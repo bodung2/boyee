@@ -24,6 +24,14 @@ class OpenAIError(RuntimeError):
     pass
 
 
+class OpenAIAccountError(OpenAIError):
+    """키·잔액·권한 문제. 다시 시도해도 소용없으므로 바로 멈추고 알린다."""
+
+
+_ACCOUNT_CODES = ("insufficient_quota", "credit_balance_exhausted", "billing", "invalid_api_key",
+                  "must be verified", "organization")
+
+
 def _post(cfg: Config, path: str, payload: dict, timeout: int) -> dict:
     if not cfg.openai_api_key:
         raise OpenAIError(".env에 OPENAI_API_KEY가 없습니다")
@@ -38,6 +46,8 @@ def _post(cfg: Config, path: str, payload: dict, timeout: int) -> dict:
                 return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             body = e.read().decode("utf-8", "replace")[:500]
+            if e.code in (401, 403) or (e.code == 429 and any(c in body for c in _ACCOUNT_CODES[:3])):
+                raise OpenAIAccountError(f"OpenAI 계정 문제(HTTP {e.code}) — 키·충전 잔액·조직 인증을 확인하세요: {body}") from e
             if e.code in (429, 500, 502, 503, 504) and attempt < 2:
                 last = OpenAIError(f"HTTP {e.code}: {body}")
                 time.sleep(10 * (attempt + 1))

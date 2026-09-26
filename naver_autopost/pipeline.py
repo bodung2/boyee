@@ -83,9 +83,13 @@ def _make_illustrations(cfg: Config, post: dict, out_dir: Path) -> None:
     failed = set()
     for ill in post.get("illustrations") or []:
         name = ill.get("name", "")
+        if (out_dir / f"{name}.png").exists():      # 이어서 실행할 때 이미 만든 그림은 재사용
+            continue
         try:
             openai_client.generate_image(cfg, ill["prompt"], out_dir / f"{name}.png")
             log.info("일러스트 생성: %s", name)
+        except openai_client.OpenAIAccountError:
+            raise                                    # 잔액·키 문제는 그림만 빼지 말고 멈춘다
         except Exception as e:
             log.warning("일러스트 %s 생성 실패: %s", name, e)
             failed.add(name)
@@ -112,31 +116,55 @@ def _gpt_factcheck(cfg: Config, post_path: Path, out_dir: Path) -> dict:
     return post
 
 
-def _attempt(cfg: Config, today: str, out_dir: Path, feedback: str) -> dict:
-    post_path = generate.write_post(cfg, out_dir, today, feedback)
-    post = _load_post(post_path)
-    _save_json(post_path, post)
-    errors = content.validate(post, cfg.profile)
-    if errors:
-        raise Rejected("구조 검증 실패:\n- " + "\n- ".join(errors))
+def _stage(out_dir: Path) -> dict:
+    path = out_dir / "stage.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except json.JSONDecodeError:
+        return {}
 
-    if cfg.profile.illustrations:
+
+def _mark(out_dir: Path, **flags) -> None:
+    _save_json(out_dir / "stage.json", {**_stage(out_dir), **flags})
+
+
+def _attempt(cfg: Config, today: str, out_dir: Path, feedback: str, resume: bool = False) -> dict:
+    """글 1편을 발행 가능한 상태로 만든다. resume이면 지난 실행이 멈춘 단계부터 이어서 한다
+    (예: OpenAI 잔액 부족으로 멈췄을 때 이미 쓴 글·통과한 검수를 다시 하지 않음)."""
+    post_path = out_dir / "post.json"
+    stage = _stage(out_dir) if resume else {}
+    if not stage.get("written"):
+        generate.write_post(cfg, out_dir, today, feedback)
+        post = _load_post(post_path)
+        _save_json(post_path, post)
+        errors = content.validate(post, cfg.profile)
+        if errors:
+            raise Rejected("구조 검증 실패:\n- " + "\n- ".join(errors))
+        _mark(out_dir, written=True)
+    else:
+        log.info("이미 쓴 글을 이어서 처리합니다: %s", _load_post(post_path)["title"])
+    post = _load_post(post_path)
+
+    if cfg.profile.illustrations and not stage.get("illustrated"):
         post["illustrations"] = (post.get("illustrations") or [])[:cfg.illustration_count]
         extra = {m.group(1) for m in content.IMAGE_MARKER.finditer(post["body_html"])} - {"card"} \
             - {i.get("name") for i in post["illustrations"]}
         post["body_html"] = content.remove_markers(post["body_html"], extra)
         _make_illustrations(cfg, post, out_dir)
         _save_json(post_path, post)
+        _mark(out_dir, illustrated=True)
 
-    fc = generate.factcheck(cfg, out_dir)
-    post = _load_post(post_path)
-    bad = {name for name, verdict in (fc.get("images") or {}).items() if not str(verdict).startswith("ok")}
-    _drop_images(post, bad, out_dir, "검수 탈락")
-    _save_json(post_path, post)
-    if fc.get("verdict") != "pass":
-        raise Rejected(f"Claude 팩트체크 불합격: {fc.get('summary', '')}\n"
-                       + json.dumps(fc.get("issues", [])[:10], ensure_ascii=False))
-    log.info("Claude 팩트체크 통과: %s", fc.get("summary", ""))
+    if not stage.get("claude_pass"):
+        fc = generate.factcheck(cfg, out_dir)
+        post = _load_post(post_path)
+        bad = {name for name, verdict in (fc.get("images") or {}).items() if not str(verdict).startswith("ok")}
+        _drop_images(post, bad, out_dir, "검수 탈락")
+        _save_json(post_path, post)
+        if fc.get("verdict") != "pass":
+            raise Rejected(f"Claude 팩트체크 불합격: {fc.get('summary', '')}\n"
+                           + json.dumps(fc.get("issues", [])[:10], ensure_ascii=False))
+        log.info("Claude 팩트체크 통과: %s", fc.get("summary", ""))
+        _mark(out_dir, claude_pass=True)
 
     if cfg.gpt_factcheck:
         post = _gpt_factcheck(cfg, post_path, out_dir)
@@ -158,16 +186,18 @@ def produce(cfg: Config, today: str, out_dir: Path) -> dict:
             return post
 
     feedback = ""
+    resume = _stage(out_dir).get("written") and (out_dir / "post.json").exists()
     for attempt in range(1, cfg.max_attempts + 1):
-        if out_dir.exists() and any(out_dir.iterdir()):
+        if not resume and out_dir.exists() and any(out_dir.iterdir()):
             stamp = datetime.now(KST).strftime("%H%M%S")
             shutil.move(str(out_dir), str(out_dir.with_name(f"{out_dir.name}-rejected-{stamp}")))
-        log.info("[%s] 글쓰기 시도 %d/%d", cfg.profile.name, attempt, cfg.max_attempts)
+        log.info("[%s] 글쓰기 시도 %d/%d%s", cfg.profile.name, attempt, cfg.max_attempts, " (이어서)" if resume else "")
         try:
-            post = _attempt(cfg, today, out_dir, feedback)
+            post = _attempt(cfg, today, out_dir, feedback, resume=bool(resume))
         except Rejected as e:
             feedback = str(e)
             log.warning(feedback)
+            resume = False
             continue
         _save_json(ready, {"title": post["title"], "at": datetime.now(KST).isoformat()})
         return post

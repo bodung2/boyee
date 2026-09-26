@@ -191,3 +191,63 @@ def test_sales_domain_blocked_even_with_negation_nearby():
     post = child_post()
     post["body_html"] += "<p>smartstore.naver.com/x 는 광고가 아닙니다</p>"
     assert content.validate(content.normalize(post), CHILD)
+
+
+def test_account_error_stops_and_resume_skips_finished_steps(cfg, monkeypatch):
+    """잔액 부족이면 그림을 빼지 않고 멈추고, 다음 실행은 글쓰기·통과한 검수를 건너뛰고 이어서 한다."""
+    out = cfg.output_dir / "2026-09-27"
+    writes = []
+
+    def write_post(c, out_dir, today, feedback=""):
+        writes.append(1)
+        return _fake_write(child_post())(c, out_dir, today, feedback)
+    monkeypatch.setattr(generate, "write_post", write_post)
+
+    def no_money(c, prompt, path):
+        raise openai_client.OpenAIAccountError("credit_balance_exhausted")
+    monkeypatch.setattr(openai_client, "generate_image", no_money)
+    with pytest.raises(openai_client.OpenAIAccountError):
+        pipeline.produce(cfg, "2026-09-27", out)
+    assert "[[IMAGE:illust_a]]" in (out / "post.json").read_text(encoding="utf-8")   # 그림 자리 유지
+
+    # 충전 후 다시 실행
+    def ok_image(c, prompt, path):
+        path.write_bytes(b"png")
+        return path
+    monkeypatch.setattr(openai_client, "generate_image", ok_image)
+    claude_calls = []
+
+    def fake_claude_fc(c, out_dir):
+        claude_calls.append(1)
+        return {"verdict": "pass", "images": {"illust_a": "ok", "illust_b": "ok"}}
+    monkeypatch.setattr(generate, "factcheck", fake_claude_fc)
+    gpt = iter([openai_client.OpenAIAccountError("no credits"), {"verdict": "pass", "issues": []}])
+
+    def fake_gpt(c, p):
+        r = next(gpt)
+        if isinstance(r, Exception):
+            raise r
+        return r
+    monkeypatch.setattr(openai_client, "factcheck", fake_gpt)
+    with pytest.raises(openai_client.OpenAIAccountError):
+        pipeline.produce(cfg, "2026-09-27", out)
+    post = pipeline.produce(cfg, "2026-09-27", out)
+    assert writes == [1]                 # 글은 한 번만 썼다
+    assert claude_calls == [1]           # Claude 검수도 한 번만
+    assert "[[IMAGE:illust_b]]" in post["body_html"]
+    assert (out / "ready.json").exists()
+
+
+def test_quota_429_is_account_error_without_retry(cfg, monkeypatch):
+    import io
+    import urllib.error
+    calls = []
+
+    def fake_urlopen(req, timeout):
+        calls.append(1)
+        raise urllib.error.HTTPError(req.full_url, 429, "Too Many Requests", {},
+                                     io.BytesIO(b'{"error": {"code": "credit_balance_exhausted"}}'))
+    monkeypatch.setattr(openai_client.urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(openai_client.OpenAIAccountError):
+        openai_client._post(cfg, "/responses", {}, timeout=5)
+    assert calls == [1]
