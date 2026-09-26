@@ -2,7 +2,9 @@
 .browser-profile/
 output/
 logs/
-data/published.json
+data/published*.json
+assets/*
+!assets/README.md
 __pycache__/
 *.pyc
 .venv/

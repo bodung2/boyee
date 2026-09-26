@@ -1,0 +1,181 @@
+import json
+
+import pytest
+
+from naver_autopost import content, generate, openai_client, pipeline, profiles
+from naver_autopost.config import Config
+from tests.sample_post import make_post
+
+CHILD = profiles.get("childhood")
+
+
+def child_post(**over):
+    post = make_post(
+        thumbnail={"chip": "연령별 발달 · 4세", "main_lines": ["4세 숫자,", "어디까지", "배워야 할까?"], "sub": "단계가 먼저"},
+        illustrations=[{"name": "illust_a", "prompt": "a Korean living room ...", "desc_ko": "도입", "alt": "숫자 놀이"},
+                       {"name": "illust_b", "prompt": "a kindergarten classroom ...", "desc_ko": "2장", "alt": "교실"}],
+        domain="N", cluster="4세 초기수학", lane="B",
+    )
+    post["body_html"] = "<p>[[IMAGE:illust_a]]</p>" + post["body_html"] + "<p>[[IMAGE:illust_b]]</p>"
+    post.update(over)
+    return post
+
+
+def test_childhood_post_valid():
+    assert content.validate(content.normalize(child_post()), CHILD) == []
+
+
+def test_childhood_guardrail_phrase_blocks():
+    post = child_post()
+    post["body_html"] += "<p>4세라면 이 단계를 통과해야 합니다.</p>"
+    assert any("통과해야" in e for e in content.validate(content.normalize(post), CHILD))
+
+
+def test_sales_link_blocks():
+    post = child_post()
+    post["body_html"] += "<p>https://smartstore.naver.com/abc</p>"
+    assert any("smartstore" in e for e in content.validate(content.normalize(post), CHILD))
+
+
+def test_thumbnail_lines_limit():
+    post = child_post(thumbnail={"main_lines": ["a", "b", "c", "d"], "sub": ""})
+    assert any("1~3줄" in e for e in content.validate(content.normalize(post), CHILD))
+
+
+def test_unknown_illust_marker_blocks():
+    post = child_post()
+    post["body_html"] += "<p>[[IMAGE:illust_z]]</p>"
+    assert any("알 수 없는" in e for e in content.validate(content.normalize(post), CHILD))
+
+
+def test_remove_markers_keeps_others():
+    body = "<p>[[IMAGE:illust_a]]</p><p>x</p><p>[[IMAGE:card]]</p>"
+    assert content.remove_markers(body, {"illust_a"}) == "<p>x</p><p>[[IMAGE:card]]</p>"
+
+
+def test_openai_output_parsing():
+    resp = {"output": [{"type": "web_search_call"},
+                       {"type": "message", "content": [{"type": "output_text",
+                                                        "text": '```json\n{"verdict": "pass", "issues": []}\n```'}]}]}
+    assert openai_client._extract_json(openai_client._output_text(resp))["verdict"] == "pass"
+
+
+@pytest.fixture
+def cfg(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test")
+    c = Config.load("childhood")
+    c.output_dir = tmp_path / "out"
+    c.data_dir = tmp_path / "data"
+    c.history_file = c.data_dir / "published_childhood.json"
+    return c
+
+
+def _fake_write(post):
+    def write_post(cfg, out_dir, today, feedback=""):
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "post.json").write_text(json.dumps(post, ensure_ascii=False), encoding="utf-8")
+        return out_dir / "post.json"
+    return write_post
+
+
+def test_attempt_full_flow_with_gpt_fix(cfg, monkeypatch):
+    out = cfg.output_dir / "2026-09-27"
+    monkeypatch.setattr(generate, "write_post", _fake_write(child_post()))
+
+    def fake_image(c, prompt, path):
+        if "classroom" in prompt:
+            raise openai_client.OpenAIError("boom")      # illust_b 생성 실패 → 본문에서 빠져야 함
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"png")
+        return path
+    monkeypatch.setattr(openai_client, "generate_image", fake_image)
+
+    def fake_claude_fc(c, out_dir):
+        fc = {"verdict": "pass", "images": {"illust_a": "ok"}, "summary": "ok"}
+        (out_dir / "factcheck.json").write_text(json.dumps(fc), encoding="utf-8")
+        return fc
+    monkeypatch.setattr(generate, "factcheck", fake_claude_fc)
+
+    reviews = iter([
+        {"verdict": "fix", "issues": [{"text": "정책 설명 문장입니다.", "correction": "삭제"}], "summary": "1건"},
+        {"verdict": "pass", "issues": [], "summary": "ok"},
+    ])
+    monkeypatch.setattr(openai_client, "factcheck", lambda c, p: next(reviews))
+    applied = []
+    monkeypatch.setattr(generate, "apply_gpt_review",
+                        lambda c, d, r: applied.append(r) or {"applied": [{}], "rejected": []})
+
+    post = pipeline._attempt(cfg, "2026-09-27", out, "")
+    assert applied == [1]
+    assert "[[IMAGE:illust_b]]" not in post["body_html"]
+    assert "[[IMAGE:illust_a]]" in post["body_html"]
+    assert (out / "gpt_factcheck_1.json").exists() and (out / "gpt_factcheck_2.json").exists()
+
+
+def test_gpt_fail_rejects(cfg, monkeypatch):
+    out = cfg.output_dir / "d"
+    out.mkdir(parents=True)
+    (out / "post.json").write_text(json.dumps(child_post(), ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(openai_client, "factcheck",
+                        lambda c, p: {"verdict": "fail", "issues": [], "summary": "핵심 수치 오류"})
+    with pytest.raises(pipeline.Rejected, match="ChatGPT"):
+        pipeline._gpt_factcheck(cfg, out / "post.json", out)
+
+
+def test_gpt_still_fix_after_second_round_rejects(cfg, monkeypatch):
+    out = cfg.output_dir / "d"
+    out.mkdir(parents=True)
+    (out / "post.json").write_text(json.dumps(child_post(), ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(openai_client, "factcheck", lambda c, p: {"verdict": "fix", "issues": [{}], "summary": ""})
+    monkeypatch.setattr(generate, "apply_gpt_review", lambda c, d, r: {})
+    with pytest.raises(pipeline.Rejected):
+        pipeline._gpt_factcheck(cfg, out / "post.json", out)
+
+
+def test_bad_image_from_claude_review_is_dropped(cfg, monkeypatch):
+    out = cfg.output_dir / "2026-09-27"
+    monkeypatch.setattr(generate, "write_post", _fake_write(child_post()))
+    monkeypatch.setattr(openai_client, "generate_image",
+                        lambda c, p, path: path.parent.mkdir(parents=True, exist_ok=True) or path.write_bytes(b"x") or path)
+
+    def fake_claude_fc(c, out_dir):
+        fc = {"verdict": "pass", "images": {"illust_a": "ok", "illust_b": "bad: 글자 보임"}}
+        return fc
+    monkeypatch.setattr(generate, "factcheck", fake_claude_fc)
+    cfg.gpt_factcheck = False
+    post = pipeline._attempt(cfg, "2026-09-27", out, "")
+    assert "illust_b" not in post["body_html"]
+    assert not (out / "illust_b.png").exists()
+    imgs = pipeline.render_images(cfg, post, out)
+    assert set(imgs) == {"thumbnail", "card", "illust_a"}
+
+
+def test_generate_image_falls_back_to_standard_size(cfg, monkeypatch, tmp_path):
+    import base64
+    calls = []
+
+    def fake_post(c, path, payload, timeout):
+        calls.append(dict(payload))
+        if payload["size"] != "1536x1024":
+            raise openai_client.OpenAIError('HTTP 400: {"error": {"message": "Invalid size"}}')
+        return {"data": [{"b64_json": base64.b64encode(b"PNGDATA").decode()}]}
+    monkeypatch.setattr(openai_client, "_post", fake_post)
+    out = openai_client.generate_image(cfg, "a scene", tmp_path / "i.png")
+    assert out.read_bytes() == b"PNGDATA"
+    assert [c["size"] for c in calls] == ["1536x864", "1536x1024"]
+    assert "no text" in calls[0]["prompt"].lower()
+
+
+def test_gpt_factcheck_payload_uses_web_search(cfg, monkeypatch):
+    seen = {}
+
+    def fake_post(c, path, payload, timeout):
+        seen.update(path=path, payload=payload)
+        return {"output_text": '{"verdict": "pass", "checked": 3, "issues": [], "summary": "ok"}'}
+    monkeypatch.setattr(openai_client, "_post", fake_post)
+    result = openai_client.factcheck(cfg, content.normalize(child_post()))
+    assert result["verdict"] == "pass"
+    assert seen["path"] == "/responses"
+    assert seen["payload"]["tools"] == [{"type": "web_search"}]
+    assert "발달 안전" in seen["payload"]["instructions"]
+    assert "[[IMAGE" not in seen["payload"]["input"]

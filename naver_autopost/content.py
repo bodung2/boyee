@@ -4,6 +4,8 @@ from __future__ import annotations
 import html
 import re
 
+from .profiles import Profile
+
 IMAGE_MARKER = re.compile(r"(?:<p>\s*)?\[\[IMAGE:(\w+)\]\](?:\s*</p>)?")
 
 # 자동 발행 글에 남아 있으면 안 되는 자리표시자·초안용 문구
@@ -80,7 +82,12 @@ def normalize(post: dict) -> dict:
     return post
 
 
-def validate(post: dict) -> list[str]:
+def remove_markers(body_html: str, names: set[str]) -> str:
+    """빠진 이미지(생성 실패·검수 탈락)의 자리 표시를 본문에서 지운다."""
+    return IMAGE_MARKER.sub(lambda m: "" if m.group(1) in names else m.group(0), body_html)
+
+
+def validate(post: dict, profile: Profile | None = None) -> list[str]:
     """발행을 막아야 하는 문제 목록. 비어 있으면 통과."""
     errors: list[str] = []
     for key in ("title", "body_html", "tags", "sources", "claims", "thumbnail", "card"):
@@ -97,13 +104,17 @@ def validate(post: dict) -> list[str]:
     markers = [m.group(1) for m in IMAGE_MARKER.finditer(body)]
     if markers.count("card") != 1:
         errors.append(f"[[IMAGE:card]] 표시는 정확히 1번이어야 합니다(현재 {markers.count('card')}번)")
-    unknown = sorted(set(markers) - {"card"})
+    illust_names = {i.get("name") for i in post.get("illustrations") or []}
+    unknown = sorted(set(markers) - {"card"} - illust_names)
     if unknown:
         errors.append(f"알 수 없는 이미지 표시: {unknown}")
+    dupes = sorted({m for m in markers if markers.count(m) > 1})
+    if dupes:
+        errors.append(f"이미지 표시가 중복됩니다: {dupes}")
 
     text = html_to_text(IMAGE_MARKER.sub("", body))
     everything = "\n".join([title, text, str(post["thumbnail"]), str(post["card"])])
-    for phrase in FORBIDDEN_PHRASES:
+    for phrase in FORBIDDEN_PHRASES + list(profile.extra_forbidden if profile else ()):
         if phrase in everything:
             errors.append(f"자리표시자/초안 문구가 남아 있습니다: '{phrase}'")
     if len(text) < MIN_BODY_CHARS:
@@ -118,7 +129,13 @@ def validate(post: dict) -> list[str]:
         errors.append(f"검증 대상 사실이 {MIN_CLAIMS}개 미만입니다")
 
     thumb = post["thumbnail"]
-    if not thumb.get("main"):
+    if profile and profile.thumbnail_style == "childhood":
+        lines = thumb.get("main_lines") or []
+        if not 1 <= len(lines) <= 3:
+            errors.append(f"썸네일 메인은 1~3줄이어야 합니다(현재 {len(lines)}줄)")
+        elif any(len(line) > 10 for line in lines):
+            errors.append(f"썸네일 메인 한 줄이 너무 깁니다: {lines}")
+    elif not thumb.get("main"):
         errors.append("썸네일 메인 문구가 없습니다")
     elif len(thumb["main"]) > 16:
         errors.append(f"썸네일 메인 문구가 깁니다({len(thumb['main'])}자)")

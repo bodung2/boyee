@@ -1,4 +1,5 @@
-"""하루 1편: 글쓰기 → 구조 검증 → 팩트체크 → 이미지 → 네이버 발행 → 이력 기록 → 알림."""
+"""하루 1편: 글쓰기 → 구조 검증 → 일러스트(ChatGPT) → Claude 팩트체크 → ChatGPT 팩트체크
+→ 이미지 → 네이버 발행 → 이력 기록 → 알림."""
 from __future__ import annotations
 
 import json
@@ -9,11 +10,15 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import content, generate, history, images, notify
+from . import content, generate, history, images, notify, openai_client
 from .config import Config
 
 log = logging.getLogger(__name__)
 KST = ZoneInfo("Asia/Seoul")
+
+
+class Rejected(Exception):
+    """이번 시도의 글이 발행 기준에 못 미침(다른 주제로 다시 시도)."""
 
 
 def today_kst() -> str:
@@ -60,75 +65,149 @@ def _load_post(path: Path) -> dict:
     return content.normalize(json.loads(path.read_text(encoding="utf-8")))
 
 
-def _save_post(path: Path, post: dict) -> None:
-    path.write_text(json.dumps(post, ensure_ascii=False, indent=2), encoding="utf-8")
+def _save_json(path: Path, data: dict) -> None:
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _ready_post(out_dir: Path) -> dict | None:
-    """이전 실행에서 팩트체크까지 통과했지만 발행 전에 멈춘 글이 있으면 다시 쓴다."""
-    post_path, fc_path = out_dir / "post.json", out_dir / "factcheck.json"
-    if not (post_path.exists() and fc_path.exists()):
-        return None
-    try:
-        if json.loads(fc_path.read_text(encoding="utf-8")).get("verdict") != "pass":
-            return None
+def _drop_images(post: dict, names: set[str], out_dir: Path, why: str) -> None:
+    if not names:
+        return
+    log.warning("일러스트 %s 제외(%s)", sorted(names), why)
+    post["body_html"] = content.remove_markers(post["body_html"], names)
+    post["illustrations"] = [i for i in post.get("illustrations") or [] if i.get("name") not in names]
+    for name in names:
+        (out_dir / f"{name}.png").unlink(missing_ok=True)
+
+
+def _make_illustrations(cfg: Config, post: dict, out_dir: Path) -> None:
+    failed = set()
+    for ill in post.get("illustrations") or []:
+        name = ill.get("name", "")
+        try:
+            openai_client.generate_image(cfg, ill["prompt"], out_dir / f"{name}.png")
+            log.info("일러스트 생성: %s", name)
+        except Exception as e:
+            log.warning("일러스트 %s 생성 실패: %s", name, e)
+            failed.add(name)
+    _drop_images(post, failed, out_dir, "생성 실패")
+
+
+def _gpt_factcheck(cfg: Config, post_path: Path, out_dir: Path) -> dict:
+    """ChatGPT 교차검증. 지적이 있으면 Claude가 원문으로 재확인해 반영한 뒤 ChatGPT가 다시 본다."""
+    post = _load_post(post_path)
+    for round_no in (1, 2):
+        review = openai_client.factcheck(cfg, post)
+        _save_json(out_dir / f"gpt_factcheck_{round_no}.json", review)
+        if review["verdict"] == "pass":
+            return post
+        if review["verdict"] == "fail" or round_no == 2:
+            raise Rejected(f"ChatGPT 팩트체크 불합격({review['verdict']}): {review.get('summary', '')}\n"
+                           + json.dumps(review.get("issues", [])[:8], ensure_ascii=False))
+        _save_json(out_dir / "gpt_review.json", review)
+        applied = generate.apply_gpt_review(cfg, out_dir, round_no)
+        log.info("ChatGPT 지적 반영: 적용 %d건, 반박 %d건",
+                 len(applied.get("applied", [])), len(applied.get("rejected", [])))
         post = _load_post(post_path)
-    except (json.JSONDecodeError, OSError):
-        return None
-    return None if content.validate(post) else post
+        _save_json(post_path, post)
+    return post
+
+
+def _attempt(cfg: Config, today: str, out_dir: Path, feedback: str) -> dict:
+    post_path = generate.write_post(cfg, out_dir, today, feedback)
+    post = _load_post(post_path)
+    _save_json(post_path, post)
+    errors = content.validate(post, cfg.profile)
+    if errors:
+        raise Rejected("구조 검증 실패:\n- " + "\n- ".join(errors))
+
+    if cfg.profile.illustrations:
+        post["illustrations"] = (post.get("illustrations") or [])[:cfg.illustration_count]
+        extra = {m.group(1) for m in content.IMAGE_MARKER.finditer(post["body_html"])} - {"card"} \
+            - {i.get("name") for i in post["illustrations"]}
+        post["body_html"] = content.remove_markers(post["body_html"], extra)
+        _make_illustrations(cfg, post, out_dir)
+        _save_json(post_path, post)
+
+    fc = generate.factcheck(cfg, out_dir)
+    post = _load_post(post_path)
+    bad = {name for name, verdict in (fc.get("images") or {}).items() if not str(verdict).startswith("ok")}
+    _drop_images(post, bad, out_dir, "검수 탈락")
+    _save_json(post_path, post)
+    if fc.get("verdict") != "pass":
+        raise Rejected(f"Claude 팩트체크 불합격: {fc.get('summary', '')}\n"
+                       + json.dumps(fc.get("issues", [])[:10], ensure_ascii=False))
+    log.info("Claude 팩트체크 통과: %s", fc.get("summary", ""))
+
+    if cfg.gpt_factcheck:
+        post = _gpt_factcheck(cfg, post_path, out_dir)
+        log.info("ChatGPT 팩트체크 통과")
+
+    errors = content.validate(post, cfg.profile)
+    if errors:
+        raise Rejected("팩트체크 수정 후 구조 검증 실패:\n- " + "\n- ".join(errors))
+    return post
 
 
 def produce(cfg: Config, today: str, out_dir: Path) -> dict:
-    """발행 가능한 post를 만든다. 실패하면 최대 MAX_ATTEMPTS번까지 새로 쓴다."""
-    ready = _ready_post(out_dir)
-    if ready:
-        log.info("팩트체크를 통과한 오늘 글이 이미 있어 재사용합니다: %s", ready["title"])
-        return ready
+    """발행 가능한 post를 만든다. 떨어지면 최대 MAX_ATTEMPTS번까지 새로 쓴다."""
+    ready = out_dir / "ready.json"
+    if ready.exists() and (out_dir / "post.json").exists():
+        post = _load_post(out_dir / "post.json")
+        if not content.validate(post, cfg.profile):
+            log.info("검수를 통과한 오늘 글이 이미 있어 재사용합니다: %s", post["title"])
+            return post
 
     feedback = ""
     for attempt in range(1, cfg.max_attempts + 1):
         if out_dir.exists() and any(out_dir.iterdir()):
             stamp = datetime.now(KST).strftime("%H%M%S")
             shutil.move(str(out_dir), str(out_dir.with_name(f"{out_dir.name}-rejected-{stamp}")))
-        log.info("글쓰기 시도 %d/%d", attempt, cfg.max_attempts)
-        post_path = generate.write_post(cfg, out_dir, today, feedback)
-        post = _load_post(post_path)
-        _save_post(post_path, post)
-
-        errors = content.validate(post)
-        if errors:
-            feedback = "구조 검증 실패:\n- " + "\n- ".join(errors)
+        log.info("[%s] 글쓰기 시도 %d/%d", cfg.profile.name, attempt, cfg.max_attempts)
+        try:
+            post = _attempt(cfg, today, out_dir, feedback)
+        except Rejected as e:
+            feedback = str(e)
             log.warning(feedback)
             continue
-
-        fc = generate.factcheck(cfg, out_dir)
-        post = _load_post(post_path)          # 팩트체커가 고친 내용 반영
-        _save_post(post_path, post)
-        if fc.get("verdict") != "pass":
-            feedback = f"팩트체크 불합격: {fc.get('summary', '')}\n" + json.dumps(fc.get("issues", [])[:10], ensure_ascii=False)
-            log.warning(feedback)
-            continue
-        errors = content.validate(post)
-        if errors:
-            feedback = "팩트체크 수정 후 구조 검증 실패:\n- " + "\n- ".join(errors)
-            log.warning(feedback)
-            continue
-        log.info("팩트체크 통과: %s", fc.get("summary", ""))
+        _save_json(ready, {"title": post["title"], "at": datetime.now(KST).isoformat()})
         return post
     raise RuntimeError(f"{cfg.max_attempts}번 시도했지만 발행 기준을 통과한 글을 만들지 못했습니다.\n{feedback[:800]}")
 
 
-def render_images(post: dict, out_dir: Path) -> dict[str, Path]:
+def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
     names = post.get("image_names") or {}
 
     def fname(key: str, default: str) -> Path:
         stem = "".join(ch for ch in str(names.get(key) or default) if ch not in '\\/:*?"<>|').strip() or default
         return out_dir / f"{stem}.png"
 
-    return {
-        "thumbnail": images.make_thumbnail(post["thumbnail"], fname("thumbnail", "thumbnail")),
-        "card": images.make_card(post["card"], fname("card", "card")),
-    }
+    if cfg.profile.thumbnail_style == "childhood":
+        tone = images.childhood_tone(post.get("domain"))
+        imgs = {
+            "thumbnail": images.make_thumbnail_childhood(post["thumbnail"], post.get("domain"),
+                                                         fname("thumbnail", "thumbnail")),
+            "card": images.make_card(post["card"], fname("card", "card"), tone=tone),
+        }
+    else:
+        imgs = {
+            "thumbnail": images.make_thumbnail(post["thumbnail"], fname("thumbnail", "thumbnail")),
+            "card": images.make_card(post["card"], fname("card", "card")),
+        }
+    for ill in post.get("illustrations") or []:
+        path = out_dir / f"{ill.get('name')}.png"
+        if path.exists():
+            imgs[ill["name"]] = path
+    # 본문에 표시가 남아 있는데 파일이 없는 이미지는 지운다(발행 중 오류 방지).
+    missing = {m.group(1) for m in content.IMAGE_MARKER.finditer(post["body_html"])} - set(imgs)
+    post["body_html"] = content.remove_markers(post["body_html"], missing)
+    return imgs
+
+
+def _preflight(cfg: Config) -> None:
+    if not cfg.blog_id:
+        raise RuntimeError(".env에 NAVER_BLOG_ID가 없습니다")
+    if (cfg.gpt_factcheck or cfg.profile.illustrations) and not cfg.openai_api_key:
+        raise RuntimeError(".env에 OPENAI_API_KEY가 없습니다(ChatGPT 이미지·팩트체크에 필요)")
 
 
 def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
@@ -136,17 +215,19 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
     from . import publisher
 
     today = today_kst()
-    setup_logging(cfg, today)
+    label = f"{cfg.profile.label}"
+    setup_logging(cfg, f"{cfg.profile.name}-{today}")
     try:
-        with _Lock(cfg.log_dir / ".run.lock"):
+        with _Lock(cfg.log_dir / f".run-{cfg.profile.name}.lock"):
             done = history.published_on(cfg.history_file, today)
             if done and not force:
                 log.info("오늘(%s)은 이미 발행했습니다: %s", today, done["url"])
                 return 0
+            _preflight(cfg)
 
             out_dir = cfg.output_dir / today
             post = produce(cfg, today, out_dir)
-            imgs = render_images(post, out_dir)
+            imgs = render_images(cfg, post, out_dir)
 
             last_error: Exception | None = None
             for attempt in (1, 2):
@@ -162,15 +243,16 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
                 raise RuntimeError(f"네이버 발행 실패: {last_error}")
 
             if dry_run:
-                notify.send(cfg, f"[자동발행 테스트] 발행 직전까지 확인했습니다: {post['title']}")
+                notify.send(cfg, f"[{label} 자동발행 테스트] 발행 직전까지 확인했습니다: {post['title']}")
                 return 0
             history.append(cfg.history_file, {
                 "date": today, "title": post["title"], "url": url, "topic": post.get("topic", ""),
-                "lane": post.get("lane", ""), "tags": post.get("tags", []), "source": "autopost",
+                "lane": post.get("lane", ""), "cluster": post.get("cluster", ""), "domain": post.get("domain"),
+                "tags": post.get("tags", []), "source": "autopost",
             })
-            notify.send(cfg, f"[자동발행 완료] {post['title']}\n{url}")
+            notify.send(cfg, f"[{label} 자동발행 완료] {post['title']}\n{url}")
             return 0
     except Exception as e:
         log.exception("자동 발행 실패")
-        notify.send(cfg, f"[자동발행 실패] {today}\n{e}")
+        notify.send(cfg, f"[{label} 자동발행 실패] {today}\n{e}")
         return 1

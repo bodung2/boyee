@@ -38,8 +38,13 @@ _FONT_CANDIDATES = {
 def _font(weight: str, size: int) -> ImageFont.FreeTypeFont:
     for path in _FONT_CANDIDATES[weight]:
         if Path(path).exists():
-            # AppleSDGothicNeo.ttc는 index 6 근처가 Bold지만, 기본(0)도 한글은 정상 출력된다.
-            index = 6 if weight == "bold" and path.endswith("AppleSDGothicNeo.ttc") else 0
+            # AppleSDGothicNeo.ttc는 index 6 근처가 Bold, NotoSansCJK.ttc는 index 1이 한국어(KR) 글꼴이다.
+            if path.endswith("AppleSDGothicNeo.ttc"):
+                index = 6 if weight == "bold" else 0
+            elif "NotoSansCJK" in path:
+                index = 1
+            else:
+                index = 0
             try:
                 return ImageFont.truetype(path, size, index=index)
             except OSError:
@@ -139,7 +144,7 @@ def make_thumbnail(thumb: dict, out: Path, size: int = 1200) -> Path:
     return out
 
 
-def make_card(card: dict, out: Path, width: int = 1200) -> Path:
+def make_card(card: dict, out: Path, width: int = 1200, tone: str = BG) -> Path:
     title_font = _font("bold", 52)
     bullet_font = _font("regular", 36)
     chip_font = _font("bold", 28)
@@ -159,18 +164,18 @@ def make_card(card: dict, out: Path, width: int = 1200) -> Path:
 
     img = Image.new("RGB", (width, height), WHITE)
     draw = ImageDraw.Draw(img)
-    draw.rectangle([0, 0, width, 24], fill=BG)
+    draw.rectangle([0, 0, width, 24], fill=tone)
     y = 64
     chip_w = _width(draw, card.get("chip", "교육 정책"), chip_font) + 44
     draw.rounded_rectangle([margin, y, margin + chip_w, y + 50], radius=25, fill=CHIP_BG)
-    draw.text((margin + 22, y + 8), card.get("chip", "교육 정책"), font=chip_font, fill=BG)
+    draw.text((margin + 22, y + 8), card.get("chip", "교육 정책"), font=chip_font, fill=tone)
     y += 50 + 30
     for line in title_lines:
         draw.text((margin, y), line, font=title_font, fill=INK)
         y += 68
     y += 30
     for block in bullet_blocks:
-        draw.ellipse([margin + 4, y + 16, margin + 18, y + 30], fill=BG)
+        draw.ellipse([margin + 4, y + 16, margin + 18, y + 30], fill=tone)
         for line in block:
             draw.text((margin + 40, y), line, font=bullet_font, fill=INK)
             y += 52
@@ -181,6 +186,60 @@ def make_card(card: dict, out: Path, width: int = 1200) -> Path:
     for line in footer_lines:
         draw.text((margin, y), line, font=footer_font, fill=MUTED)
         y += 34
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    img.save(out, "PNG", optimize=True)
+    return out
+
+
+# ---------------------------------------------------------------- 유아 블로그(시리즈 고정 템플릿)
+# early-childhood-insight-extraction 4-1: 질문형·다크, 좌상단 고정 좌표, 영역별 배경 톤.
+
+CHILDHOOD_TONES = {
+    "N": "#1a4d7a",   # 초기수학 딥블루
+    "M": "#2f6b3d",   # 감각·운동 딥그린
+    "C": "#155e52",   # 인지·공간 딥틸
+    "L": "#2c2960",   # 언어·문해 인디고
+    "S": "#7a2e46",   # 사회정서 버건디
+    "E": "#4a2a6b",   # 실행기능 딥퍼플
+    "A": "#146b6b",   # 창의·탐구 딥청록
+}
+CHILDHOOD_DEFAULT_TONE = "#1a4d7a"
+WARM_TONES = {"#7a2e46", "#7a3a12"}
+
+
+def childhood_tone(domain: str | None) -> str:
+    return CHILDHOOD_TONES.get((domain or "").strip().upper()[:1], CHILDHOOD_DEFAULT_TONE)
+
+
+def make_thumbnail_childhood(thumb: dict, domain: str | None, out: Path, size: int = 1200) -> Path:
+    tone = childhood_tone(domain)
+    accent = "#ffcf5a" if tone in WARM_TONES else "#ffd23f"
+    img = Image.new("RGB", (size, size), tone)
+    draw = ImageDraw.Draw(img)
+
+    chip_font = _font("bold", 38)
+    chip = thumb.get("chip", "유아교육")
+    draw.rounded_rectangle([90, 110, 90 + _width(draw, chip, chip_font) + 56, 190], radius=26, fill=accent)
+    draw.text((118, 129), chip, font=chip_font, fill=tone)
+
+    lines = [line for line in (thumb.get("main_lines") or []) if line][:3]
+    font_size = 130
+    main_font = _font("bold", font_size)
+    # 한 줄이라도 캔버스를 넘으면 글자 크기를 줄인다(우측 여백 90 유지).
+    while font_size > 90 and any(_width(draw, line, main_font) > size - 180 for line in lines):
+        font_size -= 6
+        main_font = _font("bold", font_size)
+    line_h = int(font_size * 1.22)
+    y = 300
+    y_end = y
+    for line in lines:
+        draw.text((90, y), line, font=main_font, fill=WHITE)
+        y_end = draw.textbbox((90, y), line, font=main_font)[3]   # 실제로 그려진 글자 아래끝
+        y += line_h
+    draw.rectangle([96, y_end + 16, 96 + 320, y_end + 34], fill=accent)
+    if thumb.get("sub"):
+        draw.text((96, y_end + 84), thumb["sub"], font=_font("regular", 48), fill=accent)
 
     out.parent.mkdir(parents=True, exist_ok=True)
     img.save(out, "PNG", optimize=True)

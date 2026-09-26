@@ -54,3 +54,13 @@ description: "edu-auto-post가 만든 post.json을 발행 직전에 독립적으
 **애매하면 fail이다.** 하루 발행을 건너뛰는 비용이 틀린 정책 정보를 교사 이름으로 공개하는 비용보다 훨씬 작다.
 
 마지막 응답은 "verdict / checked / fixed / removed" 한 줄로 끝낸다.
+
+## MODE=apply_gpt_review (ChatGPT 교차검증 반영)
+
+프롬프트에 `MODE=apply_gpt_review`가 있으면 위 절차 대신 `OUTPUT_DIR/gpt_review.json`의 `issues`만 처리한다.
+
+각 지적에 대해 ChatGPT가 제시한 `evidence_url`과 원문을 직접 열어 확인한다.
+- ChatGPT가 맞으면 `correction`대로 정정(원문 값)하거나 문장을 삭제한다.
+- ChatGPT가 틀렸으면(원문이 본문을 지지하면) 그대로 두고 이유를 기록한다.
+
+결과는 `OUTPUT_DIR/gpt_applied.json`에 `{"applied": [...], "rejected": [{"text": "", "reason": ""}], "summary": ""}` 형태로 저장한다. 새 사실은 추가하지 않는다.
