@@ -12,15 +12,23 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def _load_dotenv(path: Path) -> None:
+    """.env를 읽는다. 같은 키가 여러 번 있으면 값이 채워진 마지막 줄을 쓴다
+    (예시의 빈 줄 아래에 키를 한 줄 더 적어도 동작하도록). 시스템 환경변수가 있으면 그것이 우선."""
     if not path.exists():
         return
-    for raw in path.read_text(encoding="utf-8").splitlines():
+    values: dict[str, str] = {}
+    for raw in path.read_text(encoding="utf-8-sig").splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        value = value.strip().strip('"').strip("'")
-        os.environ.setdefault(key.strip(), value)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'").strip()
+        if value or key not in values:
+            values[key] = value
+    for key, value in values.items():
+        if not os.environ.get(key):
+            os.environ[key] = value
 
 
 def _bool(name: str, default: bool) -> bool:
