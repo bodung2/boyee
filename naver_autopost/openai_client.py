@@ -1,6 +1,7 @@
-"""ChatGPT(OpenAI API): 본문 일러스트 생성과 웹 검색 기반 교차 팩트체크.
+"""ChatGPT 교차 팩트체크(와 선택적 OpenAI 이미지 생성).
 
-ChatGPT 앱(구독)이 아니라 OpenAI API 키로 호출한다. 모델 이름은 .env에서 바꿀 수 있다.
+팩트체크 기본 경로는 Codex CLI(`codex exec`)다. "Sign in with ChatGPT"로 로그인하면 API 결제 없이
+ChatGPT 구독 사용량으로 돈다. Codex를 쓸 수 없을 때 OPENAI_API_KEY가 있으면 OpenAI API로 넘어간다.
 """
 from __future__ import annotations
 
@@ -8,6 +9,10 @@ import base64
 import json
 import logging
 import re
+import shlex
+import shutil
+import subprocess
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -15,6 +20,7 @@ from pathlib import Path
 
 from .config import Config
 from .content import IMAGE_MARKER, html_to_text
+from .errors import ExternalAccountError
 
 log = logging.getLogger(__name__)
 API = "https://api.openai.com/v1"
@@ -24,7 +30,7 @@ class OpenAIError(RuntimeError):
     pass
 
 
-class OpenAIAccountError(OpenAIError):
+class OpenAIAccountError(OpenAIError, ExternalAccountError):
     """키·잔액·권한 문제. 다시 시도해도 소용없으므로 바로 멈추고 알린다."""
 
 
@@ -133,10 +139,9 @@ def _extract_json(text: str) -> dict:
     return json.loads(text[start:end + 1])
 
 
-def factcheck(cfg: Config, post: dict) -> dict:
-    extra = CHILDHOOD_EXTRA if cfg.profile.name == "childhood" else ""
+def _article(post: dict) -> str:
     body = html_to_text(IMAGE_MARKER.sub("", post["body_html"]))
-    article = (
+    return (
         f"[제목] {post['title']}\n"
         f"[썸네일 문구] {json.dumps(post.get('thumbnail', {}), ensure_ascii=False)}\n"
         f"[요약 카드] {json.dumps(post.get('card', {}), ensure_ascii=False)}\n"
@@ -145,18 +150,117 @@ def factcheck(cfg: Config, post: dict) -> dict:
             for s in post.get("sources", [])
         ) + f"\n\n[본문]\n{body}"
     )
+
+
+def _instructions(cfg: Config) -> str:
+    return FACTCHECK_INSTRUCTIONS.format(extra=CHILDHOOD_EXTRA if cfg.profile.name == "childhood" else "")
+
+
+def _checked(result: dict, backend: str) -> dict:
+    result.setdefault("issues", [])
+    if result.get("verdict") not in ("pass", "fix", "fail"):
+        raise OpenAIError(f"알 수 없는 verdict: {result.get('verdict')} ({result.get('summary', '')})")
+    log.info("ChatGPT 팩트체크(%s): %s, 지적 %d건", backend, result["verdict"], len(result["issues"]))
+    return result
+
+
+def factcheck_api(cfg: Config, post: dict) -> dict:
     payload = {
         "model": cfg.openai_factcheck_model,
         "tools": [{"type": "web_search"}],
-        "instructions": FACTCHECK_INSTRUCTIONS.format(extra=extra),
-        "input": article,
+        "instructions": _instructions(cfg),
+        "input": _article(post),
     }
     resp = _post(cfg, "/responses", payload, timeout=900)
-    result = _extract_json(_output_text(resp))
-    result.setdefault("issues", [])
-    if result.get("verdict") not in ("pass", "fix", "fail"):
-        raise OpenAIError(f"알 수 없는 verdict: {result.get('verdict')}")
-    usage = resp.get("usage") or {}
-    log.info("ChatGPT 팩트체크(%s): %s, 지적 %d건, 토큰 %s", cfg.openai_factcheck_model,
-             result["verdict"], len(result["issues"]), usage.get("total_tokens"))
-    return result
+    return _checked(_extract_json(_output_text(resp)), f"API {cfg.openai_factcheck_model}")
+
+
+# ---------------------------------------------------------------- Codex CLI (ChatGPT 구독)
+
+class CodexUnavailable(OpenAIError):
+    """Codex를 쓸 수 없음(미설치·미로그인·사용 한도·웹 검색 불가)."""
+
+
+CODEX_SEARCH_NOTE = """
+[실행 조건] 반드시 웹 검색 도구로 출처 원문을 직접 확인하라. 웹 검색을 쓸 수 없는 환경이면 검증하지 말고
+{"verdict": "error", "summary": "no web search"} 만 출력하라. 파일을 만들거나 명령을 실행하지 말 것."""
+
+# 설치된 Codex 버전마다 웹 검색 켜는 옵션 위치가 달라 차례로 시도한다(.env의 CODEX_ARGS가 있으면 그것만 쓴다).
+CODEX_SEARCH_VARIANTS = (
+    ("exec", "--search"),
+    ("--search", "exec"),
+    ("exec", "-c", "tools.web_search=true"),
+)
+_CLI_USAGE_ERROR = re.compile(r"unexpected argument|unrecognized|Usage:", re.I)
+_LOGIN_OR_LIMIT = re.compile(r"not logged in|login|usage limit|rate limit|quota|401|unauthorized", re.I)
+
+
+def _codex_variants(cfg: Config) -> list[tuple[str, ...]]:
+    if cfg.codex_args:
+        args = tuple(shlex.split(cfg.codex_args))
+        return [args if "exec" in args else ("exec", *args)]
+    return list(CODEX_SEARCH_VARIANTS)
+
+
+def run_codex(cfg: Config, prompt: str) -> str:
+    """Codex CLI를 웹 검색을 켠 읽기 전용 모드로 실행하고 마지막 답변을 돌려준다."""
+    exe = shutil.which(cfg.codex_bin)
+    if not exe:
+        raise CodexUnavailable(f"'{cfg.codex_bin}' 명령을 찾지 못했습니다(Codex CLI 미설치)")
+    with tempfile.TemporaryDirectory() as tmp:
+        last_msg = Path(tmp) / "last.txt"
+        for variant in _codex_variants(cfg):
+            cmd = [exe, *variant, "--skip-git-repo-check", "--sandbox", "read-only",
+                   "--output-last-message", str(last_msg)]
+            if cfg.codex_model:
+                cmd += ["--model", cfg.codex_model]
+            cmd.append("-")                      # 프롬프트는 stdin으로
+            try:
+                proc = subprocess.run(cmd, input=prompt, cwd=tmp, capture_output=True, text=True,
+                                      encoding="utf-8", errors="replace", timeout=cfg.codex_timeout)
+            except subprocess.TimeoutExpired as e:
+                raise CodexUnavailable(f"Codex 시간 초과({cfg.codex_timeout}초)") from e
+            err = (proc.stderr or "")[-800:]
+            if proc.returncode != 0 and _CLI_USAGE_ERROR.search(err) and not last_msg.exists():
+                log.info("Codex 옵션 조합 %s 미지원 → 다음 조합", " ".join(variant))
+                continue
+            if proc.returncode != 0:
+                kind = "로그인·사용 한도" if _LOGIN_OR_LIMIT.search(err) else "실행 오류"
+                raise CodexUnavailable(f"Codex {kind}(exit {proc.returncode}): {err.strip()[-400:]}")
+            log.info("Codex 실행 옵션: %s", " ".join(variant))
+            return last_msg.read_text(encoding="utf-8") if last_msg.exists() else proc.stdout
+    raise CodexUnavailable("설치된 Codex에서 웹 검색 옵션을 켜지 못했습니다. .env의 CODEX_ARGS를 확인하세요")
+
+
+def factcheck_codex(cfg: Config, post: dict) -> dict:
+    prompt = _instructions(cfg) + CODEX_SEARCH_NOTE + "\n\n" + _article(post)
+    result = _extract_json(run_codex(cfg, prompt))
+    if result.get("verdict") == "error":
+        raise CodexUnavailable(f"Codex에서 웹 검색을 쓸 수 없습니다: {result.get('summary', '')}")
+    return _checked(result, "Codex/ChatGPT 구독")
+
+
+CODEX_SELFTEST = """웹 검색 도구로 대한민국 교육부 누리집(moe.go.kr)의 가장 최근 보도자료 1건을 찾아라.
+웹 검색을 쓸 수 없으면 {"ok": false, "reason": "no web search"} 만 출력하라.
+찾았으면 {"ok": true, "title": "보도자료 제목", "date": "YYYY-MM-DD", "url": "https://..."} JSON 하나만 출력하라."""
+
+
+def codex_selftest(cfg: Config) -> dict:
+    return _extract_json(run_codex(cfg, CODEX_SELFTEST))
+
+
+def factcheck(cfg: Config, post: dict) -> dict:
+    """ChatGPT 교차 팩트체크. 기본은 Codex(구독), 안 되면 API 키가 있을 때만 API로."""
+    if cfg.factcheck_backend == "codex":
+        try:
+            return factcheck_codex(cfg, post)
+        except CodexUnavailable as e:
+            if cfg.openai_api_key:
+                log.warning("%s → OpenAI API로 팩트체크합니다", e)
+                return factcheck_api(cfg, post)
+            raise CodexAccountError(f"ChatGPT(Codex) 팩트체크를 할 수 없습니다: {e}") from e
+    return factcheck_api(cfg, post)
+
+
+class CodexAccountError(OpenAIError, ExternalAccountError):
+    pass

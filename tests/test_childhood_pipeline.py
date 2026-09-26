@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from naver_autopost import content, generate, openai_client, pipeline, profiles
+from naver_autopost import content, gemini_client, generate, openai_client, pipeline, profiles
 from naver_autopost.config import Config
 from tests.sample_post import make_post
 
@@ -84,11 +84,11 @@ def test_attempt_full_flow_with_gpt_fix(cfg, monkeypatch):
 
     def fake_image(c, prompt, path):
         if "classroom" in prompt:
-            raise openai_client.OpenAIError("boom")      # illust_b 생성 실패 → 본문에서 빠져야 함
+            raise gemini_client.GeminiError("blocked")   # illust_b 생성 실패 → 본문에서 빠져야 함
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"png")
         return path
-    monkeypatch.setattr(openai_client, "generate_image", fake_image)
+    monkeypatch.setattr(gemini_client, "generate_image", fake_image)
 
     def fake_claude_fc(c, out_dir):
         fc = {"verdict": "pass", "images": {"illust_a": "ok"}, "summary": "ok"}
@@ -135,7 +135,7 @@ def test_gpt_still_fix_after_second_round_rejects(cfg, monkeypatch):
 def test_bad_image_from_claude_review_is_dropped(cfg, monkeypatch):
     out = cfg.output_dir / "2026-09-27"
     monkeypatch.setattr(generate, "write_post", _fake_write(child_post()))
-    monkeypatch.setattr(openai_client, "generate_image",
+    monkeypatch.setattr(gemini_client, "generate_image",
                         lambda c, p, path: path.parent.mkdir(parents=True, exist_ok=True) or path.write_bytes(b"x") or path)
 
     def fake_claude_fc(c, out_dir):
@@ -173,6 +173,7 @@ def test_gpt_factcheck_payload_uses_web_search(cfg, monkeypatch):
         seen.update(path=path, payload=payload)
         return {"output_text": '{"verdict": "pass", "checked": 3, "issues": [], "summary": "ok"}'}
     monkeypatch.setattr(openai_client, "_post", fake_post)
+    cfg.factcheck_backend = "api"
     result = openai_client.factcheck(cfg, content.normalize(child_post()))
     assert result["verdict"] == "pass"
     assert seen["path"] == "/responses"
@@ -204,9 +205,9 @@ def test_account_error_stops_and_resume_skips_finished_steps(cfg, monkeypatch):
     monkeypatch.setattr(generate, "write_post", write_post)
 
     def no_money(c, prompt, path):
-        raise openai_client.OpenAIAccountError("credit_balance_exhausted")
-    monkeypatch.setattr(openai_client, "generate_image", no_money)
-    with pytest.raises(openai_client.OpenAIAccountError):
+        raise gemini_client.GeminiAccountError("RESOURCE_EXHAUSTED")
+    monkeypatch.setattr(gemini_client, "generate_image", no_money)
+    with pytest.raises(gemini_client.GeminiAccountError):
         pipeline.produce(cfg, "2026-09-27", out)
     assert "[[IMAGE:illust_a]]" in (out / "post.json").read_text(encoding="utf-8")   # 그림 자리 유지
 
@@ -214,7 +215,7 @@ def test_account_error_stops_and_resume_skips_finished_steps(cfg, monkeypatch):
     def ok_image(c, prompt, path):
         path.write_bytes(b"png")
         return path
-    monkeypatch.setattr(openai_client, "generate_image", ok_image)
+    monkeypatch.setattr(gemini_client, "generate_image", ok_image)
     claude_calls = []
 
     def fake_claude_fc(c, out_dir):
@@ -251,3 +252,101 @@ def test_quota_429_is_account_error_without_retry(cfg, monkeypatch):
     with pytest.raises(openai_client.OpenAIAccountError):
         openai_client._post(cfg, "/responses", {}, timeout=5)
     assert calls == [1]
+
+
+# ---------------------------------------------------------------- Gemini
+
+def _png_b64():
+    import base64
+    import io as _io
+
+    from PIL import Image
+    buf = _io.BytesIO()
+    Image.new("RGB", (32, 18), "#abcdef").save(buf, "PNG")
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def test_gemini_generate_image_requests_16x9_and_saves_png(cfg, monkeypatch, tmp_path):
+    cfg.gemini_api_key = "g"
+    seen = {}
+
+    def fake_call(c, model, payload):
+        seen.update(model=model, payload=payload)
+        return {"candidates": [{"content": {"parts": [{"text": "here"}, {"inlineData": {"mimeType": "image/png", "data": _png_b64()}}]}}]}
+    monkeypatch.setattr(gemini_client, "_call", fake_call)
+    out = gemini_client.generate_image(cfg, "a scene", tmp_path / "a.png")
+    from PIL import Image
+    assert Image.open(out).size == (32, 18)
+    assert seen["model"] == cfg.gemini_image_model
+    assert seen["payload"]["generationConfig"]["imageConfig"]["aspectRatio"] == "16:9"
+    assert "no text" in seen["payload"]["contents"][0]["parts"][0]["text"].lower()
+
+
+def test_gemini_falls_back_when_model_missing(cfg, monkeypatch, tmp_path):
+    cfg.gemini_api_key = "g"
+    cfg.gemini_image_model = "retired-model"
+    tried = []
+
+    def fake_call(c, model, payload):
+        tried.append(model)
+        if len(tried) == 1:
+            raise gemini_client.GeminiError(f"model-not-found {model}")
+        return {"candidates": [{"content": {"parts": [{"inlineData": {"data": _png_b64()}}]}}]}
+    monkeypatch.setattr(gemini_client, "_call", fake_call)
+    gemini_client.generate_image(cfg, "x", tmp_path / "a.png")
+    assert tried == ["retired-model", gemini_client.FALLBACK_MODELS[0]]
+
+
+def test_gemini_missing_key_is_account_error(cfg, tmp_path):
+    cfg.gemini_api_key = ""
+    with pytest.raises(gemini_client.GeminiAccountError):
+        gemini_client.generate_image(cfg, "x", tmp_path / "a.png")
+
+
+# ---------------------------------------------------------------- Codex(ChatGPT 구독) 팩트체크
+
+def _fake_codex(tmp_path, body: str, reject_first_variant=False):
+    """가짜 codex 실행 파일: 인자를 기록하고 --output-last-message 파일에 결과를 쓴다."""
+    script = tmp_path / "codex"
+    log = tmp_path / "codex_args.log"
+    script.write_text(f"""#!{__import__('sys').executable}
+import sys, pathlib
+args = sys.argv[1:]
+pathlib.Path({str(log)!r}).open("a").write(" ".join(args) + "\\n")
+if {reject_first_variant!r} and args[:2] == ["exec", "--search"]:
+    sys.stderr.write("error: unexpected argument '--search' found\\nUsage: codex exec"); sys.exit(2)
+prompt = sys.stdin.read()
+assert "[본문]" in prompt
+out = args[args.index("--output-last-message") + 1]
+pathlib.Path(out).write_text({body!r}, encoding="utf-8")
+""", encoding="utf-8")
+    script.chmod(0o755)
+    return script, log
+
+
+def test_codex_factcheck_uses_subscription_cli(cfg, tmp_path):
+    script, log = _fake_codex(tmp_path, '{"verdict": "pass", "checked": 5, "issues": [], "summary": "ok"}')
+    cfg.codex_bin = str(script)
+    result = openai_client.factcheck(cfg, content.normalize(child_post()))
+    assert result["verdict"] == "pass"
+    args = log.read_text().splitlines()[0]
+    assert args.startswith("exec --search") and "--sandbox read-only" in args
+
+
+def test_codex_tries_next_search_variant(cfg, tmp_path):
+    script, log = _fake_codex(tmp_path, '{"verdict": "fix", "issues": [{"text": "a"}], "summary": ""}',
+                              reject_first_variant=True)
+    cfg.codex_bin = str(script)
+    assert openai_client.factcheck(cfg, content.normalize(child_post()))["verdict"] == "fix"
+    assert log.read_text().splitlines()[1].startswith("--search exec")
+
+
+def test_codex_without_web_search_falls_back_or_stops(cfg, tmp_path, monkeypatch):
+    script, _ = _fake_codex(tmp_path, '{"verdict": "error", "summary": "no web search"}')
+    cfg.codex_bin = str(script)
+    cfg.openai_api_key = ""
+    with pytest.raises(openai_client.CodexAccountError):
+        openai_client.factcheck(cfg, content.normalize(child_post()))
+    cfg.openai_api_key = "k"
+    monkeypatch.setattr(openai_client, "_post", lambda c, p, payload, timeout: {"output_text": '{"verdict": "pass"}'})
+    assert openai_client.factcheck(cfg, content.normalize(child_post()))["verdict"] == "pass"

@@ -1,4 +1,4 @@
-"""하루 1편: 글쓰기 → 구조 검증 → 일러스트(ChatGPT) → Claude 팩트체크 → ChatGPT 팩트체크
+"""하루 1편: 글쓰기 → 구조 검증 → 일러스트(Gemini) → Claude 팩트체크 → ChatGPT 팩트체크
 → 이미지 → 네이버 발행 → 이력 기록 → 알림."""
 from __future__ import annotations
 
@@ -10,8 +10,9 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import content, generate, history, images, notify, openai_client
+from . import content, gemini_client, generate, history, images, notify, openai_client
 from .config import Config
+from .errors import ExternalAccountError
 
 log = logging.getLogger(__name__)
 KST = ZoneInfo("Asia/Seoul")
@@ -86,9 +87,10 @@ def _make_illustrations(cfg: Config, post: dict, out_dir: Path) -> None:
         if (out_dir / f"{name}.png").exists():      # 이어서 실행할 때 이미 만든 그림은 재사용
             continue
         try:
-            openai_client.generate_image(cfg, ill["prompt"], out_dir / f"{name}.png")
-            log.info("일러스트 생성: %s", name)
-        except openai_client.OpenAIAccountError:
+            generator = gemini_client if cfg.image_backend == "gemini" else openai_client
+            generator.generate_image(cfg, ill["prompt"], out_dir / f"{name}.png")
+            log.info("일러스트 생성(%s): %s", cfg.image_backend, name)
+        except ExternalAccountError:
             raise                                    # 잔액·키 문제는 그림만 빼지 말고 멈춘다
         except Exception as e:
             log.warning("일러스트 %s 생성 실패: %s", name, e)
@@ -236,8 +238,15 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
 def _preflight(cfg: Config) -> None:
     if not cfg.blog_id:
         raise RuntimeError(".env에 NAVER_BLOG_ID가 없습니다")
-    if (cfg.gpt_factcheck or cfg.profile.illustrations) and not cfg.openai_api_key:
-        raise RuntimeError(".env에 OPENAI_API_KEY가 없습니다(ChatGPT 이미지·팩트체크에 필요)")
+    if cfg.profile.illustrations:
+        if cfg.image_backend == "gemini" and not cfg.gemini_api_key:
+            raise RuntimeError(".env에 GEMINI_API_KEY가 없습니다(Gemini 일러스트 생성에 필요)")
+        if cfg.image_backend == "openai" and not cfg.openai_api_key:
+            raise RuntimeError(".env에 OPENAI_API_KEY가 없습니다(IMAGE_BACKEND=openai)")
+    if cfg.gpt_factcheck:
+        has_codex = cfg.factcheck_backend == "codex" and shutil.which(cfg.codex_bin)
+        if not has_codex and not cfg.openai_api_key:
+            raise RuntimeError("ChatGPT 팩트체크에 쓸 Codex CLI(ChatGPT 로그인)도 OPENAI_API_KEY도 없습니다")
 
 
 def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:

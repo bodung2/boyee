@@ -28,7 +28,8 @@ Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Se
 
 Write-Host ""
 Write-Host "설치 완료. 남은 일(최초 1회):"
-Write-Host "  (1) .env 에 NAVER_BLOG_ID, OPENAI_API_KEY 입력"
+Write-Host "  (1) .env 에 NAVER_BLOG_ID, GEMINI_API_KEY 입력"
 Write-Host "  (2) .venv\Scripts\python.exe -m naver_autopost login   <- 열린 창에서 네이버 로그인"
 Write-Host "  (3) claude 명령으로 Claude Code 로그인이 되어 있는지 확인"
-Write-Host "  (4) .venv\Scripts\python.exe -m naver_autopost run --profile $Profile --dry-run   <- 발행 직전까지 시험 실행"
+Write-Host "  (4) .venv\Scripts\python.exe -m naver_autopost check-ai   <- Gemini 그림·Codex(ChatGPT) 연결 확인"
+Write-Host "  (5) .venv\Scripts\python.exe -m naver_autopost run --profile $Profile --dry-run   <- 발행 직전까지 시험 실행"

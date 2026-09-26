@@ -1,6 +1,6 @@
 ---
 name: childhood-auto-factcheck
-description: "childhood-auto-post가 만든 유아교육 post.json을 발행 직전에 독립적으로 검수한다. 모든 수치·날짜·고시·명칭을 출처 원문과 다시 대조해 정정·삭제하고, 발달 안전 가드레일(진단·통과 표현, 검사 복제, 판매 링크)과 ChatGPT가 만든 일러스트(글자·부적절 장면)를 점검해 factcheck.json에 pass/fail을 남긴다. 파이프라인의 ChatGPT 리뷰 반영 단계에서도 쓴다."
+description: "childhood-auto-post가 만든 유아교육 post.json을 발행 직전에 독립적으로 검수한다. 모든 수치·날짜·고시·명칭을 출처 원문과 다시 대조해 정정·삭제하고, 발달 안전 가드레일(진단·통과 표현, 검사 복제, 판매 링크)과 Gemini가 만든 일러스트(글자·부적절 장면)를 점검해 factcheck.json에 pass/fail을 남긴다. 파이프라인의 ChatGPT 리뷰 반영 단계에서도 쓴다."
 ---
 
 # 유아교육 자동 발행 검수 (게이트키퍼)

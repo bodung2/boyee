@@ -4,6 +4,7 @@
   python -m naver_autopost run --profile childhood --dry-run 발행 버튼 직전까지만(설치 확인용)
   python -m naver_autopost preview output/childhood/날짜      post.json으로 이미지·HTML 미리보기만 생성
   python -m naver_autopost import-history 시트.csv --profile childhood  발행 이력 가져오기
+  python -m naver_autopost check-ai                          Gemini 그림·Codex(ChatGPT) 웹 검색 연결 확인
 """
 from __future__ import annotations
 
@@ -32,6 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     prev.add_argument("dir", type=Path)
     imp = with_profile(sub.add_parser("import-history"))
     imp.add_argument("csv", type=Path)
+    with_profile(sub.add_parser("check-ai"))
     args = parser.parse_args(argv)
     cfg = Config.load(getattr(args, "profile", profiles.DEFAULT_PROFILE))
 
@@ -62,12 +64,47 @@ def main(argv: list[str] | None = None) -> int:
         (args.dir / "preview.html").write_text(html, encoding="utf-8")
         print("미리보기:", args.dir / "preview.html")
         return 0
+    if args.cmd == "check-ai":
+        return _check_ai(cfg)
     if args.cmd == "import-history":
         from . import history
         added = history.import_csv(cfg.history_file, args.csv)
         print(f"{added}개 글을 발행 이력에 추가했습니다: {cfg.history_file}")
         return 0
     return 1
+
+
+def _check_ai(cfg: Config) -> int:
+    import logging
+
+    from . import gemini_client, openai_client
+    logging.basicConfig(level=logging.INFO, format="  %(message)s")
+    ok = True
+
+    print("1) Gemini 그림 생성 확인 ...")
+    out = cfg.output_dir.parent / "check" / "gemini_test.png"
+    try:
+        gemini_client.generate_image(
+            cfg, "a cute flat vector illustration of a child stacking colorful wooden blocks in a Korean living room, "
+                 "warm pastel light, wide 16:9", out)
+        print(f"   ✅ 성공: {out}  (그림을 열어 확인해 보세요)")
+    except Exception as e:
+        ok = False
+        print(f"   ❌ 실패: {e}")
+
+    print("2) Codex(ChatGPT 구독) 웹 검색 확인 ... (1~3분)")
+    try:
+        r = openai_client.codex_selftest(cfg)
+        if r.get("ok"):
+            print(f"   ✅ 성공: {r.get('date', '')} {r.get('title', '')}\n      {r.get('url', '')}")
+        else:
+            ok = False
+            print(f"   ❌ Codex는 실행되지만 웹 검색이 꺼져 있습니다: {r.get('reason', '')}")
+    except Exception as e:
+        ok = False
+        print(f"   ❌ 실패: {e}")
+    print("모두 정상입니다." if ok else "실패한 항목의 메시지를 Claude에게 알려주세요.")
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":
