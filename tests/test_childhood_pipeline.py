@@ -67,6 +67,7 @@ def cfg(tmp_path, monkeypatch):
     c.output_dir = tmp_path / "out"
     c.data_dir = tmp_path / "data"
     c.history_file = c.data_dir / "published_childhood.json"
+    c.image_backend = "gemini"      # 파이프라인 테스트는 gemini_client를 가짜로 바꿔 쓴다
     return c
 
 
@@ -352,3 +353,53 @@ def test_codex_without_web_search_falls_back_or_stops(cfg, tmp_path, monkeypatch
     cfg.openai_api_key = "k"
     monkeypatch.setattr(openai_client, "_post", lambda c, p, payload, timeout: {"output_text": '{"verdict": "pass"}'})
     assert openai_client.factcheck(cfg, content.normalize(child_post()))["verdict"] == "pass"
+
+
+# ---------------------------------------------------------------- Codex 내장 이미지 생성(ChatGPT 구독)
+
+def _fake_codex_image(tmp_path, codex_home, make_image=True, size=(1536, 1024)):
+    """가짜 codex: 세션 id를 출력하고 CODEX_HOME/generated_images/<세션>/ig_1.png 를 만든다."""
+    script = tmp_path / "codex_img"
+    script.write_text(f"""#!{__import__('sys').executable}
+import sys, os, pathlib
+prompt = sys.stdin.read()
+assert "image generation tool" in prompt and "no text" in prompt.lower()
+assert "OPENAI_API_KEY" not in os.environ
+sid = "0199aaaa-bbbb-cccc-dddd-eeeeffff0000"
+print("session id: " + sid)
+if {make_image!r}:
+    from PIL import Image
+    d = pathlib.Path(os.environ["CODEX_HOME"]) / "generated_images" / sid
+    d.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", {size!r}, "#88aacc").save(d / "ig_1.png")
+""", encoding="utf-8")
+    script.chmod(0o755)
+    return script
+
+
+def test_codex_image_collects_file_and_crops_to_16x9(cfg, tmp_path, monkeypatch):
+    from naver_autopost import codex_image
+    home = tmp_path / "codex_home"
+    monkeypatch.setenv("CODEX_HOME", str(home))
+    monkeypatch.setenv("OPENAI_API_KEY", "should-not-leak")
+    cfg.codex_bin = str(_fake_codex_image(tmp_path, home))
+    out = codex_image.generate_image(cfg, "a child stacking blocks", tmp_path / "out" / "illust_a.png")
+    from PIL import Image
+    assert Image.open(out).size == (1536, 864)
+
+
+def test_codex_image_missing_file_is_plain_error(cfg, tmp_path, monkeypatch):
+    from naver_autopost import codex_image
+    home = tmp_path / "codex_home"
+    monkeypatch.setenv("CODEX_HOME", str(home))
+    cfg.codex_bin = str(_fake_codex_image(tmp_path, home, make_image=False))
+    with pytest.raises(codex_image.CodexImageError):      # 그 그림만 빠지고 발행은 계속
+        codex_image.generate_image(cfg, "x", tmp_path / "a.png")
+
+
+def test_default_image_backend_is_codex(monkeypatch):
+    monkeypatch.delenv("IMAGE_BACKEND", raising=False)
+    from naver_autopost import codex_image
+    c = Config.load("childhood")
+    assert c.image_backend == "codex"
+    assert pipeline.image_generator(c) is codex_image

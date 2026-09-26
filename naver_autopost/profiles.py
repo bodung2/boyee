@@ -11,7 +11,7 @@ class Profile:
     write_skill: str
     factcheck_skill: str
     thumbnail_style: str        # "edu"(가운데 정렬) | "childhood"(질문형·다크, 좌상단 고정 레이아웃)
-    illustrations: bool         # Gemini(나노바나나)로 본문 일러스트 생성
+    illustrations: bool         # AI 이미지(기본: Codex/ChatGPT 구독)로 본문 일러스트 생성
     extra_forbidden: tuple[str, ...] = ()
 
 

@@ -1,6 +1,6 @@
 ---
 name: childhood-auto-post
-description: "교사 SR의 네이버 블로그 '유아교육 정보성 글'을 완전 자동 발행용으로 1편 만든다. early-childhood-insight-extraction의 register 규율·발달 안전 가드레일·클러스터 큐·34역량 분해 엔진·심층 리서치 원칙을 그대로 따르되, 사람 검토 없이 발행되므로 ✍️ 경험 블록·체크리스트·'확인 필요' 표기를 없애고, 일러스트는 Gemini(나노바나나) 이미지 생성용 프롬프트로 post.json에 담는다. naver_autopost 파이프라인(--profile childhood)이 매일 호출한다."
+description: "교사 SR의 네이버 블로그 '유아교육 정보성 글'을 완전 자동 발행용으로 1편 만든다. early-childhood-insight-extraction의 register 규율·발달 안전 가드레일·클러스터 큐·34역량 분해 엔진·심층 리서치 원칙을 그대로 따르되, 사람 검토 없이 발행되므로 ✍️ 경험 블록·체크리스트·'확인 필요' 표기를 없애고, 일러스트는 이미지 생성용 프롬프트로 post.json에 담는다. naver_autopost 파이프라인(--profile childhood)이 매일 호출한다."
 ---
 
 # 유아교육 정보성 글 — 완전 자동 발행 모드
@@ -8,7 +8,7 @@ description: "교사 SR의 네이버 블로그 '유아교육 정보성 글'을 �
 이 스킬은 `early-childhood-insight-extraction`의 **자동 발행 버전**이다. 파이프라인이 매일 1회 호출한다. 여기서 만든 `post.json`은 아래 순서를 거쳐 **사람 검토 없이 네이버에 발행된다.**
 
 1. 구조 검증
-2. Gemini(나노바나나) 일러스트 생성
+2. 일러스트 생성(ChatGPT 이미지, Codex)
 3. Claude 팩트체크
 4. ChatGPT 팩트체크(Codex)
 
@@ -114,7 +114,7 @@ description: "교사 SR의 네이버 블로그 '유아교육 정보성 글'을 �
 - 일러스트: `ILLUSTRATIONS`개만큼 `<p>[[IMAGE:illust_a]]</p>`, `<p>[[IMAGE:illust_b]]</p>`… 를 흐름에 맞게 분산한다. 첫 일러스트는 도입 직후 대표 장면, 나머지는 해당 문단 바로 뒤에 둔다.
 - 대표 썸네일은 파이프라인이 글 맨 앞에 넣으므로 표시하지 않는다.
 
-### 일러스트 프롬프트 (Gemini 나노바나나 이미지 생성용)
+### 일러스트 프롬프트 (이미지 생성 AI용)
 각 일러스트는 대응 문단의 핵심을 **그림 한 장으로 설명**해야 한다. 추상 상징은 쓰지 않는다.
 - 영어로 쓴다: [구체 장소: 한국 가정 거실/유치원 교실] + [인물의 구체 행동] + [핵심 소품] + [따뜻한 파스텔 조명] + [cute flat vector illustration, 모든 일러스트 스타일 통일] + [wide 16:9 composition]
 - 반드시 포함: "no text, no letters, no numbers, no logos, no watermark", "natural Korean home/early-childhood-education context", "generic people, not any real person or real building"

@@ -63,6 +63,7 @@ class Config:
     codex_args: str
     codex_model: str
     codex_timeout: int
+    codex_image_timeout: int
     openai_image_model: str
     openai_image_size: str
     openai_image_quality: str
@@ -94,7 +95,7 @@ class Config:
             generate_timeout=int(env("GENERATE_TIMEOUT_SEC", "3600")),
             max_attempts=int(env("MAX_ATTEMPTS", "2")),
             openai_api_key=env("OPENAI_API_KEY", "").strip(),
-            image_backend=env("IMAGE_BACKEND", "gemini").strip().lower(),
+            image_backend=env("IMAGE_BACKEND", "codex").strip().lower(),
             gemini_api_key=env("GEMINI_API_KEY", "").strip(),
             gemini_image_model=env("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image").strip(),
             factcheck_backend=env("FACTCHECK_BACKEND", "codex").strip().lower(),
@@ -102,6 +103,7 @@ class Config:
             codex_args=env("CODEX_ARGS", "").strip(),
             codex_model=env("CODEX_MODEL", "").strip(),
             codex_timeout=int(env("CODEX_TIMEOUT_SEC", "1200")),
+            codex_image_timeout=int(env("CODEX_IMAGE_TIMEOUT_SEC", "360")),
             openai_image_model=env("OPENAI_IMAGE_MODEL", "gpt-image-2").strip(),
             openai_image_size=env("OPENAI_IMAGE_SIZE", "1536x864").strip(),
             openai_image_quality=env("OPENAI_IMAGE_QUALITY", "medium").strip(),

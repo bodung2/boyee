@@ -4,7 +4,7 @@
   python -m naver_autopost run --profile childhood --dry-run 발행 버튼 직전까지만(설치 확인용)
   python -m naver_autopost preview output/childhood/날짜      post.json으로 이미지·HTML 미리보기만 생성
   python -m naver_autopost import-history 시트.csv --profile childhood  발행 이력 가져오기
-  python -m naver_autopost check-ai                          Gemini 그림·Codex(ChatGPT) 웹 검색 연결 확인
+  python -m naver_autopost check-ai                          그림 생성·Codex(ChatGPT) 웹 검색 연결 확인
 """
 from __future__ import annotations
 
@@ -77,14 +77,15 @@ def main(argv: list[str] | None = None) -> int:
 def _check_ai(cfg: Config) -> int:
     import logging
 
-    from . import gemini_client, openai_client
+    from . import openai_client
+    from .pipeline import image_generator
     logging.basicConfig(level=logging.INFO, format="  %(message)s")
     ok = True
 
-    print("1) Gemini 그림 생성 확인 ...")
-    out = cfg.output_dir.parent / "check" / "gemini_test.png"
+    print(f"1) 그림 생성 확인 ({cfg.image_backend}) ... (1~3분)")
+    out = cfg.output_dir.parent / "check" / f"{cfg.image_backend}_test.png"
     try:
-        gemini_client.generate_image(
+        image_generator(cfg).generate_image(
             cfg, "a cute flat vector illustration of a child stacking colorful wooden blocks in a Korean living room, "
                  "warm pastel light, wide 16:9", out)
         print(f"   ✅ 성공: {out}  (그림을 열어 확인해 보세요)")

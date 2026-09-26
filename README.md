@@ -12,7 +12,7 @@
   ① 글쓰기(Claude)       클러스터 큐로 주제 선정 → 자료 10개+ 정독·교차검증 → post.json
                            (본문, 요약 카드 문구, 썸네일 문구, 일러스트 프롬프트, 출처, 검증용 사실 목록)
   ② 구조 검증            자리표시자, 발달 진단·통과 표현, 판매 링크, 출처 부족 → 차단
-  ③ 일러스트(Gemini)     나노바나나로 본문 일러스트 2장 생성 → 본문 중간에 배치
+  ③ 일러스트(ChatGPT)    Codex CLI 내장 이미지 생성(ChatGPT 구독)으로 2장 → 본문 중간에 배치
   ④ 팩트체크 1(Claude)   모든 사실을 원문과 대조해 정정·삭제, 발달 안전 점검,
                            일러스트를 눈으로 검사(글자·이상한 장면이면 그 그림만 제외)
   ⑤ 팩트체크 2(ChatGPT)  Codex CLI(ChatGPT 구독)로 웹 검색 교차검증 → 지적 사항은 Claude가 원문으로 재확인해
@@ -30,16 +30,15 @@
 - Git
 - 크롬
 - Claude Code([설치 안내](https://code.claude.com/docs)). 터미널에서 `claude`를 한 번 실행해 로그인해 둡니다.
-- **Gemini API 키**(그림): [aistudio.google.com](https://aistudio.google.com)의 **Get API key**에서 발급합니다. 무료 한도를 넘거나 이미지 모델에 무료 한도가 없으면 결제 등록이 필요할 수 있습니다.
-- **Codex CLI**(ChatGPT 팩트체크): `npm install -g @openai/codex` 설치 후 `codex`를 실행해 **Sign in with ChatGPT**로 로그인합니다. API 결제 없이 ChatGPT 구독 사용량으로 동작합니다.
+- **Codex CLI**(ChatGPT 그림 + 팩트체크): `npm install -g @openai/codex` 설치 후 `codex`를 실행해 **Sign in with ChatGPT**로 로그인합니다. API 결제 없이 ChatGPT 구독 사용량으로 동작합니다.
 - (선택) OpenAI API 키: Codex가 안 되는 날의 예비 팩트체크 경로입니다. 없어도 됩니다.
 
 ```powershell
 git clone https://github.com/bodung2/boyee.git
 cd boyee
 powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Profile childhood -Time 06:00
-notepad .env        # NAVER_BLOG_ID, NAVER_CATEGORY_CHILDHOOD, GEMINI_API_KEY 입력
-.venv\Scripts\python.exe -m naver_autopost check-ai   # Gemini 그림·Codex 웹 검색 연결 확인
+notepad .env        # NAVER_BLOG_ID, NAVER_CATEGORY_CHILDHOOD 입력
+.venv\Scripts\python.exe -m naver_autopost check-ai   # ChatGPT 그림·웹 검색 연결 확인
 .venv\Scripts\python.exe -m naver_autopost login    # 뜬 창에서 네이버 로그인("로그인 상태 유지" 체크)
 ```
 
@@ -75,7 +74,6 @@ notepad .env        # NAVER_BLOG_ID, NAVER_CATEGORY_CHILDHOOD, GEMINI_API_KEY �
 |---|---|---|
 | 네이버 로그인이 풀렸습니다 | 세션 만료·보안 확인 | `python -m naver_autopost login` 다시 실행 |
 | 발행 기준을 통과한 글을 만들지 못했습니다 | 검증·팩트체크 탈락 | 없음. 그날은 건너뛰는 것이 정상 동작입니다 |
-| Gemini 계정 문제 / 사용 한도 초과 | 키 누락·무료 한도 소진 | `.env`의 GEMINI_API_KEY, AI Studio 결제 설정 확인 |
 | ChatGPT(Codex) 팩트체크를 할 수 없습니다 | Codex 로그인 풀림·구독 사용 한도 | `codex` 실행 → 로그인 확인. 다음 실행은 멈춘 단계부터 이어서 합니다 |
 | 화면 요소를 찾지 못했습니다 | 네이버 에디터 변경 | `logs/*-publish-error.png`를 보고 `naver_autopost/publisher.py`의 `SELECTORS` 수정 |
 | 발행 버튼은 눌렀지만 글 주소를 확인하지 못했습니다 | 발행 직후 화면 변화 | 블로그에서 확인. 중복 발행을 막기 위해 자동 재시도하지 않습니다 |
@@ -86,7 +84,7 @@ notepad .env        # NAVER_BLOG_ID, NAVER_CATEGORY_CHILDHOOD, GEMINI_API_KEY �
 
 - ✍️ 경험 블록을 만들지 않습니다(경험 위조 금지). 대신 '초등 교사 관점 해석' 문단을 씁니다.
 - "(확인 필요)" 표기와 발행 전 체크리스트를 쓰지 않습니다. 불확실한 사실은 아예 쓰지 않습니다.
-- 나노바나나 프롬프트를 사람이 옮기는 대신 **Gemini API로 일러스트를 직접 생성**해 본문에 넣습니다.
+- 나노바나나 프롬프트를 사람이 옮기는 대신 **ChatGPT 이미지(Codex)로 일러스트를 직접 생성**해 본문에 넣습니다. `.env`의 `IMAGE_BACKEND=gemini`로 Gemini API로도 바꿀 수 있습니다.
 - E(홈러닝) 레인에서 활동지 파일 배포나 다운로드 약속은 하지 않습니다. 파일 배포는 edu-freebie-distribution 몫입니다.
 - 판매·구매 링크는 발행 단계에서 코드로 한 번 더 차단합니다.
 
@@ -94,7 +92,7 @@ notepad .env        # NAVER_BLOG_ID, NAVER_CATEGORY_CHILDHOOD, GEMINI_API_KEY �
 
 - 네이버는 공식 글쓰기 API가 없어 브라우저 자동화로 발행합니다. 에디터가 바뀌면 멈출 수 있고, 운영정책상 제재 위험도 0은 아닙니다(하루 1편, 실제 크롬 창, 사람 계정 세션으로 최소화).
 - 이중 팩트체크를 거쳐도 AI 오류 가능성은 남습니다. 발행된 글은 틈틈이 읽어 보세요.
-- **비용**: 팩트체크는 ChatGPT 구독 사용량(Codex), 글쓰기는 Claude 구독 사용량을 씁니다. 별도 과금은 Gemini 그림(하루 2장)뿐이며, 무료 한도 안이면 0원, 넘으면 모델 요금표 기준으로 과금됩니다.
+- **비용**: 별도 과금이 없습니다. 글쓰기는 Claude 구독, 그림과 2차 팩트체크는 ChatGPT 구독(Codex) 사용량을 씁니다. 그림 생성은 일반 대화보다 구독 사용량을 많이 쓰므로, 한도에 걸리는 날은 멈추고 알린 뒤 다음 실행에서 이어서 합니다.
 
 ## 설정 바꾸기
 

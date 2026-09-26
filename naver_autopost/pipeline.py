@@ -1,4 +1,4 @@
-"""하루 1편: 글쓰기 → 구조 검증 → 일러스트(Gemini) → Claude 팩트체크 → ChatGPT 팩트체크
+"""하루 1편: 글쓰기 → 구조 검증 → 일러스트(ChatGPT·Codex) → Claude 팩트체크 → ChatGPT 팩트체크
 → 이미지 → 네이버 발행 → 이력 기록 → 알림."""
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import content, gemini_client, generate, history, images, notify, openai_client
+from . import codex_image, content, gemini_client, generate, history, images, notify, openai_client
 from .config import Config
 from .errors import ExternalAccountError
 
@@ -80,6 +80,11 @@ def _drop_images(post: dict, names: set[str], out_dir: Path, why: str) -> None:
         (out_dir / f"{name}.png").unlink(missing_ok=True)
 
 
+def image_generator(cfg: Config):
+    """IMAGE_BACKEND: codex(ChatGPT 구독, 기본) / gemini / openai(API)"""
+    return {"codex": codex_image, "gemini": gemini_client, "openai": openai_client}.get(cfg.image_backend, codex_image)
+
+
 def _make_illustrations(cfg: Config, post: dict, out_dir: Path) -> None:
     failed = set()
     for ill in post.get("illustrations") or []:
@@ -87,8 +92,7 @@ def _make_illustrations(cfg: Config, post: dict, out_dir: Path) -> None:
         if (out_dir / f"{name}.png").exists():      # 이어서 실행할 때 이미 만든 그림은 재사용
             continue
         try:
-            generator = gemini_client if cfg.image_backend == "gemini" else openai_client
-            generator.generate_image(cfg, ill["prompt"], out_dir / f"{name}.png")
+            image_generator(cfg).generate_image(cfg, ill["prompt"], out_dir / f"{name}.png")
             log.info("일러스트 생성(%s): %s", cfg.image_backend, name)
         except ExternalAccountError:
             raise                                    # 잔액·키 문제는 그림만 빼지 말고 멈춘다
@@ -238,7 +242,9 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
 def _preflight(cfg: Config) -> None:
     if not cfg.blog_id:
         raise RuntimeError(".env에 NAVER_BLOG_ID가 없습니다")
-    if cfg.profile.illustrations:
+    if cfg.profile.illustrations and cfg.illustration_count > 0:
+        if cfg.image_backend == "codex" and not shutil.which(cfg.codex_bin):
+            raise RuntimeError("Codex CLI를 찾지 못했습니다(ChatGPT 구독 그림 생성에 필요)")
         if cfg.image_backend == "gemini" and not cfg.gemini_api_key:
             raise RuntimeError(".env에 GEMINI_API_KEY가 없습니다(Gemini 일러스트 생성에 필요)")
         if cfg.image_backend == "openai" and not cfg.openai_api_key:
