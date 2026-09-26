@@ -316,6 +316,8 @@ pathlib.Path({str(log)!r}).open("a").write(" ".join(args) + "\\n")
 if {reject_first_variant!r} and args[:2] == ["exec", "--search"]:
     sys.stderr.write("error: unexpected argument '--search' found\\nUsage: codex exec"); sys.exit(2)
 prompt = sys.stdin.read()
+import os
+assert "OPENAI_API_KEY" not in os.environ, "API key leaked to codex"
 assert "[본문]" in prompt
 out = args[args.index("--output-last-message") + 1]
 pathlib.Path(out).write_text({body!r}, encoding="utf-8")

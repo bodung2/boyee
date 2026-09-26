@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
 import re
 import shlex
 import shutil
@@ -215,8 +216,10 @@ def run_codex(cfg: Config, prompt: str) -> str:
             if cfg.codex_model:
                 cmd += ["--model", cfg.codex_model]
             cmd.append("-")                      # 프롬프트는 stdin으로
+            # API 키가 환경에 있으면 Codex가 구독 대신 API 결제로 돌 수 있어 빼고 넘긴다.
+            env = {k: v for k, v in os.environ.items() if k not in ("OPENAI_API_KEY", "CODEX_API_KEY")}
             try:
-                proc = subprocess.run(cmd, input=prompt, cwd=tmp, capture_output=True, text=True,
+                proc = subprocess.run(cmd, input=prompt, cwd=tmp, env=env, capture_output=True, text=True,
                                       encoding="utf-8", errors="replace", timeout=cfg.codex_timeout)
             except subprocess.TimeoutExpired as e:
                 raise CodexUnavailable(f"Codex 시간 초과({cfg.codex_timeout}초)") from e
