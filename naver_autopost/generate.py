@@ -53,7 +53,8 @@ def _run_claude(cfg: Config, prompt: str, log_file: Path) -> None:
         raise GenerationError(f"Claude 실행 시간 초과({cfg.generate_timeout}초)") from e
     log_file.write_text(proc.stdout + "\n--- stderr ---\n" + proc.stderr, encoding="utf-8")
     if proc.returncode != 0:
-        raise GenerationError(f"Claude 실행 실패(exit {proc.returncode}). 로그: {log_file}")
+        detail = (proc.stderr.strip() or proc.stdout.strip())[-600:]
+        raise GenerationError(f"Claude 실행 실패(exit {proc.returncode}). 로그: {log_file}\n{detail}")
     try:
         result = json.loads(proc.stdout)
         if result.get("is_error"):
