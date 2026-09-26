@@ -46,3 +46,12 @@ def test_too_few_sources():
 def test_split_segments_order():
     segs = content.split_segments("<p>앞</p><p>[[IMAGE:card]]</p><p>뒤</p>")
     assert segs == [("html", "<p>앞</p>"), ("image", "card"), ("html", "<p>뒤</p>")]
+
+
+def test_heading_dash_becomes_bar_but_body_keeps_dash():
+    post = make_post(title="AIDT 총정리 — 핵심만")
+    post["body_html"] = "<h2>2. 언제 바뀌었나 — 타임라인</h2><p>설명 — 그대로</p>" + post["body_html"]
+    post = content.normalize(post)
+    assert post["title"] == "AIDT 총정리 | 핵심만"
+    assert "<h2>2. 언제 바뀌었나 | 타임라인</h2>" in post["body_html"]
+    assert "<p>설명 — 그대로</p>" in post["body_html"]

@@ -55,15 +55,28 @@ def split_segments(body_html: str) -> list[tuple[str, str]]:
     return segments
 
 
+_DASH_SEPARATOR = re.compile(r"\s+[—–]\s+")
+
+
+def _heading_separators(fragment: str) -> str:
+    """제목류 구분자는 '|'(원본 스킬 규칙). 본문 문장 속 대시는 그대로 둔다."""
+    def fix(m: re.Match) -> str:
+        tag, inner = m.group(1), m.group(2)
+        return f"<{tag}>" + _DASH_SEPARATOR.sub(" | ", inner) + f"</{tag}>"
+
+    return re.sub(r"<(h[1-6])>(.*?)</\1>", fix, fragment, flags=re.S)
+
+
 def normalize(post: dict) -> dict:
-    post["body_html"] = sanitize_html(post.get("body_html", ""))
+    post["body_html"] = _heading_separators(sanitize_html(post.get("body_html", "")))
+    post["title"] = _DASH_SEPARATOR.sub(" | ", str(post.get("title", "")))
     tags = []
     for tag in post.get("tags", []):
         tag = str(tag).strip().lstrip("#").replace(" ", "")
         if tag and tag not in tags:
             tags.append(tag)
     post["tags"] = tags[:30]
-    post["title"] = str(post.get("title", "")).strip()
+    post["title"] = post["title"].strip()
     return post
 
 
