@@ -28,3 +28,11 @@ def test_images_render(tmp_path):
     card = images.make_card(post["card"], tmp_path / "c.png")
     assert Image.open(thumb).size == (1200, 1200)
     assert Image.open(card).size[0] == 1200
+
+
+def test_import_csv_resaved_by_excel_cp949(tmp_path):
+    csv_path = tmp_path / "sheet.csv"
+    csv_path.write_bytes("제목,발행 글 링크\n4세 블록 놀이,https://blog.naver.com/a/2\n".encode("cp949"))
+    path = tmp_path / "published.json"
+    assert history.import_csv(path, csv_path) == 1
+    assert history.load(path)[0]["title"] == "4세 블록 놀이"

@@ -37,8 +37,12 @@ def import_csv(path: Path, csv_path: Path) -> int:
 
     열 이름은 '제목'이 들어간 열과 '링크'/'URL'이 들어간 열을 자동으로 찾는다.
     """
-    with csv_path.open(encoding="utf-8-sig", newline="") as f:
-        rows = list(csv.DictReader(f))
+    # 구글 시트 CSV는 UTF-8, 엑셀에서 다시 저장한 CSV는 CP949(한글 윈도우)다.
+    try:
+        text = csv_path.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError:
+        text = csv_path.read_text(encoding="cp949")
+    rows = list(csv.DictReader(text.splitlines()))
     if not rows:
         return 0
     headers = list(rows[0].keys())
