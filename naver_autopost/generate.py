@@ -35,7 +35,7 @@ def _claude_bin(cfg: Config) -> str:
 
 def _run_claude(cfg: Config, prompt: str, log_file: Path) -> None:
     cmd = [
-        _claude_bin(cfg), "-p", prompt,
+        _claude_bin(cfg), "-p",
         "--permission-mode", "acceptEdits",
         "--allowedTools", ",".join(ALLOWED_TOOLS),
         "--output-format", "json",
@@ -45,7 +45,8 @@ def _run_claude(cfg: Config, prompt: str, log_file: Path) -> None:
     log.info("Claude 실행: %s", log_file.name)
     try:
         proc = subprocess.run(
-            cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
+            # 프롬프트는 stdin으로 넘긴다(Windows의 claude.cmd는 여러 줄 한글 인자를 망가뜨린다).
+            cmd, input=prompt, cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
             errors="replace", timeout=cfg.generate_timeout,
         )
     except subprocess.TimeoutExpired as e:
