@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import io
 import json
 from pathlib import Path
 
@@ -42,7 +43,7 @@ def import_csv(path: Path, csv_path: Path) -> int:
         text = csv_path.read_text(encoding="utf-8-sig")
     except UnicodeDecodeError:
         text = csv_path.read_text(encoding="cp949")
-    rows = list(csv.DictReader(text.splitlines()))
+    rows = list(csv.DictReader(io.StringIO(text, newline="")))
     if not rows:
         return 0
     headers = list(rows[0].keys())
