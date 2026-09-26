@@ -179,3 +179,15 @@ def test_gpt_factcheck_payload_uses_web_search(cfg, monkeypatch):
     assert seen["payload"]["tools"] == [{"type": "web_search"}]
     assert "발달 안전" in seen["payload"]["instructions"]
     assert "[[IMAGE" not in seen["payload"]["input"]
+
+
+def test_negated_guardrail_phrase_allowed():
+    post = child_post()
+    post["body_html"] += "<p>이 표는 아이가 반드시 통과해야 하는 순서표가 아니라 흐름을 보여주는 참고입니다.</p>"
+    assert content.validate(content.normalize(post), CHILD) == []
+
+
+def test_sales_domain_blocked_even_with_negation_nearby():
+    post = child_post()
+    post["body_html"] += "<p>smartstore.naver.com/x 는 광고가 아닙니다</p>"
+    assert content.validate(content.normalize(post), CHILD)

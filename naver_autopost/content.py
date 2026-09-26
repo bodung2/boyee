@@ -82,6 +82,21 @@ def normalize(post: dict) -> dict:
     return post
 
 
+_NEGATION = re.compile(r"아니|아닙|않|없|말고|금물")
+
+
+def _affirmative_use(text: str, phrase: str) -> bool:
+    """금지 표현이 부정문 속에 쓰인 경우("통과해야 하는 기준이 아니라")는 허용한다.
+    URL·판매 문구처럼 부정할 일이 없는 표현은 항상 금지."""
+    for m in re.finditer(re.escape(phrase), text):
+        if "." in phrase:          # 도메인
+            return True
+        window = text[m.end():m.end() + 25]
+        if not _NEGATION.search(window):
+            return True
+    return False
+
+
 def remove_markers(body_html: str, names: set[str]) -> str:
     """빠진 이미지(생성 실패·검수 탈락)의 자리 표시를 본문에서 지운다."""
     return IMAGE_MARKER.sub(lambda m: "" if m.group(1) in names else m.group(0), body_html)
@@ -114,9 +129,12 @@ def validate(post: dict, profile: Profile | None = None) -> list[str]:
 
     text = html_to_text(IMAGE_MARKER.sub("", body))
     everything = "\n".join([title, text, str(post["thumbnail"]), str(post["card"])])
-    for phrase in FORBIDDEN_PHRASES + list(profile.extra_forbidden if profile else ()):
+    for phrase in FORBIDDEN_PHRASES:
         if phrase in everything:
             errors.append(f"자리표시자/초안 문구가 남아 있습니다: '{phrase}'")
+    for phrase in profile.extra_forbidden if profile else ():
+        if _affirmative_use(everything, phrase):
+            errors.append(f"금지 표현이 있습니다: '{phrase}'")
     if len(text) < MIN_BODY_CHARS:
         errors.append(f"본문이 너무 짧습니다({len(text)}자 < {MIN_BODY_CHARS}자)")
 
