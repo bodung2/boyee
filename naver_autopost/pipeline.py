@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import os
 import shutil
 from datetime import datetime
@@ -102,6 +103,24 @@ def _make_illustrations(cfg: Config, post: dict, out_dir: Path) -> None:
     _drop_images(post, failed, out_dir, "생성 실패")
 
 
+def _published_issues(post: dict, issues: list[dict]) -> list[dict]:
+    """실제로 블로그에 보이는 글(제목·본문·썸네일·카드)에 있는 문장에 대한 지적만 남긴다.
+    발행되지 않는 내부 출처 목록(sources)의 표기 지적 때문에 좋은 글을 버리지 않기 위해서다."""
+    def norm(text: str) -> str:
+        return re.sub(r"\s+", "", text or "")
+    visible = norm(" ".join([
+        post.get("title", ""), content.html_to_text(post.get("body_html", "")),
+        json.dumps(post.get("thumbnail", {}), ensure_ascii=False),
+        json.dumps(post.get("card", {}), ensure_ascii=False),
+    ]))
+    kept = []
+    for issue in issues:
+        text = norm(issue.get("text", ""))
+        if not text or text in visible or text[:30] in visible:
+            kept.append(issue)
+    return kept
+
+
 def _gpt_factcheck(cfg: Config, post_path: Path, out_dir: Path) -> dict:
     """ChatGPT 교차검증. 지적이 있으면 Claude가 원문으로 재확인해 반영한 뒤 ChatGPT가 다시 본다."""
     post = _load_post(post_path)
@@ -109,6 +128,13 @@ def _gpt_factcheck(cfg: Config, post_path: Path, out_dir: Path) -> dict:
     for round_no in range(1, last_round + 1):
         review = openai_client.factcheck(cfg, post)
         _save_json(out_dir / f"gpt_factcheck_{round_no}.json", review)
+        if review["verdict"] == "fix":
+            visible = _published_issues(post, review.get("issues", []))
+            if not visible:
+                log.info("ChatGPT 지적 %d건은 모두 발행되지 않는 출처 목록 표기라 통과로 봅니다",
+                         len(review.get("issues", [])))
+                return post
+            review["issues"] = visible
         if review["verdict"] == "pass":
             return post
         if review["verdict"] == "fail" or round_no == last_round:

@@ -415,3 +415,25 @@ def test_default_image_backend_is_codex(monkeypatch):
     c = Config.load("childhood")
     assert c.image_backend == "codex"
     assert pipeline.image_generator(c) is codex_image
+
+
+def test_gpt_issue_only_in_unpublished_sources_list_passes(cfg, monkeypatch):
+    out = cfg.output_dir / "d"
+    out.mkdir(parents=True)
+    (out / "post.json").write_text(json.dumps(child_post(), ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(openai_client, "factcheck", lambda c, p: {
+        "verdict": "fix", "issues": [{"text": "National Institute for Literacy (NELP)", "correction": "NIFL"}]})
+    monkeypatch.setattr(generate, "apply_gpt_review", lambda *a: pytest.fail("should not apply"))
+    pipeline._gpt_factcheck(cfg, out / "post.json", out)
+
+
+def test_gpt_issue_in_body_is_still_applied(cfg, monkeypatch):
+    out = cfg.output_dir / "d"
+    out.mkdir(parents=True)
+    (out / "post.json").write_text(json.dumps(child_post(), ensure_ascii=False), encoding="utf-8")
+    reviews = iter([{"verdict": "fix", "issues": [{"text": "시행 일정 설명입니다."}]}, {"verdict": "pass"}])
+    monkeypatch.setattr(openai_client, "factcheck", lambda c, p: next(reviews))
+    applied = []
+    monkeypatch.setattr(generate, "apply_gpt_review", lambda c, d, r: applied.append(r) or {})
+    pipeline._gpt_factcheck(cfg, out / "post.json", out)
+    assert applied == [1]

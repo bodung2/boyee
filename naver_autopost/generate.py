@@ -15,6 +15,7 @@ log = logging.getLogger(__name__)
 ALLOWED_TOOLS = [
     "WebSearch", "WebFetch", "Read", "Write", "Edit", "Glob", "Grep", "Skill",
     "Bash(python:*)", "Bash(python3:*)", "Bash(py:*)",
+    "Bash(.venv/Scripts/python.exe:*)", "Bash(.venv/bin/python:*)",
     "mcp__claude_ai_Google_Drive__search_files",
     "mcp__claude_ai_Google_Drive__read_file_content",
 ]
