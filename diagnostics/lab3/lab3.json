@@ -1,0 +1,158 @@
+{
+ "window_keys": [
+  "self",
+  "closed",
+  "pageXOffset",
+  "pageYOffset",
+  "onsearch",
+  "onclose",
+  "onmousedown",
+  "onmouseenter",
+  "onmouseleave",
+  "onmousemove",
+  "onmouseout",
+  "onmouseover",
+  "onmouseup",
+  "onmousewheel",
+  "onpause",
+  "onreset",
+  "onsecuritypolicyviolation",
+  "onseeked",
+  "onseeking",
+  "onselect",
+  "onselectstart",
+  "onselectionchange",
+  "onbeforexrselect",
+  "isSecureContext",
+  "sessionStorage",
+  "close",
+  "getSelection",
+  "releaseEvents",
+  "setInterval",
+  "setTimeout",
+  "setImmediate",
+  "__SENTRY__",
+  "__se_editor_jsonp",
+  "SE",
+  "SmartEditor",
+  "Mousetrap"
+ ],
+ "copy_postit": {
+  "diff": [
+   {
+    "frame": "https://blog.naver.com/PostUpdateForm.naver?blogId=kkus_i&logNo=224403935438",
+    "origin": "https://blog.naver.com",
+    "area": "local",
+    "key": "se3#SE_COPIED_DATA",
+    "len": 356,
+    "value": "{\"docId\":\"224403935438\",\"copyData\":[{\"id\":\"\",\"ctype\":\"quotation\",\"layout\":\"quotation_postit\",\"value\":[{\"id\":\"\",\"ctype\":\"paragraph\",\"nodes\":[{\"id\":\"\",\"ctype\":\"textNode\",\"value\":\"[한 줄 요약]\"}]},{\"id\":\"\",\"ctype\":\"paragraph\",\"nodes\":[{\"id\":\"\",\"ctype\":\"textNode\",\"value\":\"4세 상상놀이의 핵심은 '얼마나 대단하게 노느냐'가 아니라, 상징·역할·이야기가 자라도록 어른이 무대를 깔아 주는 것입니다.\"}]}],\"source\":null}]}"
+   },
+   {
+    "frame": "input_buffer1790541082783",
+    "origin": "https://blog.naver.com",
+    "area": "local",
+    "key": "se3#SE_COPIED_DATA",
+    "len": 356,
+    "value": "{\"docId\":\"224403935438\",\"copyData\":[{\"id\":\"\",\"ctype\":\"quotation\",\"layout\":\"quotation_postit\",\"value\":[{\"id\":\"\",\"ctype\":\"paragraph\",\"nodes\":[{\"id\":\"\",\"ctype\":\"textNode\",\"value\":\"[한 줄 요약]\"}]},{\"id\":\"\",\"ctype\":\"paragraph\",\"nodes\":[{\"id\":\"\",\"ctype\":\"textNode\",\"value\":\"4세 상상놀이의 핵심은 '얼마나 대단하게 노느냐'가 아니라, 상징·역할·이야기가 자라도록 어른이 무대를 깔아 주는 것입니다.\"}]}],\"source\":null}]}"
+   }
+  ],
+  "clipboard": {
+   "text/plain": "[한 줄 요약]\n4세 상상놀이의 핵심은 '얼마나 대단하게 노느냐'가 아니라, 상징·역할·이야기가 자라도록 어른이 무대를 깔아 주는 것입니다.\n출처 입력",
+   "text/html": "<html>\r\n<body>\r\n<!--StartFragment-->﻿<span data-input-buffer=\"INPUT_BUFFER_DATA;Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F153.0.0.0%20Safari%2F537.36;blog.naver.com\"></span><div class=\"se-component se-quotation se-l-quotation_postit\" id=\"SE-4643397d-36bf-47df-8e71-19099d68662c\" data-compid=\"SE-4643397d-36bf-47df-8e71-19099d68662c\" data-a11y-title=\"인용구\"><button class=\"se-component-edge-button se-component-edge-button-top __edge-area\" type=\"button\" tab-index=\"-1\" data-compid=\"SE-4643397d-36bf-47df-8e71-19099d68662c\" data-direction=\"top\"></button><div class=\"se-component-content\"><div class=\"__se-toolbar-slot __se-cursor-unrelated\" style=\"display: none;\"></div><div class=\"se-drop-indicator\" data-unitid=\"\" data-compid=\"SE-4643397d-36bf-47df-8e71-19099d68662c\" data-direction=\"top\"><div class=\"se-section se-section-quotation se-l-quotation_postit se-section-align-left __se-unit se-is-selected se-is-activated\"><div class=\"se-quotation-container\"><div id=\"SE-5e2fef24-4a2e-462e-896d-7478da08c1aa\" class=\"se-module se-module-text __se-unit se-quote\"><p id=\"SE-efebb485-c1b5-4655-9360-cc7cd873b79a\" class=\"se-text-paragraph se-text-paragraph-align-center\" style=\"line-height: 1.8;\"><span id=\"SE-ed73b720-b55e-4171-b8df-9743c990bb98\" class=\"se-ff-nanumbarungothic se-fs19 __se-node\" style=\"color: rgb(0, 0, 0);\">[한 줄 요약]</span></p><p id=\"SE-9d5d374d-807e-4d39-afb8-1c833443a865\" class=\"se-text-paragraph se-text-paragraph-align-center\" style=\"line-height: 1.8;\"><span id=\"SE-b8b8bfb9-8051-4a21-863f-63993e1efefe\" class=\"se-ff-nanumbarungothic se-fs19 __se-node\" style=\"color: rgb(0, 0, 0);\">4세 상상놀이의 핵심은 '얼마나 대단하게 노느냐'가 아니라, 상징·역할·이야기가 자라도록 어른이 무대를 깔아 주는 것입니다.</span></p></div><div id=\"SE-9b3c1e9e-2e74-4ea5-ad6b-d82259711d99\" class=\"se-module se-module-text __se-unit se-is-empty se-cite se-is-on\"><p id=\"SE-d52c81c3-0b70-482c-935f-c23ea9ce9d4c\" class=\"se-text-paragraph se-text-paragraph-align-center\" style=\"line-height: 1.5;\"><span id=\"SE-04f8f682-798b-4228-9162-57a4ceb226e7\" class=\"se-ff-nanumgothic se-fs13 __se-node\" style=\"color: rgb(119, 119, 119);\"></span><span class=\"se-placeholder __se_placeholder se-ff-nanumgothic se-fs13\">출처 입력</span></p></div></div></div></div></div></div>﻿<!--EndFragment-->\r\n</body>\r\n</html>"
+  }
+ },
+ "copy_table": {
+  "diff": [
+   {
+    "frame": "https://blog.naver.com/PostUpdateForm.naver?blogId=kkus_i&logNo=224403935438",
+    "origin": "https://blog.naver.com",
+    "area": "local",
+    "key": "se3#SE_COPIED_DATA",
+    "len": 1871,
+    "value": "{\"docId\":\"224403935438\",\"copyData\":[{\"id\":\"\",\"ctype\":\"table\",\"layout\":\"default\",\"width\":100,\"rows\":[{\"ctype\":\"tableRow\",\"cells\":[{\"id\":\"\",\"ctype\":\"tableCell\",\"borderInlineStyle\":\"border:1px solid rgb(226, 226, 226);\",\"colSpan\":1,\"rowSpan\":1,\"width\":100,\"height\":40,\"backgroundColor\":\"#f7f7f7\",\"value\":[{\"id\":\"\",\"ctype\":\"paragraph\",\"nodes\":[{\"id\":\"\",\"ctype\":\"textNode\",\"value\":\"⚡ 3줄 핵심 요약\",\"style\":{\"ctype\":\"nodeStyle\",\"fontColor\":\"#000000\",\"fontSizeCode\":\"fs16\",\"backgroundColor\":\"#f7f7f7\",\"bold\":true}}],\"style\":{\"ctype\":\"paragraphStyle\",\"lineHeight\":1.8}},{\"id\":\"\",\"ctype\":\"paragraph\",\"nodes\":[{\"id\":\"\",\"ctype\":\"textNode\",\"value\":\"상상놀이(가상놀이)는 '이건 ~인 척'이라는 상징 능력의 표현으로, 대략 2세에 나타나 유아기에 가장 활발합니다(Child Mind Institute; Lillard 외, 2013).\",\"style\":{\"ctype\":\"nodeStyle\",\"fontColor\":\"#000000\",\"fontSizeCode\":\"fs16\",\"backgroundColor\":\"#f7f7f7\"}}],\"style\":{\"ctype\":\"paragraphStyle\",\"lineHeight\":1.8,\"list\":{\"type\":\"bullet\",\"level\":0,\"ctype\":\"paragraphListStyle\"}}},{\"id\":\"\",\"ctype\":\"paragraph\",\"nodes\":[{\"id\":\"\",\"ctype\":\"textNode\",\"value\":\"'4세니까 이만큼 놀아야 한다'가 아니라 지금 어느 단계인지로 봐야 합니다 — 혼자 흉내내기에서 또래와 함께하는 사회극놀이(대략 4~6세)로 나아가는 흐름이며(Smilansky, 1968), 나이는 통과 기준이 아니라 참고 흐름입니다.\",\"style\":{\"ctype\":\"nodeStyle\",\"fontColor\":\"#000000\",\"fontSizeCode\":\"fs16\",\"backgroundColor\":\"#f7f7f7\"}}],\"style\":{\"ctype\":\"paragraphStyle\",\"lineHeight\":1.8,\"list\":{\"type\":\"bullet\",\"level\":0,\"ctype\":\"paragraphListStyle\"}}},{\"id\":\"\",\"ctype\":\"paragraph\",\"nodes\":[{\"id\":\"\",\"ctype\":\"textNode\",\"value\":\"상상놀이가 발달에 '반드시 필수적 원인'이라는 강한 주장은 근거가 아직 충분치 않지만(Lillard 외, 2013), 자기조절·언어·사회성이 자라는 좋은 무대인 것은 분명해, 억지로 시키기보다 충분히 허용·지지하는 게 핵심입니다.\",\"style\":{\"ctype\":\"nodeStyle\",\"fontColor\":\"#000000\",\"fontSizeCode\":\"fs16\",\"backgroundColor\":\"#f7f7f7\"}}],\"style\":{\"ctype\":\"paragraphStyle\",\"lineHeight\":1.8,\"list\":{\"type\":\"bullet\",\"level\":0,\"ctype\":\"paragraphListStyle\"}}}]}]}],\"columnCount\":1,\"borderInlineStyle\":\"border:none;\"}]}"
+   },
+   {
+    "frame": "input_buffer1790541082783",
+    "origin": "https://blog.naver.com",
+    "area": "local",
+    "key": "se3#SE_COPIED_DATA",
+    "len": 1871,
+    "value": "{\"docId\":\"224403935438\",\"copyData\":[{\"id\":\"\",\"ctype\":\"table\",\"layout\":\"default\",\"width\":100,\"rows\":[{\"ctype\":\"tableRow\",\"cells\":[{\"id\":\"\",\"ctype\":\"tableCell\",\"borderInlineStyle\":\"border:1px solid rgb(226, 226, 226);\",\"colSpan\":1,\"rowSpan\":1,\"width\":100,\"height\":40,\"backgroundColor\":\"#f7f7f7\",\"value\":[{\"id\":\"\",\"ctype\":\"paragraph\",\"nodes\":[{\"id\":\"\",\"ctype\":\"textNode\",\"value\":\"⚡ 3줄 핵심 요약\",\"style\":{\"ctype\":\"nodeStyle\",\"fontColor\":\"#000000\",\"fontSizeCode\":\"fs16\",\"backgroundColor\":\"#f7f7f7\",\"bold\":true}}],\"style\":{\"ctype\":\"paragraphStyle\",\"lineHeight\":1.8}},{\"id\":\"\",\"ctype\":\"paragraph\",\"nodes\":[{\"id\":\"\",\"ctype\":\"textNode\",\"value\":\"상상놀이(가상놀이)는 '이건 ~인 척'이라는 상징 능력의 표현으로, 대략 2세에 나타나 유아기에 가장 활발합니다(Child Mind Institute; Lillard 외, 2013).\",\"style\":{\"ctype\":\"nodeStyle\",\"fontColor\":\"#000000\",\"fontSizeCode\":\"fs16\",\"backgroundColor\":\"#f7f7f7\"}}],\"style\":{\"ctype\":\"paragraphStyle\",\"lineHeight\":1.8,\"list\":{\"type\":\"bullet\",\"level\":0,\"ctype\":\"paragraphListStyle\"}}},{\"id\":\"\",\"ctype\":\"paragraph\",\"nodes\":[{\"id\":\"\",\"ctype\":\"textNode\",\"value\":\"'4세니까 이만큼 놀아야 한다'가 아니라 지금 어느 단계인지로 봐야 합니다 — 혼자 흉내내기에서 또래와 함께하는 사회극놀이(대략 4~6세)로 나아가는 흐름이며(Smilansky, 1968), 나이는 통과 기준이 아니라 참고 흐름입니다.\",\"style\":{\"ctype\":\"nodeStyle\",\"fontColor\":\"#000000\",\"fontSizeCode\":\"fs16\",\"backgroundColor\":\"#f7f7f7\"}}],\"style\":{\"ctype\":\"paragraphStyle\",\"lineHeight\":1.8,\"list\":{\"type\":\"bullet\",\"level\":0,\"ctype\":\"paragraphListStyle\"}}},{\"id\":\"\",\"ctype\":\"paragraph\",\"nodes\":[{\"id\":\"\",\"ctype\":\"textNode\",\"value\":\"상상놀이가 발달에 '반드시 필수적 원인'이라는 강한 주장은 근거가 아직 충분치 않지만(Lillard 외, 2013), 자기조절·언어·사회성이 자라는 좋은 무대인 것은 분명해, 억지로 시키기보다 충분히 허용·지지하는 게 핵심입니다.\",\"style\":{\"ctype\":\"nodeStyle\",\"fontColor\":\"#000000\",\"fontSizeCode\":\"fs16\",\"backgroundColor\":\"#f7f7f7\"}}],\"style\":{\"ctype\":\"paragraphStyle\",\"lineHeight\":1.8,\"list\":{\"type\":\"bullet\",\"level\":0,\"ctype\":\"paragraphListStyle\"}}}]}]}],\"columnCount\":1,\"borderInlineStyle\":\"border:none;\"}]}"
+   }
+  ],
+  "clipboard": {
+   "text/plain": "⚡ 3줄 핵심 요약\n상상놀이(가상놀이)는 '이건 ~인 척'이라는 상징 능력의 표현으로, 대략 2세에 나타나 유아기에 가장 활발합니다(Child Mind Institute; Lillard 외, 2013).\n'4세니까 이만큼 놀아야 한다'가 아니라 지금 어느 단계인지로 봐야 합니다 — 혼자 흉내내기에서 또래와 함께하는 사회극놀이(대략 4~6세)로 나아가는 흐름이며(Smilansky, 1968), 나이는 통과 기준이 아니라 참고 흐름입니다.\n상상놀이가 발달에 '반드시 필수적 원인'이라는 강한 주장은 근거가 아직 충분치 않지만(Lillard 외, 2013), 자기조절·언어·사회성이 자라는 좋은 무대인 것은 분명해, 억지로 시키기보다 충분히 허용·지지하는 게 핵심입니다.",
+   "text/html": "<html>\r\n<body>\r\n<!--StartFragment-->﻿<span data-input-buffer=\"INPUT_BUFFER_DATA;Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F153.0.0.0%20Safari%2F537.36;blog.naver.com\"></span><div class=\"se-component se-table se-l-default\" id=\"SE-26778f3c-cc60-4b8d-8417-f2fac028b172\" data-compid=\"SE-26778f3c-cc60-4b8d-8417-f2fac028b172\" data-a11y-title=\"표\"><button class=\"se-component-edge-button se-component-edge-button-top __edge-area\" type=\"button\" tab-index=\"-1\" data-compid=\"SE-26778f3c-cc60-4b8d-8417-f2fac028b172\" data-direction=\"top\"></button><div class=\"se-component-content\"><div class=\"se-drop-indicator\" data-unitid=\"\" data-compid=\"SE-26778f3c-cc60-4b8d-8417-f2fac028b172\" data-direction=\"top\"><div class=\"se-section se-section-table se-l-default se-section-align-left se-is-selected se-is-activated\" style=\"width: 100%;\"><div class=\"__se-toolbar-slot __se-cursor-unrelated\" style=\"display: none;\"></div><div class=\"se-table-container\"><div class=\"__se-cursor-unrelated se-table-control\"><ul class=\"se-cell-controlbar se-cell-controlbar-column\"><li class=\"se-cell-controlbar-item\" style=\"width: 886px;\"><button type=\"button\" class=\"se-cell-select-button\"><span class=\"se-blind\">0열 선택</span></button><button type=\"button\" class=\"se-cell-add-button\"><span class=\"se-blind\">0열 다음에 열 추가</span></button></li></ul><ul class=\"se-cell-controlbar se-cell-controlbar-row\"><li class=\"se-cell-controlbar-item\" style=\"height: 224px;\"><button type=\"button\" class=\"se-cell-select-button\"><span class=\"se-blind\">0행 선택</span></button><button type=\"button\" class=\"se-cell-add-button\"><span class=\"se-blind\">0행 다음에 행 추가</span></button></li></ul><button type=\"button\" class=\"se-cell-select-all-button\"><span class=\"se-blind\">셀 전체 선택</span></button><div class=\"se-cell-size-controlbar se-cell-size-controlbar-width\" style=\"left: 0px;\"><button type=\"button\" class=\"se-cell-size-button\"><span class=\"se-blind\">열 너비 조절</span></button></div><div class=\"se-cell-size-controlbar se-cell-size-controlbar-height\" style=\"top: 0px;\"><button type=\"button\" class=\"se-cell-size-button\"><span class=\"se-blind\">행 높이 조절</span></button></div></div><table class=\"se-table-content\" style=\"border-width: medium; border-style: none; border-color: currentcolor; border-image: none;\"><tbody><tr class=\"se-tr\" id=\"SE-ff2c80ca-8bb9-41e9-9959-f3516542ca79\"><td id=\"SE-b9699a8c-a4a1-4e08-8b8f-a887909d6a1f\" colspan=\"1\" rowspan=\"1\" class=\"__se-unit se-cell\" style=\"width: 100%; height: 40px; background-color: rgb(247, 247, 247); border: 1px solid rgb(226, 226, 226);\"><div id=\"SE-a712f98c-40e8-4e24-be23-2cd5087176a3\" class=\"se-module se-module-text\"><p id=\"SE-f59073f2-3e4d-4667-ad60-9628b60c566b\" class=\"se-text-paragraph se-text-paragraph-align-left\" style=\"line-height: 1.8;\"><span id=\"SE-1b365990-2575-46ce-9961-40cf96782f52\" class=\"se-ff-nanumgothic se-fs16 se-highlight __se-node\" style=\"color: rgb(0, 0, 0); background-color: rgb(247, 247, 247);\"><mark><b>⚡ 3줄 핵심 요약</b></mark></span></p><ul class=\"se-text-list se-text-list-type-bullet-disc\"><li class=\"se-text-list-item\"><p id=\"SE-f0e87a13-d310-4ed6-8bb4-5349b7ff4f0a\" class=\"se-text-paragraph se-text-paragraph-align-left\" style=\"line-height: 1.8;\"><span id=\"SE-cc2ee665-8ed0-467c-87ab-555a2146108e\" class=\"se-ff-nanumgothic se-fs16 se-highlight __se-node\" style=\"color: rgb(0, 0, 0); background-color: rgb(247, 247, 247);\"><mark>상상놀이(가상놀이)는 '이건 ~인 척'이라는 상징 능력의 표현으로, 대략 2세에 나타나 유아기에 가장 활발합니다(Child Mind Institute; Lillard 외, 2013).</mark></span></p></li><li class=\"se-text-list-item\"><p id=\"SE-6212fd49-0526-42c3-b1b1-cb977f7338f4\" class=\"se-text-paragraph se-text-paragraph-align-left\" style=\"line-height: 1.8;\"><span id=\"SE-43a792ab-3ca8-4173-983f-03cf647cf48f\" class=\"se-ff-nanumgothic se-fs16 se-highlight __se-node\" style=\"color: rgb(0, 0, 0); background-color: rgb(247, 247, 247);\"><mark>'4세니까 이만큼 놀아야 한다'가 아니라 지금 어느 단계인지로 봐야 합니다 — 혼자 흉내내기에서 또래와 함께하는 사회극놀이(대략 4~6세)로 나아가는 흐름이며(Smilansky, 1968), 나이는 통과 기준이 아니라 참고 흐름입니다.</mark></span></p></li><li class=\"se-text-list-item\"><p id=\"SE-571d3055-5d40-4527-845b-bd0ea0703b9c\" class=\"se-text-paragraph se-text-paragraph-align-left\" style=\"line-height: 1.8;\"><span id=\"SE-37231909-47bd-4268-b415-796f4c3485a7\" class=\"se-ff-nanumgothic se-fs16 se-highlight __se-node\" style=\"color: rgb(0, 0, 0); background-color: rgb(247, 247, 247);\"><mark>상상놀이가 발달에 '반드시 필수적 원인'이라는 강한 주장은 근거가 아직 충분치 않지만(Lillard 외, 2013), 자기조절·언어·사회성이 자라는 좋은 무대인 것은 분명해, 억지로 시키기보다 충분히 허용·지지하는 게 핵심입니다.</mark></span></p></li></ul></div></td></tr></tbody></table><ul class=\"se-cell-context-menu __se-cursor-unrelated\" style=\"top: -1000px; left: -1000px;\"><li class=\"se-cell-context-menu-item\"><button type=\"button\" class=\"se-cell-context-menu-button se-context-menu-button-merge\"><span class=\"se-cell-context-menu-text\">셀 병합</span></button></li><li class=\"se-cell-context-menu-item\"><button type=\"button\" class=\"se-cell-context-menu-button se-context-menu-button-row-split\"><span class=\"se-cell-context-menu-text\">행 분할</span></button></li><li class=\"se-cell-context-menu-item\"><button type=\"button\" class=\"se-cell-context-menu-button se-context-menu-button-column-split\"><span class=\"se-cell-context-menu-text\">열 분할</span></button></li><li class=\"se-cell-context-menu-item\"><button type=\"button\" class=\"se-cell-context-menu-button se-context-menu-button-equal-width\"><span class=\"se-cell-context-menu-text\">너비 맞춤</span></button></li><li class=\"se-cell-context-menu-item\"><button type=\"button\" class=\"se-cell-context-menu-button se-context-menu-button-delete\"><span class=\"se-cell-context-menu-text\">삭제</span></button></li></ul></div></div></div></div></div>﻿<!--EndFragment-->\r\n</body>\r\n</html>"
+  }
+ },
+ "copy_quote_line": {
+  "diff": [
+   {
+    "frame": "https://blog.naver.com/PostUpdateForm.naver?blogId=kkus_i&logNo=224403935438",
+    "origin": "https://blog.naver.com",
+    "area": "local",
+    "key": "se3#SE_COPIED_DATA",
+    "len": 274,
+    "value": "{\"docId\":\"224403935438\",\"copyData\":[{\"id\":\"\",\"ctype\":\"quotation\",\"layout\":\"quotation_line\",\"value\":[{\"id\":\"\",\"ctype\":\"paragraph\",\"nodes\":[{\"id\":\"\",\"ctype\":\"textNode\",\"value\":\"1. 상상놀이는 '그냥 노는 것'과 뭐가 다른가요? (큰 그림)\",\"style\":{\"ctype\":\"nodeStyle\",\"bold\":true}}]}],\"source\":null}]}"
+   },
+   {
+    "frame": "input_buffer1790541082783",
+    "origin": "https://blog.naver.com",
+    "area": "local",
+    "key": "se3#SE_COPIED_DATA",
+    "len": 274,
+    "value": "{\"docId\":\"224403935438\",\"copyData\":[{\"id\":\"\",\"ctype\":\"quotation\",\"layout\":\"quotation_line\",\"value\":[{\"id\":\"\",\"ctype\":\"paragraph\",\"nodes\":[{\"id\":\"\",\"ctype\":\"textNode\",\"value\":\"1. 상상놀이는 '그냥 노는 것'과 뭐가 다른가요? (큰 그림)\",\"style\":{\"ctype\":\"nodeStyle\",\"bold\":true}}]}],\"source\":null}]}"
+   }
+  ],
+  "clipboard": {
+   "text/plain": "1. 상상놀이는 '그냥 노는 것'과 뭐가 다른가요? (큰 그림)\n출처 입력",
+   "text/html": "<html>\r\n<body>\r\n<!--StartFragment-->﻿<span data-input-buffer=\"INPUT_BUFFER_DATA;Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F153.0.0.0%20Safari%2F537.36;blog.naver.com\"></span><div class=\"se-component se-quotation se-l-quotation_line\" id=\"SE-fa93678f-c59e-4033-ad77-352371363529\" data-compid=\"SE-fa93678f-c59e-4033-ad77-352371363529\" data-a11y-title=\"인용구\"><button class=\"se-component-edge-button se-component-edge-button-top __edge-area\" type=\"button\" tab-index=\"-1\" data-compid=\"SE-fa93678f-c59e-4033-ad77-352371363529\" data-direction=\"top\"></button><div class=\"se-component-content\"><div class=\"__se-toolbar-slot __se-cursor-unrelated\" style=\"display: none;\"></div><div class=\"se-drop-indicator\" data-unitid=\"\" data-compid=\"SE-fa93678f-c59e-4033-ad77-352371363529\" data-direction=\"top\"><div class=\"se-section se-section-quotation se-l-quotation_line se-section-align-left __se-unit se-is-selected se-is-activated\"><div class=\"se-quotation-container\"><div id=\"SE-7c318e0a-5e7a-4333-b386-6405af06677a\" class=\"se-module se-module-text __se-unit se-quote\"><p id=\"SE-f5371cc3-fd2a-41af-b6ea-512f0aa76d8c\" class=\"se-text-paragraph se-text-paragraph-align-left\" style=\"line-height: 1.8;\"><span id=\"SE-5b6711d5-c28d-4958-8161-0cfd9df6243c\" class=\"se-ff-nanumbarungothic se-fs19 __se-node\" style=\"color: rgb(0, 0, 0);\"><b>1. 상상놀이는 '그냥 노는 것'과 뭐가 다른가요? (큰 그림)</b></span></p></div><div id=\"SE-aa0cdf27-4b7e-4f37-a252-840cd93536f7\" class=\"se-module se-module-text __se-unit se-is-empty se-cite se-is-on\"><p id=\"SE-6a247a37-76d9-4f28-8acf-896972120cdf\" class=\"se-text-paragraph se-text-paragraph-align-left\" style=\"line-height: 1.5;\"><span id=\"SE-643967de-3ad2-483e-88f1-6f71fa472065\" class=\"se-ff-nanumgothic se-fs13 __se-node\" style=\"color: rgb(119, 119, 119);\"></span><span class=\"se-placeholder __se_placeholder se-ff-nanumgothic se-fs13\">출처 입력</span></p></div></div></div></div></div></div>﻿<!--EndFragment-->\r\n</body>\r\n</html>"
+  }
+ },
+ "storage_after": [
+  {
+   "frame": "https://blog.naver.com/PostUpdateForm.naver?blogId=kkus_i&logNo=224403935438",
+   "origin": "https://blog.naver.com",
+   "local_keys": {
+    "se3#AI_MARK_TOOLTIP//STORAGE": 22,
+    "se3#highlight-tooltip-not-sponsored-button-2026-9": 5,
+    "glad_loader_policy_info": 243,
+    "se3#SE_COPIED_DATA": 274,
+    "BA_DEVICE": 51,
+    "__tmp_____persist___": 13,
+    "3fbddd8d15feb0d3": 64,
+    "se3#HELP_PANEL//STORAGE": 22,
+    "d6277b37e628876c": 64,
+    "gfp_uuid_iv": 36
+   },
+   "session_keys": {
+    "BA_TRACKING_CODE": 2,
+    "BA_CURRENT_PATH": 2,
+    "REACT_QUERY_OFFLINE_CACHE:v2_SCOPE": 71,
+    "REACT_QUERY_OFFLINE_CACHE:v2:member%3A908a2f63edb13a7ac15060671b0b0bb15948c15a0eb5f805fd19102aff4a6d4b": 117
+   }
+  },
+  {
+   "frame": "input_buffer1790541082783",
+   "origin": "https://blog.naver.com",
+   "local_keys": {
+    "se3#AI_MARK_TOOLTIP//STORAGE": 22,
+    "se3#highlight-tooltip-not-sponsored-button-2026-9": 5,
+    "glad_loader_policy_info": 243,
+    "se3#SE_COPIED_DATA": 274,
+    "BA_DEVICE": 51,
+    "__tmp_____persist___": 13,
+    "3fbddd8d15feb0d3": 64,
+    "se3#HELP_PANEL//STORAGE": 22,
+    "d6277b37e628876c": 64,
+    "gfp_uuid_iv": 36
+   },
+   "session_keys": {
+    "BA_TRACKING_CODE": 2,
+    "BA_CURRENT_PATH": 2,
+    "REACT_QUERY_OFFLINE_CACHE:v2_SCOPE": 71,
+    "REACT_QUERY_OFFLINE_CACHE:v2:member%3A908a2f63edb13a7ac15060671b0b0bb15948c15a0eb5f805fd19102aff4a6d4b": 117
+   }
+  }
+ ]
+}
