@@ -72,6 +72,7 @@ class Config:
     gpt_fix_rounds: int
     illustration_count: int
     style_mode: str
+    limit_wait_max_min: int
     telegram_bot_token: str
     telegram_chat_id: str
 
@@ -130,6 +131,7 @@ class Config:
             gpt_fix_rounds=int(env("GPT_FIX_ROUNDS", "2")),
             illustration_count=int(env("ILLUSTRATION_COUNT", "2")),
             style_mode=env("STYLE_MODE", "native").strip().lower(),
+            limit_wait_max_min=int(env("CLAUDE_LIMIT_WAIT_MAX_MIN", "330")),
             telegram_bot_token=env("TELEGRAM_BOT_TOKEN", "").strip(),
             telegram_chat_id=env("TELEGRAM_CHAT_ID", "").strip(),
         )

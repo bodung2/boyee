@@ -437,3 +437,70 @@ def test_gpt_issue_in_body_is_still_applied(cfg, monkeypatch):
     monkeypatch.setattr(generate, "apply_gpt_review", lambda c, d, r: applied.append(r) or {})
     pipeline._gpt_factcheck(cfg, out / "post.json", out)
     assert applied == [1]
+
+
+def test_limit_reset_time_parsing():
+    from datetime import datetime
+    now = datetime(2026, 9, 27, 5, 10, tzinfo=generate.KST)
+    msg = "You've hit your session limit · resets 7:30am (Asia/Seoul)"
+    assert generate.limit_reset_at(msg, now) == datetime(2026, 9, 27, 7, 30, tzinfo=generate.KST)
+    assert generate.limit_reset_at("5-hour limit reached ∙ resets 3pm", now).hour == 15
+    late = datetime(2026, 9, 27, 23, 0, tzinfo=generate.KST)
+    assert generate.limit_reset_at(msg, late).day == 28          # 이미 지난 시각이면 다음 날
+    assert generate.limit_reset_at("Claude 오류: 파일 없음", now) is None
+
+
+def test_run_claude_raises_limit_error(cfg, monkeypatch, tmp_path):
+    import subprocess
+
+    out = json.dumps({"type": "result", "is_error": True, "api_error_status": 429,
+                      "result": "You've hit your session limit · resets 7:30am (Asia/Seoul)"})
+    monkeypatch.setattr(generate, "_claude_bin", lambda c: "claude")
+    monkeypatch.setattr(subprocess, "run",
+                        lambda *a, **k: subprocess.CompletedProcess(a, 1, stdout=out, stderr=""))
+    with pytest.raises(generate.ClaudeLimitError) as e:
+        generate._run_claude(cfg, "x", tmp_path / "log.txt")
+    assert (e.value.reset_at.hour, e.value.reset_at.minute) == (7, 30)
+
+
+def test_limit_waits_then_resumes_same_post(cfg, monkeypatch):
+    """Claude 한도에 걸리면 실패하지 않고 풀릴 때까지 기다린 뒤, 쓴 글을 버리지 않고 이어서 한다."""
+    from datetime import datetime, timedelta
+    out = cfg.output_dir / "2026-09-27"
+    cfg.gpt_factcheck = False
+    writes, sleeps, sent = [], [], []
+    monkeypatch.setattr(generate, "write_post",
+                        lambda *a, **k: writes.append(1) or _fake_write(child_post())(*a, **k))
+    monkeypatch.setattr(gemini_client, "generate_image", lambda c, p, path: path.write_bytes(b"png") or path)
+    calls = iter(["limit", "pass"])
+
+    def fake_fc(c, out_dir):
+        if next(calls) == "limit":
+            raise generate.ClaudeLimitError("limit", datetime.now(generate.KST) + timedelta(minutes=10))
+        return {"verdict": "pass", "images": {"illust_a": "ok", "illust_b": "ok"}}
+    monkeypatch.setattr(generate, "factcheck", fake_fc)
+    monkeypatch.setattr(pipeline, "_sleep", lambda s: sleeps.append(s) or clock.append(s))
+    clock = []
+    real_now = datetime.now
+
+    class FakeDT(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return real_now(tz) + timedelta(seconds=sum(clock))
+    monkeypatch.setattr(pipeline, "datetime", FakeDT)
+    monkeypatch.setattr(pipeline.notify, "send", lambda c, t: sent.append(t))
+
+    post = pipeline.produce(cfg, "2026-09-27", out)
+    assert post["title"] and writes == [1]
+    assert sum(sleeps) >= 11 * 60 and sent and "이어서" in sent[0]
+    assert not list(cfg.output_dir.glob("*-rejected-*"))
+
+
+def test_limit_too_long_stops(cfg, monkeypatch):
+    from datetime import datetime, timedelta
+    cfg.limit_wait_max_min = 30
+    monkeypatch.setattr(generate, "write_post", lambda *a, **k: (_ for _ in ()).throw(
+        generate.ClaudeLimitError("limit", datetime.now(generate.KST) + timedelta(hours=3))))
+    monkeypatch.setattr(pipeline, "_sleep", lambda s: pytest.fail("기다리면 안 됨"))
+    with pytest.raises(generate.GenerationError, match="최대 대기"):
+        pipeline.produce(cfg, "2026-09-27", cfg.output_dir / "2026-09-27")

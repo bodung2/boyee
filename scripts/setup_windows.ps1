@@ -22,7 +22,7 @@ Write-Host "2) 매일 $Time 자동 실행 작업 등록 (작업 이름: $TaskNam
 $Action = New-ScheduledTaskAction -Execute "$Root\scripts\run_daily.bat" -Argument "--profile $Profile" -WorkingDirectory $Root
 $Trigger = New-ScheduledTaskTrigger -Daily -At $Time
 # 꺼져 있다가 켜지면 놓친 실행을 바로 하고, 절전 중이면 깨워서 실행한다.
-$Settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -ExecutionTimeLimit (New-TimeSpan -Hours 3) -MultipleInstances IgnoreNew
+$Settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -ExecutionTimeLimit (New-TimeSpan -Hours 9) -MultipleInstances IgnoreNew
 $Principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
 Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal -Force | Out-Null
 

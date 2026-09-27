@@ -7,7 +7,8 @@ import logging
 import re
 import os
 import shutil
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -209,6 +210,24 @@ def _attempt(cfg: Config, today: str, out_dir: Path, feedback: str, resume: bool
     return post
 
 
+def _wait_for_limit(cfg: Config, err: "generate.ClaudeLimitError", deadline: datetime) -> None:
+    """Claude 사용 한도가 풀릴 때까지 기다린다. 너무 오래 걸리면 그날은 멈추고 알린다."""
+    resume_at = err.reset_at + timedelta(minutes=2)
+    if resume_at > deadline:
+        raise generate.GenerationError(
+            f"{err} — {err.reset_at:%H:%M}에 풀리지만 최대 대기({cfg.limit_wait_max_min}분)를 넘어 오늘은 멈춥니다. "
+            "다음 실행 때 멈춘 단계부터 이어서 합니다.")
+    msg = (f"[{cfg.profile.label}] Claude 사용 한도에 걸려 {err.reset_at:%H:%M}(한국 시각)에 풀린 뒤 "
+           f"{resume_at:%H:%M}부터 이어서 진행합니다.")
+    log.warning(msg)
+    notify.send(cfg, msg)
+    while (left := (resume_at - datetime.now(KST)).total_seconds()) > 0:
+        _sleep(min(left, 300))
+
+
+_sleep = time.sleep
+
+
 def produce(cfg: Config, today: str, out_dir: Path) -> dict:
     """발행 가능한 post를 만든다. 떨어지면 최대 MAX_ATTEMPTS번까지 새로 쓴다."""
     ready = out_dir / "ready.json"
@@ -220,16 +239,26 @@ def produce(cfg: Config, today: str, out_dir: Path) -> dict:
 
     feedback = ""
     resume = _stage(out_dir).get("written") and (out_dir / "post.json").exists()
+    deadline = datetime.now(KST) + timedelta(minutes=cfg.limit_wait_max_min)
     for attempt in range(1, cfg.max_attempts + 1):
         if not resume and out_dir.exists() and any(out_dir.iterdir()):
             stamp = datetime.now(KST).strftime("%H%M%S")
             shutil.move(str(out_dir), str(out_dir.with_name(f"{out_dir.name}-rejected-{stamp}")))
-        log.info("[%s] 글쓰기 시도 %d/%d%s", cfg.profile.name, attempt, cfg.max_attempts, " (이어서)" if resume else "")
-        try:
-            post = _attempt(cfg, today, out_dir, feedback, resume=bool(resume))
-        except Rejected as e:
-            feedback = str(e)
-            log.warning(feedback)
+        while True:
+            log.info("[%s] 글쓰기 시도 %d/%d%s", cfg.profile.name, attempt, cfg.max_attempts,
+                     " (이어서)" if resume else "")
+            try:
+                post = _attempt(cfg, today, out_dir, feedback, resume=bool(resume))
+            except generate.ClaudeLimitError as e:
+                _wait_for_limit(cfg, e, deadline)
+                resume = True  # 한도가 풀리면 같은 글을 멈춘 단계부터 이어서 한다
+                continue
+            except Rejected as e:
+                feedback = str(e)
+                log.warning(feedback)
+                post = None
+            break
+        if post is None:
             resume = False
             continue
         _save_json(ready, {"title": post["title"], "at": datetime.now(KST).isoformat()})

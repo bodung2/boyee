@@ -3,9 +3,12 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shutil
 import subprocess
+from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from .config import ROOT, Config
 
@@ -23,6 +26,47 @@ ALLOWED_TOOLS = [
 
 class GenerationError(RuntimeError):
     pass
+
+
+class ClaudeLimitError(GenerationError):
+    """Claude 구독 사용 한도에 걸렸다. reset_at(KST) 이후에 다시 하면 된다."""
+
+    def __init__(self, message: str, reset_at: datetime):
+        super().__init__(message)
+        self.reset_at = reset_at
+
+
+KST = ZoneInfo("Asia/Seoul")
+_LIMIT_TEXT = re.compile(r"(usage|session|weekly|5-hour|hour)\s*limit|limit (reached|exceeded)|hit your", re.I)
+_RESETS = re.compile(r"resets\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?:\s*\(([^)]+)\))?", re.I)
+
+
+def limit_reset_at(text: str, now: datetime | None = None) -> datetime | None:
+    """'You've hit your session limit · resets 7:30am (Asia/Seoul)' 같은 문구에서 풀리는 시각을 구한다.
+    한도 문구가 아니면 None, 시각을 못 읽으면 1시간 뒤로 본다."""
+    if not _LIMIT_TEXT.search(text or ""):
+        return None
+    now = now or datetime.now(KST)
+    m = _RESETS.search(text)
+    if not m:
+        return now + timedelta(hours=1)
+    hour, minute, ampm, tzname = int(m.group(1)), int(m.group(2) or 0), (m.group(3) or "").lower(), m.group(4)
+    if ampm == "pm" and hour != 12:
+        hour += 12
+    elif ampm == "am" and hour == 12:
+        hour = 0
+    try:
+        tz = ZoneInfo(tzname) if tzname else KST
+    except Exception:  # noqa: BLE001 - 모르는 시간대 이름이면 한국 시각으로 본다
+        tz = KST
+    local_now = now.astimezone(tz)
+    try:
+        reset = local_now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    except ValueError:
+        return now + timedelta(hours=1)
+    if reset <= local_now:
+        reset += timedelta(days=1)
+    return reset.astimezone(KST)
 
 
 def _claude_bin(cfg: Config) -> str:
@@ -53,16 +97,27 @@ def _run_claude(cfg: Config, prompt: str, log_file: Path) -> None:
     except subprocess.TimeoutExpired as e:
         raise GenerationError(f"Claude 실행 시간 초과({cfg.generate_timeout}초)") from e
     log_file.write_text(proc.stdout + "\n--- stderr ---\n" + proc.stderr, encoding="utf-8")
+    try:
+        result = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        result = None
+    if not isinstance(result, dict):
+        result = {}
+    text = str(result.get("result", ""))
+    if proc.returncode != 0 or result.get("is_error"):
+        reset = limit_reset_at(f"{text}\n{proc.stderr}") if (
+            result.get("api_error_status") == 429 or _LIMIT_TEXT.search(f"{text}\n{proc.stderr}")) else None
+        if result.get("api_error_status") == 429 and reset is None:
+            reset = datetime.now(KST) + timedelta(hours=1)
+        if reset is not None:
+            raise ClaudeLimitError(f"Claude 사용 한도: {text.strip()[:200]}", reset)
     if proc.returncode != 0:
         detail = (proc.stderr.strip() or proc.stdout.strip())[-600:]
         raise GenerationError(f"Claude 실행 실패(exit {proc.returncode}). 로그: {log_file}\n{detail}")
-    try:
-        result = json.loads(proc.stdout)
-        if result.get("is_error"):
-            raise GenerationError(f"Claude 오류: {result.get('result', '')[:300]}")
-        log.info("Claude 결과: %s", str(result.get("result", "")).strip()[-300:])
-    except json.JSONDecodeError:
-        pass
+    if result.get("is_error"):
+        raise GenerationError(f"Claude 오류: {text[:300]}")
+    if result:
+        log.info("Claude 결과: %s", text.strip()[-300:])
 
 
 def _rel(path: Path) -> Path:
