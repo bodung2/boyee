@@ -33,6 +33,9 @@ def main(argv: list[str] | None = None) -> int:
     lab = sub.add_parser("style-lab")
     lab.add_argument("--link", default="https://blog.naver.com/kkus_i/224403929458", help="링크 카드 시험용 글 주소")
     lab.add_argument("--no-push", action="store_true")
+    prevw = with_profile(sub.add_parser("preview-editor"))
+    prevw.add_argument("dir", nargs="?", type=Path, help="post.json이 있는 폴더(기본: 가장 최근 글)")
+    prevw.add_argument("--no-push", action="store_true")
     lab2 = sub.add_parser("style-lab2")
     lab2.add_argument("url", nargs="?", default="https://blog.naver.com/kkus_i/224403935438")
     lab2.add_argument("--no-push", action="store_true")
@@ -63,6 +66,8 @@ def main(argv: list[str] | None = None) -> int:
         for name, r in res["experiments"].items():
             print(f"  {'✅' if r.get('ok') else '❌'} {name}: {r.get('classes') or r.get('error')}")
         return 0 if args.no_push else _push_diagnostics("Style lab results")
+    if args.cmd == "preview-editor":
+        return _preview_editor(cfg, args.dir, push=not args.no_push)
     if args.cmd == "style-lab2":
         from .config import ROOT
         from .publisher import style_lab2
@@ -117,6 +122,28 @@ def _capture_style(cfg: Config, url: str, push: bool) -> int:
     if not push:
         return 0
     return _push_diagnostics(f"Capture blog design sample from {url}")
+
+
+def _preview_editor(cfg: Config, post_dir: Path | None, push: bool) -> int:
+    """저장된 글(post.json)을 새 디자인으로 에디터에 넣어 보고(발행 안 함) 결과를 올린다."""
+    from . import content
+    from .config import ROOT
+    from .pipeline import render_images
+    from .publisher import publish
+    if post_dir is None:
+        candidates = sorted((p for p in cfg.output_dir.glob("*/post.json") if "rejected" not in p.parent.name),
+                            key=lambda p: p.stat().st_mtime)
+        if not candidates:
+            print("post.json이 있는 글이 없습니다. 먼저 run --dry-run 으로 글을 만드세요.")
+            return 1
+        post_dir = candidates[-1].parent
+    post = content.normalize(json.loads((post_dir / "post.json").read_text(encoding="utf-8")))
+    imgs = render_images(cfg, post, post_dir)
+    diag = ROOT / "diagnostics" / "preview"
+    print(f"미리보기: {post['title']} ({post_dir})")
+    publish(cfg, post, imgs, dry_run=True, diag_dir=diag)
+    print(f"  에디터 화면: {diag / 'editor_full.png'}")
+    return 0 if not push else _push_diagnostics("Editor preview with native style")
 
 
 def _push_diagnostics(message: str) -> int:

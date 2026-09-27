@@ -15,6 +15,7 @@ from pathlib import Path
 from playwright.sync_api import BrowserContext, Frame, Locator, Page, sync_playwright
 
 from .config import Config
+from . import se_markup
 from .content import html_to_text, split_segments
 
 log = logging.getLogger(__name__)
@@ -142,8 +143,8 @@ class _Editor:
         except PublishError:
             return False
 
-    def paste_html(self, fragment: str) -> None:
-        plain = html_to_text(fragment)
+    def paste_html(self, fragment: str, plain: str | None = None) -> None:
+        plain = html_to_text(fragment) if plain is None else plain
         self.page.evaluate(
             """async ([h, t]) => {
                 const item = new ClipboardItem({
@@ -156,6 +157,28 @@ class _Editor:
         )
         self.page.keyboard.press(f"{MOD}+V")
         self.page.wait_for_timeout(1500)
+
+    def paste_native(self, components: str) -> None:
+        """에디터 고유 형식(내부 복사 표식 포함)으로 붙여넣어 인용구·표·글자 크기를 그대로 살린다."""
+        ua = self.page.evaluate("navigator.userAgent")
+        self.paste_html(se_markup.clipboard_html(components, ua), plain=html_to_text(components))
+        self.page.wait_for_timeout(1000)
+
+    def insert_oglink(self, url: str) -> None:
+        """빈 줄에 주소를 입력하고 Enter → 네이버가 링크 카드를 만든다."""
+        scope = self.scopes[0]
+        before = scope.locator(".se-component.se-oglink").count()
+        self.move_to_end()
+        self.page.keyboard.press("Enter")
+        self.page.keyboard.insert_text(url)
+        self.page.keyboard.press("Enter")
+        deadline = time.time() + 12
+        while scope.locator(".se-component.se-oglink").count() <= before and time.time() < deadline:
+            time.sleep(0.5)
+        if scope.locator(".se-component.se-oglink").count() <= before:
+            log.warning("링크 카드가 만들어지지 않았습니다(주소만 남습니다): %s", url)
+        self.page.wait_for_timeout(500)
+        self.move_to_end()
 
     def move_to_end(self) -> None:
         """마지막 컴포넌트 뒤로 커서를 옮긴다(이미지 뒤에는 빈 문단을 만든다)."""
@@ -193,7 +216,8 @@ def _shot(page: Page, cfg: Config, name: str) -> None:
         pass
 
 
-def publish(cfg: Config, post: dict, images: dict[str, Path], dry_run: bool = False) -> str:
+def publish(cfg: Config, post: dict, images: dict[str, Path], dry_run: bool = False,
+            diag_dir: Path | None = None) -> str:
     """글을 발행하고 발행된 글 URL을 돌려준다. dry_run이면 발행 버튼 직전에 멈춘다."""
     if not cfg.blog_id:
         raise PublishError(".env에 NAVER_BLOG_ID가 없습니다")
@@ -201,7 +225,7 @@ def publish(cfg: Config, post: dict, images: dict[str, Path], dry_run: bool = Fa
         ctx = _launch(p, cfg, headless=cfg.headless)
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         try:
-            return _publish(page, cfg, post, images, dry_run)
+            return _publish(page, cfg, post, images, dry_run, diag_dir)
         except Exception:
             _shot(page, cfg, "publish-error")
             raise
@@ -209,7 +233,22 @@ def publish(cfg: Config, post: dict, images: dict[str, Path], dry_run: bool = Fa
             ctx.close()
 
 
-def _publish(page: Page, cfg: Config, post: dict, images: dict[str, Path], dry_run: bool) -> str:
+def _dump_editor(page: Page, ed: "_Editor", out_dir: Path) -> None:
+    """미리보기 진단: 에디터에 실제로 만들어진 컴포넌트 종류와 전체 화면을 남긴다."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    comps = ed.scopes[0].locator(".se-component")
+    rows = []
+    for i in range(comps.count()):
+        c = comps.nth(i)
+        cls = c.get_attribute("class") or ""
+        fs = sorted(set(re.findall(r"se-fs\d+", c.inner_html())))
+        rows.append({"class": cls, "font_sizes": fs, "text": c.inner_text()[:80]})
+    (out_dir / "components.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
+    page.screenshot(path=str(out_dir / "editor_full.png"), full_page=True)
+
+
+def _publish(page: Page, cfg: Config, post: dict, images: dict[str, Path], dry_run: bool,
+             diag_dir: Path | None = None) -> str:
     page.goto(f"https://blog.naver.com/{cfg.blog_id}?Redirect=Write&", wait_until="domcontentloaded")
     page.wait_for_timeout(4000)
     if "nid.naver.com" in page.url:
@@ -225,14 +264,27 @@ def _publish(page: Page, cfg: Config, post: dict, images: dict[str, Path], dry_r
 
     ed.find("body").last.click()
     ed.upload_image(images["thumbnail"])
-    for kind, value in split_segments(post["body_html"]):
-        if kind == "html":
-            ed.paste_html(value)
-            ed.move_to_end()
-        else:
-            ed.upload_image(images[value])
+    if cfg.style_mode == "native":
+        # SR 기존 글과 같은 서식(인용구 챕터·요약표·16pt 본문·포스트잇 한 줄 요약·링크 카드)
+        for kind, value in se_markup.to_segments(post["body_html"]):
+            if kind == "se":
+                ed.paste_native(value)
+                ed.move_to_end()
+            elif kind == "oglink":
+                ed.insert_oglink(value)
+            elif value in images:
+                ed.upload_image(images[value])
+    else:
+        for kind, value in split_segments(post["body_html"]):
+            if kind == "html":
+                ed.paste_html(value)
+                ed.move_to_end()
+            else:
+                ed.upload_image(images[value])
 
     _shot(page, cfg, "before-publish")
+    if diag_dir:
+        _dump_editor(page, ed, diag_dir)
     if dry_run:
         log.info("dry-run: 발행 직전에 멈췄습니다. 브라우저 창을 확인하세요(60초 후 닫힘).")
         page.wait_for_timeout(60_000)
