@@ -158,10 +158,14 @@ class _Editor:
         self.page.keyboard.press(f"{MOD}+V")
         self.page.wait_for_timeout(1500)
 
-    def paste_native(self, components: str) -> None:
-        """에디터 고유 형식(내부 복사 표식 포함)으로 붙여넣어 인용구·표·글자 크기를 그대로 살린다."""
+    def paste_native(self, components: list[dict]) -> None:
+        """에디터 고유 방식으로 붙여넣는다: 문서 데이터(JSON)를 에디터의 복사 저장소에 넣고
+        '내부 복사' 표식을 붙여넣으면, 에디터가 저장소의 JSON으로 인용구·표·글자 크기를 그대로 만든다."""
+        data = se_markup.copied_data(components)
+        for scope in self.scopes:
+            scope.evaluate("([k, v]) => localStorage.setItem(k, v)", [se_markup.STORAGE_KEY, data])
         ua = self.page.evaluate("navigator.userAgent")
-        self.paste_html(se_markup.clipboard_html(components, ua), plain=html_to_text(components))
+        self.paste_html(se_markup.clipboard_html(ua), plain=se_markup.plain_text(components))
         self.page.wait_for_timeout(1000)
 
     def insert_oglink(self, url: str) -> None:
@@ -241,8 +245,18 @@ def _dump_editor(page: Page, ed: "_Editor", out_dir: Path) -> None:
     for i in range(comps.count()):
         c = comps.nth(i)
         cls = c.get_attribute("class") or ""
-        fs = sorted(set(re.findall(r"se-fs\d+", c.inner_html())))
-        rows.append({"class": cls, "font_sizes": fs, "text": c.inner_text()[:80]})
+        inner = c.inner_html()
+        rows.append({
+            "class": cls,
+            "font_sizes": sorted(set(re.findall(r"se-fs\d+", inner))),
+            "fonts": sorted(set(re.findall(r"se-ff-[\w-]+", inner))),
+            "aligns": sorted(set(re.findall(r"se-text-paragraph-align-(\w+)", inner))),
+            "line_heights": sorted(set(re.findall(r"line-height: ([\d.]+)", inner))),
+            "backgrounds": sorted(set(re.findall(r"background-color: (rgb\([^)]*\))", inner)))[:4],
+            "bold": "<b>" in inner,
+            "lists": "se-text-list" in inner,
+            "text": c.inner_text()[:80],
+        })
     (out_dir / "components.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
     page.screenshot(path=str(out_dir / "editor_full.png"), full_page=True)
 

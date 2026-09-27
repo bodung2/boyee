@@ -33,12 +33,17 @@ function textComp(html) {
 document.addEventListener('paste', e => {
   e.preventDefault();
   const h = e.clipboardData.getData('text/html');
-  if (h.includes('data-input-buffer')) {           // 실제 에디터처럼: 자기 복사본이면 컴포넌트 그대로
-    const tmp = document.createElement('div'); tmp.innerHTML = h;
-    tmp.querySelectorAll(':scope .se-component').forEach(c => {
-      if (!c.parentElement.closest('.se-component')) content.appendChild(c);
+  if (h.includes('data-input-buffer')) {           // 실제 에디터처럼: 내부 복사 표식이면 저장소의 문서 데이터로
+    const data = JSON.parse(localStorage.getItem('se3#SE_COPIED_DATA'));
+    data.copyData.forEach(c => {
+      const d = document.createElement('div');
+      d.className = 'se-component se-' + c.ctype + ' se-l-' + (c.layout || 'default');
+      if (c.ctype === 'text') {
+        d.innerHTML = c.value.map(p => '<p class="se-text-paragraph" contenteditable="true">' +
+          p.nodes.map(n => n.value).join('') + '</p>').join('');
+      } else { d.textContent = c.ctype + ':' + JSON.stringify(c).length; }
+      content.appendChild(d);
     });
-    content.querySelectorAll('.se-component.se-text .se-text-paragraph').forEach(p => p.contentEditable = 'true');
   } else {
     textComp(h);
   }

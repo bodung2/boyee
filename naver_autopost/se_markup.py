@@ -1,33 +1,29 @@
-"""post.json 본문(단순 HTML)을 네이버 스마트에디터 ONE 고유 형식으로 바꾼다.
+"""post.json 본문(단순 HTML)을 네이버 스마트에디터 ONE 문서 데이터로 바꾼다.
 
-에디터는 자기 자신이 복사한 내용(맨 앞에 data-input-buffer 표식이 붙은 컴포넌트 HTML)을 붙여넣으면
-인용구·표·글자 크기까지 그대로 되살린다(style-lab2로 확인). 그래서 SR의 기존 글
-(https://blog.naver.com/kkus_i/224403935438)에서 뜬 서식을 그대로 재현하는 컴포넌트를 만든다.
+에디터는 복사할 때 내용을 localStorage["se3#SE_COPIED_DATA"]에 문서 데이터(JSON)로 저장하고,
+클립보드에는 '내부 복사' 표식(data-input-buffer)만 둔다. 붙여넣을 때 표식이 있으면 저장된 JSON으로
+인용구·표·글자 크기까지 그대로 만든다(style-lab2·3과 preview-editor로 확인).
+그래서 SR의 기존 글(https://blog.naver.com/kkus_i/224403935438)과 같은 서식의 JSON을 만들어 넣는다.
 
-- 본문: 나눔고딕 16, 줄간격 1.8
-- 챕터(h2): 인용구 '세로선'(quotation_line), 나눔바른고딕 19, 굵게
+- 본문: 16pt(fs16), 줄간격 1.8
+- 챕터(h2): 인용구 quotation_line, 굵게(인용구 기본 글꼴 19)
 - 3줄 핵심 요약(맨 앞 ol): 1칸 표(배경 #f7f7f7, 테두리 #e2e2e2) + 굵은 제목 + 글머리표 목록
 - 비교 표: 가운데 정렬, 첫 줄 굵게 + 배경 #fafafa, 테두리 #ccc
-- 한 줄 요약(<div data-block="oneline">): 구분선 + 인용구 '포스트잇', 가운데 19
+- 한 줄 요약(<div data-block="oneline">): 구분선 + 인용구 quotation_postit
 - 함께 보면 좋은 글(<div data-block="related">): 구분선 + 🔗 제목 + 글 소개 + 링크 카드(주소 입력 후 Enter)
 """
 from __future__ import annotations
 
-import html
+import json
 import re
-import uuid
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from urllib.parse import quote
 
 from .content import IMAGE_MARKER
 
-BLACK = "color: rgb(0, 0, 0);"
 URL_ONLY = re.compile(r"^\s*(https?://\S+)\s*$")
-
-
-def _id() -> str:
-    return f"SE-{uuid.uuid4()}"
+STORAGE_KEY = "se3#SE_COPIED_DATA"
 
 
 # ---------------------------------------------------------------- 간단한 DOM
@@ -119,133 +115,128 @@ def runs_of(node, bold: bool = False) -> list[list[Run]]:
     return cleaned
 
 
-# ---------------------------------------------------------------- 컴포넌트 조각
+# ---------------------------------------------------------------- 문서 데이터(JSON) 조각
 
-def _span(text: str, bold: bool, font: str = "nanumgothic", size: int = 16,
-          highlight: str | None = None, color: str = BLACK) -> str:
-    inner = html.escape(text, quote=False)
-    if bold:
-        inner = f"<b>{inner}</b>"
-    cls = f"se-ff-{font} se-fs{size}"
-    style = color
-    if highlight:
-        cls += " se-highlight"
-        style += f" background-color: {highlight};"
-        inner = f"<mark>{inner}</mark>"
-    return f'<span id="{_id()}" class="{cls} __se-node" style="{style}">{inner}</span>'
-
-
-def _para(runs: list[Run], align: str = "left", lh: str = "1.8", **span_kw) -> str:
-    if not runs:
-        runs = [("", False)]
-    spans = "".join(_span(t, b, **span_kw) for t, b in runs)
-    return (f'<p id="{_id()}" class="se-text-paragraph se-text-paragraph-align-{align}" '
-            f'style="line-height: {lh};">{spans}</p>')
-
-
-def _component(kind: str, layout: str, title: str, section: str) -> str:
-    cid = _id()
-    return (f'<div class="se-component se-{kind} se-l-{layout}" id="{cid}" data-compid="{cid}" '
-            f'data-a11y-title="{title}"><div class="se-component-content">'
-            f'<div class="se-drop-indicator" data-unitid="" data-compid="{cid}" data-direction="top">'
-            f'{section}</div></div></div>')
-
-
-def text_component(paragraphs: list[str]) -> str:
-    section = (f'<div class="se-section se-section-text se-l-default">'
-               f'<div id="{_id()}" class="se-module se-module-text __se-unit">{"".join(paragraphs)}</div></div>')
-    return _component("text", "default", "본문", section)
-
-
-def bullet_list(items: list[list[Run]], **para_kw) -> str:
-    lis = "".join(f'<li class="se-text-list-item">{_para(runs, **para_kw)}</li>' for runs in items)
-    return f'<ul class="se-text-list se-text-list-type-bullet-disc">{lis}</ul>'
-
-
-def quote_component(style: str, paragraphs: list[str], align: str = "left") -> str:
-    cite = (f'<div id="{_id()}" class="se-module se-module-text __se-unit se-is-empty se-cite">'
-            f'<p id="{_id()}" class="se-text-paragraph se-text-paragraph-align-{align}" style="line-height: 1.5;">'
-            f'<span id="{_id()}" class="se-ff-nanumgothic se-fs13 __se-node" style="color: rgb(119, 119, 119);">'
-            f'</span></p></div>')
-    section = (f'<div class="se-section se-section-quotation se-l-{style} se-section-align-left __se-unit">'
-               f'<div class="se-quotation-container">'
-               f'<div id="{_id()}" class="se-module se-module-text __se-unit se-quote">{"".join(paragraphs)}</div>'
-               f'{cite}</div></div>')
-    return _component("quotation", style, "인용구", section)
-
-
-def chapter_quote(runs: list[Run]) -> str:
-    runs = [(t, True) for t, _ in runs]
-    return quote_component("quotation_line", [_para(runs, font="nanumbarungothic", size=19)])
-
-
-def oneline_quote(lines: list[list[Run]]) -> str:
-    paras = [_para([("[한 줄 요약]", False)], align="center", font="nanumbarungothic", size=19)]
-    paras += [_para(r, align="center", font="nanumbarungothic", size=19) for r in lines if r]
-    return quote_component("quotation_postit", paras, align="center")
-
-
-def _table(rows_html: str) -> str:
-    section = (f'<div class="se-section se-section-table se-l-default se-section-align-left" style="width: 100%;">'
-               f'<div class="se-table-container"><table class="se-table-content" style="border-width: medium; '
-               f'border-style: none; border-color: currentcolor; border-image: none;"><tbody>{rows_html}'
-               f'</tbody></table></div></div>')
-    return _component("table", "default", "표", section)
-
-
-def _cell(content: str, width: str, bg: str | None, border: str) -> str:
-    style = f"width: {width}; height: 40px; "
+def _node(text: str, bold: bool, size: str | None = "fs16", bg: str | None = None) -> dict:
+    style: dict = {"ctype": "nodeStyle"}
+    if size:
+        style.update({"fontColor": "#000000", "fontSizeCode": size})
     if bg:
-        style += f"background-color: {bg}; "
-    style += f"border: 1px solid {border};"
-    return (f'<td id="{_id()}" colspan="1" rowspan="1" class="__se-unit se-cell" style="{style}">'
-            f'<div id="{_id()}" class="se-module se-module-text">{content}</div></td>')
+        style["backgroundColor"] = bg
+    if bold:
+        style["bold"] = True
+    return {"id": "", "ctype": "textNode", "value": text, "style": style}
 
 
-def summary_table(items: list[list[Run]], title: str = "⚡ 3줄 핵심 요약") -> str:
-    bg = "rgb(247, 247, 247)"
-    content = _para([(title, True)], highlight=bg) + bullet_list(items, highlight=bg)
-    return _table(f'<tr class="se-tr" id="{_id()}">{_cell(content, "100%", bg, "rgb(226, 226, 226)")}</tr>')
+def _para(runs: list[Run], align: str | None = None, size: str | None = "fs16", bg: str | None = None,
+          bullet: bool = False, line_height: float | None = 1.8) -> dict:
+    nodes = [_node(t, b, size, bg) for t, b in runs] or [_node("", False, size, bg)]
+    para: dict = {"id": "", "ctype": "paragraph", "nodes": nodes}
+    style: dict = {"ctype": "paragraphStyle"}
+    if line_height:
+        style["lineHeight"] = line_height
+    if align:
+        style["align"] = align
+    if bullet:
+        style["list"] = {"type": "bullet", "level": 0, "ctype": "paragraphListStyle"}
+    if len(style) > 1:
+        para["style"] = style
+    return para
 
 
-def compare_table(rows: list[list[list[list[Run]]]]) -> str:
+def text_component(paragraphs: list[dict]) -> dict:
+    return {"id": "", "ctype": "text", "layout": "default", "value": paragraphs}
+
+
+def chapter_quote(runs: list[Run]) -> dict:
+    return {"id": "", "ctype": "quotation", "layout": "quotation_line",
+            "value": [_para([(t, True) for t, _ in runs], size=None, line_height=None)], "source": None}
+
+
+def oneline_quote(lines: list[list[Run]]) -> dict:
+    paras = [_para([("[한 줄 요약]", False)], size=None, line_height=None)]
+    paras += [_para(r, size=None, line_height=None) for r in lines if r]
+    return {"id": "", "ctype": "quotation", "layout": "quotation_postit", "value": paras, "source": None}
+
+
+def _cell(paragraphs: list[dict], width: float, bg: str | None, border: str) -> dict:
+    cell = {"id": "", "ctype": "tableCell", "borderInlineStyle": f"border:1px solid {border};",
+            "colSpan": 1, "rowSpan": 1, "width": width, "height": 40, "value": paragraphs}
+    if bg:
+        cell["backgroundColor"] = bg
+    return cell
+
+
+def _table(rows: list[list[dict]], ncol: int) -> dict:
+    return {"id": "", "ctype": "table", "layout": "default", "width": 100,
+            "rows": [{"ctype": "tableRow", "cells": r} for r in rows],
+            "columnCount": ncol, "borderInlineStyle": "border:none;"}
+
+
+def summary_table(items: list[list[Run]], title: str = "⚡ 3줄 핵심 요약") -> dict:
+    bg = "#f7f7f7"
+    paras = [_para([(title, True)], bg=bg)] + [_para(r, bg=bg, bullet=True) for r in items]
+    return _table([[_cell(paras, 100, bg, "rgb(226, 226, 226)")]], 1)
+
+
+def compare_table(rows: list[list[list[list[Run]]]]) -> dict | None:
     """rows[행][열] = 셀 안 문단들(각 문단은 글자 조각 목록). 첫 행은 머리글."""
     if not rows:
-        return ""
+        return None
     ncol = max(len(r) for r in rows)
-    width = f"{100 / ncol:.2f}%"
-    head_bg, border = "rgb(250, 250, 250)", "rgb(204, 204, 204)"
+    width = round(100 / ncol, 2)
+    head_bg, border = "#fafafa", "rgb(204, 204, 204)"
     out = []
     for i, row in enumerate(rows):
         cells = []
         for c in range(ncol):
             paras = row[c] if c < len(row) else [[("", False)]]
             if i == 0:
-                content = "".join(_para([(t, True) for t, _ in p], align="center", highlight=head_bg) for p in paras)
-                cells.append(_cell(content, width, head_bg, border))
+                cells.append(_cell([_para([(t, True) for t, _ in p], align="center", bg=head_bg) for p in paras],
+                                   width, head_bg, border))
             else:
-                content = "".join(_para(p, align="center") for p in paras)
-                cells.append(_cell(content, width, None, border))
-        out.append(f'<tr class="se-tr" id="{_id()}">{"".join(cells)}</tr>')
-    return _table("".join(out))
+                cells.append(_cell([_para(p, align="center") for p in paras], width, None, border))
+        out.append(cells)
+    return _table(out, ncol)
 
 
-def horizontal_line() -> str:
-    section = ('<div draggable="true" class="se-section se-section-horizontalLine se-l-line1 '
-               'se-section-align-left"><div class="se-module se-module-horizontalLine __se-unit">'
-               '<span class="se-hr-invisible"></span><hr class="se-hr"></div></div>')
-    return _component("horizontalLine", "line1", "구분선", section)
+def horizontal_line() -> dict:
+    return {"id": "", "ctype": "horizontalLine", "layout": "line1"}
 
 
-def clipboard_html(components: str, user_agent: str) -> str:
-    """에디터가 '자기 복사본'으로 알아보도록 복사할 때와 같은 표식을 앞에 붙인다."""
+def copied_data(components: list[dict]) -> str:
+    """localStorage['se3#SE_COPIED_DATA']에 넣을 값."""
+    return json.dumps({"docId": "0", "copyData": components}, ensure_ascii=False)
+
+
+def clipboard_html(user_agent: str, plain: str = "") -> str:
+    """에디터가 '내부 복사'로 알아보는 클립보드 표식(내용은 저장소에서 읽는다)."""
     marker = f'<span data-input-buffer="INPUT_BUFFER_DATA;{quote(user_agent, safe="()")};blog.naver.com"></span>'
-    return f"<html><body><!--StartFragment-->﻿{marker}{components}﻿<!--EndFragment--></body></html>"
+    return f"<html><body><!--StartFragment-->\ufeff{marker}\ufeff<!--EndFragment--></body></html>"
+
+
+def plain_text(components: list[dict]) -> str:
+    out = []
+
+    def walk(v):
+        if isinstance(v, dict):
+            if v.get("ctype") == "textNode":
+                out.append(v.get("value", ""))
+            for x in v.values():
+                if isinstance(x, (list, dict)):
+                    walk(x)
+            if v.get("ctype") == "paragraph":
+                out.append("\n")
+        elif isinstance(v, list):
+            for x in v:
+                walk(x)
+    walk(components)
+    return "".join(out).strip()
 
 
 # ---------------------------------------------------------------- 본문 → 조각 순서
 
-Segment = tuple[str, str]     # ("se", 컴포넌트 HTML) | ("image", 이름) | ("oglink", 주소)
+Segment = tuple[str, object]  # ("se", [컴포넌트 dict]) | ("image", 이름) | ("oglink", 주소)
 
 
 def _cell_paragraphs(td: Node) -> list[list[Run]]:
@@ -283,8 +274,8 @@ def to_segments(body_html: str) -> list[Segment]:
     body = IMAGE_MARKER.sub(lambda m: f'<img data-marker="{m.group(1)}">', body_html)
     root = parse(body)
     segments: list[Segment] = []
-    pending: list[str] = []          # 붙여넣기 한 번으로 넣을 컴포넌트들
-    paragraphs: list[str] = []       # 이어지는 본문 문단(한 텍스트 컴포넌트로 묶음)
+    pending: list[dict] = []         # 붙여넣기 한 번으로 넣을 컴포넌트들
+    paragraphs: list[dict] = []      # 이어지는 본문 문단(한 텍스트 컴포넌트로 묶음)
     seen_chapter = False
     summary_done = False
 
@@ -298,7 +289,7 @@ def to_segments(body_html: str) -> list[Segment]:
         if pending:
             # 끝에 빈 문단을 하나 둬서, 다음 이미지·링크 카드를 넣을 때 커서가 인용구·표 안에 갇히지 않게 한다.
             pending.append(text_component([_para([])]))
-            segments.append(("se", "".join(pending)))
+            segments.append(("se", pending.copy()))
             pending.clear()
 
     def add_paragraph(runs: list[Run], bold: bool = False):
@@ -340,10 +331,12 @@ def to_segments(body_html: str) -> list[Segment]:
             else:
                 if paragraphs:
                     paragraphs.append(_para([]))
-                paragraphs.append(bullet_list(items))
+                paragraphs.extend(_para(r, bullet=True) for r in items)
         elif tag == "table":
             flush_text()
-            pending.append(compare_table(_table_rows(node)))
+            table = compare_table(_table_rows(node))
+            if table:
+                pending.append(table)
         elif tag == "div" and node.attrs.get("data-block") == "oneline":
             flush_text()
             pending.append(horizontal_line())
