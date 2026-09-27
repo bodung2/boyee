@@ -33,6 +33,9 @@ def main(argv: list[str] | None = None) -> int:
     lab = sub.add_parser("style-lab")
     lab.add_argument("--link", default="https://blog.naver.com/kkus_i/224403929458", help="링크 카드 시험용 글 주소")
     lab.add_argument("--no-push", action="store_true")
+    lab2 = sub.add_parser("style-lab2")
+    lab2.add_argument("url", nargs="?", default="https://blog.naver.com/kkus_i/224403935438")
+    lab2.add_argument("--no-push", action="store_true")
     run_p = with_profile(sub.add_parser("run"))
     run_p.add_argument("--dry-run", action="store_true", help="발행 버튼은 누르지 않는다")
     run_p.add_argument("--force", action="store_true", help="오늘 이미 발행했어도 한 편 더 발행")
@@ -60,6 +63,14 @@ def main(argv: list[str] | None = None) -> int:
         for name, r in res["experiments"].items():
             print(f"  {'✅' if r.get('ok') else '❌'} {name}: {r.get('classes') or r.get('error')}")
         return 0 if args.no_push else _push_diagnostics("Style lab results")
+    if args.cmd == "style-lab2":
+        from .config import ROOT
+        from .publisher import style_lab2
+        res = style_lab2(cfg, args.url, ROOT / "diagnostics" / "lab2")
+        for k, v in res.items():
+            size = len(json.dumps(v, ensure_ascii=False))
+            print(f"  {k}: {size:,}자" + (" ⚠️" if "ERR" in str(v)[:20] or "__error" in str(v)[:40] else ""))
+        return 0 if args.no_push else _push_diagnostics("Style lab 2 results")
     if args.cmd == "capture-style":
         return _capture_style(cfg, args.url, push=not args.no_push)
     if args.cmd == "run":

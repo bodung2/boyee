@@ -469,3 +469,127 @@ def style_lab(cfg: Config, sample_dir: Path, out_dir: Path, link_url: str) -> di
             ctx.close()
     (out_dir / "lab.json").write_text(json.dumps(results, ensure_ascii=False, indent=1), encoding="utf-8")
     return results
+
+
+def _read_clipboard_all(page: Page) -> dict:
+    """클립보드의 모든 형식(에디터 고유의 'web ...' 형식 포함)을 읽는다."""
+    return page.evaluate("""async () => {
+        const out = {};
+        try {
+            for (const item of await navigator.clipboard.read({unsanitized: ['text/html']})) {
+                for (const type of item.types) {
+                    try { out[type] = (await (await item.getType(type)).text()).slice(0, 300000); }
+                    catch (e) { out[type] = 'ERR ' + e; }
+                }
+            }
+        } catch (e) { out.__error = String(e); }
+        return out;
+    }""")
+
+
+def style_lab2(cfg: Config, post_url: str, out_dir: Path) -> dict:
+    """2차 서식 실험: (1) 에디터 고유 복사 형식 캡처 (2) 인용구·글자크기·줄간격 메뉴 구조
+    (3) 인용구 버튼으로 넣고 빠져나오는 동작. 발행·저장하지 않는다."""
+    m = _POST_URL_PARTS.search(post_url)
+    blog_id, log_no = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    res: dict = {}
+
+    def layer_html(scope) -> str:
+        loc = scope.locator(".se-popup, .se-toolbar-layer, .se-layer, [class*='option-layer'], [class*='-layer']")
+        htmls = []
+        for i in range(min(loc.count(), 30)):
+            try:
+                if loc.nth(i).is_visible():
+                    htmls.append(loc.nth(i).evaluate("e => e.outerHTML")[:20000])
+            except Exception:
+                pass
+        return "\n\n".join(htmls)
+
+    with sync_playwright() as p:
+        ctx = _launch(p, cfg, headless=cfg.headless)
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        page.on("dialog", lambda d: d.accept())
+        try:
+            # (1) 기존 글 수정 화면에서 복사 형식 캡처 — 전체, 인용구 하나, 표 하나
+            page.goto(f"https://blog.naver.com/PostUpdateForm.naver?blogId={blog_id}&logNo={log_no}",
+                      wait_until="domcontentloaded")
+            page.wait_for_timeout(6000)
+            ed = _Editor(page, cfg)
+            ed.try_click("draft_popup_cancel")
+            ed.try_click("help_close")
+            scope = ed.scopes[0]
+            for name, sel in (("quote_line", ".se-component.se-l-quotation_line"),
+                              ("quote_postit", ".se-component.se-l-quotation_postit"),
+                              ("table", ".se-component.se-table"),
+                              ("text", ".se-component.se-text")):
+                try:
+                    comp = scope.locator(sel).first
+                    comp.locator(".se-text-paragraph").first.click(timeout=8000)
+                    page.keyboard.press(f"{MOD}+A")
+                    page.keyboard.press(f"{MOD}+C")
+                    page.wait_for_timeout(800)
+                    res[f"clip_{name}_ctrlA"] = _read_clipboard_all(page)
+                except Exception as e:
+                    res[f"clip_{name}_ctrlA"] = {"__error": repr(e)[:300]}
+            # 컴포넌트 자체를 선택(가장자리 클릭)해서 복사
+            try:
+                comp = scope.locator(".se-component.se-l-quotation_line").first
+                box = comp.bounding_box(timeout=8000)
+                page.mouse.click(box["x"] + 3, box["y"] + box["height"] / 2)
+                page.keyboard.press(f"{MOD}+C")
+                page.wait_for_timeout(800)
+                res["clip_quote_line_component"] = _read_clipboard_all(page)
+            except Exception as e:
+                res["clip_quote_line_component"] = {"__error": repr(e)[:300]}
+            page.goto("about:blank")
+
+            # (2)(3) 새 글쓰기 화면에서 메뉴 구조와 인용구 삽입 동작
+            page.goto(f"https://blog.naver.com/{cfg.blog_id}?Redirect=Write&", wait_until="domcontentloaded")
+            page.wait_for_timeout(5000)
+            ed = _Editor(page, cfg)
+            ed.find("title", timeout=30_000)
+            ed.try_click("draft_popup_cancel")
+            ed.try_click("help_close")
+            ed.find("title").first.click(timeout=8000)
+            page.keyboard.insert_text("서식 실험2(발행 안 함)")
+            ed.find("body").last.click()
+            page.keyboard.insert_text("첫 문단")
+            scope = ed.scopes[0]
+            for name, sel in (("quote_options", ".se-insert-quotation-default-toolbar-button + .se-document-toolbar-select-option-button"),
+                              ("font_size_options", ".se-font-size-code-toolbar-button"),
+                              ("line_height_options", ".se-line-height-toolbar-button"),
+                              ("font_family_options", ".se-font-family-toolbar-button")):
+                try:
+                    scope.locator(sel).first.click(timeout=8000)
+                    page.wait_for_timeout(800)
+                    res[name] = layer_html(scope)
+                    page.screenshot(path=str(out_dir / f"{name}.png"))
+                    page.keyboard.press("Escape")
+                    page.wait_for_timeout(300)
+                except Exception as e:
+                    res[name] = "ERR " + repr(e)[:300]
+
+            def comps() -> list[str]:
+                c = scope.locator(".se-component")
+                return [c.nth(i).evaluate("e => e.outerHTML")[:3000] for i in range(c.count())]
+
+            try:
+                ed.find("body").last.click()
+                page.keyboard.press("End")
+                scope.locator(".se-insert-quotation-default-toolbar-button").first.click(timeout=8000)
+                page.wait_for_timeout(1000)
+                page.keyboard.insert_text("인용구 안 글자")
+                res["after_quote_insert"] = comps()
+                page.keyboard.press("ArrowDown")
+                page.keyboard.press("ArrowDown")
+                page.keyboard.insert_text("아래로 빠져나온 뒤 글자")
+                res["after_arrowdown"] = comps()
+                page.screenshot(path=str(out_dir / "quote_flow.png"), full_page=True)
+            except Exception as e:
+                res["quote_flow_error"] = repr(e)[:500]
+        finally:
+            page.goto("about:blank")
+            ctx.close()
+    (out_dir / "lab2.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+    return res
