@@ -36,6 +36,9 @@ def main(argv: list[str] | None = None) -> int:
     prevw = with_profile(sub.add_parser("preview-editor"))
     prevw.add_argument("dir", nargs="?", type=Path, help="post.json이 있는 폴더(기본: 가장 최근 글)")
     prevw.add_argument("--no-push", action="store_true")
+    lab3 = sub.add_parser("style-lab3")
+    lab3.add_argument("url", nargs="?", default="https://blog.naver.com/kkus_i/224403935438")
+    lab3.add_argument("--no-push", action="store_true")
     lab2 = sub.add_parser("style-lab2")
     lab2.add_argument("url", nargs="?", default="https://blog.naver.com/kkus_i/224403935438")
     lab2.add_argument("--no-push", action="store_true")
@@ -68,6 +71,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if args.no_push else _push_diagnostics("Style lab results")
     if args.cmd == "preview-editor":
         return _preview_editor(cfg, args.dir, push=not args.no_push)
+    if args.cmd == "style-lab3":
+        from .config import ROOT
+        from .publisher import style_lab3
+        res = style_lab3(cfg, args.url, ROOT / "diagnostics" / "lab3")
+        for k, v in res.items():
+            if isinstance(v, dict) and "diff" in v:
+                print(f"  {k}: 저장소 변화 {len(v['diff'])}건 {[d['key'] for d in v['diff']][:5]}")
+            else:
+                print(f"  {k}: {str(v)[:120]}")
+        return 0 if args.no_push else _push_diagnostics("Style lab 3 results")
     if args.cmd == "style-lab2":
         from .config import ROOT
         from .publisher import style_lab2

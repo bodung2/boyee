@@ -645,3 +645,79 @@ def style_lab2(cfg: Config, post_url: str, out_dir: Path) -> dict:
             ctx.close()
     (out_dir / "lab2.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
     return res
+
+
+_DUMP_STORAGE_JS = """() => {
+    const dump = (s) => { const o = {}; try { for (let i = 0; i < s.length; i++) { const k = s.key(i); o[k] = s.getItem(k); } } catch (e) { o.__error = String(e); } return o; };
+    return {origin: location.origin, local: dump(localStorage), session: dump(sessionStorage)};
+}"""
+
+
+def _storage_snapshot(page: Page) -> list[dict]:
+    snaps = []
+    for frame in page.frames:
+        try:
+            snap = frame.evaluate(_DUMP_STORAGE_JS)
+            snap["frame"] = frame.name or frame.url[:80]
+            snaps.append(snap)
+        except Exception:
+            pass
+    return snaps
+
+
+def _storage_diff(before: list[dict], after: list[dict]) -> list[dict]:
+    diffs = []
+    for a in after:
+        b = next((x for x in before if x.get("frame") == a.get("frame")), {"local": {}, "session": {}})
+        for area in ("local", "session"):
+            for k, v in (a.get(area) or {}).items():
+                if (b.get(area) or {}).get(k) != v:
+                    diffs.append({"frame": a.get("frame"), "origin": a.get("origin"), "area": area,
+                                  "key": k, "len": len(v or ""), "value": (v or "")[:200000]})
+    return diffs
+
+
+def style_lab3(cfg: Config, post_url: str, out_dir: Path) -> dict:
+    """3차 실험: 에디터가 복사할 때 내용을 어디(브라우저 저장소)에 두는지 찾는다. 저장·발행하지 않는다."""
+    m = _POST_URL_PARTS.search(post_url)
+    blog_id, log_no = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    res: dict = {}
+    with sync_playwright() as p:
+        ctx = _launch(p, cfg, headless=cfg.headless)
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        page.on("dialog", lambda d: d.accept())
+        try:
+            page.goto(f"https://blog.naver.com/PostUpdateForm.naver?blogId={blog_id}&logNo={log_no}",
+                      wait_until="domcontentloaded")
+            page.wait_for_timeout(6000)
+            ed = _Editor(page, cfg)
+            ed.try_click("draft_popup_cancel")
+            ed.try_click("help_close")
+            scope = ed.scopes[0]
+            res["window_keys"] = scope.evaluate(
+                "() => Object.keys(window).filter(k => /se|editor|smart|clip|buffer/i.test(k)).slice(0, 200)")
+            for name, sel in (("postit", ".se-component.se-l-quotation_postit"),
+                              ("table", ".se-component.se-table"),
+                              ("quote_line", ".se-component.se-l-quotation_line")):
+                try:
+                    before = _storage_snapshot(page)
+                    comp = scope.locator(sel).first
+                    comp.scroll_into_view_if_needed(timeout=8000)
+                    box = comp.bounding_box(timeout=8000)
+                    page.mouse.click(box["x"] + 3, box["y"] + box["height"] / 2)
+                    page.keyboard.press(f"{MOD}+C")
+                    page.wait_for_timeout(1500)
+                    res[f"copy_{name}"] = {"diff": _storage_diff(before, _storage_snapshot(page)),
+                                           "clipboard": _read_clipboard_all(page)}
+                except Exception as e:
+                    res[f"copy_{name}"] = {"error": repr(e)[:400]}
+            res["storage_after"] = [{"frame": s.get("frame"), "origin": s.get("origin"),
+                                     "local_keys": {k: len(v or "") for k, v in (s.get("local") or {}).items()},
+                                     "session_keys": {k: len(v or "") for k, v in (s.get("session") or {}).items()}}
+                                    for s in _storage_snapshot(page)]
+        finally:
+            page.goto("about:blank")
+            ctx.close()
+    (out_dir / "lab3.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+    return res
