@@ -300,11 +300,6 @@ def _publish(page: Page, cfg: Config, post: dict, images: dict[str, Path], dry_r
     _shot(page, cfg, "before-publish")
     if diag_dir:
         _dump_editor(page, ed, diag_dir)
-    if dry_run:
-        log.info("dry-run: 발행 직전에 멈췄습니다. 브라우저 창을 확인하세요(60초 후 닫힘).")
-        page.wait_for_timeout(60_000)
-        return ""
-
     ed.find("publish_open").first.click()
     page.wait_for_timeout(1500)
 
@@ -319,10 +314,15 @@ def _publish(page: Page, cfg: Config, post: dict, images: dict[str, Path], dry_r
                     opt.first.click()
                     picked = True
                     break
-            if not picked:
+            if picked:
+                log.info("카테고리 선택: %s", category)
+                post["_category_ok"] = True
+            else:
                 log.warning("카테고리 '%s'를 찾지 못해 기본 카테고리로 발행합니다.", category)
+                post["_category_ok"] = False
         else:
             log.warning("카테고리 선택 버튼을 찾지 못해 기본 카테고리로 발행합니다.")
+            post["_category_ok"] = False
 
     try:
         tag_input = ed.find("tag_input", timeout=5_000).first
@@ -339,6 +339,14 @@ def _publish(page: Page, cfg: Config, post: dict, images: dict[str, Path], dry_r
             page.wait_for_timeout(300)
     except PublishError:
         log.warning("태그 입력칸을 찾지 못해 태그 없이 발행합니다.")
+
+    if dry_run:
+        # 시험 실행: 발행 창에서 카테고리·태그까지 실제로 고른 뒤, 최종 '발행'만 누르지 않는다.
+        _shot(page, cfg, "publish-layer")
+        log.info("dry-run: 카테고리·태그까지 넣고 최종 발행 직전에 멈췄습니다(60초 후 닫힘). 카테고리=%s",
+                 category or "(기본)")
+        page.wait_for_timeout(60_000)
+        return ""
 
     ed.find("publish_confirm").first.click()
     # 여기부터는 이미 발행됐을 수 있으므로, 실패해도 절대 재시도하지 않는다(중복 발행 방지).

@@ -304,11 +304,9 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
 
             # 직접 쓴 글까지 이력에 반영(주제 중복 피하기·내부 링크 후보). 실패해도 발행은 계속한다.
             try:
-                added = history.sync_from_rss(cfg.history_file, cfg.blog_id)
-                if added:
-                    log.info("블로그 RSS에서 이력에 없던 글 %d편을 추가했습니다", added)
+                log.info("발행 목록 동기화: %s", history.sync(cfg.history_file, cfg.blog_id))
             except Exception as e:
-                log.warning("블로그 RSS 동기화 실패(계속 진행): %s", e)
+                log.warning("발행 목록 동기화 실패(계속 진행): %s", e)
 
             out_dir = cfg.output_dir / today
             post = produce(cfg, today, out_dir)
@@ -329,8 +327,11 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
             else:
                 raise RuntimeError(f"네이버 발행 실패: {last_error}")
 
+            cat_note = f"카테고리: {post.get('blog_category') or '(기본)'}"
+            if post.get("_category_ok") is False:
+                cat_note += " ⚠️ 이 카테고리를 찾지 못해 기본 카테고리로 들어갔습니다"
             if dry_run:
-                notify.send(cfg, f"[{label} 자동발행 테스트] 발행 직전까지 확인했습니다: {post['title']}")
+                notify.send(cfg, f"[{label} 자동발행 테스트] 최종 발행 직전까지 확인했습니다: {post['title']}\n{cat_note}")
                 return 0
             history.append(cfg.history_file, {
                 "date": today, "title": post["title"], "url": url, "topic": post.get("topic", ""),
@@ -338,7 +339,7 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
                 "lane": post.get("lane", ""), "cluster": post.get("cluster", ""), "domain": post.get("domain"),
                 "tags": post.get("tags", []), "source": "autopost",
             })
-            notify.send(cfg, f"[{label} 자동발행 완료] {post['title']}\n{url}")
+            notify.send(cfg, f"[{label} 자동발행 완료] {post['title']}\n{url}\n{cat_note}")
             return 0
     except Exception as e:
         log.exception("자동 발행 실패")

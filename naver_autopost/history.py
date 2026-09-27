@@ -6,6 +6,7 @@ import html
 import io
 import json
 import re
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -142,3 +143,74 @@ def sync_from_rss(path: Path, blog_id: str, xml: str | None = None) -> int:
     if added:
         save(path, entries)
     return added
+
+
+LIST_API = ("https://blog.naver.com/PostTitleListAsync.naver?blogId={blog_id}&viewdate=&currentPage={page}"
+            "&categoryNo=0&parentCategoryNo=&countPerPage=30")
+
+
+def _loose_json(raw: str) -> dict:
+    """네이버 글 목록 응답은 JSON 안에 \\' 같은 비표준 이스케이프가 섞여 있어 느슨하게 읽는다."""
+    raw = raw.strip().replace("\\'", "'")
+    return json.loads(raw, strict=False)
+
+
+def fetch_all_posts(blog_id: str, max_pages: int = 300, fetch=None) -> list[dict]:
+    """블로그의 '전체 글' 목록을 페이지(30개씩)마다 끝까지 읽는다(공개 글 기준)."""
+    def default_fetch(url: str) -> str:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0",
+                                                   "Referer": f"https://blog.naver.com/{blog_id}"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return resp.read().decode("utf-8", "replace")
+
+    fetch = fetch or default_fetch
+    posts: list[dict] = []
+    seen: set[str] = set()
+    for page in range(1, max_pages + 1):
+        data = _loose_json(fetch(LIST_API.format(blog_id=blog_id, page=page)))
+        items = data.get("postList") or []
+        new = 0
+        for it in items:
+            log_no = str(it.get("logNo", "")).strip()
+            if not log_no or log_no in seen:
+                continue
+            seen.add(log_no)
+            new += 1
+            posts.append({
+                "title": urllib.parse.unquote_plus(str(it.get("title", ""))).strip(),
+                "url": f"https://blog.naver.com/{blog_id}/{log_no}",
+                "category_no": str(it.get("categoryNo", "")),
+                "add_date": urllib.parse.unquote_plus(str(it.get("addDate", ""))).strip(),
+            })
+        total = int(str(data.get("totalCount") or "0") or 0)
+        if not new or (total and len(posts) >= total):
+            break
+    return posts
+
+
+def sync_all(path: Path, blog_id: str, fetch=None) -> tuple[int, int]:
+    """전체 글 목록으로 이력을 채운다(오래된 글·직접 쓴 글 포함). (추가한 수, 블로그 전체 글 수)."""
+    posts = fetch_all_posts(blog_id, fetch=fetch)
+    entries = load(path)
+    known = {e.get("url", "").rstrip("/") for e in entries}
+    added = 0
+    for post in posts:
+        if post["url"] in known:
+            continue
+        entries.append({"date": "", "title": post["title"], "url": post["url"], "category": "",
+                        "category_no": post["category_no"], "pub_date": post["add_date"], "source": "blog-list"})
+        known.add(post["url"])
+        added += 1
+    if added:
+        save(path, entries)
+    return added, len(posts)
+
+
+def sync(path: Path, blog_id: str) -> str:
+    """매일 실행 전 동기화: 전체 목록을 먼저 시도하고, 안 되면 RSS(최근 글)로 대신한다."""
+    try:
+        added, total = sync_all(path, blog_id)
+        return f"전체 글 목록 {total}편 확인, 이력에 없던 {added}편 추가"
+    except Exception as e:
+        added = sync_from_rss(path, blog_id)
+        return f"전체 목록 조회 실패({e}) → RSS로 최근 글 {added}편 추가"

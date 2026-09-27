@@ -106,3 +106,42 @@ def test_sync_from_rss_adds_only_missing_posts(tmp_path):
     assert history.sync_from_rss(path, "kkus_i", xml=RSS) == 0
     # rss 글은 '오늘 이미 발행함' 판단에 쓰이지 않는다
     assert history.published_on(path, "2026-09-29") is None
+
+
+def test_fetch_all_posts_paginates_until_total():
+    import json as _json
+    from urllib.parse import quote_plus
+    pages = {
+        1: {"postList": [{"logNo": str(100000 + i), "title": quote_plus(f"글 {i} | 제목"), "categoryNo": "3",
+                          "addDate": quote_plus("2026. 9. 1.")} for i in range(30)], "totalCount": "45"},
+        2: {"postList": [{"logNo": str(100030 + i), "title": quote_plus(f"글 {30 + i}"), "categoryNo": "4",
+                          "addDate": "2025. 1. 1."} for i in range(15)], "totalCount": "45"},
+    }
+    calls = []
+
+    def fetch(url):
+        page = int(url.split("currentPage=")[1].split("&")[0])
+        calls.append(page)
+        # 실제 응답처럼 비표준 \' 이스케이프가 섞여 있어도 읽혀야 한다
+        return _json.dumps(pages.get(page, {"postList": []}), ensure_ascii=False).replace("글 1 ", "글 1 \\'")
+
+    posts = history.fetch_all_posts("flw3148", fetch=fetch)
+    assert len(posts) == 45 and calls == [1, 2]
+    assert posts[0]["url"] == "https://blog.naver.com/flw3148/100000"
+    assert posts[0]["title"] == "글 0 | 제목"
+
+
+def test_sync_all_adds_missing_only(tmp_path):
+    import json as _json
+    path = tmp_path / "published.json"
+    history.append(path, {"date": "", "title": "기존", "url": "https://blog.naver.com/flw3148/100000", "source": "sheet-import"})
+
+    def fetch(url):
+        page = int(url.split("currentPage=")[1].split("&")[0])
+        if page > 1:
+            return _json.dumps({"postList": []})
+        return _json.dumps({"postList": [{"logNo": "100000", "title": "기존"}, {"logNo": "100001", "title": "새글"}],
+                            "totalCount": "2"})
+
+    assert history.sync_all(path, "flw3148", fetch=fetch) == (1, 2)
+    assert history.sync_all(path, "flw3148", fetch=fetch) == (0, 2)

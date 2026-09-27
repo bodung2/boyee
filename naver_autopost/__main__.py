@@ -140,8 +140,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "sync-history":
         from . import history
-        added = history.sync_from_rss(cfg.history_file, cfg.blog_id)
-        print(f"  블로그 RSS에서 {added}편을 이력에 추가했습니다: {cfg.history_file}")
+        print(f"  {cfg.blog_id}: {history.sync(cfg.history_file, cfg.blog_id)}")
+        print(f"  이력 파일에 있는 글: {len(history.load(cfg.history_file))}편 ({cfg.history_file})")
         return 0
     if args.cmd == "forget":
         from . import history
