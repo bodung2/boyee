@@ -75,6 +75,18 @@ class Config:
     telegram_bot_token: str
     telegram_chat_id: str
 
+    def category_for(self, lane: str | None) -> str:
+        """글의 레인에 맞는 블로그 카테고리. .env의 NAVER_CATEGORY_<프로필>_<레인>이 있으면 그것을 쓴다."""
+        lane = (lane or "").strip().upper()[:1]
+        name = self.profile.name.upper()
+        if self.profile.lane_categories:
+            override = os.environ.get(f"NAVER_CATEGORY_{name}_{lane}") if lane else None
+            if override:
+                return override.strip()
+            table = dict(self.profile.lane_categories)
+            return (table.get(lane) or os.environ.get(f"NAVER_CATEGORY_{name}") or table.get("*", "")).strip()
+        return self.category
+
     @classmethod
     def load(cls, profile_name: str = profiles.DEFAULT_PROFILE) -> "Config":
         _load_dotenv(ROOT / ".env")
@@ -83,11 +95,15 @@ class Config:
         data_dir = Path(env("DATA_DIR", str(ROOT / "data")))
         return cls(
             profile=profile,
-            blog_id=env("NAVER_BLOG_ID", "").strip(),
+            blog_id=(env(f"NAVER_BLOG_ID_{profile.name.upper()}") or env("NAVER_BLOG_ID", "")).strip(),
             category=(env(f"NAVER_CATEGORY_{profile.name.upper()}") or env("NAVER_CATEGORY", "")).strip(),
             browser_channel=env("BROWSER_CHANNEL", "chrome").strip(),
             headless=_bool("HEADLESS", False),
-            profile_dir=Path(env("BROWSER_PROFILE_DIR", str(ROOT / ".browser-profile"))),
+            # 네이버 계정마다 자동화용 크롬 저장 공간을 따로 둔다(로그인 충돌 방지).
+            profile_dir=Path(env(f"BROWSER_PROFILE_DIR_{profile.name.upper()}")
+                             or (env("BROWSER_PROFILE_DIR") if profile.name == profiles.DEFAULT_PROFILE else None)
+                             or str(ROOT / (".browser-profile" if profile.name == profiles.DEFAULT_PROFILE
+                                            else f".browser-profile-{profile.name}"))),
             output_dir=Path(env("OUTPUT_DIR", str(ROOT / "output"))) / profile.name,
             history_file=data_dir / f"published_{profile.name}.json",
             data_dir=data_dir,

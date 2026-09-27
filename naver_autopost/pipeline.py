@@ -313,6 +313,8 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
             out_dir = cfg.output_dir / today
             post = produce(cfg, today, out_dir)
             imgs = render_images(cfg, post, out_dir)
+            post["blog_category"] = cfg.category_for(post.get("lane"))
+            log.info("카테고리: %s (레인 %s)", post["blog_category"] or "(기본)", post.get("lane", "-"))
 
             last_error: Exception | None = None
             for attempt in (1, 2):
@@ -332,6 +334,7 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
                 return 0
             history.append(cfg.history_file, {
                 "date": today, "title": post["title"], "url": url, "topic": post.get("topic", ""),
+                "category": post.get("blog_category", ""),
                 "lane": post.get("lane", ""), "cluster": post.get("cluster", ""), "domain": post.get("domain"),
                 "tags": post.get("tags", []), "source": "autopost",
             })

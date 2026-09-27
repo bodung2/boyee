@@ -25,8 +25,8 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--profile", default=profiles.DEFAULT_PROFILE, choices=sorted(profiles.PROFILES))
         return p
 
-    sub.add_parser("login")
-    sub.add_parser("check-login")
+    with_profile(sub.add_parser("login"))
+    with_profile(sub.add_parser("check-login"))
     cap = sub.add_parser("capture-style")
     cap.add_argument("url", help="디자인 기준이 되는 기존 네이버 글 주소")
     cap.add_argument("--no-push", action="store_true", help="GitHub에 올리지 않고 파일만 만든다")

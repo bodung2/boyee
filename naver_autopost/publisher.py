@@ -308,18 +308,19 @@ def _publish(page: Page, cfg: Config, post: dict, images: dict[str, Path], dry_r
     ed.find("publish_open").first.click()
     page.wait_for_timeout(1500)
 
-    if cfg.category:
+    category = post.get("blog_category") or cfg.category
+    if category:
         if ed.try_click("category_open"):
             page.wait_for_timeout(700)
             picked = False
             for scope in ed.scopes:
-                opt = scope.locator(f"label:has-text('{cfg.category}'), span:text-is('{cfg.category}')")
+                opt = scope.locator(f"label:has-text('{category}'), span:text-is('{category}')")
                 if opt.count():
                     opt.first.click()
                     picked = True
                     break
             if not picked:
-                log.warning("카테고리 '%s'를 찾지 못해 기본 카테고리로 발행합니다.", cfg.category)
+                log.warning("카테고리 '%s'를 찾지 못해 기본 카테고리로 발행합니다.", category)
         else:
             log.warning("카테고리 선택 버튼을 찾지 못해 기본 카테고리로 발행합니다.")
 

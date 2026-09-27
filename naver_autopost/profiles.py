@@ -13,13 +13,16 @@ class Profile:
     thumbnail_style: str        # "edu"(가운데 정렬) | "childhood"(질문형·다크, 좌상단 고정 레이아웃)
     illustrations: bool         # AI 이미지(기본: Codex/ChatGPT 구독)로 본문 일러스트 생성
     extra_forbidden: tuple[str, ...] = ()
+    # 레인별 블로그 카테고리(없으면 NAVER_CATEGORY_<프로필> 하나를 쓴다). 마지막 "*"는 나머지 레인.
+    lane_categories: tuple[tuple[str, str], ...] = ()
 
 
 PROFILES: dict[str, Profile] = {
     "edu": Profile(
         name="edu", label="교육 정책",
         write_skill="edu-auto-post", factcheck_skill="edu-auto-factcheck",
-        thumbnail_style="edu", illustrations=False,
+        thumbnail_style="edu", illustrations=True,
+        lane_categories=(("B", "교직 꿀팁"), ("*", "교육 정책 인사이트")),
     ),
     "childhood": Profile(
         name="childhood", label="유아교육",

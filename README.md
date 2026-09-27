@@ -5,7 +5,7 @@
 | 프로필 | 글 규칙(원본 스킬) | 자동 발행용 스킬 | 상태 |
 |---|---|---|---|
 | `childhood` (기본) | early-childhood-insight-extraction | `.claude/skills/childhood-auto-post`, `childhood-auto-factcheck` | **사용 중** |
-| `edu` | education-insight-extraction | `.claude/skills/edu-auto-post`, `edu-auto-factcheck` | 보류(명령 한 줄로 켜기 가능) |
+| `edu` | education-insight-extraction | `.claude/skills/edu-auto-post`, `edu-auto-factcheck` | 교육 블로그(flw3148), 매일 05:00 |
 
 ```
 [작업 스케줄러, 매일 06:00]  python -m naver_autopost run --profile childhood
@@ -87,6 +87,13 @@ notepad .env        # NAVER_BLOG_ID, NAVER_CATEGORY_CHILDHOOD 입력
 - 나노바나나 프롬프트를 사람이 옮기는 대신 **ChatGPT 이미지(Codex)로 일러스트를 직접 생성**해 본문에 넣습니다. `.env`의 `IMAGE_BACKEND=gemini`로 Gemini API로도 바꿀 수 있습니다.
 - E(홈러닝) 레인에서 활동지 파일 배포나 다운로드 약속은 하지 않습니다. 파일 배포는 edu-freebie-distribution 몫입니다.
 - 판매·구매 링크는 발행 단계에서 코드로 한 번 더 차단합니다.
+
+## 교육 블로그 (두 번째 네이버 계정)
+
+- `.env`에 `NAVER_BLOG_ID_EDU=flw3148`을 넣습니다. 자동화용 크롬은 `.browser-profile-edu`로 **유아 계정과 따로** 씁니다. 로그인이 섞이지 않고, 두 작업이 동시에 돌아도 됩니다.
+- 최초 1회 로그인: `python -m naver_autopost login --profile edu` (교육 블로그 계정으로, '로그인 상태 유지' 체크)
+- 카테고리는 글 종류로 자동 결정됩니다. 교직 실무(B 레인)는 '교직 꿀팁', 나머지는 '교육 정책 인사이트'입니다.
+- 예약: `scripts\setup_windows.ps1 -Profile edu -Time 05:00`
 
 ## 블로그 디자인 (SR 기존 글과 동일)
 
