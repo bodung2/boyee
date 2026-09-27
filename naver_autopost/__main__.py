@@ -36,6 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     prevw = with_profile(sub.add_parser("preview-editor"))
     prevw.add_argument("dir", nargs="?", type=Path, help="post.json이 있는 폴더(기본: 가장 최근 글)")
     prevw.add_argument("--no-push", action="store_true")
+    prevw.add_argument("--style", choices=["native", "plain"], default="native", help="시험할 서식 방식")
     lab3 = sub.add_parser("style-lab3")
     lab3.add_argument("url", nargs="?", default="https://blog.naver.com/kkus_i/224403935438")
     lab3.add_argument("--no-push", action="store_true")
@@ -70,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {'✅' if r.get('ok') else '❌'} {name}: {r.get('classes') or r.get('error')}")
         return 0 if args.no_push else _push_diagnostics("Style lab results")
     if args.cmd == "preview-editor":
+        cfg.style_mode = args.style
         return _preview_editor(cfg, args.dir, push=not args.no_push)
     if args.cmd == "style-lab3":
         from .config import ROOT
