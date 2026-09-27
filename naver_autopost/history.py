@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import csv
+import html
 import io
 import json
+import re
+import urllib.request
 from pathlib import Path
 
 
@@ -90,3 +93,52 @@ def remove(path: Path, url_or_date: str) -> list[dict]:
     removed = [e for e in entries if e.get("url", "").rstrip("/") == key or e.get("date") == key]
     save(path, [e for e in entries if e not in removed])
     return removed
+
+
+_ITEM = re.compile(r"<item>(.*?)</item>", re.S)
+
+
+def _tag(item: str, name: str) -> str:
+    m = re.search(rf"<{name}>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</{name}>", item, re.S)
+    return html.unescape(m.group(1)).strip() if m else ""
+
+
+def parse_rss(xml: str, blog_id: str) -> list[dict]:
+    """네이버 블로그 RSS에서 글 목록(제목·주소·카테고리·날짜)을 뽑는다."""
+    posts = []
+    for item in _ITEM.findall(xml):
+        link = _tag(item, "link")
+        m = re.search(r"blog\.naver\.com/(?:[^/?#]+/(\d{6,})|.*?logNo=(\d{6,}))", link)
+        if not m:
+            continue
+        posts.append({
+            "title": _tag(item, "title"),
+            "url": f"https://blog.naver.com/{blog_id}/{m.group(1) or m.group(2)}",
+            "category": _tag(item, "category"),
+            "pub_date": _tag(item, "pubDate"),
+            "tags": [t.strip() for t in _tag(item, "tag").split(",") if t.strip()],
+        })
+    return posts
+
+
+def sync_from_rss(path: Path, blog_id: str, xml: str | None = None) -> int:
+    """블로그 RSS에 있는데 이력에 없는 글(직접 쓴 글 포함)을 이력에 추가한다. 추가한 개수를 돌려준다."""
+    if xml is None:
+        req = urllib.request.Request(f"https://rss.blog.naver.com/{blog_id}.xml",
+                                     headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            xml = resp.read().decode("utf-8", "replace")
+    entries = load(path)
+    known = {e.get("url", "").rstrip("/") for e in entries}
+    added = 0
+    for post in parse_rss(xml, blog_id):
+        if post["url"] in known:
+            continue
+        entries.append({"date": "", "title": post["title"], "url": post["url"],
+                        "category": post["category"], "tags": post["tags"],
+                        "pub_date": post["pub_date"], "source": "rss"})
+        known.add(post["url"])
+        added += 1
+    if added:
+        save(path, entries)
+    return added

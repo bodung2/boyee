@@ -302,6 +302,14 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
                     "네이버 로그인이 풀려 있습니다. `python -m naver_autopost login`으로 다시 로그인하세요"
                     "('로그인 상태 유지' 체크).")
 
+            # 직접 쓴 글까지 이력에 반영(주제 중복 피하기·내부 링크 후보). 실패해도 발행은 계속한다.
+            try:
+                added = history.sync_from_rss(cfg.history_file, cfg.blog_id)
+                if added:
+                    log.info("블로그 RSS에서 이력에 없던 글 %d편을 추가했습니다", added)
+            except Exception as e:
+                log.warning("블로그 RSS 동기화 실패(계속 진행): %s", e)
+
             out_dir = cfg.output_dir / today
             post = produce(cfg, today, out_dir)
             imgs = render_images(cfg, post, out_dir)

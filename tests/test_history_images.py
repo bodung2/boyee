@@ -82,3 +82,27 @@ def test_find_post_url_by_title_from_rss():
     assert find_post_url_by_title(Page(), "kkus_i", "초등 입학 전 한글, 어디까지 떼야 할까? | 준비") == \
         "https://blog.naver.com/kkus_i/224424354626"
     assert find_post_url_by_title(Page(), "kkus_i", "없는 제목") is None
+
+
+RSS = """<?xml version="1.0" encoding="UTF-8"?><rss><channel>
+<item><title><![CDATA[초등 입학 전 한글, 어디까지 떼야 할까?]]></title>
+<link><![CDATA[https://blog.naver.com/kkus_i/224424354626?fromRss=true&trackingCode=rss]]></link>
+<category><![CDATA[유아 발달]]></category><tag><![CDATA[유아교육,누리과정]]></tag>
+<pubDate>Mon, 28 Sep 2026 05:46:00 +0900</pubDate></item>
+<item><title><![CDATA[한글 활동지 &amp; 나눔]]></title>
+<link>https://blog.naver.com/kkus_i/224403985633?fromRss=true</link><category>활동지</category></item>
+</channel></rss>"""
+
+
+def test_sync_from_rss_adds_only_missing_posts(tmp_path):
+    path = tmp_path / "published.json"
+    history.append(path, {"date": "2026-09-28", "title": "x", "url": "https://blog.naver.com/kkus_i/224424354626",
+                          "source": "autopost"})
+    assert history.sync_from_rss(path, "kkus_i", xml=RSS) == 1
+    entries = history.load(path)
+    assert entries[-1]["title"] == "한글 활동지 & 나눔"
+    assert entries[-1]["url"] == "https://blog.naver.com/kkus_i/224403985633"
+    assert entries[-1]["source"] == "rss"
+    assert history.sync_from_rss(path, "kkus_i", xml=RSS) == 0
+    # rss 글은 '오늘 이미 발행함' 판단에 쓰이지 않는다
+    assert history.published_on(path, "2026-09-29") is None
