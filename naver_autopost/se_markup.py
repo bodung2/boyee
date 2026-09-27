@@ -25,6 +25,7 @@ from .content import IMAGE_MARKER
 URL_ONLY = re.compile(r"^\s*(https?://\S+)\s*$")
 STORAGE_KEY = "se3#SE_COPIED_DATA"
 _JS_URI_SAFE = "()!'*"
+HASHTAG_LINE = re.compile(r"^\s*(#\S+\s*){2,}$")
 RELATED_HEAD = re.compile(r"함께\s*보면\s*좋은\s*글")
 ONELINE_HEAD = re.compile(r"^\s*[📌✅🔑⭐]?\s*\[?\s*한\s*줄\s*(요약|정리)\s*\]?\s*[:：]?\s*")
 
@@ -373,6 +374,8 @@ def to_segments(body_html: str) -> list[Segment]:
                         segments.append(("oglink", m.group(1)))
                     else:
                         add_paragraph(line)
+        elif tag in ("p", "div", "section", "blockquote") and HASHTAG_LINE.match(text_of(node)):
+            return          # '#태그 #태그' 줄은 본문에 넣지 않는다(발행 창의 태그 칸에 따로 들어간다)
         elif tag in ("p", "div", "section", "blockquote"):
             lines = runs_of(node)
             for line in lines:

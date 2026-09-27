@@ -326,10 +326,16 @@ def _publish(page: Page, cfg: Config, post: dict, images: dict[str, Path], dry_r
     try:
         tag_input = ed.find("tag_input", timeout=5_000).first
         for tag in post.get("tags", [])[:30]:
+            # 너무 빨리 치면 Enter가 먹히기 전에 다음 태그가 붙어 '#유아교육누리과정'처럼 합쳐진다.
             tag_input.click()
+            tag_input.fill("")
             page.keyboard.insert_text(tag)
+            page.wait_for_timeout(300)
             page.keyboard.press("Enter")
-            page.wait_for_timeout(150)
+            deadline = time.time() + 3
+            while tag_input.input_value() and time.time() < deadline:
+                time.sleep(0.2)
+            page.wait_for_timeout(300)
     except PublishError:
         log.warning("태그 입력칸을 찾지 못해 태그 없이 발행합니다.")
 

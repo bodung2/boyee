@@ -71,3 +71,11 @@ def test_clipboard_marker_and_storage_payload():
     assert 'data-input-buffer="INPUT_BUFFER_DATA;Mozilla%2F5.0%20(Windows%20NT%2010.0);blog.naver.com"' in html
     data = json.loads(S.copied_data([S.horizontal_line()]))
     assert data["copyData"][0]["ctype"] == "horizontalLine"
+
+
+def test_hashtag_line_is_not_put_in_body():
+    body = "<h2>1. 본문</h2><p>내용</p><p>#유아교육 #누리과정 #취학준비</p><p>출처: 교육부(2022)</p>"
+    texts = [n["value"] for k, v in S.to_segments(body) if k == "se"
+             for c in v if c["ctype"] == "text" for p in c["value"] for n in p["nodes"]]
+    assert not any(t.startswith("#") for t in texts)
+    assert any("출처" in t for t in texts)
