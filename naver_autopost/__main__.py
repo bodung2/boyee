@@ -26,6 +26,7 @@ def main(argv: list[str] | None = None) -> int:
         return p
 
     sub.add_parser("login")
+    sub.add_parser("check-login")
     run_p = with_profile(sub.add_parser("run"))
     run_p.add_argument("--dry-run", action="store_true", help="발행 버튼은 누르지 않는다")
     run_p.add_argument("--force", action="store_true", help="오늘 이미 발행했어도 한 편 더 발행")
@@ -41,6 +42,11 @@ def main(argv: list[str] | None = None) -> int:
         from .publisher import login
         login(cfg)
         return 0
+    if args.cmd == "check-login":
+        from .publisher import check_session
+        ok = check_session(cfg)
+        print("네이버 로그인 유지됨 ✅" if ok else "네이버 로그인이 풀려 있습니다 ❌ → python -m naver_autopost login")
+        return 0 if ok else 1
     if args.cmd == "run":
         from .pipeline import run
         return run(cfg, dry_run=args.dry_run, force=args.force)

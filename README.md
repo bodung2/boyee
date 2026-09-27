@@ -72,7 +72,7 @@ notepad .env        # NAVER_BLOG_ID, NAVER_CATEGORY_CHILDHOOD 입력
 
 | 알림 | 원인 | 할 일 |
 |---|---|---|
-| 네이버 로그인이 풀렸습니다 | 세션 만료·보안 확인 | `python -m naver_autopost login` 다시 실행 |
+| 네이버 로그인이 풀려 있습니다 | 세션 만료·'로그인 상태 유지' 미체크 | `python -m naver_autopost login` 다시 실행('로그인 상태 유지' 체크). `check-login`으로 확인. 실행 맨 처음에 확인하므로 글을 쓰기 전에 멈춥니다 |
 | 발행 기준을 통과한 글을 만들지 못했습니다 | 검증·팩트체크 탈락 | 없음. 그날은 건너뛰는 것이 정상 동작입니다 |
 | ChatGPT(Codex) 팩트체크를 할 수 없습니다 | Codex 로그인 풀림·구독 사용 한도 | `codex` 실행 → 로그인 확인. 다음 실행은 멈춘 단계부터 이어서 합니다 |
 | 화면 요소를 찾지 못했습니다 | 네이버 에디터 변경 | `logs/*-publish-error.png`를 보고 `naver_autopost/publisher.py`의 `SELECTORS` 수정 |

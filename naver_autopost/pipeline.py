@@ -105,12 +105,13 @@ def _make_illustrations(cfg: Config, post: dict, out_dir: Path) -> None:
 def _gpt_factcheck(cfg: Config, post_path: Path, out_dir: Path) -> dict:
     """ChatGPT 교차검증. 지적이 있으면 Claude가 원문으로 재확인해 반영한 뒤 ChatGPT가 다시 본다."""
     post = _load_post(post_path)
-    for round_no in (1, 2):
+    last_round = cfg.gpt_fix_rounds + 1          # 반영 N번 + 마지막 재검사 1번
+    for round_no in range(1, last_round + 1):
         review = openai_client.factcheck(cfg, post)
         _save_json(out_dir / f"gpt_factcheck_{round_no}.json", review)
         if review["verdict"] == "pass":
             return post
-        if review["verdict"] == "fail" or round_no == 2:
+        if review["verdict"] == "fail" or round_no == last_round:
             raise Rejected(f"ChatGPT 팩트체크 불합격({review['verdict']}): {review.get('summary', '')}\n"
                            + json.dumps(review.get("issues", [])[:8], ensure_ascii=False))
         _save_json(out_dir / "gpt_review.json", review)
@@ -269,6 +270,11 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
                 log.info("오늘(%s)은 이미 발행했습니다: %s", today, done["url"])
                 return 0
             _preflight(cfg)
+            # 글쓰기(30분+) 전에 네이버 로그인부터 확인한다.
+            if not publisher.check_session(cfg):
+                raise publisher.SessionExpired(
+                    "네이버 로그인이 풀려 있습니다. `python -m naver_autopost login`으로 다시 로그인하세요"
+                    "('로그인 상태 유지' 체크).")
 
             out_dir = cfg.output_dir / today
             post = produce(cfg, today, out_dir)

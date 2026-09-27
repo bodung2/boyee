@@ -69,6 +69,7 @@ class Config:
     openai_image_quality: str
     openai_factcheck_model: str
     gpt_factcheck: bool
+    gpt_fix_rounds: int
     illustration_count: int
     telegram_bot_token: str
     telegram_chat_id: str
@@ -109,6 +110,7 @@ class Config:
             openai_image_quality=env("OPENAI_IMAGE_QUALITY", "medium").strip(),
             openai_factcheck_model=env("OPENAI_FACTCHECK_MODEL", "gpt-5.5").strip(),
             gpt_factcheck=_bool("GPT_FACTCHECK", True),
+            gpt_fix_rounds=int(env("GPT_FIX_ROUNDS", "2")),
             illustration_count=int(env("ILLUSTRATION_COUNT", "2")),
             telegram_bot_token=env("TELEGRAM_BOT_TOKEN", "").strip(),
             telegram_chat_id=env("TELEGRAM_CHAT_ID", "").strip(),

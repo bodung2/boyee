@@ -67,6 +67,10 @@ def _launch(p, cfg: Config, headless: bool) -> BrowserContext:
     return p.chromium.launch_persistent_context(**kwargs)
 
 
+def _logged_in(ctx: BrowserContext) -> bool:
+    return any(c["name"] == "NID_AUT" for c in ctx.cookies("https://naver.com"))
+
+
 def login(cfg: Config, wait_minutes: int = 5) -> None:
     """최초 1회: 브라우저 창에서 직접 로그인하면 세션이 프로필에 저장된다."""
     with sync_playwright() as p:
@@ -75,15 +79,34 @@ def login(cfg: Config, wait_minutes: int = 5) -> None:
         page.goto("https://nid.naver.com/nidlogin.login")
         print("열린 브라우저에서 네이버에 로그인하세요. ('로그인 상태 유지'를 꼭 체크하세요)")
         deadline = time.time() + wait_minutes * 60
-        while time.time() < deadline:
-            if any(c["name"] == "NID_AUT" for c in ctx.cookies("https://naver.com")):
-                print("로그인 확인. 세션을 저장했습니다.")
-                time.sleep(3)
-                ctx.close()
-                return
+        while time.time() < deadline and not _logged_in(ctx):
             time.sleep(2)
+        if not _logged_in(ctx):
+            ctx.close()
+            raise SessionExpired(f"{wait_minutes}분 안에 로그인이 확인되지 않았습니다")
+        time.sleep(3)
         ctx.close()
-        raise SessionExpired(f"{wait_minutes}분 안에 로그인이 확인되지 않았습니다")
+    # '로그인 상태 유지'를 안 하면 창을 닫는 순간 로그인이 사라진다 → 다시 열어서 남아 있는지 확인
+    if not check_session(cfg):
+        raise SessionExpired("로그인은 됐지만 창을 닫자 풀렸습니다. 다시 실행해서 '로그인 상태 유지'를 꼭 체크하고 로그인하세요.")
+    print("로그인 확인. 창을 다시 열어도 로그인이 유지됩니다.")
+
+
+def check_session(cfg: Config) -> bool:
+    """저장된 브라우저 프로필에 네이버 로그인이 살아 있고 글쓰기 화면이 열리는지 확인한다(약 10초)."""
+    with sync_playwright() as p:
+        ctx = _launch(p, cfg, headless=cfg.headless)
+        try:
+            if not _logged_in(ctx):
+                return False
+            if not cfg.blog_id:
+                return True
+            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            page.goto(f"https://blog.naver.com/{cfg.blog_id}?Redirect=Write&", wait_until="domcontentloaded")
+            page.wait_for_timeout(3000)
+            return "nid.naver.com" not in page.url
+        finally:
+            ctx.close()
 
 
 class _Editor:

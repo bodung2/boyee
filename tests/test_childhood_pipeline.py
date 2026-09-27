@@ -123,7 +123,19 @@ def test_gpt_fail_rejects(cfg, monkeypatch):
         pipeline._gpt_factcheck(cfg, out / "post.json", out)
 
 
-def test_gpt_still_fix_after_second_round_rejects(cfg, monkeypatch):
+def test_gpt_fix_twice_then_pass(cfg, monkeypatch):
+    out = cfg.output_dir / "d"
+    out.mkdir(parents=True)
+    (out / "post.json").write_text(json.dumps(child_post(), ensure_ascii=False), encoding="utf-8")
+    reviews = iter([{"verdict": "fix", "issues": [{}]}, {"verdict": "fix", "issues": [{}]}, {"verdict": "pass"}])
+    monkeypatch.setattr(openai_client, "factcheck", lambda c, p: next(reviews))
+    applied = []
+    monkeypatch.setattr(generate, "apply_gpt_review", lambda c, d, r: applied.append(r) or {})
+    pipeline._gpt_factcheck(cfg, out / "post.json", out)
+    assert applied == [1, 2]
+
+
+def test_gpt_still_fix_after_last_round_rejects(cfg, monkeypatch):
     out = cfg.output_dir / "d"
     out.mkdir(parents=True)
     (out / "post.json").write_text(json.dumps(child_post(), ensure_ascii=False), encoding="utf-8")
