@@ -24,6 +24,7 @@ from .content import IMAGE_MARKER
 
 URL_ONLY = re.compile(r"^\s*(https?://\S+)\s*$")
 STORAGE_KEY = "se3#SE_COPIED_DATA"
+_JS_URI_SAFE = "()!'*"
 RELATED_HEAD = re.compile(r"함께\s*보면\s*좋은\s*글")
 ONELINE_HEAD = re.compile(r"^\s*[📌✅🔑⭐]?\s*\[?\s*한\s*줄\s*(요약|정리)\s*\]?\s*[:：]?\s*")
 
@@ -213,7 +214,8 @@ def copied_data(components: list[dict]) -> str:
 
 def clipboard_html(user_agent: str, plain: str = "") -> str:
     """에디터가 '내부 복사'로 알아보는 클립보드 표식(내용은 저장소에서 읽는다)."""
-    marker = f'<span data-input-buffer="INPUT_BUFFER_DATA;{quote(user_agent, safe="()!'*")};blog.naver.com"></span>'
+    encoded = quote(user_agent, safe=_JS_URI_SAFE)      # 브라우저 encodeURIComponent와 같게
+    marker = f'<span data-input-buffer="INPUT_BUFFER_DATA;{encoded};blog.naver.com"></span>'
     return f"<html><body><!--StartFragment-->\ufeff{marker}\ufeff<!--EndFragment--></body></html>"
 
 
