@@ -30,6 +30,9 @@ def main(argv: list[str] | None = None) -> int:
     cap = sub.add_parser("capture-style")
     cap.add_argument("url", help="디자인 기준이 되는 기존 네이버 글 주소")
     cap.add_argument("--no-push", action="store_true", help="GitHub에 올리지 않고 파일만 만든다")
+    lab = sub.add_parser("style-lab")
+    lab.add_argument("--link", default="https://blog.naver.com/kkus_i/224403929458", help="링크 카드 시험용 글 주소")
+    lab.add_argument("--no-push", action="store_true")
     run_p = with_profile(sub.add_parser("run"))
     run_p.add_argument("--dry-run", action="store_true", help="발행 버튼은 누르지 않는다")
     run_p.add_argument("--force", action="store_true", help="오늘 이미 발행했어도 한 편 더 발행")
@@ -50,6 +53,13 @@ def main(argv: list[str] | None = None) -> int:
         ok = check_session(cfg)
         print("네이버 로그인 유지됨 ✅" if ok else "네이버 로그인이 풀려 있습니다 ❌ → python -m naver_autopost login")
         return 0 if ok else 1
+    if args.cmd == "style-lab":
+        from .config import ROOT
+        from .publisher import style_lab
+        res = style_lab(cfg, ROOT / "diagnostics" / "style", ROOT / "diagnostics" / "lab", args.link)
+        for name, r in res["experiments"].items():
+            print(f"  {'✅' if r.get('ok') else '❌'} {name}: {r.get('classes') or r.get('error')}")
+        return 0 if args.no_push else _push_diagnostics("Style lab results")
     if args.cmd == "capture-style":
         return _capture_style(cfg, args.url, push=not args.no_push)
     if args.cmd == "run":
@@ -87,8 +97,6 @@ def main(argv: list[str] | None = None) -> int:
 
 def _capture_style(cfg: Config, url: str, push: bool) -> int:
     """기존 글의 디자인 구조를 diagnostics/style 에 저장하고, GitHub에 올려 Claude가 볼 수 있게 한다."""
-    import subprocess
-
     from .config import ROOT
     from .publisher import capture_style
     out = ROOT / "diagnostics" / "style"
@@ -97,15 +105,23 @@ def _capture_style(cfg: Config, url: str, push: bool) -> int:
         print(f"  저장: {f.relative_to(ROOT)} ({f.stat().st_size:,} bytes)")
     if not push:
         return 0
+    return _push_diagnostics(f"Capture blog design sample from {url}")
+
+
+def _push_diagnostics(message: str) -> int:
+    """diagnostics 폴더를 GitHub에 올려 Claude가 볼 수 있게 한다."""
+    import subprocess
+
+    from .config import ROOT
     git = ["git", "-c", "user.name=naver-autopost", "-c", "user.email=naver-autopost@localhost"]
     steps = [git + ["pull", "--no-rebase", "--no-edit"], git + ["add", "diagnostics"],
-             git + ["commit", "-m", f"Capture blog design sample from {url}"], git + ["push"]]
+             git + ["commit", "-m", message], git + ["push"]]
     for cmd in steps:
         r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
         if r.returncode != 0 and "nothing to commit" not in (r.stdout + r.stderr):
-            print(f"  ❌ {' '.join(cmd[5:])} 실패:\n{(r.stdout + r.stderr).strip()[-600:]}")
+            print(f"  ❌ git {cmd[5]} 실패:\n{(r.stdout + r.stderr).strip()[-600:]}")
             return 1
-    print("✅ 디자인 구조를 GitHub에 올렸습니다. Claude에게 '올렸어'라고 알려주세요.")
+    print("✅ 결과를 GitHub에 올렸습니다. Claude에게 '올렸어'라고 알려주세요.")
     return 0
 
 

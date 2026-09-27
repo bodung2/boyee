@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 import sys
@@ -352,3 +353,119 @@ def capture_style(cfg: Config, post_url: str, out_dir: Path) -> list[Path]:
             page.goto("about:blank")                       # 저장 버튼은 누르지 않는다
             ctx.close()
     return saved
+
+
+# ---------------------------------------------------------------- 서식 실험(진단용, 발행하지 않음)
+
+_COMPONENT_SPLIT = re.compile(r'(?=<div[^>]*class="se-component )')
+
+
+def _sample_components(html: str) -> dict[str, str]:
+    """캡처한 글에서 종류별 첫 컴포넌트 HTML을 뽑는다(표는 요약표·비교표 두 개)."""
+    parts = [p for p in _COMPONENT_SPLIT.split(html) if p.startswith("<div")]
+    found: dict[str, str] = {}
+    tables = 0
+    for part in parts:
+        head = part[:200]
+        if "se-l-quotation_line" in head:
+            found.setdefault("quote_line", part)
+        elif "se-l-quotation_postit" in head:
+            found.setdefault("quote_postit", part)
+        elif "se-table" in head:
+            tables += 1
+            found.setdefault("table_summary" if tables == 1 else "table_compare", part)
+        elif "se-text" in head and "se-fs16" in part:
+            found.setdefault("text16", part)
+        elif "se-horizontalLine" in head:
+            found.setdefault("hr", part)
+    return found
+
+
+PLAIN_SAMPLES = {
+    "plain_blockquote": "<blockquote><p><b>1. 테스트 챕터 제목</b></p></blockquote>",
+    "plain_styled_text": '<p style="font-size:16pt;line-height:1.8">본문 16pt 줄간격 1.8 테스트 문장입니다.</p>',
+    "plain_table_styled": (
+        '<table style="border-collapse:collapse" border="1"><tr>'
+        '<td style="background-color:#fafafa;text-align:center"><b>구분</b></td>'
+        '<td style="background-color:#fafafa;text-align:center"><b>핵심</b></td></tr>'
+        '<tr><td style="text-align:center">가</td><td style="text-align:center">나</td></tr></table>'),
+}
+
+
+def style_lab(cfg: Config, sample_dir: Path, out_dir: Path, link_url: str) -> dict:
+    """새 글쓰기 화면에서 서식을 넣는 여러 방법을 시험하고, 결과로 생긴 에디터 구조를 기록한다.
+    발행·저장 버튼은 누르지 않는다(네이버 자동 임시저장이 남을 수는 있다)."""
+    samples: dict[str, str] = {}
+    for name, fname in (("editor", "editor_dom.html"), ("view", "view.html")):
+        path = sample_dir / fname
+        if path.exists():
+            for kind, html in _sample_components(path.read_text(encoding="utf-8")).items():
+                samples[f"paste_{name}_{kind}"] = html
+    samples.update({f"paste_{k}": v for k, v in PLAIN_SAMPLES.items()})
+    out_dir.mkdir(parents=True, exist_ok=True)
+    results: dict = {"experiments": {}}
+
+    with sync_playwright() as p:
+        ctx = _launch(p, cfg, headless=cfg.headless)
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        page.on("dialog", lambda d: d.accept())
+        try:
+            page.goto(f"https://blog.naver.com/{cfg.blog_id}?Redirect=Write&", wait_until="domcontentloaded")
+            page.wait_for_timeout(5000)
+            if "nid.naver.com" in page.url:
+                raise SessionExpired("네이버 로그인이 풀려 있습니다")
+            ed = _Editor(page, cfg)
+            ed.find("title", timeout=30_000)
+            ed.try_click("draft_popup_cancel")
+            ed.try_click("help_close")
+            ed.find("title").first.click()
+            page.keyboard.insert_text("서식 실험(발행 안 함)")
+            ed.find("body").last.click()
+            scope = ed.scopes[0]
+
+            def new_components(before: int) -> list[str]:
+                comps = scope.locator(".se-component")
+                return [comps.nth(i).evaluate("e => e.outerHTML")[:6000] for i in range(before, comps.count())]
+
+            for name, html in samples.items():
+                try:
+                    ed.move_to_end()
+                    before = scope.locator(".se-component").count()
+                    ed.paste_html(html)
+                    page.wait_for_timeout(1200)
+                    made = new_components(before)
+                    results["experiments"][name] = {
+                        "ok": True,
+                        "classes": [re.search(r'class="([^"]*)"', m).group(1) if re.search(r'class="([^"]*)"', m) else "" for m in made],
+                        "html": made,
+                    }
+                except Exception as e:
+                    results["experiments"][name] = {"ok": False, "error": repr(e)[:500]}
+
+            # 링크 카드: 주소를 치고 Enter
+            try:
+                ed.move_to_end()
+                before = scope.locator(".se-component").count()
+                page.keyboard.press("Enter")
+                page.keyboard.insert_text(link_url)
+                page.keyboard.press("Enter")
+                page.wait_for_timeout(6000)
+                made = new_components(before)
+                results["experiments"]["type_url_enter"] = {
+                    "ok": True, "classes": [re.search(r'class="([^"]*)"', m).group(1) for m in made], "html": made}
+            except Exception as e:
+                results["experiments"]["type_url_enter"] = {"ok": False, "error": repr(e)[:500]}
+
+            # 툴바 구조(인용구·글자크기·줄간격 버튼 위치 파악용)
+            for label, sel in (("toolbar", ".se-toolbar, .se-header, header"), ("property_toolbar", ".se-property-toolbar")):
+                try:
+                    loc = scope.locator(sel)
+                    results[label] = loc.first.evaluate("e => e.outerHTML")[:60000] if loc.count() else ""
+                except Exception as e:
+                    results[label] = repr(e)
+            page.screenshot(path=str(out_dir / "lab.png"), full_page=True)
+        finally:
+            page.goto("about:blank")
+            ctx.close()
+    (out_dir / "lab.json").write_text(json.dumps(results, ensure_ascii=False, indent=1), encoding="utf-8")
+    return results
