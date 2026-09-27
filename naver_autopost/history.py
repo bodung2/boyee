@@ -80,3 +80,13 @@ def import_csv(path: Path, csv_path: Path) -> int:
         added += 1
     save(path, entries)
     return added
+
+
+def remove(path: Path, url_or_date: str) -> list[dict]:
+    """네이버에서 지운 글을 발행 이력에서 뺀다(주소 또는 날짜 YYYY-MM-DD로 지정).
+    이력에 남아 있으면 '오늘 이미 발행함'으로 건너뛰거나 지운 글로 내부 링크를 걸 수 있다."""
+    entries = load(path)
+    key = url_or_date.strip().rstrip("/")
+    removed = [e for e in entries if e.get("url", "").rstrip("/") == key or e.get("date") == key]
+    save(path, [e for e in entries if e not in removed])
+    return removed

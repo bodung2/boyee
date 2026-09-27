@@ -36,3 +36,12 @@ def test_import_csv_resaved_by_excel_cp949(tmp_path):
     path = tmp_path / "published.json"
     assert history.import_csv(path, csv_path) == 1
     assert history.load(path)[0]["title"] == "4세 블록 놀이"
+
+
+def test_forget_removes_by_url_or_date(tmp_path):
+    path = tmp_path / "published.json"
+    history.append(path, {"date": "2026-09-28", "title": "a", "url": "https://blog.naver.com/x/1", "source": "autopost"})
+    history.append(path, {"date": "2026-09-27", "title": "b", "url": "https://blog.naver.com/x/2", "source": "autopost"})
+    assert [e["title"] for e in history.remove(path, "https://blog.naver.com/x/1/")] == ["a"]
+    assert history.published_on(path, "2026-09-28") is None
+    assert [e["title"] for e in history.remove(path, "2026-09-27")] == ["b"]

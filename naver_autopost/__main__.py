@@ -48,6 +48,8 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument("--force", action="store_true", help="오늘 이미 발행했어도 한 편 더 발행")
     prev = with_profile(sub.add_parser("preview"))
     prev.add_argument("dir", type=Path)
+    forget = with_profile(sub.add_parser("forget"))
+    forget.add_argument("target", help="지운 글 주소 또는 날짜(YYYY-MM-DD)")
     imp = with_profile(sub.add_parser("import-history"))
     imp.add_argument("csv", type=Path)
     with_profile(sub.add_parser("check-ai"))
@@ -118,6 +120,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "check-ai":
         return _check_ai(cfg)
+    if args.cmd == "forget":
+        from . import history
+        removed = history.remove(cfg.history_file, args.target)
+        for e in removed:
+            print(f"  이력에서 뺐습니다: {e.get('date')} {e.get('title')} {e.get('url')}")
+        if not removed:
+            print("  일치하는 발행 이력이 없습니다(이미 없거나 주소가 다릅니다).")
+        return 0
     if args.cmd == "import-history":
         from . import history
         added = history.import_csv(cfg.history_file, args.csv)
