@@ -27,6 +27,9 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("login")
     sub.add_parser("check-login")
+    cap = sub.add_parser("capture-style")
+    cap.add_argument("url", help="디자인 기준이 되는 기존 네이버 글 주소")
+    cap.add_argument("--no-push", action="store_true", help="GitHub에 올리지 않고 파일만 만든다")
     run_p = with_profile(sub.add_parser("run"))
     run_p.add_argument("--dry-run", action="store_true", help="발행 버튼은 누르지 않는다")
     run_p.add_argument("--force", action="store_true", help="오늘 이미 발행했어도 한 편 더 발행")
@@ -47,6 +50,8 @@ def main(argv: list[str] | None = None) -> int:
         ok = check_session(cfg)
         print("네이버 로그인 유지됨 ✅" if ok else "네이버 로그인이 풀려 있습니다 ❌ → python -m naver_autopost login")
         return 0 if ok else 1
+    if args.cmd == "capture-style":
+        return _capture_style(cfg, args.url, push=not args.no_push)
     if args.cmd == "run":
         from .pipeline import run
         return run(cfg, dry_run=args.dry_run, force=args.force)
@@ -78,6 +83,30 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{added}개 글을 발행 이력에 추가했습니다: {cfg.history_file}")
         return 0
     return 1
+
+
+def _capture_style(cfg: Config, url: str, push: bool) -> int:
+    """기존 글의 디자인 구조를 diagnostics/style 에 저장하고, GitHub에 올려 Claude가 볼 수 있게 한다."""
+    import subprocess
+
+    from .config import ROOT
+    from .publisher import capture_style
+    out = ROOT / "diagnostics" / "style"
+    files = capture_style(cfg, url, out)
+    for f in files:
+        print(f"  저장: {f.relative_to(ROOT)} ({f.stat().st_size:,} bytes)")
+    if not push:
+        return 0
+    git = ["git", "-c", "user.name=naver-autopost", "-c", "user.email=naver-autopost@localhost"]
+    steps = [git + ["pull", "--no-rebase", "--no-edit"], git + ["add", "diagnostics"],
+             git + ["commit", "-m", f"Capture blog design sample from {url}"], git + ["push"]]
+    for cmd in steps:
+        r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if r.returncode != 0 and "nothing to commit" not in (r.stdout + r.stderr):
+            print(f"  ❌ {' '.join(cmd[5:])} 실패:\n{(r.stdout + r.stderr).strip()[-600:]}")
+            return 1
+    print("✅ 디자인 구조를 GitHub에 올렸습니다. Claude에게 '올렸어'라고 알려주세요.")
+    return 0
 
 
 def _check_ai(cfg: Config) -> int:

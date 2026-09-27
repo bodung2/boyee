@@ -276,3 +276,79 @@ def _publish(page: Page, cfg: Config, post: dict, images: dict[str, Path], dry_r
         time.sleep(1)
     _shot(page, cfg, "after-publish")
     raise PublishUncertain("발행 버튼은 눌렀지만 글 주소를 확인하지 못했습니다. 블로그에서 직접 확인하세요.")
+
+
+# ---------------------------------------------------------------- 디자인 캡처(진단용)
+
+_POST_URL_PARTS = re.compile(r"blog\.naver\.com/(?:PostView\.naver\?blogId=([^&]+)&logNo=(\d+)|([^/?#]+)/(\d+))")
+
+
+def capture_style(cfg: Config, post_url: str, out_dir: Path) -> list[Path]:
+    """기존 글의 디자인 구조를 떠서 파일로 남긴다. 글은 수정·저장하지 않는다.
+
+    1) 발행된 화면의 본문 HTML(se-main-container)  2) 수정 화면(에디터)의 컴포넌트 DOM
+    3) 에디터에서 전체 선택·복사했을 때의 클립보드 HTML(에디터 고유 형식)  4) 스크린샷
+    """
+    m = _POST_URL_PARTS.search(post_url)
+    if not m:
+        raise PublishError(f"네이버 글 주소를 알아보지 못했습니다: {post_url}")
+    blog_id, log_no = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    saved: list[Path] = []
+
+    def save(name: str, text: str) -> None:
+        path = out_dir / name
+        path.write_text(text or "", encoding="utf-8")
+        saved.append(path)
+
+    with sync_playwright() as p:
+        ctx = _launch(p, cfg, headless=cfg.headless)
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        page.on("dialog", lambda d: d.accept())          # '페이지를 나가시겠습니까?' → 저장하지 않고 나감
+        try:
+            page.goto(f"https://blog.naver.com/PostView.naver?blogId={blog_id}&logNo={log_no}",
+                      wait_until="domcontentloaded")
+            page.wait_for_timeout(4000)
+            view = page.locator(".se-main-container")
+            save("view.html", view.first.inner_html() if view.count() else page.content())
+            page.screenshot(path=str(out_dir / "view.png"), full_page=True)
+            saved.append(out_dir / "view.png")
+
+            page.goto(f"https://blog.naver.com/PostUpdateForm.naver?blogId={blog_id}&logNo={log_no}",
+                      wait_until="domcontentloaded")
+            page.wait_for_timeout(6000)
+            if "nid.naver.com" in page.url:
+                raise SessionExpired("네이버 로그인이 풀려 있습니다")
+            ed = _Editor(page, cfg)
+            ed.try_click("draft_popup_cancel")
+            ed.try_click("help_close")
+            scope = ed.scopes[0]
+            wrap = scope.locator(".se-components-wrap, .se-content").first
+            save("editor_dom.html", wrap.inner_html() if wrap.count() else scope.content())
+            page.screenshot(path=str(out_dir / "editor.png"), full_page=True)
+            saved.append(out_dir / "editor.png")
+
+            # 본문 첫 문단을 클릭하고 전체 선택 → 복사 → 클립보드에 담긴 에디터 고유 HTML을 읽는다.
+            try:
+                scope.locator(".se-component.se-text .se-text-paragraph").first.click()
+                page.keyboard.press(f"{MOD}+A")
+                page.keyboard.press(f"{MOD}+C")
+                page.wait_for_timeout(1000)
+                clip = page.evaluate("""async () => {
+                    const out = {};
+                    for (const item of await navigator.clipboard.read()) {
+                        for (const type of item.types) {
+                            if (type.startsWith('text/') || type.includes('html') || type.includes('json'))
+                                out[type] = await (await item.getType(type)).text();
+                        }
+                    }
+                    return out;
+                }""")
+                for kind, text in (clip or {}).items():
+                    save("clipboard_" + re.sub(r"[^a-z0-9]+", "_", kind.lower()) + ".txt", text)
+            except Exception as e:
+                save("clipboard_error.txt", repr(e))
+        finally:
+            page.goto("about:blank")                       # 저장 버튼은 누르지 않는다
+            ctx.close()
+    return saved
