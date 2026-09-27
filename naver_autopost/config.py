@@ -113,7 +113,7 @@ class Config:
             gpt_factcheck=_bool("GPT_FACTCHECK", True),
             gpt_fix_rounds=int(env("GPT_FIX_ROUNDS", "2")),
             illustration_count=int(env("ILLUSTRATION_COUNT", "2")),
-            style_mode=env("STYLE_MODE", "plain").strip().lower(),
+            style_mode=env("STYLE_MODE", "native").strip().lower(),
             telegram_bot_token=env("TELEGRAM_BOT_TOKEN", "").strip(),
             telegram_chat_id=env("TELEGRAM_CHAT_ID", "").strip(),
         )

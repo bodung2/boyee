@@ -24,6 +24,8 @@ from .content import IMAGE_MARKER
 
 URL_ONLY = re.compile(r"^\s*(https?://\S+)\s*$")
 STORAGE_KEY = "se3#SE_COPIED_DATA"
+RELATED_HEAD = re.compile(r"함께\s*보면\s*좋은\s*글")
+ONELINE_HEAD = re.compile(r"^\s*[📌✅🔑⭐]?\s*\[?\s*한\s*줄\s*(요약|정리)\s*\]?\s*[:：]?\s*")
 
 
 # ---------------------------------------------------------------- 간단한 DOM
@@ -211,7 +213,7 @@ def copied_data(components: list[dict]) -> str:
 
 def clipboard_html(user_agent: str, plain: str = "") -> str:
     """에디터가 '내부 복사'로 알아보는 클립보드 표식(내용은 저장소에서 읽는다)."""
-    marker = f'<span data-input-buffer="INPUT_BUFFER_DATA;{quote(user_agent, safe="()")};blog.naver.com"></span>'
+    marker = f'<span data-input-buffer="INPUT_BUFFER_DATA;{quote(user_agent, safe="()!'*")};blog.naver.com"></span>'
     return f"<html><body><!--StartFragment-->\ufeff{marker}\ufeff<!--EndFragment--></body></html>"
 
 
@@ -311,11 +313,22 @@ def to_segments(body_html: str) -> list[Segment]:
                                 for c in node.children):
             for c in node.children:
                 handle(c)
+        elif tag == "h2" and RELATED_HEAD.search(text_of(node)):
+            # 예전 형식: '🔗 함께 보면 좋은 글'을 챕터 제목으로 쓴 경우 → 구분선 + 굵은 머리말
+            flush_text()
+            pending.append(horizontal_line())
+            add_paragraph([("🔗 함께 보면 좋은 글", True)])
         elif tag == "h2":
             seen_chapter = True
             flush_text()
             runs = [r for line in runs_of(node) for r in line]
             pending.append(chapter_quote(runs))
+        elif tag == "p" and ONELINE_HEAD.match(text_of(node)):
+            # 예전 형식: '한 줄 요약: …' 문단 → 구분선 + 포스트잇
+            flush_text()
+            rest = ONELINE_HEAD.sub("", text_of(node)).strip()
+            pending.append(horizontal_line())
+            pending.append(oneline_quote([[(rest, False)]]))
         elif tag == "h3":
             add_paragraph([r for line in runs_of(node) for r in line], bold=True)
         elif tag in ("ol", "ul") and not seen_chapter and not summary_done:

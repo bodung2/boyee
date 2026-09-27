@@ -88,6 +88,13 @@ notepad .env        # NAVER_BLOG_ID, NAVER_CATEGORY_CHILDHOOD 입력
 - E(홈러닝) 레인에서 활동지 파일 배포나 다운로드 약속은 하지 않습니다. 파일 배포는 edu-freebie-distribution 몫입니다.
 - 판매·구매 링크는 발행 단계에서 코드로 한 번 더 차단합니다.
 
+## 블로그 디자인 (SR 기존 글과 동일)
+
+`STYLE_MODE=native`(기본): 기존 글(https://blog.naver.com/kkus_i/224403935438)의 서식을 그대로 재현합니다.
+3줄 핵심 요약은 회색 1칸 표 + 글머리표, 챕터 제목은 세로선 인용구(19pt 굵게), 본문은 16pt·줄간격 180%, 표는 가운데 정렬 + 회색 굵은 머리줄, 한 줄 요약은 구분선 + 포스트잇 인용구, 함께 보면 좋은 글은 구분선 + 🔗 머리말 + 링크 카드입니다.
+에디터가 복사할 때 쓰는 문서 데이터(`localStorage["se3#SE_COPIED_DATA"]`)를 만들어 넣고 붙여넣는 방식입니다(`naver_autopost/se_markup.py`).
+발행 없이 확인: `python -m naver_autopost preview-editor`. 문제가 생기면 `.env`에 `STYLE_MODE=plain`으로 예전 방식으로 돌아갑니다.
+
 ## 알아둘 위험과 비용
 
 - 네이버는 공식 글쓰기 API가 없어 브라우저 자동화로 발행합니다. 에디터가 바뀌면 멈출 수 있고, 운영정책상 제재 위험도 0은 아닙니다(하루 1편, 실제 크롬 창, 사람 계정 세션으로 최소화).
