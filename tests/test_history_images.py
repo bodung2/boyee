@@ -45,3 +45,40 @@ def test_forget_removes_by_url_or_date(tmp_path):
     assert [e["title"] for e in history.remove(path, "https://blog.naver.com/x/1/")] == ["a"]
     assert history.published_on(path, "2026-09-28") is None
     assert [e["title"] for e in history.remove(path, "2026-09-27")] == ["b"]
+
+
+def test_post_url_patterns():
+    from naver_autopost.publisher import POST_URL
+    ok = ["https://blog.naver.com/kkus_i/224424354626",
+          "https://blog.naver.com/kkus_i?Redirect=Log&logNo=224424354626",
+          "https://blog.naver.com/PostView.naver?blogId=kkus_i&logNo=224424354626&redirect=Dlog",
+          "https://blog.naver.com/PostView.nhn?blogId=kkus_i&logNo=224424354626"]
+    for u in ok:
+        m = POST_URL.search(u)
+        assert m and (m.group(1) or m.group(2)) == "224424354626", u
+    for u in ["https://blog.naver.com/kkus_i?Redirect=Write&", "https://blog.naver.com/PostWriteForm.naver?blogId=kkus_i"]:
+        assert not POST_URL.search(u), u
+
+
+def test_find_post_url_by_title_from_rss():
+    from naver_autopost.publisher import find_post_url_by_title
+
+    xml = ("<rss><channel><item><title><![CDATA[다른 글]]></title><link>https://blog.naver.com/kkus_i/111111111?fromRss=true</link></item>"
+           "<item><title><![CDATA[초등 입학 전 한글, 어디까지 떼야 할까? | 준비]]></title>"
+           "<link><![CDATA[https://blog.naver.com/kkus_i/224424354626?fromRss=true&trackingCode=rss]]></link></item></channel></rss>")
+
+    class Resp:
+        def text(self):
+            return xml
+
+    class Req:
+        def get(self, url, timeout):
+            assert url == "https://rss.blog.naver.com/kkus_i.xml"
+            return Resp()
+
+    class Page:
+        request = Req()
+
+    assert find_post_url_by_title(Page(), "kkus_i", "초등 입학 전 한글, 어디까지 떼야 할까? | 준비") == \
+        "https://blog.naver.com/kkus_i/224424354626"
+    assert find_post_url_by_title(Page(), "kkus_i", "없는 제목") is None

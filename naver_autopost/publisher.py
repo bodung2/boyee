@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import html
 import json
 import logging
 import re
@@ -36,7 +37,7 @@ SELECTORS = {
     "publish_confirm": ["button[data-testid='seOnePublishBtn']", "button[class*='confirm_btn']"],
 }
 
-POST_URL = re.compile(r"blog\.naver\.com/(?:PostView\.naver\?.*logNo=(\d+)|[^/?#]+/(\d+))")
+POST_URL = re.compile(r"blog\.naver\.com/(?:[^\s\"']*?[?&]logNo=(\d{6,})|(?!PostWriteForm|PostUpdateForm)[^/?#]+/(\d{6,}))")
 
 
 class PublishError(RuntimeError):
@@ -342,7 +343,37 @@ def _publish(page: Page, cfg: Config, post: dict, images: dict[str, Path], dry_r
                 return f"https://blog.naver.com/{cfg.blog_id}/{m.group(1) or m.group(2)}"
         time.sleep(1)
     _shot(page, cfg, "after-publish")
+    # 화면 주소로 못 찾으면 블로그 RSS에서 방금 올린 글을 제목으로 찾는다.
+    for _ in range(6):
+        url = find_post_url_by_title(page, cfg.blog_id, post["title"])
+        if url:
+            log.info("RSS에서 발행된 글 주소를 찾았습니다: %s", url)
+            return url
+        time.sleep(10)
     raise PublishUncertain("발행 버튼은 눌렀지만 글 주소를 확인하지 못했습니다. 블로그에서 직접 확인하세요.")
+
+
+def _norm_title(text: str) -> str:
+    return re.sub(r"[\s\W_]+", "", html.unescape(text or "")).lower()
+
+
+def find_post_url_by_title(page: Page, blog_id: str, title: str) -> str | None:
+    """blog RSS(https://rss.blog.naver.com/<id>.xml)에서 제목이 같은 최근 글의 주소를 찾는다."""
+    try:
+        resp = page.request.get(f"https://rss.blog.naver.com/{blog_id}.xml", timeout=20_000)
+        xml = resp.text()
+    except Exception as e:
+        log.warning("RSS 조회 실패: %s", e)
+        return None
+    want = _norm_title(title)
+    for item in re.findall(r"<item>(.*?)</item>", xml, flags=re.S)[:10]:
+        t = re.search(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>", item, flags=re.S)
+        link = re.search(r"<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</link>", item, flags=re.S)
+        if t and link and _norm_title(t.group(1)) == want:
+            m = POST_URL.search(link.group(1))
+            if m:
+                return f"https://blog.naver.com/{blog_id}/{m.group(1) or m.group(2)}"
+    return None
 
 
 # ---------------------------------------------------------------- 디자인 캡처(진단용)

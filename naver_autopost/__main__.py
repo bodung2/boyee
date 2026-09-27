@@ -48,6 +48,9 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument("--force", action="store_true", help="오늘 이미 발행했어도 한 편 더 발행")
     prev = with_profile(sub.add_parser("preview"))
     prev.add_argument("dir", type=Path)
+    rec = with_profile(sub.add_parser("record"))
+    rec.add_argument("url", help="발행된 글 주소(프로그램이 주소를 확인하지 못했을 때 직접 기록)")
+    rec.add_argument("--date", help="글 날짜 YYYY-MM-DD(기본: 오늘)")
     forget = with_profile(sub.add_parser("forget"))
     forget.add_argument("target", help="지운 글 주소 또는 날짜(YYYY-MM-DD)")
     imp = with_profile(sub.add_parser("import-history"))
@@ -120,6 +123,20 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "check-ai":
         return _check_ai(cfg)
+    if args.cmd == "record":
+        from . import history
+        from .pipeline import today_kst
+        date = args.date or today_kst()
+        post_path = cfg.output_dir / date / "post.json"
+        post = json.loads(post_path.read_text(encoding="utf-8")) if post_path.exists() else {}
+        url = args.url.split("?")[0].rstrip("/")
+        history.append(cfg.history_file, {
+            "date": date, "title": post.get("title", ""), "url": url, "topic": post.get("topic", ""),
+            "lane": post.get("lane", ""), "cluster": post.get("cluster", ""), "domain": post.get("domain"),
+            "tags": post.get("tags", []), "source": "autopost",
+        })
+        print(f"  기록했습니다: {date} {post.get('title', '(제목 없음)')} {url}")
+        return 0
     if args.cmd == "forget":
         from . import history
         removed = history.remove(cfg.history_file, args.target)
