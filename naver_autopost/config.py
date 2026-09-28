@@ -74,6 +74,15 @@ class Config:
     infographic: bool
     infographic_skill: str
     infographic_timeout: int
+    social_draft: bool
+    social_account: str
+    threads_token: str
+    threads_user_id: str
+    threads_with_image: bool
+    instagram_token: str
+    instagram_user_id: str
+    instagram_api_version: str
+    imgbb_api_key: str
     style_mode: str
     limit_wait_max_min: int
     telegram_bot_token: str
@@ -136,6 +145,17 @@ class Config:
             infographic=_bool("INFOGRAPHIC", True),
             infographic_skill=env("INFOGRAPHIC_SKILL", "onepage").strip(),
             infographic_timeout=int(env("INFOGRAPHIC_TIMEOUT_SEC", "900")),
+            # 소셜 계정은 블로그마다 따로: THREADS_ACCESS_TOKEN_EDU / THREADS_ACCESS_TOKEN_CHILDHOOD …
+            # (다른 계정에 잘못 올라가지 않도록 프로필 이름이 붙은 값만 읽는다)
+            social_draft=_bool("SOCIAL_DRAFT", True),
+            social_account=(env(f"SOCIAL_ACCOUNT_{profile.name.upper()}") or "").strip(),
+            threads_token=(env(f"THREADS_ACCESS_TOKEN_{profile.name.upper()}") or "").strip(),
+            threads_user_id=(env(f"THREADS_USER_ID_{profile.name.upper()}") or "").strip(),
+            threads_with_image=_bool("THREADS_WITH_IMAGE", True),
+            instagram_token=(env(f"INSTAGRAM_ACCESS_TOKEN_{profile.name.upper()}") or "").strip(),
+            instagram_user_id=(env(f"INSTAGRAM_USER_ID_{profile.name.upper()}") or "").strip(),
+            instagram_api_version=env("INSTAGRAM_API_VERSION", "v23.0").strip(),
+            imgbb_api_key=env("IMGBB_API_KEY", "").strip(),
             style_mode=env("STYLE_MODE", "native").strip().lower(),
             limit_wait_max_min=int(env("CLAUDE_LIMIT_WAIT_MAX_MIN", "330")),
             telegram_bot_token=env("TELEGRAM_BOT_TOKEN", "").strip(),

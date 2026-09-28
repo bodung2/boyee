@@ -12,7 +12,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import codex_image, content, gemini_client, generate, history, images, infographic, notify, openai_client
+from . import (codex_image, content, gemini_client, generate, history, images, infographic, notify,
+               openai_client, social)
 from .config import Config
 from .errors import ExternalAccountError
 
@@ -323,6 +324,18 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
     return imgs
 
 
+def _social_drafts(cfg: Config, out_dir: Path, url: str) -> str:
+    """블로그 발행 직후 인스타·쓰레드 초안을 만든다(저녁 예약 작업이 발행). 실패해도 블로그 발행 결과에는 영향 없음."""
+    if not cfg.social_draft:
+        return ""
+    try:
+        social.draft(cfg, out_dir, url)
+    except Exception as e:  # noqa: BLE001 - 저녁 발행 때 다시 만들어 본다
+        log.warning("소셜 초안 실패: %s", e)
+        return f"\n⚠️ 소셜 초안을 만들지 못했습니다(저녁 발행 때 다시 시도): {str(e)[:200]}"
+    return f"\n📱 인스타·쓰레드 초안 준비 → 저녁 예약 시각에 발행(고치려면 {out_dir / 'social.json'})"
+
+
 def _preflight(cfg: Config) -> None:
     if not cfg.blog_id:
         raise RuntimeError(".env에 NAVER_BLOG_ID가 없습니다")
@@ -399,7 +412,7 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
                 "lane": post.get("lane", ""), "cluster": post.get("cluster", ""), "domain": post.get("domain"),
                 "tags": post.get("tags", []), "source": "autopost",
             })
-            notify.send(cfg, f"[{label} 자동발행 완료] {post['title']}\n{url}\n{cat_note}")
+            notify.send(cfg, f"[{label} 자동발행 완료] {post['title']}\n{url}\n{cat_note}{_social_drafts(cfg, out_dir, url)}")
             return 0
     except Exception as e:
         log.exception("자동 발행 실패")

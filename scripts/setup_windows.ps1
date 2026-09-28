@@ -1,7 +1,8 @@
 ﻿# Windows 집 PC 설치 스크립트 (PowerShell에서 한 번 실행)
 #   powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Profile childhood -Time 06:00
 #   (교육 정책 글도 켜려면 -Profile edu -Time 07:00 으로 한 번 더 실행)
-param([string]$Profile = "childhood", [string]$Time = "06:00")
+#   인스타·쓰레드 저녁 발행 시각: -SocialTime 20:00 (끄려면 -SocialTime off)
+param([string]$Profile = "childhood", [string]$Time = "06:00", [string]$SocialTime = "20:00")
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
@@ -25,6 +26,15 @@ $Trigger = New-ScheduledTaskTrigger -Daily -At $Time
 $Settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -ExecutionTimeLimit (New-TimeSpan -Hours 9) -MultipleInstances IgnoreNew
 $Principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
 Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal -Force | Out-Null
+
+if ($SocialTime -ne "off") {
+    $SocialTask = "NaverAutoPost-Social-$Profile"
+    Write-Host "3) 매일 $SocialTime 인스타·쓰레드 발행 작업 등록 (작업 이름: $SocialTask)"
+    $SocialAction = New-ScheduledTaskAction -Execute "$Root\scripts\run_social.bat" -Argument "--profile $Profile" -WorkingDirectory $Root
+    $SocialTrigger = New-ScheduledTaskTrigger -Daily -At $SocialTime
+    $SocialSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -ExecutionTimeLimit (New-TimeSpan -Hours 2) -MultipleInstances IgnoreNew
+    Register-ScheduledTask -TaskName $SocialTask -Action $SocialAction -Trigger $SocialTrigger -Settings $SocialSettings -Principal $Principal -Force | Out-Null
+}
 
 Write-Host ""
 Write-Host "설치 완료. 남은 일(최초 1회):"

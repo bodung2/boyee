@@ -5,11 +5,15 @@
   python -m naver_autopost preview output/childhood/날짜      post.json으로 이미지·HTML 미리보기만 생성
   python -m naver_autopost import-history 시트.csv --profile childhood  발행 이력 가져오기
   python -m naver_autopost check-ai                          그림 생성·Codex(ChatGPT) 웹 검색 연결 확인
+  python -m naver_autopost social-draft --profile edu        오늘 발행한 글로 인스타·쓰레드 초안 만들기
+  python -m naver_autopost social-publish --profile edu      초안을 인스타·쓰레드에 발행(저녁 예약 작업)
+  python -m naver_autopost social-check --profile edu        인스타·쓰레드 토큰·계정 확인
 """
 from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -57,6 +61,12 @@ def main(argv: list[str] | None = None) -> int:
     imp = with_profile(sub.add_parser("import-history"))
     imp.add_argument("csv", type=Path)
     with_profile(sub.add_parser("check-ai"))
+    sdraft = with_profile(sub.add_parser("social-draft"))
+    sdraft.add_argument("--date", help="블로그 글 날짜 YYYY-MM-DD(기본: 오늘)")
+    spub = with_profile(sub.add_parser("social-publish"))
+    spub.add_argument("--date", help="블로그 글 날짜 YYYY-MM-DD(기본: 오늘)")
+    spub.add_argument("--dry-run", action="store_true", help="검사·이미지 준비까지만 하고 올리지 않는다")
+    with_profile(sub.add_parser("social-check"))
     args = parser.parse_args(argv)
     cfg = Config.load(getattr(args, "profile", profiles.DEFAULT_PROFILE))
 
@@ -122,6 +132,8 @@ def main(argv: list[str] | None = None) -> int:
         (args.dir / "preview.html").write_text(html, encoding="utf-8")
         print("미리보기:", args.dir / "preview.html")
         return 0
+    if args.cmd in ("social-draft", "social-publish", "social-check"):
+        return _social(cfg, args)
     if args.cmd == "check-ai":
         return _check_ai(cfg)
     if args.cmd == "record":
@@ -192,6 +204,31 @@ def _preview_editor(cfg: Config, post_dir: Path | None, push: bool) -> int:
     publish(cfg, post, imgs, dry_run=True, diag_dir=diag)
     print(f"  에디터 화면: {diag / 'editor_full.png'}")
     return 0 if not push else _push_diagnostics("Editor preview with native style")
+
+
+def _social(cfg: Config, args) -> int:
+    from . import history, social
+    from .pipeline import setup_logging, today_kst
+    if args.cmd == "social-check":
+        return social.check(cfg)
+    date = args.date or today_kst()
+    setup_logging(cfg, f"{cfg.profile.name}-social-{date}")
+    if args.cmd == "social-publish":
+        try:
+            return social.publish(cfg, date, dry_run=args.dry_run)
+        except Exception as e:  # noqa: BLE001 - 예약 작업이므로 실패를 알림으로 남긴다
+            logging.getLogger(__name__).exception("소셜 발행 실패")
+            from . import notify
+            notify.send(cfg, f"[{cfg.profile.label} 소셜 발행 실패] {date}\n{e}")
+            return 1
+    entry = history.published_on(cfg.history_file, date)
+    if not entry:
+        print(f"{date}에 자동 발행한 {cfg.profile.label} 글이 발행 이력에 없습니다.")
+        return 1
+    result = social.draft(cfg, cfg.output_dir / date, entry["url"])
+    print(social.preview_md(result))
+    print(f"저장: {cfg.output_dir / date / 'social.json'}")
+    return 0
 
 
 def _push_diagnostics(message: str) -> int:
