@@ -3,9 +3,11 @@
 #   (교육 정책 글도 켜려면 -Profile edu -Time 07:00 으로 한 번 더 실행)
 #   인스타·쓰레드 저녁 발행 시각: -SocialTime 20:00 (끄려면 -SocialTime off)
 #   아침 발행이 막혔을 때(사용 한도·잔액 부족 등) 다시 시도할 시각: -RetryTime 11:00 (끄려면 -RetryTime off)
+#   기본값은 교육 11:00, 유아 11:30(두 블로그가 겹치지 않게)
 #   (이미 발행한 날엔 재시도 실행이 바로 끝나고, 멈춘 날엔 멈춘 단계부터 이어서 한다)
 param([string]$Profile = "childhood", [string]$Time = "06:00", [string]$SocialTime = "20:00",
-      [string]$RetryTime = "11:00")
+      [string]$RetryTime = "")
+if ($RetryTime -eq "") { $RetryTime = if ($Profile -eq "childhood") { "11:30" } else { "11:00" } }
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root

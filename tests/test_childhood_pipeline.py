@@ -616,3 +616,13 @@ def test_publish_lock_clears_stale_lock_and_gives_up_eventually(tmp_path, monkey
     with pytest.raises(RuntimeError, match="기다리다 멈췄"):
         with pipeline._PublishLock(lock, wait_sec=0):
             pass
+
+
+
+def test_default_retry_times_are_staggered(monkeypatch):
+    monkeypatch.delenv("RETRY_TIME_EDU", raising=False)
+    monkeypatch.delenv("RETRY_TIME_CHILDHOOD", raising=False)
+    assert Config.load("edu").retry_time == "11:00"
+    assert Config.load("childhood").retry_time == "11:30"
+    monkeypatch.setenv("RETRY_TIME_CHILDHOOD", "12:00")
+    assert Config.load("childhood").retry_time == "12:00"

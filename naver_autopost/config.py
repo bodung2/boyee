@@ -160,7 +160,9 @@ class Config:
             style_mode=env("STYLE_MODE", "native").strip().lower(),
             limit_wait_max_min=int(env("CLAUDE_LIMIT_WAIT_MAX_MIN", "330")),
             # 아침 발행이 막히면 이 시각에 예약 작업이 한 번 더 돌린다(setup_windows.ps1 -RetryTime과 같게). off면 끔
-            retry_time=env("RETRY_TIME", "11:00").strip(),
+            # 두 블로그가 겹치지 않게 기본값을 30분 떨어뜨림(교육 11:00, 유아 11:30)
+            retry_time=(env(f"RETRY_TIME_{profile.name.upper()}")
+                        or ("11:30" if profile.name == "childhood" else "11:00")).strip(),
             telegram_bot_token=env("TELEGRAM_BOT_TOKEN", "").strip(),
             telegram_chat_id=env("TELEGRAM_CHAT_ID", "").strip(),
         )
