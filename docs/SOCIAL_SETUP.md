@@ -70,8 +70,8 @@
 
 저녁 예약 작업은 설치 스크립트를 다시 실행하면 함께 등록됩니다. 블로그 발행 시각은 지금 쓰는 값을 그대로 넣으세요.
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Profile edu -Time 05:00 -SocialTime 20:00
-powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Profile childhood -Time 06:00 -SocialTime 20:30
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Profile edu -Time 05:00 -SocialTime 19:30
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Profile childhood -Time 06:00 -SocialTime 20:00
 ```
 
 ## 동작 요약
