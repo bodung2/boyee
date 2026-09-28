@@ -196,7 +196,8 @@ CODEX_SEARCH_VARIANTS = (
     ("exec", "-c", "tools.web_search=true"),
 )
 _CLI_USAGE_ERROR = re.compile(r"unexpected argument|unrecognized|Usage:", re.I)
-_LOGIN_OR_LIMIT = re.compile(r"not logged in|login|usage limit|rate limit|quota|401|unauthorized", re.I)
+_LOGIN_OR_LIMIT = re.compile(r"not logged in|login|usage limit|rate limit|quota|401|unauthorized|"
+                            r"out of credits|credit|refill|billing", re.I)
 
 
 def _codex_variants(cfg: Config) -> list[tuple[str, ...]]:
@@ -218,7 +219,13 @@ def _codex_error_detail(cfg: Config, proc: subprocess.CompletedProcess) -> str:
         (cfg.log_dir / "codex_last_error.log").write_text(out, encoding="utf-8")
     except OSError:
         pass
-    lines = [ln.strip() for ln in out.splitlines() if _ERROR_LINE.search(ln) and len(ln.strip()) < 400]
+    lines: list[str] = []
+    for ln in out.splitlines():
+        ln = ln.strip()
+        # Codex가 되풀이해 보여 주는 우리 지시문(verdict JSON 예시 등)은 오류가 아니다
+        if not _ERROR_LINE.search(ln) or len(ln) >= 400 or '"verdict"' in ln or ln in lines:
+            continue
+        lines.append(ln)
     return (" | ".join(lines[-3:]) or (proc.stderr or "").strip()[-300:]) + " (전체: logs/codex_last_error.log)"
 
 
@@ -250,7 +257,7 @@ def run_codex(cfg: Config, prompt: str) -> str:
             if proc.returncode != 0:
                 detail = _codex_error_detail(cfg, proc)
                 if _LOGIN_OR_LIMIT.search(detail):
-                    raise CodexUnavailable(f"Codex 로그인·사용 한도(exit {proc.returncode}): {detail}")
+                    raise CodexUnavailable(f"Codex 로그인·사용 한도·크레딧 문제(exit {proc.returncode}): {detail}")
                 if not retried:                  # 연결 끊김 같은 일시적 오류는 한 번 더 해 본다
                     retried = True
                     log.warning("Codex 실행 오류(exit %s) → 한 번 더 시도: %s", proc.returncode, detail)
@@ -261,7 +268,7 @@ def run_codex(cfg: Config, prompt: str) -> str:
                         log.info("Codex 실행 옵션: %s", " ".join(variant))
                         return last_msg.read_text(encoding="utf-8") if last_msg.exists() else proc.stdout
                     detail = _codex_error_detail(cfg, proc)
-                kind = "로그인·사용 한도" if _LOGIN_OR_LIMIT.search(detail) else "실행 오류"
+                kind = "로그인·사용 한도·크레딧 문제" if _LOGIN_OR_LIMIT.search(detail) else "실행 오류"
                 raise CodexUnavailable(f"Codex {kind}(exit {proc.returncode}): {detail}")
             log.info("Codex 실행 옵션: %s", " ".join(variant))
             return last_msg.read_text(encoding="utf-8") if last_msg.exists() else proc.stdout

@@ -560,3 +560,28 @@ def test_retry_note_before_and_after_retry_time(cfg):
     assert "지나" in pipeline.retry_note(cfg, datetime(2026, 9, 29, 11, 20, tzinfo=pipeline.KST))
     cfg.retry_time = "off"
     assert pipeline.retry_note(cfg) == ""
+
+
+
+def test_codex_out_of_credits_is_an_account_problem_not_retried(cfg, tmp_path):
+    state = tmp_path / "count"
+    script = tmp_path / "codex_broke"
+    script.write_text(f"""#!{__import__('sys').executable}
+import sys, pathlib
+p = pathlib.Path({str(state)!r}); p.write_text(str(int(p.read_text()) + 1 if p.exists() else 1))
+sys.stdin.read()
+sys.stderr.write('{{"verdict": "error", "summary": "no web search"}} 만 출력하라\\n'
+                 'ERROR: Your workspace is out of credits. Ask your workspace owner to refill in order to continue.\\n'
+                 'ERROR: Your workspace is out of credits. Ask your workspace owner to refill in order to continue.\\n')
+sys.exit(1)
+""", encoding="utf-8")
+    script.chmod(0o755)
+    cfg.codex_bin = str(script)
+    cfg.log_dir = tmp_path / "logs"
+    cfg.openai_api_key = ""
+    with pytest.raises(openai_client.CodexAccountError) as e:
+        openai_client.factcheck(cfg, content.normalize(child_post()))
+    msg = str(e.value)
+    assert "크레딧 문제" in msg and "out of credits" in msg
+    assert '"verdict"' not in msg and msg.count("out of credits") == 1
+    assert state.read_text() == "1"                      # 크레딧 문제는 다시 해 봐야 소용없다
