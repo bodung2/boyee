@@ -108,6 +108,8 @@ FACTCHECK_INSTRUCTIONS = """너는 한국 교육 분야 팩트체커다. 아래 
 - 글쓴이가 단 출처 표기(괄호 속 기관·연도)가 실제 그 자료에 있는 내용인지도 확인.
 - 의견·해석 문장은 사실 오류가 아니면 지적하지 말 것. 문체 지적 금지.
 - 확신이 없는 지적은 하지 말 것(근거 URL 없는 지적 금지).
+- 원문(첨부 파일·법령안 등)을 열지 못해 확인하지 못한 사실은 그 문장을 issues에 넣고 problem에 '원문 확인 불가',
+  correction에 '삭제' 또는 확인된 범위로 줄인 문장을 적어라(evidence_url은 확인을 시도한 공식 페이지). 이런 경우 verdict는 fix다.
 
 오직 아래 JSON 하나만 출력하라(코드블록 없이):
 {{"verdict": "pass" | "fix" | "fail",
@@ -183,8 +185,9 @@ class CodexUnavailable(OpenAIError):
 
 
 CODEX_SEARCH_NOTE = """
-[실행 조건] 반드시 웹 검색 도구로 출처 원문을 직접 확인하라. 웹 검색을 쓸 수 없는 환경이면 검증하지 말고
-{"verdict": "error", "summary": "no web search"} 만 출력하라. 파일을 만들거나 명령을 실행하지 말 것."""
+[실행 조건] 반드시 웹 검색 도구로 출처 원문을 직접 확인하라. 웹 검색 도구 자체를 쓸 수 없는 환경일 때만 검증하지 말고
+{"verdict": "error", "summary": "no web search"} 만 출력하라(일부 원문을 못 연 것은 error가 아니라 위 규칙대로 fix).
+파일을 만들거나 명령을 실행하지 말 것."""
 
 # 설치된 Codex 버전마다 웹 검색 켜는 옵션 위치가 달라 차례로 시도한다(.env의 CODEX_ARGS가 있으면 그것만 쓴다).
 CODEX_SEARCH_VARIANTS = (
@@ -203,11 +206,28 @@ def _codex_variants(cfg: Config) -> list[tuple[str, ...]]:
     return list(CODEX_SEARCH_VARIANTS)
 
 
+_ERROR_LINE = re.compile(r"error|failed|limit|disconnected|timed out|unauthorized|refused", re.I)
+
+
+def _codex_error_detail(cfg: Config, proc: subprocess.CompletedProcess) -> str:
+    """Codex는 진행 기록 전체를 stderr로 내보내므로 끝부분만으로는 원인이 안 보인다.
+    전체 출력을 logs/codex_last_error.log에 남기고, 오류로 보이는 줄만 골라 돌려준다."""
+    out = f"--- stdout ---\n{proc.stdout or ''}\n--- stderr ---\n{proc.stderr or ''}"
+    try:
+        cfg.log_dir.mkdir(parents=True, exist_ok=True)
+        (cfg.log_dir / "codex_last_error.log").write_text(out, encoding="utf-8")
+    except OSError:
+        pass
+    lines = [ln.strip() for ln in out.splitlines() if _ERROR_LINE.search(ln) and len(ln.strip()) < 400]
+    return (" | ".join(lines[-3:]) or (proc.stderr or "").strip()[-300:]) + " (전체: logs/codex_last_error.log)"
+
+
 def run_codex(cfg: Config, prompt: str) -> str:
     """Codex CLI를 웹 검색을 켠 읽기 전용 모드로 실행하고 마지막 답변을 돌려준다."""
     exe = shutil.which(cfg.codex_bin)
     if not exe:
         raise CodexUnavailable(f"'{cfg.codex_bin}' 명령을 찾지 못했습니다(Codex CLI 미설치)")
+    retried = False
     with tempfile.TemporaryDirectory() as tmp:
         last_msg = Path(tmp) / "last.txt"
         for variant in _codex_variants(cfg):
@@ -228,8 +248,21 @@ def run_codex(cfg: Config, prompt: str) -> str:
                 log.info("Codex 옵션 조합 %s 미지원 → 다음 조합", " ".join(variant))
                 continue
             if proc.returncode != 0:
-                kind = "로그인·사용 한도" if _LOGIN_OR_LIMIT.search(err) else "실행 오류"
-                raise CodexUnavailable(f"Codex {kind}(exit {proc.returncode}): {err.strip()[-400:]}")
+                detail = _codex_error_detail(cfg, proc)
+                if _LOGIN_OR_LIMIT.search(detail):
+                    raise CodexUnavailable(f"Codex 로그인·사용 한도(exit {proc.returncode}): {detail}")
+                if not retried:                  # 연결 끊김 같은 일시적 오류는 한 번 더 해 본다
+                    retried = True
+                    log.warning("Codex 실행 오류(exit %s) → 한 번 더 시도: %s", proc.returncode, detail)
+                    last_msg.unlink(missing_ok=True)
+                    proc = subprocess.run(cmd, input=prompt, cwd=tmp, env=env, capture_output=True, text=True,
+                                          encoding="utf-8", errors="replace", timeout=cfg.codex_timeout)
+                    if proc.returncode == 0:
+                        log.info("Codex 실행 옵션: %s", " ".join(variant))
+                        return last_msg.read_text(encoding="utf-8") if last_msg.exists() else proc.stdout
+                    detail = _codex_error_detail(cfg, proc)
+                kind = "로그인·사용 한도" if _LOGIN_OR_LIMIT.search(detail) else "실행 오류"
+                raise CodexUnavailable(f"Codex {kind}(exit {proc.returncode}): {detail}")
             log.info("Codex 실행 옵션: %s", " ".join(variant))
             return last_msg.read_text(encoding="utf-8") if last_msg.exists() else proc.stdout
     raise CodexUnavailable("설치된 Codex에서 웹 검색 옵션을 켜지 못했습니다. .env의 CODEX_ARGS를 확인하세요")
@@ -239,7 +272,16 @@ def factcheck_codex(cfg: Config, post: dict) -> dict:
     prompt = _instructions(cfg) + CODEX_SEARCH_NOTE + "\n\n" + _article(post)
     result = _extract_json(run_codex(cfg, prompt))
     if result.get("verdict") == "error":
-        raise CodexUnavailable(f"Codex에서 웹 검색을 쓸 수 없습니다: {result.get('summary', '')}")
+        summary = str(result.get("summary", ""))
+        if "no web search" in summary.lower() or not summary.strip():
+            raise CodexUnavailable(f"Codex에서 웹 검색을 쓸 수 없습니다: {summary}")
+        # 웹 검색은 했지만 일부 원문을 못 열어 판정을 보류한 경우: 확인 못 한 부분을 고치는 'fix'로 다룬다
+        # (Claude가 원문으로 다시 확인해 삭제·완화하고 ChatGPT가 재검사한다).
+        log.warning("Codex가 일부 사실을 확인하지 못해 판정을 보류했습니다 → 수정 요청으로 처리: %s", summary)
+        result["verdict"] = "fix"
+        result.setdefault("issues", []).append({
+            "text": "", "problem": f"원문 확인 불가: {summary}",
+            "correction": "확인되지 않은 사실은 삭제하거나 공식 원문으로 확인된 범위로 줄인다", "evidence_url": ""})
     return _checked(result, "Codex/ChatGPT 구독")
 
 
@@ -260,7 +302,12 @@ def factcheck(cfg: Config, post: dict) -> dict:
         except CodexUnavailable as e:
             if cfg.openai_api_key:
                 log.warning("%s → OpenAI API로 팩트체크합니다", e)
-                return factcheck_api(cfg, post)
+                try:
+                    return factcheck_api(cfg, post)
+                except OpenAIError as api_err:
+                    # 대체 수단까지 막혔으면 진짜 원인(Codex)을 먼저 알린다.
+                    raise CodexAccountError(f"ChatGPT(Codex) 팩트체크 실패: {e}\n"
+                                            f"대체 OpenAI API도 실패: {str(api_err)[:200]}") from api_err
             raise CodexAccountError(f"ChatGPT(Codex) 팩트체크를 할 수 없습니다: {e}") from e
     return factcheck_api(cfg, post)
 

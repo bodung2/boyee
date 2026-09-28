@@ -504,3 +504,49 @@ def test_limit_too_long_stops(cfg, monkeypatch):
     monkeypatch.setattr(pipeline, "_sleep", lambda s: pytest.fail("기다리면 안 됨"))
     with pytest.raises(generate.GenerationError, match="최대 대기"):
         pipeline.produce(cfg, "2026-09-27", cfg.output_dir / "2026-09-27")
+
+
+def test_codex_partial_verification_becomes_fix_not_api_fallback(cfg, tmp_path, monkeypatch):
+    """웹 검색은 했지만 일부 원문을 못 열어 'error'로 답하면 유료 API로 넘기지 않고 수정 요청(fix)으로 다룬다."""
+    script, _ = _fake_codex(tmp_path, '{"verdict": "error", "checked": 20, "issues": [], '
+                                      '"summary": "첨부 법령안 원문 접근 실패로 2030년 부칙 미검증"}')
+    cfg.codex_bin = str(script)
+    monkeypatch.setattr(openai_client, "_post", lambda *a, **k: pytest.fail("API로 넘기면 안 됩니다"))
+    result = openai_client.factcheck(cfg, content.normalize(child_post()))
+    assert result["verdict"] == "fix"
+    assert any("원문 확인 불가" in i["problem"] and "2030" in i["problem"] for i in result["issues"])
+
+
+def test_codex_down_and_api_out_of_credit_reports_codex_first(cfg, tmp_path, monkeypatch):
+    script, _ = _fake_codex(tmp_path, '{"verdict": "error", "summary": "no web search"}')
+    cfg.codex_bin = str(script)
+    cfg.openai_api_key = "k"
+
+    def no_credit(*a, **k):
+        raise openai_client.OpenAIAccountError("HTTP 429 credit_balance_exhausted")
+
+    monkeypatch.setattr(openai_client, "_post", no_credit)
+    with pytest.raises(openai_client.CodexAccountError) as e:
+        openai_client.factcheck(cfg, content.normalize(child_post()))
+    msg = str(e.value)
+    assert msg.index("no web search") < msg.index("credit_balance_exhausted")
+
+
+def test_codex_crash_is_retried_once_and_logged(cfg, tmp_path):
+    """Codex는 진행 기록을 stderr로 내보내 끝부분엔 원인이 없다 → 전체를 파일로 남기고 오류 줄만 보여준다."""
+    state = tmp_path / "count"
+    script = tmp_path / "codex_flaky"
+    script.write_text(f"""#!{__import__('sys').executable}
+import sys, pathlib
+p = pathlib.Path({str(state)!r}); n = int(p.read_text()) if p.exists() else 0; p.write_text(str(n + 1))
+args = sys.argv[1:]; sys.stdin.read()
+if n == 0:
+    sys.stderr.write("ERROR: stream disconnected before completion\\n...Clements(1999), Duncan 외(2007)\\ncodex\\n"); sys.exit(1)
+pathlib.Path(args[args.index("--output-last-message") + 1]).write_text('{{"verdict": "pass", "issues": []}}')
+""", encoding="utf-8")
+    script.chmod(0o755)
+    cfg.codex_bin = str(script)
+    cfg.log_dir = tmp_path / "logs"
+    assert openai_client.factcheck(cfg, content.normalize(child_post()))["verdict"] == "pass"
+    assert state.read_text() == "2"
+    assert "stream disconnected" in (cfg.log_dir / "codex_last_error.log").read_text(encoding="utf-8")
