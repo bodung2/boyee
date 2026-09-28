@@ -65,6 +65,42 @@ class _Lock:
         self.path.unlink(missing_ok=True)
 
 
+class _PublishLock:
+    """교육·유아 작업이 같은 PC에서 동시에 네이버 에디터에 글을 넣지 않게 한다(클립보드는 PC에 하나뿐).
+    다른 쪽이 발행 중이면 끝날 때까지 기다린다. 오래된 잠금(비정상 종료)은 걷어 낸다."""
+
+    def __init__(self, path: Path, wait_sec: int = 1800, stale_sec: int = 1800, poll: float = 10):
+        self.path, self.wait_sec, self.stale_sec, self.poll = path, wait_sec, stale_sec, poll
+
+    def __enter__(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        deadline = time.time() + self.wait_sec
+        told = False
+        while True:
+            try:
+                fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                break
+            except FileExistsError:
+                try:
+                    if time.time() - self.path.stat().st_mtime > self.stale_sec:
+                        self.path.unlink(missing_ok=True)
+                        continue
+                except FileNotFoundError:
+                    continue
+                if time.time() > deadline:
+                    raise RuntimeError(f"다른 블로그 발행이 끝나지 않아 기다리다 멈췄습니다({self.path})")
+                if not told:
+                    log.info("다른 블로그가 발행 중이라 끝날 때까지 기다립니다")
+                    told = True
+                _sleep(self.poll)
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+        return self
+
+    def __exit__(self, *exc):
+        self.path.unlink(missing_ok=True)
+
+
 def _load_post(path: Path) -> dict:
     return content.normalize(json.loads(path.read_text(encoding="utf-8")))
 
@@ -410,17 +446,18 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
             log.info("카테고리: %s (레인 %s)", post["blog_category"] or "(기본)", post.get("lane", "-"))
 
             last_error: Exception | None = None
-            for attempt in (1, 2):
-                try:
-                    url = publisher.publish(cfg, post, imgs, dry_run=dry_run)
-                    break
-                except (publisher.SessionExpired, publisher.PublishUncertain):
-                    raise
-                except Exception as e:
-                    last_error = e
-                    log.warning("발행 시도 %d 실패: %s", attempt, e)
-            else:
-                raise RuntimeError(f"네이버 발행 실패: {last_error}")
+            with _PublishLock(cfg.log_dir / ".publishing.lock"):     # 교육·유아 공용
+                for attempt in (1, 2):
+                    try:
+                        url = publisher.publish(cfg, post, imgs, dry_run=dry_run)
+                        break
+                    except (publisher.SessionExpired, publisher.PublishUncertain):
+                        raise
+                    except Exception as e:
+                        last_error = e
+                        log.warning("발행 시도 %d 실패: %s", attempt, e)
+                else:
+                    raise RuntimeError(f"네이버 발행 실패: {last_error}")
 
             cat_note = f"카테고리: {post.get('blog_category') or '(기본)'}"
             if post.get("_category_ok") is False:

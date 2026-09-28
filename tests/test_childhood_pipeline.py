@@ -585,3 +585,34 @@ sys.exit(1)
     assert "크레딧 문제" in msg and "out of credits" in msg
     assert '"verdict"' not in msg and msg.count("out of credits") == 1
     assert state.read_text() == "1"                      # 크레딧 문제는 다시 해 봐야 소용없다
+
+
+def test_publish_lock_waits_for_the_other_blog(tmp_path, monkeypatch):
+    lock = tmp_path / ".publishing.lock"
+    lock.write_text("123")                                   # 다른 블로그가 발행 중
+    naps = []
+
+    def fake_sleep(sec):
+        naps.append(sec)
+        lock.unlink()                                        # 그사이 다른 쪽이 끝남
+
+    monkeypatch.setattr(pipeline, "_sleep", fake_sleep)
+    with pipeline._PublishLock(lock, poll=5):
+        assert lock.exists()
+    assert naps == [5] and not lock.exists()
+
+
+def test_publish_lock_clears_stale_lock_and_gives_up_eventually(tmp_path, monkeypatch):
+    import os
+    import time
+    lock = tmp_path / ".publishing.lock"
+    lock.write_text("dead")
+    old = time.time() - 3600
+    os.utime(lock, (old, old))                               # 비정상 종료로 남은 잠금
+    with pipeline._PublishLock(lock, stale_sec=1800):
+        pass
+    lock.write_text("busy")
+    monkeypatch.setattr(pipeline, "_sleep", lambda s: None)
+    with pytest.raises(RuntimeError, match="기다리다 멈췄"):
+        with pipeline._PublishLock(lock, wait_sec=0):
+            pass
