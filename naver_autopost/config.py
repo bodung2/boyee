@@ -85,6 +85,7 @@ class Config:
     imgbb_api_key: str
     style_mode: str
     limit_wait_max_min: int
+    retry_time: str
     telegram_bot_token: str
     telegram_chat_id: str
 
@@ -158,6 +159,8 @@ class Config:
             imgbb_api_key=env("IMGBB_API_KEY", "").strip(),
             style_mode=env("STYLE_MODE", "native").strip().lower(),
             limit_wait_max_min=int(env("CLAUDE_LIMIT_WAIT_MAX_MIN", "330")),
+            # 아침 발행이 막히면 이 시각에 예약 작업이 한 번 더 돌린다(setup_windows.ps1 -RetryTime과 같게). off면 끔
+            retry_time=env("RETRY_TIME", "11:00").strip(),
             telegram_bot_token=env("TELEGRAM_BOT_TOKEN", "").strip(),
             telegram_chat_id=env("TELEGRAM_CHAT_ID", "").strip(),
         )

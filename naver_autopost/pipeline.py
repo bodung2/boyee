@@ -352,6 +352,21 @@ def _preflight(cfg: Config) -> None:
             raise RuntimeError("ChatGPT 팩트체크에 쓸 Codex CLI(ChatGPT 로그인)도 OPENAI_API_KEY도 없습니다")
 
 
+def retry_note(cfg: Config, now: datetime | None = None) -> str:
+    """아침 실패 알림에 붙이는 안내: 재시도 시각 전이면 그때 자동으로 한 번 더 돈다고 알려 준다.
+    (재시도는 예약 작업이 같은 명령을 다시 실행하는 것. 이미 발행했으면 바로 끝나고, 멈춘 단계부터 이어서 한다)"""
+    if not cfg.retry_time or cfg.retry_time.lower() == "off":
+        return ""
+    now = now or datetime.now(KST)
+    try:
+        hh, mm = (int(x) for x in cfg.retry_time.split(":"))
+    except ValueError:
+        return ""
+    if (now.hour, now.minute) >= (hh, mm):
+        return "\n(오늘 자동 재시도 시각이 지나 더는 시도하지 않습니다. 원인을 해결한 뒤 직접 실행하세요)"
+    return f"\n→ {cfg.retry_time}에 자동으로 한 번 더 시도합니다(멈춘 단계부터 이어서)."
+
+
 def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
     # 브라우저 자동화는 무거우므로 필요할 때만 불러온다.
     from . import publisher
@@ -425,5 +440,5 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
             return 0
     except Exception as e:
         log.exception("자동 발행 실패")
-        notify.send(cfg, f"[{label} 자동발행 실패] {today}\n{e}")
+        notify.send(cfg, f"[{label} 자동발행 실패] {today}\n{e}{retry_note(cfg)}")
         return 1

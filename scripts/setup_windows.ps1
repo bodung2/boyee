@@ -2,7 +2,10 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Profile childhood -Time 06:00
 #   (교육 정책 글도 켜려면 -Profile edu -Time 07:00 으로 한 번 더 실행)
 #   인스타·쓰레드 저녁 발행 시각: -SocialTime 20:00 (끄려면 -SocialTime off)
-param([string]$Profile = "childhood", [string]$Time = "06:00", [string]$SocialTime = "20:00")
+#   아침 발행이 막혔을 때(사용 한도·잔액 부족 등) 다시 시도할 시각: -RetryTime 11:00 (끄려면 -RetryTime off)
+#   (이미 발행한 날엔 재시도 실행이 바로 끝나고, 멈춘 날엔 멈춘 단계부터 이어서 한다)
+param([string]$Profile = "childhood", [string]$Time = "06:00", [string]$SocialTime = "20:00",
+      [string]$RetryTime = "11:00")
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
@@ -21,7 +24,11 @@ if (-not (Test-Path ".env")) {
 $TaskName = "NaverAutoPost-$Profile"
 Write-Host "2) 매일 $Time 자동 실행 작업 등록 (작업 이름: $TaskName)"
 $Action = New-ScheduledTaskAction -Execute "$Root\scripts\run_daily.bat" -Argument "--profile $Profile" -WorkingDirectory $Root
-$Trigger = New-ScheduledTaskTrigger -Daily -At $Time
+$Trigger = @(New-ScheduledTaskTrigger -Daily -At $Time)
+if ($RetryTime -ne "off") {
+    Write-Host "   + 막힌 날 $RetryTime 에 한 번 더 시도"
+    $Trigger += New-ScheduledTaskTrigger -Daily -At $RetryTime
+}
 # 꺼져 있다가 켜지면 놓친 실행을 바로 하고, 절전 중이면 깨워서 실행한다.
 $Settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -ExecutionTimeLimit (New-TimeSpan -Hours 9) -MultipleInstances IgnoreNew
 $Principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive

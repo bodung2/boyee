@@ -550,3 +550,13 @@ pathlib.Path(args[args.index("--output-last-message") + 1]).write_text('{{"verdi
     assert openai_client.factcheck(cfg, content.normalize(child_post()))["verdict"] == "pass"
     assert state.read_text() == "2"
     assert "stream disconnected" in (cfg.log_dir / "codex_last_error.log").read_text(encoding="utf-8")
+
+
+
+def test_retry_note_before_and_after_retry_time(cfg):
+    from datetime import datetime
+    cfg.retry_time = "11:00"
+    assert "11:00에 자동으로 한 번 더" in pipeline.retry_note(cfg, datetime(2026, 9, 29, 5, 33, tzinfo=pipeline.KST))
+    assert "지나" in pipeline.retry_note(cfg, datetime(2026, 9, 29, 11, 20, tzinfo=pipeline.KST))
+    cfg.retry_time = "off"
+    assert pipeline.retry_note(cfg) == ""
