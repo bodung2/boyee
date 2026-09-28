@@ -211,3 +211,10 @@ def test_social_accounts_are_per_profile(monkeypatch):
     monkeypatch.delenv("THREADS_ACCESS_TOKEN_CHILDHOOD", raising=False)
     assert Config.load("edu").threads_token == "edu-token"
     assert Config.load("childhood").threads_token == ""        # 다른 계정 토큰으로 새지 않는다
+
+
+@pytest.mark.parametrize("tag", ["#현직교 사", "#현직교\u3000사", "#현직교\u200b사", "현직교사", "##현직교사"])
+def test_hashtag_with_any_space_or_missing_hash_is_rejected(tag):
+    s = good_social()
+    s["instagram"]["hashtags"] = ["#교육정책", tag]
+    assert any("해시태그 형식" in e for e in social.validate(s, make_post(), URL))

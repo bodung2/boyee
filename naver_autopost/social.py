@@ -40,6 +40,8 @@ TOKEN_REFRESH_DAYS = 7          # 60일짜리 토큰을 일주일마다 새로 �
 _URL = re.compile(r"https?://\S+")
 _HASHTAG = re.compile(r"#\S+")
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
+# '#' 하나로 시작하고, 띄어쓰기·전각 공백·보이지 않는 공백(zero-width) 없이 이어져야 한 태그로 인식된다.
+_TAG_OK = re.compile(r"^#[^\s#\u200b\u200c\u200d\u2060\ufeff]+$")
 
 
 class SocialError(RuntimeError):
@@ -84,7 +86,7 @@ def validate(social: dict, post: dict, blog_url: str, profile=None) -> list[str]
         errors.append(f"인스타 캡션이 {INSTAGRAM_MAX}자를 넘습니다({len(instagram_caption(social))}자)")
     if len(tags) > INSTAGRAM_MAX_TAGS:
         errors.append(f"해시태그가 {INSTAGRAM_MAX_TAGS}개를 넘습니다({len(tags)}개)")
-    bad_tags = [t for t in tags if not str(t).startswith("#") or " " in str(t)]
+    bad_tags = [t for t in tags if not _TAG_OK.match(str(t))]
     if bad_tags:
         errors.append(f"해시태그 형식이 틀렸습니다: {bad_tags[:5]}")
     for name, text in (("쓰레드", th), ("인스타", ig)):

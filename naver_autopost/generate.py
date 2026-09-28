@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -92,6 +93,8 @@ def _run_claude(cfg: Config, prompt: str, log_file: Path) -> None:
         proc = subprocess.run(
             # 프롬프트는 stdin으로 넘긴다(Windows의 claude.cmd는 여러 줄 한글 인자를 망가뜨린다).
             cmd, input=prompt, cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
+            # Claude가 돌리는 확인용 python이 Windows 콘솔(cp949)에서 이모지를 출력하다 멈추지 않게 한다.
+            env={**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"},
             errors="replace", timeout=cfg.generate_timeout,
         )
     except subprocess.TimeoutExpired as e:
