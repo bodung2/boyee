@@ -18,7 +18,7 @@ from playwright.sync_api import BrowserContext, Frame, Locator, Page, sync_playw
 from .config import Config
 from . import se_markup
 from .content import html_to_text, split_segments
-from .images import THUMBNAIL_SIZE
+from .images import INFOGRAPHIC_WIDTH, THUMBNAIL_SIZE
 
 log = logging.getLogger(__name__)
 
@@ -39,6 +39,10 @@ SELECTORS = {
 }
 
 POST_URL = re.compile(r"blog\.naver\.com/(?:[^\s\"']*?[?&]logNo=(\d{6,})|(?!PostWriteForm|PostUpdateForm)[^/?#]+/(\d{6,}))")
+
+
+# 문서 너비로 늘리지 않고 원래 크기(작게) + 가운데 정렬로 넣는 이미지: 이름 → (가로 px, 로그용 이름)
+SMALL_CENTERED = {"thumbnail": (THUMBNAIL_SIZE, "썸네일"), "infographic": (INFOGRAPHIC_WIDTH, "인포그래픽")}
 
 
 class PublishError(RuntimeError):
@@ -214,7 +218,7 @@ class _Editor:
         self.page.wait_for_timeout(1500)
         self.move_to_end()
 
-    def center_small_image(self, width: int) -> bool:
+    def center_small_image(self, width: int, label: str = "썸네일") -> bool:
         """방금 올린 이미지를 '작게'(원본 크기) + 가운데 정렬로 바꾼다. 기본값은 '문서 너비'·왼쪽 정렬이라
         600px 그림도 본문 폭(약 886px)으로 늘어난다. 실패해도 발행은 계속하고 False를 돌려준다.
         실패하면 화면 구조를 self.image_debug에 남긴다(진단용)."""
@@ -222,7 +226,7 @@ class _Editor:
         comp = scope.locator(SELECTORS["image_component"][0]).last
         self.image_debug = None
         if not comp.count() or not comp.locator("img").count():
-            log.warning("썸네일 이미지를 찾지 못해 크기·정렬을 바꾸지 못했습니다")
+            log.warning("%s 이미지를 찾지 못해 크기·정렬을 바꾸지 못했습니다", label)
             return False
         shown_w, centered, tried = 0, False, []
         try:
@@ -258,15 +262,15 @@ class _Editor:
                 centered = self._is_centered(comp)
                 shown_w = self._shown_width(comp)
         except Exception as e:  # noqa: BLE001 - 서식만 실패한 것이므로 발행은 계속한다
-            log.warning("썸네일 크기·정렬 변경 실패: %s", e)
+            log.warning("%s 크기·정렬 변경 실패: %s", label, e)
         if not (centered and abs(shown_w - width) <= 2):
             self.image_debug = self._image_debug(comp, scope)
         self.move_to_end()
         if centered and abs(shown_w - width) <= 2:
-            log.info("썸네일: %dpx, 가운데 정렬", shown_w)
+            log.info("%s: %dpx, 가운데 정렬", label, shown_w)
             return True
-        log.warning("썸네일 크기·정렬이 기대와 다릅니다(너비 %spx, 가운데 정렬 %s, 정렬 단추 %s)",
-                    shown_w, centered, "눌렀지만 효과 없음" if tried else "못 찾음")
+        log.warning("%s 크기·정렬이 기대와 다릅니다(너비 %spx, 가운데 정렬 %s, 정렬 단추 %s)",
+                    label, shown_w, centered, "눌렀지만 효과 없음" if tried else "못 찾음")
         return False
 
     @staticmethod
@@ -372,12 +376,18 @@ def _publish(page: Page, cfg: Config, post: dict, images: dict[str, Path], dry_r
     page.keyboard.insert_text(post["title"])
 
     ed.find("body").last.click()
-    ed.upload_image(images["thumbnail"])
-    if not ed.center_small_image(THUMBNAIL_SIZE) and ed.image_debug:
-        dbg_dir = diag_dir or cfg.log_dir
-        dbg_dir.mkdir(parents=True, exist_ok=True)
-        (dbg_dir / "thumbnail_debug.json").write_text(
-            json.dumps(ed.image_debug, ensure_ascii=False, indent=1), encoding="utf-8")
+    def upload(name: str) -> None:
+        ed.upload_image(images[name])
+        if name not in SMALL_CENTERED:
+            return
+        width, label = SMALL_CENTERED[name]
+        if not ed.center_small_image(width, label) and ed.image_debug:
+            dbg_dir = diag_dir or cfg.log_dir
+            dbg_dir.mkdir(parents=True, exist_ok=True)
+            (dbg_dir / f"{name}_debug.json").write_text(
+                json.dumps(ed.image_debug, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    upload("thumbnail")
     if cfg.style_mode == "native":
         # SR 기존 글과 같은 서식(인용구 챕터·요약표·16pt 본문·포스트잇 한 줄 요약·링크 카드)
         for kind, value in se_markup.to_segments(post["body_html"]):
@@ -387,14 +397,14 @@ def _publish(page: Page, cfg: Config, post: dict, images: dict[str, Path], dry_r
             elif kind == "oglink":
                 ed.insert_oglink(value)
             elif value in images:
-                ed.upload_image(images[value])
+                upload(value)
     else:
         for kind, value in split_segments(post["body_html"]):
             if kind == "html":
                 ed.paste_html(value)
                 ed.move_to_end()
             else:
-                ed.upload_image(images[value])
+                upload(value)
 
     _shot(page, cfg, "before-publish")
     if diag_dir:

@@ -68,6 +68,8 @@ def test_add_infographic_uses_skill_and_keeps_aspect(cfg, tmp_path):
 
     imgs = pipeline.render_images(cfg, post, out_dir)
     assert imgs["infographic"].name == "늘봄_인포그래픽_2026.png"
+    assert Image.open(imgs["infographic"]).size == (600, 900)            # 올리는 파일은 가로 600, 세로는 비율대로
+    assert Image.open(out_dir / "infographic.png").size == (1600, 2400)  # 원본은 그대로
     assert imgs["thumbnail"].name == "늘봄_썸네일_2026.png"
     names = [v for k, v in content.split_segments(post["body_html"]) if k == "image"]
     assert names[-1] == "infographic"
@@ -98,3 +100,20 @@ def test_both_thumbnails_are_600(tmp_path):
         {"chip": "연령별 발달 · 4세", "main_lines": ["4세 숫자,", "어디까지"], "sub": "단계가 먼저"}, "N", tmp_path / "c.png")
     assert Image.open(edu).size == (600, 600)
     assert Image.open(child).size == (600, 600)
+
+
+def test_infographic_without_keyword_name_is_still_resized(cfg, tmp_path):
+    out_dir = tmp_path / "day"
+    out_dir.mkdir()
+    Image.new("RGB", (1200, 1600), "#fff").save(out_dir / "infographic.png")
+    post = content.normalize(make_post())
+    post["body_html"] = infographic.insert_marker(post["body_html"])
+    imgs = pipeline.render_images(cfg, post, out_dir)
+    assert Image.open(imgs["infographic"]).size == (600, 800)
+    assert Image.open(out_dir / "infographic.png").size == (1200, 1600)
+
+
+def test_infographic_is_uploaded_small_and_centered():
+    from naver_autopost import publisher
+    assert publisher.SMALL_CENTERED["infographic"][0] == 600
+    assert publisher.SMALL_CENTERED["thumbnail"][0] == 600

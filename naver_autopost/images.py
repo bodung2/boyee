@@ -105,6 +105,17 @@ def _draw_centered_line(draw, text: str, y: int, font, canvas_w: int, fill, high
 
 THUMBNAIL_SIZE = 600       # 블로그 본문 맨 위에 600x600, 가운데 정렬로 넣는다
 _DRAW_SIZE = 1200          # 글자가 선명하도록 크게 그린 뒤 줄인다
+INFOGRAPHIC_WIDTH = 600    # 인포그래픽은 가로 600px(세로는 비율대로), 가운데 정렬
+
+
+def fit_width(src: Path, out: Path, width: int) -> Path:
+    """비율을 유지한 채 가로를 width로 맞춘다."""
+    img = Image.open(src).convert("RGB")
+    if img.width != width:
+        img = img.resize((width, max(1, round(img.height * width / img.width))), Image.LANCZOS)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    img.save(out, "PNG", optimize=True)
+    return out
 
 
 def _save_thumbnail(img: Image.Image, out: Path, size: int) -> Path:

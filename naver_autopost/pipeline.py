@@ -313,9 +313,10 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
         default = (thumb_name.replace("썸네일", "인포그래픽") if "썸네일" in thumb_name
                    else f"{thumb_name}_인포그래픽" if thumb_name else infographic.NAME)
         named = fname(infographic.NAME, default)
-        if named != info:
-            shutil.copyfile(info, named)
-        imgs[infographic.NAME] = named
+        if named == info:
+            named = out_dir / f"{infographic.NAME}_{images.INFOGRAPHIC_WIDTH}.png"
+        # 원본(고해상도)은 두고, 올릴 파일만 가로 600px로 줄인다(세로는 비율대로).
+        imgs[infographic.NAME] = images.fit_width(info, named, images.INFOGRAPHIC_WIDTH)
     # 본문에 표시가 남아 있는데 파일이 없는 이미지는 지운다(발행 중 오류 방지).
     missing = {m.group(1) for m in content.IMAGE_MARKER.finditer(post["body_html"])} - set(imgs)
     post["body_html"] = content.remove_markers(post["body_html"], missing)
