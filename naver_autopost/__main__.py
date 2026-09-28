@@ -213,7 +213,7 @@ def _history_check(cfg: Config, days: int, fix: bool) -> int:
     from . import history
     from .pipeline import today_kst
     print(f"[{cfg.profile.label}] 블로그 {cfg.blog_id} · 이력 {cfg.history_file}")
-    problems = 0
+    problems = fixable = 0
     end = date.fromisoformat(today_kst())
     for i in range(days):
         day = (end - timedelta(days=i)).isoformat()
@@ -227,6 +227,7 @@ def _history_check(cfg: Config, days: int, fix: bool) -> int:
             status = f"✅ 기록됨 {exact['url']}"
         elif found:
             problems += 1
+            fixable += 1
             status = f"⚠️ 날짜 기록 없음(제목으로 찾음) {found['url']}"
             if fix:
                 history.upsert(cfg.history_file, history.autopost_entry(day, post, found["url"]))
@@ -238,7 +239,7 @@ def _history_check(cfg: Config, days: int, fix: bool) -> int:
             status = "· 글 없음"
         title = (post.get("title") or (exact or {}).get("title") or "")[:40]
         print(f"  {day}  {status}  | 소셜: {sns}  | {title}")
-    if problems and not fix:
+    if fixable and not fix:
         print("  → `history-check --fix`로 제목으로 찾은 항목을 바로잡을 수 있습니다.")
     return 0 if not problems or fix else 1
 
