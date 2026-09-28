@@ -310,6 +310,20 @@ def test_host_that_serves_a_web_page_is_skipped(cfg, monkeypatch, tmp_path):
     assert social.host_images(cfg, jpg) == ["https://litter.catbox.moe/abc.jpg"]
 
 
+def test_unreachable_from_this_pc_is_kept_but_tried_last(cfg, monkeypatch, tmp_path):
+    monkeypatch.setattr(social, "_is_image_url", lambda url: None if "ibb" in url else True)
+    jpg = tmp_path / "a.jpg"
+    Image.new("RGB", (10, 10)).save(jpg)
+    assert social.host_images(cfg, jpg) == ["https://litter.catbox.moe/abc.jpg", "https://i.ibb.co/x/social_image.jpg"]
+
+
+def test_tmpfiles_link_is_turned_into_direct_download(monkeypatch, cfg, tmp_path):
+    jpg = tmp_path / "a.jpg"
+    Image.new("RGB", (10, 10)).save(jpg)
+    monkeypatch.setattr(social, "_upload_form", lambda *a, **k: '{"status":"success","data":{"url":"http://tmpfiles.org/123/a.jpg"}}')
+    assert social._host_tmpfiles(cfg, jpg) == "https://tmpfiles.org/dl/123/a.jpg"
+
+
 def test_litterbox_upload_request_shape(monkeypatch, tmp_path, cfg):
     jpg = tmp_path / "social_image.jpg"
     Image.new("RGB", (10, 10)).save(jpg, "JPEG")

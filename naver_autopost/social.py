@@ -251,53 +251,87 @@ def _host_imgbb(cfg: Config, path: Path) -> str:
     return url
 
 
+def _upload_form(url: str, fields: dict, file_field: str, path: Path, timeout: int = 120) -> str:
+    """파일 하나를 multipart/form-data로 올리고 응답 본문을 돌려준다."""
+    data = path.read_bytes()
+    boundary = "----naverautopost" + hashlib.md5(data).hexdigest()
+    parts = [f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode()
+             for k, v in fields.items()]
+    parts.append((f'--{boundary}\r\nContent-Disposition: form-data; name="{file_field}"; filename="{path.name}"\r\n'
+                  "Content-Type: image/jpeg\r\n\r\n").encode() + data + b"\r\n")
+    parts.append(f"--{boundary}--\r\n".encode())
+    req = urllib.request.Request(url, data=b"".join(parts), headers={
+        "Content-Type": f"multipart/form-data; boundary={boundary}", "User-Agent": "naver-autopost/1.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read().decode("utf-8", "replace").strip()
+
+
+def _plain_url(text: str, name: str) -> str:
+    if not text.startswith("https://"):
+        raise SocialError(f"{name} 업로드 실패: {text[:200]}")
+    return text
+
+
+def _host_catbox(cfg: Config, path: Path) -> str:
+    """catbox(키 필요 없음). 블로그에 이미 공개된 인포그래픽이라 보관 기간은 따로 두지 않는다."""
+    return _plain_url(_upload_form("https://catbox.moe/user/api.php", {"reqtype": "fileupload"},
+                                   "fileToUpload", path), "catbox")
+
+
 def _host_litterbox(cfg: Config, path: Path) -> str:
     """catbox의 임시 보관함(litterbox, 키 필요 없음, 24시간 뒤 자동 삭제)."""
-    boundary = "----naverautopost" + hashlib.md5(path.read_bytes()).hexdigest()
-    parts = []
-    for name, value in (("reqtype", "fileupload"), ("time", "24h")):
-        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode())
-    parts.append((f'--{boundary}\r\nContent-Disposition: form-data; name="fileToUpload"; filename="{path.name}"\r\n'
-                  "Content-Type: image/jpeg\r\n\r\n").encode() + path.read_bytes() + b"\r\n")
-    parts.append(f"--{boundary}--\r\n".encode())
-    req = urllib.request.Request("https://litterbox.catbox.moe/resources/internals/api.php", data=b"".join(parts),
-                                 headers={"Content-Type": f"multipart/form-data; boundary={boundary}",
-                                          "User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        url = resp.read().decode("utf-8", "replace").strip()
-    if not url.startswith("https://"):
-        raise SocialError(f"litterbox 업로드 실패: {url[:200]}")
-    return url
+    return _plain_url(_upload_form("https://litterbox.catbox.moe/resources/internals/api.php",
+                                   {"reqtype": "fileupload", "time": "24h"}, "fileToUpload", path), "litterbox")
 
 
-_HOSTS = (("imgbb", _host_imgbb), ("litterbox", _host_litterbox))
+def _host_tmpfiles(cfg: Config, path: Path) -> str:
+    """tmpfiles.org(키 필요 없음, 1시간 뒤 삭제 — 올린 직후 바로 쓰므로 충분). 직접 받는 주소는 /dl/ 경로."""
+    res = json.loads(_upload_form("https://tmpfiles.org/api/v1/upload", {}, "file", path))
+    url = (res.get("data") or {}).get("url", "")
+    if not url.startswith("http"):
+        raise SocialError(f"tmpfiles 업로드 실패: {str(res)[:200]}")
+    return re.sub(r"^https?://tmpfiles\.org/", "https://tmpfiles.org/dl/", url)
 
 
-def _is_image_url(url: str) -> bool:
-    """Meta가 가져갈 때처럼 받아 보고, 정말 이미지 파일이 오는지 확인한다(웹페이지·차단 페이지면 거절)."""
+_HOSTS = (("imgbb", _host_imgbb), ("catbox", _host_catbox), ("litterbox", _host_litterbox),
+          ("tmpfiles", _host_tmpfiles))
+MAX_IMAGE_URLS = 3
+
+
+def _is_image_url(url: str) -> bool | None:
+    """Meta가 가져갈 때처럼 받아 본다. 이미지면 True, 웹페이지 등이 오면 False,
+    이 PC에서 접속이 안 되면(국내망 차단·지연 등) None — Meta 서버는 받을 수 있으니 후보로 둔다."""
     req = urllib.request.Request(url, headers={"User-Agent": "facebookexternalhit/1.1"})
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=20) as resp:
             return resp.headers.get("Content-Type", "").startswith("image/")
-    except Exception as e:  # noqa: BLE001
-        log.warning("이미지 주소 확인 실패(%s): %s", url, e)
+    except urllib.error.HTTPError as e:
+        log.warning("이미지 주소가 오류를 돌려줍니다(%s): HTTP %s", url, e.code)
         return False
+    except Exception as e:  # noqa: BLE001
+        log.info("이 PC에서 이미지 주소를 확인하지 못했습니다(후보로는 둠) %s: %s", url, e)
+        return None
 
 
 def host_images(cfg: Config, path: Path) -> list[str]:
-    """이미지를 여러 곳에 하루짜리로 올려, Meta가 가져갈 수 있는 주소 후보를 돌려준다(앞에서부터 시도)."""
-    urls = []
+    """이미지를 여러 곳에 올려, Meta가 가져갈 수 있는 주소 후보를 돌려준다(확인된 주소를 앞에 둔다)."""
+    sure, unsure = [], []
     for name, host in _HOSTS:
+        if len(sure) >= MAX_IMAGE_URLS:
+            break
         try:
             url = host(cfg, path)
         except Exception as e:  # noqa: BLE001 - 다른 곳에 올린다
             log.warning("이미지 업로드 실패(%s): %s", name, e)
             continue
-        if _is_image_url(url):
-            urls.append(url)
+        ok = _is_image_url(url)
+        if ok:
+            sure.append(url)
+        elif ok is None:
+            unsure.append(url)
         else:
             log.warning("이미지 주소가 사진 파일로 열리지 않아 건너뜁니다(%s): %s", name, url)
-    return urls
+    return sure + unsure
 
 
 def _image_rejected(err: Exception) -> bool:
