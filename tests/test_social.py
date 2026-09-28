@@ -37,6 +37,16 @@ def cfg(tmp_path):
     return c
 
 
+@pytest.fixture(autouse=True)
+def fake_hosts(monkeypatch):
+    """이미지 업로드·확인은 가짜로(두 곳에 올린 것처럼)."""
+    monkeypatch.setattr(social, "_HOSTS", (
+        ("imgbb", lambda c, p: "https://i.ibb.co/x/social_image.jpg"),
+        ("litterbox", lambda c, p: "https://litter.catbox.moe/abc.jpg"),
+    ))
+    monkeypatch.setattr(social, "_is_image_url", lambda url: True)
+
+
 def test_good_draft_passes():
     assert social.validate(good_social(), make_post(), URL, profiles.get("edu")) == []
 
@@ -112,15 +122,16 @@ def _published_day(cfg, social_data=None, infographic=True):
 
 
 class FakeMeta:
-    def __init__(self):
+    def __init__(self, reject=()):
         self.calls = []
+        self.reject = reject          # 이 주소의 이미지는 가져오지 못한 것처럼 거절
 
     def __call__(self, method, url, params, timeout=60):
         self.calls.append((method, url, dict(params)))
+        if params.get("image_url") in self.reject:
+            raise social.SocialError(f"{url} → HTTP 400: Only photo or video can be accepted as media type.")
         if "refresh_access_token" in url:
             return {"access_token": params["access_token"]}
-        if "imgbb" in url:
-            return {"data": {"url": "https://i.ibb.co/x/social_image.jpg"}}
         if url.endswith("/me"):
             return {"id": "T1", "user_id": "I1", "username": "kkus"}
         if url.endswith("/threads") or url.endswith("/media"):
@@ -266,3 +277,71 @@ def test_record_merges_with_synced_entry(tmp_path):
     history.upsert(path, history.autopost_entry("2026-09-28", {"title": "t", "lane": "D"}, URL + "?from=rss"))
     [e] = history.load(path)
     assert e["date"] == "2026-09-28" and e["source"] == "autopost" and e["pub_date"] == "x" and e["lane"] == "D"
+
+
+def test_rejected_image_host_falls_back_to_next(cfg, monkeypatch):
+    today, out = _published_day(cfg, good_social())
+    meta = FakeMeta(reject={"https://i.ibb.co/x/social_image.jpg"})
+    monkeypatch.setattr(social, "_request", meta)
+    monkeypatch.setattr(social, "_sleep", lambda s: None)
+    assert social.publish(cfg, today) == 0
+    ig = [c[2]["image_url"] for c in meta.calls if c[1].endswith("/I1/media")]
+    assert ig == ["https://i.ibb.co/x/social_image.jpg", "https://litter.catbox.moe/abc.jpg"]
+    state = json.loads((out / "social_state.json").read_text(encoding="utf-8"))
+    assert state["instagram"]["url"].startswith("https://www.instagram.com")
+
+
+def test_threads_goes_text_only_when_every_image_is_rejected(cfg, monkeypatch):
+    today, out = _published_day(cfg, good_social())
+    meta = FakeMeta(reject={"https://i.ibb.co/x/social_image.jpg", "https://litter.catbox.moe/abc.jpg"})
+    monkeypatch.setattr(social, "_request", meta)
+    monkeypatch.setattr(social, "_sleep", lambda s: None)
+    assert social.publish(cfg, today) == 1                       # 인스타는 실패로 남는다
+    kinds = [c[2]["media_type"] for c in meta.calls if c[1].endswith("/T1/threads")]
+    assert kinds == ["IMAGE", "IMAGE", "TEXT"]
+    state = json.loads((out / "social_state.json").read_text(encoding="utf-8"))
+    assert "threads" in state and "instagram" not in state
+
+
+def test_host_that_serves_a_web_page_is_skipped(cfg, monkeypatch, tmp_path):
+    monkeypatch.setattr(social, "_is_image_url", lambda url: "catbox" in url)
+    jpg = tmp_path / "a.jpg"
+    Image.new("RGB", (10, 10)).save(jpg)
+    assert social.host_images(cfg, jpg) == ["https://litter.catbox.moe/abc.jpg"]
+
+
+def test_litterbox_upload_request_shape(monkeypatch, tmp_path, cfg):
+    jpg = tmp_path / "social_image.jpg"
+    Image.new("RGB", (10, 10)).save(jpg, "JPEG")
+    seen = {}
+
+    class Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b"https://litter.catbox.moe/abc123.jpg\n"
+
+    def fake_urlopen(req, timeout=0):
+        seen["url"], seen["body"], seen["ctype"] = req.full_url, req.data, req.headers["Content-type"]
+        return Resp()
+
+    monkeypatch.setattr(social.urllib.request, "urlopen", fake_urlopen)
+    assert social._host_litterbox(cfg, jpg) == "https://litter.catbox.moe/abc123.jpg"
+    boundary = seen["ctype"].split("boundary=")[1]
+    assert seen["url"].startswith("https://litterbox.catbox.moe/")
+    assert b'name="reqtype"\r\n\r\nfileupload' in seen["body"] and b'name="time"\r\n\r\n24h' in seen["body"]
+    assert b'name="fileToUpload"; filename="social_image.jpg"' in seen["body"] and jpg.read_bytes() in seen["body"]
+    assert seen["body"].endswith(f"--{boundary}--\r\n".encode())
+
+
+def test_imgbb_uses_direct_image_url(monkeypatch, cfg, tmp_path):
+    jpg = tmp_path / "a.jpg"
+    Image.new("RGB", (10, 10)).save(jpg)
+    monkeypatch.setattr(social, "_request", lambda *a, **k: {"data": {
+        "url": "https://i.ibb.co/x/a.jpg", "url_viewer": "https://ibb.co/x",
+        "image": {"url": "https://i.ibb.co/x/a.jpg"}}})
+    assert social._host_imgbb(cfg, jpg) == "https://i.ibb.co/x/a.jpg"

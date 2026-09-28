@@ -237,18 +237,74 @@ def to_instagram_jpeg(src: Path, out: Path, width: int = 1080) -> Path:
     return out
 
 
-def host_image(cfg: Config, path: Path) -> str:
-    """Meta가 가져갈 수 있게 이미지를 하루짜리 공개 주소로 올린다(imgbb)."""
+def _host_imgbb(cfg: Config, path: Path) -> str:
     if not cfg.imgbb_api_key:
-        raise SocialError(".env에 IMGBB_API_KEY가 없어 이미지를 올릴 수 없습니다")
+        raise SocialError("IMGBB_API_KEY 없음")
     res = _request("POST", "https://api.imgbb.com/1/upload", {
         "key": cfg.imgbb_api_key, "expiration": 86400,
         "image": base64.b64encode(path.read_bytes()).decode(), "name": path.stem,
     }, timeout=120)
-    url = (res.get("data") or {}).get("url")
+    data = res.get("data") or {}
+    url = (data.get("image") or {}).get("url") or data.get("url")
     if not url:
-        raise SocialError(f"이미지 업로드 응답에 주소가 없습니다: {str(res)[:200]}")
+        raise SocialError(f"imgbb 응답에 주소가 없습니다: {str(res)[:200]}")
     return url
+
+
+def _host_litterbox(cfg: Config, path: Path) -> str:
+    """catbox의 임시 보관함(litterbox, 키 필요 없음, 24시간 뒤 자동 삭제)."""
+    boundary = "----naverautopost" + hashlib.md5(path.read_bytes()).hexdigest()
+    parts = []
+    for name, value in (("reqtype", "fileupload"), ("time", "24h")):
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode())
+    parts.append((f'--{boundary}\r\nContent-Disposition: form-data; name="fileToUpload"; filename="{path.name}"\r\n'
+                  "Content-Type: image/jpeg\r\n\r\n").encode() + path.read_bytes() + b"\r\n")
+    parts.append(f"--{boundary}--\r\n".encode())
+    req = urllib.request.Request("https://litterbox.catbox.moe/resources/internals/api.php", data=b"".join(parts),
+                                 headers={"Content-Type": f"multipart/form-data; boundary={boundary}",
+                                          "User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        url = resp.read().decode("utf-8", "replace").strip()
+    if not url.startswith("https://"):
+        raise SocialError(f"litterbox 업로드 실패: {url[:200]}")
+    return url
+
+
+_HOSTS = (("imgbb", _host_imgbb), ("litterbox", _host_litterbox))
+
+
+def _is_image_url(url: str) -> bool:
+    """Meta가 가져갈 때처럼 받아 보고, 정말 이미지 파일이 오는지 확인한다(웹페이지·차단 페이지면 거절)."""
+    req = urllib.request.Request(url, headers={"User-Agent": "facebookexternalhit/1.1"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.headers.get("Content-Type", "").startswith("image/")
+    except Exception as e:  # noqa: BLE001
+        log.warning("이미지 주소 확인 실패(%s): %s", url, e)
+        return False
+
+
+def host_images(cfg: Config, path: Path) -> list[str]:
+    """이미지를 여러 곳에 하루짜리로 올려, Meta가 가져갈 수 있는 주소 후보를 돌려준다(앞에서부터 시도)."""
+    urls = []
+    for name, host in _HOSTS:
+        try:
+            url = host(cfg, path)
+        except Exception as e:  # noqa: BLE001 - 다른 곳에 올린다
+            log.warning("이미지 업로드 실패(%s): %s", name, e)
+            continue
+        if _is_image_url(url):
+            urls.append(url)
+        else:
+            log.warning("이미지 주소가 사진 파일로 열리지 않아 건너뜁니다(%s): %s", name, url)
+    return urls
+
+
+def _image_rejected(err: Exception) -> bool:
+    """Meta가 이미지 주소를 가져오지 못했을 때 나오는 오류들."""
+    text = str(err).lower()
+    return any(k in text for k in ("only photo or video", "unknown error", "media type", "image_url",
+                                   "could not be downloaded", "media download", "invalid image"))
 
 
 # ---------------------------------------------------------------- 발행
@@ -267,7 +323,21 @@ def _wait(url: str, params: dict, field: str, done: str = "FINISHED", tries: int
 _sleep = time.sleep
 
 
-def publish_threads(cfg: Config, social: dict, image_url: str | None) -> str:
+def publish_threads(cfg: Config, social: dict, image_urls: list[str]) -> str:
+    """이미지 주소 후보를 차례로 시도하고, 모두 거절되면 글만 올린다."""
+    for url in image_urls:
+        try:
+            return _publish_threads_once(cfg, social, url)
+        except SocialError as e:
+            if not _image_rejected(e):
+                raise
+            log.warning("쓰레드가 이미지 주소를 거절했습니다(다음 후보로): %s", e)
+    if image_urls:
+        log.warning("쓰레드 이미지가 모두 거절되어 글만 올립니다")
+    return _publish_threads_once(cfg, social, None)
+
+
+def _publish_threads_once(cfg: Config, social: dict, image_url: str | None) -> str:
     acc = account(cfg, "threads")
     base = f"{THREADS_API}/v1.0"
     th = social["threads"]
@@ -289,7 +359,23 @@ def publish_threads(cfg: Config, social: dict, image_url: str | None) -> str:
         return mid
 
 
-def publish_instagram(cfg: Config, social: dict, image_url: str) -> str:
+def publish_instagram(cfg: Config, social: dict, image_urls: list[str]) -> str:
+    """이미지 주소 후보를 차례로 시도한다(인스타는 이미지 없이는 올릴 수 없다)."""
+    if not image_urls:
+        raise SocialError("인스타그램은 이미지가 필요합니다(인포그래픽이 없거나 이미지 업로드 실패)")
+    last: SocialError | None = None
+    for url in image_urls:
+        try:
+            return _publish_instagram_once(cfg, social, url)
+        except SocialError as e:
+            if not _image_rejected(e):
+                raise
+            log.warning("인스타가 이미지 주소를 거절했습니다(다음 후보로): %s", e)
+            last = e
+    raise last
+
+
+def _publish_instagram_once(cfg: Config, social: dict, image_url: str) -> str:
     acc = account(cfg, "instagram")
     base = f"{INSTAGRAM_API}/{cfg.instagram_api_version}"
     cid = _request("POST", f"{base}/{acc['id']}/media", {
@@ -360,24 +446,22 @@ def publish(cfg: Config, date: str, dry_run: bool = False) -> int:
             log.info("인포그래픽이 없어 지금 만들었습니다")
         except Exception as e:  # noqa: BLE001 - 쓰레드는 글만이라도 올린다
             log.warning("인포그래픽 생성 실패: %s", e)
-    image_url = None
-    if image.exists() and (cfg.imgbb_api_key or dry_run):
+    image_urls: list[str] = []
+    if image.exists():
         jpeg = to_instagram_jpeg(image, out_dir / "social_image.jpg")
-        image_url = "(dry-run)" if dry_run else host_image(cfg, jpeg)
+        image_urls = host_images(cfg, jpeg)
     if dry_run:
         print(preview_md(social))
-        print(f"채널: {todo}, 이미지: {'인포그래픽' if image_url else '없음'}")
+        print(f"채널: {todo}, 이미지 주소 후보: {image_urls or '없음'}")
         return 0
 
     results, failed = [], []
     for ch in todo:
         try:
             if ch == "threads":
-                url = publish_threads(cfg, social, image_url if cfg.threads_with_image else None)
-            elif image_url:
-                url = publish_instagram(cfg, social, image_url)
+                url = publish_threads(cfg, social, image_urls if cfg.threads_with_image else [])
             else:
-                raise SocialError("인스타그램은 이미지가 필요합니다(인포그래픽 또는 IMGBB_API_KEY 없음)")
+                url = publish_instagram(cfg, social, image_urls)
             state[ch] = {"url": url, "at": datetime.now(KST).isoformat()}
             (out_dir / "social_state.json").write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
             results.append(f"{ch}: {url}")
@@ -399,5 +483,6 @@ def check(cfg: Config) -> int:
         except SocialError as e:
             ok = False
             print(f"  ❌ {ch}: {e}")
-    print(f"  {'✅' if cfg.imgbb_api_key else '❌'} 이미지 업로드(IMGBB_API_KEY)")
-    return 0 if ok and cfg.imgbb_api_key else 1
+    print(f"  {'✅' if cfg.imgbb_api_key else '➖'} 이미지 업로드: imgbb{'' if cfg.imgbb_api_key else '(키 없음)'}"
+          " → 안 되면 litterbox(키 필요 없음)로 다시 시도")
+    return 0 if ok else 1
