@@ -203,15 +203,18 @@ def _codex_variants(cfg: Config) -> list[tuple[str, ...]]:
     return list(CODEX_SEARCH_VARIANTS)
 
 
-def run_codex(cfg: Config, prompt: str) -> str:
-    """Codex CLI를 웹 검색을 켠 읽기 전용 모드로 실행하고 마지막 답변을 돌려준다."""
+def run_codex(cfg: Config, prompt: str, cwd: Path | None = None, sandbox: str = "read-only",
+              timeout: int | None = None) -> str:
+    """Codex CLI를 웹 검색을 켜고 실행해 마지막 답변을 돌려준다.
+    기본은 읽기 전용 임시 폴더. cwd·sandbox="workspace-write"를 주면 그 폴더에 파일을 쓸 수 있다."""
+    timeout = timeout or cfg.codex_timeout
     exe = shutil.which(cfg.codex_bin)
     if not exe:
         raise CodexUnavailable(f"'{cfg.codex_bin}' 명령을 찾지 못했습니다(Codex CLI 미설치)")
     with tempfile.TemporaryDirectory() as tmp:
         last_msg = Path(tmp) / "last.txt"
         for variant in _codex_variants(cfg):
-            cmd = [exe, *variant, "--skip-git-repo-check", "--sandbox", "read-only",
+            cmd = [exe, *variant, "--skip-git-repo-check", "--sandbox", sandbox,
                    "--output-last-message", str(last_msg)]
             if cfg.codex_model:
                 cmd += ["--model", cfg.codex_model]
@@ -219,10 +222,10 @@ def run_codex(cfg: Config, prompt: str) -> str:
             # API 키가 환경에 있으면 Codex가 구독 대신 API 결제로 돌 수 있어 빼고 넘긴다.
             env = {k: v for k, v in os.environ.items() if k not in ("OPENAI_API_KEY", "CODEX_API_KEY")}
             try:
-                proc = subprocess.run(cmd, input=prompt, cwd=tmp, env=env, capture_output=True, text=True,
-                                      encoding="utf-8", errors="replace", timeout=cfg.codex_timeout)
+                proc = subprocess.run(cmd, input=prompt, cwd=str(cwd or tmp), env=env, capture_output=True,
+                                      text=True, encoding="utf-8", errors="replace", timeout=timeout)
             except subprocess.TimeoutExpired as e:
-                raise CodexUnavailable(f"Codex 시간 초과({cfg.codex_timeout}초)") from e
+                raise CodexUnavailable(f"Codex 시간 초과({timeout}초)") from e
             err = (proc.stderr or "")[-800:]
             if proc.returncode != 0 and _CLI_USAGE_ERROR.search(err) and not last_msg.exists():
                 log.info("Codex 옵션 조합 %s 미지원 → 다음 조합", " ".join(variant))

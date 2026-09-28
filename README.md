@@ -1,4 +1,4 @@
-# 네이버 블로그 완전 자동 발행 (유아교육 · 교육 정책)
+# 블로그 완전 자동 발행 (네이버 유아교육 · 교육 정책 · 구글 블로거)
 
 집 PC에서 매일 정해진 시간에 정보성 글 1편을 **주제 선정 → 리서치 → 글쓰기 → 일러스트 → 이중 팩트체크 → 네이버 발행**까지 사람 손 없이 처리합니다.
 
@@ -6,6 +6,7 @@
 |---|---|---|---|
 | `childhood` (기본) | early-childhood-insight-extraction | `.claude/skills/childhood-auto-post`, `childhood-auto-factcheck` | **사용 중** |
 | `edu` | education-insight-extraction | `.claude/skills/edu-auto-post`, `edu-auto-factcheck` | 교육 블로그(flw3148), 매일 05:00 |
+| 구글 블로거 | Codex 스킬 korea-explained-blogger | `python -m blogger_autopost` ([아래](#구글-블로거-korea-explained-blogger-하루-1편)) | 매일 1편, Blogger API |
 
 ```
 [작업 스케줄러, 매일 06:00]  python -m naver_autopost run --profile childhood
@@ -97,6 +98,63 @@ notepad .env        # NAVER_BLOG_ID, NAVER_CATEGORY_CHILDHOOD 입력
 - 최초 1회 로그인: `python -m naver_autopost login --profile edu` (교육 블로그 계정으로, '로그인 상태 유지' 체크)
 - 카테고리는 글 종류로 자동 결정됩니다. 교직 실무(B 레인)는 '교직 꿀팁', 나머지는 '교육 정책 인사이트'입니다.
 - 예약: `scripts\setup_windows.ps1 -Profile edu -Time 05:00`
+
+## 구글 블로거 (korea-explained-blogger, 하루 1편)
+
+Codex(ChatGPT 구독)에 설치된 `korea-explained-blogger` 스킬로 글을 쓰고, **구글 공식 Blogger API**로 발행합니다.
+네이버와 달리 브라우저 자동화가 없어 에디터 변경으로 멈출 일이 없고, 크롬 창도 뜨지 않습니다.
+
+```
+[작업 스케줄러, 매일 03:00]  python -m blogger_autopost run
+  ① 구글 로그인·블로그 확인   토큰이 풀렸으면 글을 쓰기 전에 멈추고 알림
+  ② 발행 목록 동기화         블로그의 기존 글(직접 쓴 글 포함)을 data/published_blogger.json에 반영
+  ③ 글쓰기(Codex)            $korea-explained-blogger 스킬 + 웹 검색 → post.json(제목·본문 HTML·라벨·출처)
+                              기존 글 목록을 넘겨 주제 중복을 피하고, 관련 글은 실제 주소로만 링크
+  ④ 구조 검증(코드)          분량·HTML 형식·마크다운 섞임·자리표시자·출처 수·라벨 → 떨어지면 다른 주제로 다시
+  ⑤ 팩트체크(Codex 별도 세션) 웹 검색으로 모든 사실 대조 → 지적은 글쓴 쪽이 근거를 재확인해 반영 → 다시 검사해 pass여야 통과
+  ⑥ 발행                     블로거 초안 저장 → 발행(BLOGGER_PUBLISH_TIME이 있으면 그 시각으로 예약)
+  ⑦ 기록·알림                data/published_blogger.json, 텔레그램 알림
+```
+
+### 최초 1회 설정
+
+1. **Codex 스킬 확인**: `korea-explained-blogger` 스킬이 `C:\Users\<이름>\.codex\skills\` 아래에 있으면 됩니다.
+   폴더가 한 번 더 겹쳐 있어도(`skills\korea-explained-blogger\korea-explained-blogger\SKILL.md`) 자동으로 찾습니다.
+   다른 곳에 있으면 `.env`의 `BLOGGER_SKILL_PATH`에 SKILL.md 경로를 적습니다.
+2. **구글 클라우드 OAuth 클라이언트 만들기** (무료, 5분)
+   - [console.cloud.google.com](https://console.cloud.google.com) → 새 프로젝트 만들기
+   - API 및 서비스 → 라이브러리 → **Blogger API v3** → 사용
+   - Google 인증 플랫폼(OAuth 동의 화면) → 시작하기: 앱 이름, 이메일 입력, 대상 **외부**
+   - 대상(Audience) → **앱 게시(프로덕션으로 푸시)**. ⚠️ '테스트' 상태로 두면 로그인이 **7일마다 풀립니다**
+   - 클라이언트 → 클라이언트 만들기 → 애플리케이션 유형 **데스크톱 앱** → JSON 다운로드
+   - 받은 파일을 `secrets\blogger_client_secret.json`으로 저장(git에 올라가지 않습니다)
+3. 설치와 로그인
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts\setup_blogger_windows.ps1 -Time 03:00
+   notepad .env        # BLOGGER_BLOG_URL=https://내블로그.blogspot.com  (공개 시각을 정하려면 BLOGGER_PUBLISH_TIME=21:00)
+   .venv\Scripts\python.exe -m blogger_autopost auth     # 블로그 주인 구글 계정으로 '허용'
+   .venv\Scripts\python.exe -m blogger_autopost check    # Codex·스킬·블로그·웹 검색 한 번에 확인
+   .venv\Scripts\python.exe -m blogger_autopost run --draft   # 발행하지 않고 '초안'으로 저장 → 블로거에서 확인
+   ```
+   `auth`에서 "Google에서 확인하지 않은 앱" 화면이 나오면 **고급 → (앱 이름)(으)로 이동**을 누르면 됩니다. 본인이 만든 앱이라 안전합니다.
+
+### 운영
+
+- 발행 시각: 스케줄러는 새벽(예: 03:00)에 돌리고, 독자가 보는 시각은 `BLOGGER_PUBLISH_TIME`으로 예약합니다.
+  예를 들어 해외 독자(미국 동부 아침)를 노리면 `21:00`~`22:00`(한국 시각). 비우면 완성 즉시 공개됩니다.
+- 네이버 두 블로그(05:00·06:00)도 Codex를 쓰므로 03:00처럼 시간을 떨어뜨리면 ChatGPT 사용 한도에 덜 걸립니다.
+- 결과: `logs/blogger-날짜.log`, `output/blogger/날짜/`(post.json, factcheck_*.json, write_prompt.txt)
+
+| 알림 | 원인 | 할 일 |
+|---|---|---|
+| 구글 로그인이 만료되었거나 취소되었습니다 | 동의 화면이 '테스트' 상태(7일 만료)·비밀번호 변경·앱 권한 삭제 | 동의 화면을 '프로덕션'으로 바꾸고 `python -m blogger_autopost auth` |
+| Codex(ChatGPT)를 쓸 수 없습니다 | Codex 로그인 풀림·구독 사용 한도 | `codex` 실행해 로그인 확인. 다음 실행은 멈춘 단계부터 이어서 합니다 |
+| 발행 기준을 통과한 글을 만들지 못했습니다 | 구조 검증·팩트체크 탈락 | 없음. 그날은 건너뛰는 것이 정상 동작입니다 |
+
+- 같은 날 다시 실행해도 두 번 올리지 않습니다(발행 기록 + 같은 제목 글 확인). 초안 저장 뒤 발행만 실패했으면 그 초안을 그대로 발행합니다.
+- 본문 이미지는 넣지 않습니다. Blogger API에 이미지 업로드 기능이 없어서, 스킬이 그림을 요구해도 글에서는 뺍니다.
+- 글 규칙은 Codex 스킬(`korea-explained-blogger`)을 그대로 따르고, 자동 발행에 필요한 규칙(질문 금지, 확인 못 한 사실 삭제, 경험 지어내기 금지, 출력 형식)만
+  `blogger_autopost/writer.py`의 프롬프트로 덧붙입니다.
 
 ## 블로그 디자인 (SR 기존 글과 동일)
 
