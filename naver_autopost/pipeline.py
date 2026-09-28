@@ -379,6 +379,15 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
                 log.warning("발행 목록 동기화 실패(계속 진행): %s", e)
 
             out_dir = cfg.output_dir / today
+            # 발행 버튼은 눌렀지만 주소를 확인하지 못해 기록이 빠진 경우: 블로그 목록에 같은 제목이 있으면
+            # 다시 발행하지 않고 기록만 바로잡는다(중복 발행 방지).
+            if not force and (out_dir / "ready.json").exists() and (out_dir / "post.json").exists():
+                ready_post = _load_post(out_dir / "post.json")
+                found = history.find_published(cfg.history_file, today, ready_post["title"])
+                if found:
+                    history.upsert(cfg.history_file, history.autopost_entry(today, ready_post, found["url"]))
+                    log.info("오늘 글은 이미 블로그에 있습니다(기록만 바로잡음): %s", found["url"])
+                    return 0
             post = produce(cfg, today, out_dir)
             info_ok = add_infographic(cfg, post, out_dir)
             imgs = render_images(cfg, post, out_dir)

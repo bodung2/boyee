@@ -308,16 +308,30 @@ def _load_state(out_dir: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
+def blog_post(cfg: Config, date: str) -> tuple[dict, str]:
+    """그날 글 폴더의 post.json과 발행 주소. 이력에 날짜 기록이 빠져 있고 제목으로만 찾았다면
+    그 항목을 자동 발행 기록으로 바로잡는다(날짜·주제·레인 등을 채움)."""
+    path = cfg.output_dir / date / "post.json"
+    if not path.exists():
+        return {}, ""
+    post = json.loads(path.read_text(encoding="utf-8"))
+    entry = history.find_published(cfg.history_file, date, post.get("title", ""))
+    if not entry:
+        return post, ""
+    if entry.get("source") != "autopost" or entry.get("date") != date:
+        history.upsert(cfg.history_file, history.autopost_entry(date, post, entry["url"]))
+        log.info("발행 이력을 바로잡았습니다: %s %s", date, entry["url"])
+    return post, entry["url"]
+
+
 def publish(cfg: Config, date: str, dry_run: bool = False) -> int:
     """저녁 예약 작업: 그날 블로그 글의 소셜 초안을 쓰레드·인스타에 올린다."""
     label = cfg.profile.label
     out_dir = cfg.output_dir / date
-    entry = history.published_on(cfg.history_file, date)
-    if not entry:
+    post, blog_url = blog_post(cfg, date)
+    if not blog_url:
         log.info("[%s] %s에 발행한 블로그 글이 없어 소셜 발행을 건너뜁니다", label, date)
         return 0
-    blog_url = entry["url"]
-    post = json.loads((out_dir / "post.json").read_text(encoding="utf-8"))
     if not (out_dir / "social.json").exists():
         log.info("아침에 만든 소셜 초안이 없어 지금 만듭니다")
         draft(cfg, out_dir, blog_url)

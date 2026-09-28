@@ -236,3 +236,33 @@ def test_hashtag_with_any_space_or_missing_hash_is_rejected(tag):
     s = good_social()
     s["instagram"]["hashtags"] = ["#교육정책", tag]
     assert any("해시태그 형식" in e for e in social.validate(s, make_post(), URL))
+
+
+def test_unrecorded_post_is_found_by_title_and_history_is_fixed(cfg, monkeypatch):
+    """발행 주소 확인 실패로 날짜 기록이 빠지고, 목록 동기화로만(날짜 없이) 들어온 글도 찾는다."""
+    today = pipeline.today_kst()
+    out = cfg.output_dir / today
+    out.mkdir(parents=True)
+    post = make_post(title="유아 레벨테스트 금지 총정리 | 10월부터")
+    (out / "post.json").write_text(json.dumps(post, ensure_ascii=False), encoding="utf-8")
+    history.append(cfg.history_file, {"date": "", "title": "유아 레벨테스트 금지 총정리  |  10월부터",
+                                      "url": URL, "source": "blog-list", "category_no": "3"})
+    found_post, url = social.blog_post(cfg, today)
+    assert url == URL and found_post["title"] == post["title"]
+    entries = history.load(cfg.history_file)
+    assert len(entries) == 1                                     # 새로 쌓지 않고 합친다
+    e = entries[0]
+    assert e["date"] == today and e["source"] == "autopost" and e["category_no"] == "3"
+    assert e["lane"] == post["lane"] and history.published_on(cfg.history_file, today)
+
+
+def test_no_post_folder_means_no_blog(cfg):
+    assert social.blog_post(cfg, "2020-01-01") == ({}, "")
+
+
+def test_record_merges_with_synced_entry(tmp_path):
+    path = tmp_path / "h.json"
+    history.append(path, {"date": "", "title": "t", "url": URL + "/", "source": "rss", "pub_date": "x"})
+    history.upsert(path, history.autopost_entry("2026-09-28", {"title": "t", "lane": "D"}, URL + "?from=rss"))
+    [e] = history.load(path)
+    assert e["date"] == "2026-09-28" and e["source"] == "autopost" and e["pub_date"] == "x" and e["lane"] == "D"

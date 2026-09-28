@@ -56,6 +56,9 @@ def main(argv: list[str] | None = None) -> int:
     rec.add_argument("url", help="발행된 글 주소(프로그램이 주소를 확인하지 못했을 때 직접 기록)")
     rec.add_argument("--date", help="글 날짜 YYYY-MM-DD(기본: 오늘)")
     with_profile(sub.add_parser("sync-history"))
+    hc = with_profile(sub.add_parser("history-check"))
+    hc.add_argument("--days", type=int, default=7, help="최근 며칠을 볼지(기본 7)")
+    hc.add_argument("--fix", action="store_true", help="제목으로 찾은 글을 자동 발행 기록으로 바로잡는다")
     forget = with_profile(sub.add_parser("forget"))
     forget.add_argument("target", help="지운 글 주소 또는 날짜(YYYY-MM-DD)")
     imp = with_profile(sub.add_parser("import-history"))
@@ -143,13 +146,11 @@ def main(argv: list[str] | None = None) -> int:
         post_path = cfg.output_dir / date / "post.json"
         post = json.loads(post_path.read_text(encoding="utf-8")) if post_path.exists() else {}
         url = args.url.split("?")[0].rstrip("/")
-        history.append(cfg.history_file, {
-            "date": date, "title": post.get("title", ""), "url": url, "topic": post.get("topic", ""),
-            "lane": post.get("lane", ""), "cluster": post.get("cluster", ""), "domain": post.get("domain"),
-            "tags": post.get("tags", []), "source": "autopost",
-        })
+        history.upsert(cfg.history_file, history.autopost_entry(date, post, url))   # 같은 주소가 있으면 합친다
         print(f"  기록했습니다: {date} {post.get('title', '(제목 없음)')} {url}")
         return 0
+    if args.cmd == "history-check":
+        return _history_check(cfg, args.days, args.fix)
     if args.cmd == "sync-history":
         from . import history
         print(f"  {cfg.blog_id}: {history.sync(cfg.history_file, cfg.blog_id)}")
@@ -206,6 +207,42 @@ def _preview_editor(cfg: Config, post_dir: Path | None, push: bool) -> int:
     return 0 if not push else _push_diagnostics("Editor preview with native style")
 
 
+def _history_check(cfg: Config, days: int, fix: bool) -> int:
+    """최근 며칠의 글 폴더와 발행 이력이 맞는지 본다(발행했는데 기록이 빠진 날 찾기)."""
+    from datetime import date, timedelta
+    from . import history
+    from .pipeline import today_kst
+    print(f"[{cfg.profile.label}] 블로그 {cfg.blog_id} · 이력 {cfg.history_file}")
+    problems = 0
+    end = date.fromisoformat(today_kst())
+    for i in range(days):
+        day = (end - timedelta(days=i)).isoformat()
+        post_path = cfg.output_dir / day / "post.json"
+        post = json.loads(post_path.read_text(encoding="utf-8")) if post_path.exists() else {}
+        exact = history.published_on(cfg.history_file, day)
+        found = exact or history.find_published(cfg.history_file, day, post.get("title", ""))
+        social_state = cfg.output_dir / day / "social_state.json"
+        sns = ", ".join(json.loads(social_state.read_text(encoding="utf-8"))) if social_state.exists() else "-"
+        if exact:
+            status = f"✅ 기록됨 {exact['url']}"
+        elif found:
+            problems += 1
+            status = f"⚠️ 날짜 기록 없음(제목으로 찾음) {found['url']}"
+            if fix:
+                history.upsert(cfg.history_file, history.autopost_entry(day, post, found["url"]))
+                status += " → 바로잡음"
+        elif post:
+            problems += 1
+            status = "❌ 글은 만들었는데 발행 기록 없음 → 발행됐다면 `record 주소 --date " + day + "`"
+        else:
+            status = "· 글 없음"
+        title = (post.get("title") or (exact or {}).get("title") or "")[:40]
+        print(f"  {day}  {status}  | 소셜: {sns}  | {title}")
+    if problems and not fix:
+        print("  → `history-check --fix`로 제목으로 찾은 항목을 바로잡을 수 있습니다.")
+    return 0 if not problems or fix else 1
+
+
 def _social(cfg: Config, args) -> int:
     from . import history, social
     from .pipeline import setup_logging, today_kst
@@ -221,11 +258,11 @@ def _social(cfg: Config, args) -> int:
             from . import notify
             notify.send(cfg, f"[{cfg.profile.label} 소셜 발행 실패] {date}\n{e}")
             return 1
-    entry = history.published_on(cfg.history_file, date)
-    if not entry:
-        print(f"{date}에 자동 발행한 {cfg.profile.label} 글이 발행 이력에 없습니다.")
+    _, blog_url = social.blog_post(cfg, date)
+    if not blog_url:
+        print(f"{date} {cfg.profile.label} 글을 찾지 못했습니다. `history-check --profile {cfg.profile.name}`로 확인하세요.")
         return 1
-    result = social.draft(cfg, cfg.output_dir / date, entry["url"])
+    result = social.draft(cfg, cfg.output_dir / date, blog_url)
     print(social.preview_md(result))
     print(f"저장: {cfg.output_dir / date / 'social.json'}")
     return 0
