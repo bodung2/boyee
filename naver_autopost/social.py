@@ -24,7 +24,7 @@ from zoneinfo import ZoneInfo
 
 from PIL import Image
 
-from . import content, generate, history, notify
+from . import content, generate, history, infographic, notify
 from .config import Config
 
 log = logging.getLogger(__name__)
@@ -339,6 +339,13 @@ def publish(cfg: Config, date: str, dry_run: bool = False) -> int:
         return 0
 
     image = out_dir / "infographic.png"
+    if not image.exists() and cfg.infographic:
+        # 인포그래픽 기능 전에 발행된 글이거나 아침에 만들지 못한 경우: 지금 만든다(블로그 본문은 그대로).
+        try:
+            infographic.generate(cfg, post, image)
+            log.info("인포그래픽이 없어 지금 만들었습니다")
+        except Exception as e:  # noqa: BLE001 - 쓰레드는 글만이라도 올린다
+            log.warning("인포그래픽 생성 실패: %s", e)
     image_url = None
     if image.exists() and (cfg.imgbb_api_key or dry_run):
         jpeg = to_instagram_jpeg(image, out_dir / "social_image.jpg")

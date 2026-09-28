@@ -152,8 +152,26 @@ def test_publish_posts_both_channels_once(cfg, monkeypatch):
     assert social.publish(cfg, today) == 0 and len(meta.calls) == n     # 두 번 올리지 않는다
 
 
+def test_missing_infographic_is_made_before_posting(cfg, monkeypatch):
+    today, out = _published_day(cfg, good_social(), infographic=False)
+    made = []
+
+    def fake_generate(c, post, path):
+        made.append(path)
+        Image.new("RGB", (600, 900), "white").save(path)
+
+    monkeypatch.setattr(social.infographic, "generate", fake_generate)
+    meta = FakeMeta()
+    monkeypatch.setattr(social, "_request", meta)
+    monkeypatch.setattr(social, "_sleep", lambda s: None)
+    assert social.publish(cfg, today) == 0
+    assert made == [out / "infographic.png"]
+    assert any(c[1].endswith("/I1/media") for c in meta.calls)
+
+
 def test_without_infographic_threads_is_text_and_instagram_fails(cfg, monkeypatch):
     today, out = _published_day(cfg, good_social(), infographic=False)
+    cfg.infographic = False
     meta = FakeMeta()
     monkeypatch.setattr(social, "_request", meta)
     assert social.publish(cfg, today) == 1
