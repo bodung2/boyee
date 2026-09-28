@@ -117,6 +117,7 @@ class _Editor:
     def __init__(self, page: Page, cfg: Config):
         self.page = page
         self.cfg = cfg
+        self.image_debug: dict | None = None
 
     @property
     def scopes(self) -> list[Page | Frame]:
@@ -215,14 +216,18 @@ class _Editor:
 
     def center_small_image(self, width: int) -> bool:
         """방금 올린 이미지를 '작게'(원본 크기) + 가운데 정렬로 바꾼다. 기본값은 '문서 너비'·왼쪽 정렬이라
-        600px 그림도 본문 폭(약 886px)으로 늘어난다. 실패해도 발행은 계속하고 False를 돌려준다."""
+        600px 그림도 본문 폭(약 886px)으로 늘어난다. 실패해도 발행은 계속하고 False를 돌려준다.
+        실패하면 화면 구조를 self.image_debug에 남긴다(진단용)."""
         scope = self.scopes[0]
         comp = scope.locator(SELECTORS["image_component"][0]).last
+        self.image_debug = None
         if not comp.count() or not comp.locator("img").count():
             log.warning("썸네일 이미지를 찾지 못해 크기·정렬을 바꾸지 못했습니다")
             return False
+        shown_w, centered, tried = 0, False, []
         try:
-            comp.locator("img").first.click(timeout=5_000)
+            img = comp.locator("img.se-image-resource, img").first
+            img.click(timeout=5_000)
             self.page.wait_for_timeout(500)
             toolbar = comp.locator(".se-context-toolbar-image")
             small = toolbar.locator("button[data-name='content-mode-without-pagefull'][data-value='normal']")
@@ -232,31 +237,75 @@ class _Editor:
             if small.count():
                 small.first.click(timeout=3_000)
                 self.page.wait_for_timeout(700)
-            align = scope.locator("button[data-name='align-drop-down-with-justify']:visible")
-            if align.count():
-                align.first.click(timeout=3_000)
-                self.page.wait_for_timeout(300)
-                for sel in ("button[data-value='center']:visible", "button[class*='align-center']:visible"):
-                    opt = scope.locator(sel)
-                    if opt.count():
-                        opt.first.click(timeout=3_000)
-                        break
-                self.page.wait_for_timeout(500)
-            section = comp.locator(".se-section-image").first
-            shown = comp.locator("img.se-image-resource").first
-            centered = "se-section-align-center" in (section.get_attribute("class") or "")
-            shown_w = int(float(shown.get_attribute("width") or shown.evaluate("e => e.clientWidth") or 0))
+            shown_w = self._shown_width(comp)
+            centered = self._is_centered(comp)
+            # 정렬 단추 후보: 사진 도구 모음 안 → 위쪽 서식 도구 모음. 누를 때마다 실제 위치로 확인한다.
+            for opener, option in self._align_candidates(comp, scope):
+                if centered:
+                    break
+                try:
+                    img.click(timeout=3_000)
+                    self.page.wait_for_timeout(300)
+                    if opener.count() and opener.first.is_visible():
+                        opener.first.click(timeout=3_000)
+                        self.page.wait_for_timeout(300)
+                    if option.count() and option.first.is_visible():
+                        option.first.click(timeout=3_000)
+                        self.page.wait_for_timeout(600)
+                        tried.append(True)
+                except Exception:  # noqa: BLE001 - 다음 후보로
+                    continue
+                centered = self._is_centered(comp)
+                shown_w = self._shown_width(comp)
         except Exception as e:  # noqa: BLE001 - 서식만 실패한 것이므로 발행은 계속한다
-            log.warning("썸네일 크기·정렬 변경 실패(문서 너비로 들어갑니다): %s", e)
-            self.move_to_end()
-            return False
+            log.warning("썸네일 크기·정렬 변경 실패: %s", e)
+        if not (centered and abs(shown_w - width) <= 2):
+            self.image_debug = self._image_debug(comp, scope)
         self.move_to_end()
         if centered and abs(shown_w - width) <= 2:
             log.info("썸네일: %dpx, 가운데 정렬", shown_w)
             return True
-        log.warning("썸네일 크기·정렬이 기대와 다릅니다(너비 %spx, 가운데 정렬 %s)", shown_w, centered)
+        log.warning("썸네일 크기·정렬이 기대와 다릅니다(너비 %spx, 가운데 정렬 %s, 정렬 단추 %s)",
+                    shown_w, centered, "눌렀지만 효과 없음" if tried else "못 찾음")
         return False
 
+    @staticmethod
+    def _shown_width(comp: Locator) -> int:
+        box = comp.locator("img").first.bounding_box()
+        return round(box["width"]) if box else 0
+
+    @staticmethod
+    def _is_centered(comp: Locator) -> bool:
+        """클래스 이름 대신 실제 화면 위치로 본다: 그림 가운데가 본문 칸 가운데와 같으면 가운데 정렬."""
+        if "se-section-align-center" in (comp.locator(".se-section-image").first.get_attribute("class") or ""):
+            return True
+        img = comp.locator("img").first.bounding_box()
+        area = comp.bounding_box()
+        if not img or not area or img["width"] >= area["width"] - 4:
+            return False
+        return abs((img["x"] + img["width"] / 2) - (area["x"] + area["width"] / 2)) <= 4
+
+    @staticmethod
+    def _align_candidates(comp: Locator, scope) -> list[tuple[Locator, Locator]]:
+        center = ("[data-value='center']:visible, [data-value*='center']:visible, button[class*='align-center']:visible,"
+                  " button:has-text('가운데'):visible")
+        return [
+            (comp.locator(".se-context-toolbar button[data-name*='align']:visible"),
+             comp.locator(".se-context-toolbar").locator(center)),
+            (scope.locator("button[data-name*='align']:visible"), scope.locator(center)),
+        ]
+
+    def _image_debug(self, comp: Locator, scope) -> dict:
+        try:
+            html_ = re.sub(r"data:[^\"']{80,}", "data:…", comp.evaluate("e => e.outerHTML"))[:20000]
+            buttons = scope.locator("button:visible").evaluate_all(
+                "bs => bs.map(b => [b.dataset.name || '', b.dataset.value || '', (b.className || '').slice(0, 90),"
+                " (b.innerText || b.title || '').trim().slice(0, 20)])")
+            return {"component": html_, "img_box": comp.locator("img").first.bounding_box(),
+                    "component_box": comp.bounding_box(),
+                    "visible_buttons": [b for b in buttons if any(b)][:200]}
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
 
 def _shot(page: Page, cfg: Config, name: str) -> None:
     try:
@@ -324,7 +373,11 @@ def _publish(page: Page, cfg: Config, post: dict, images: dict[str, Path], dry_r
 
     ed.find("body").last.click()
     ed.upload_image(images["thumbnail"])
-    ed.center_small_image(THUMBNAIL_SIZE)
+    if not ed.center_small_image(THUMBNAIL_SIZE) and ed.image_debug:
+        dbg_dir = diag_dir or cfg.log_dir
+        dbg_dir.mkdir(parents=True, exist_ok=True)
+        (dbg_dir / "thumbnail_debug.json").write_text(
+            json.dumps(ed.image_debug, ensure_ascii=False, indent=1), encoding="utf-8")
     if cfg.style_mode == "native":
         # SR 기존 글과 같은 서식(인용구 챕터·요약표·16pt 본문·포스트잇 한 줄 요약·링크 카드)
         for kind, value in se_markup.to_segments(post["body_html"]):

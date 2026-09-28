@@ -166,7 +166,7 @@ def test_native_style_publish_on_mock_editor(tmp_path, monkeypatch):
 
 # 실제 에디터(diagnostics/style/editor_dom.html)의 사진 컴포넌트·도구 모음 구조를 흉내 낸다.
 IMAGE_MOCK = r"""<!doctype html><meta charset="utf-8"><body>
-<div class="se-content" id="content">
+<div class="se-content" id="content" style="width:886px">
   <div class="se-component se-image se-l-default"><div class="se-component-content se-component-content-fit">
     <div class="se-section se-section-image se-l-default se-section-align-left">
       <img class="se-image-resource" width="886" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" style="width:886px;height:40px">
@@ -175,7 +175,7 @@ IMAGE_MOCK = r"""<!doctype html><meta charset="utf-8"><body>
              data-value="fit" onclick="document.getElementById('modes').style.display='block'">문서 너비</button></li>
         <li id="modes" style="display:none">
           <button class="se-context-toolbar-group-toggle-button" data-name="content-mode-without-pagefull"
-             data-value="normal" onclick="document.querySelector('.se-image-resource').setAttribute('width','600')">작게</button>
+             data-value="normal" onclick="const i=document.querySelector('.se-image-resource'); i.setAttribute('width','600'); i.style.width='600px'">작게</button>
         </li>
       </ul>
     </div></div></div>
@@ -206,4 +206,21 @@ def test_thumbnail_is_made_small_and_centered(tmp_path):
         assert ed.center_small_image(600) is True
         assert "se-section-align-center" in page.locator(".se-section-image").get_attribute("class")
         assert page.locator(".se-image-resource").get_attribute("width") == "600"
+        browser.close()
+
+
+def test_thumbnail_align_failure_leaves_debug(tmp_path):
+    """정렬 단추를 못 찾으면 발행은 계속하고, 화면 구조를 image_debug에 남긴다."""
+    cfg = Config.load()
+    with sync_playwright() as p:
+        try:
+            browser = p.chromium.launch()
+        except Exception as e:
+            pytest.skip(f"Chromium 없음: {e}")
+        page = browser.new_page()
+        page.set_content(IMAGE_MOCK.replace('data-name="align-drop-down-with-justify"', 'data-name="x"'))
+        ed = publisher._Editor(page, cfg)
+        assert ed.center_small_image(600) is False
+        assert "se-section-image" in ed.image_debug["component"]
+        assert any(b[0] == "x" for b in ed.image_debug["visible_buttons"])
         browser.close()
