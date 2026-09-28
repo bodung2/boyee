@@ -69,7 +69,18 @@ def _to_16x9_png(src: Path, out: Path) -> None:
     img.save(out, "PNG", optimize=True)
 
 
-def generate_image(cfg: Config, prompt: str, out: Path) -> Path:
+def _to_png(src: Path, out: Path, max_width: int = 1600) -> None:
+    """비율은 그대로 두고(인포그래픽은 세로형일 수 있다) 너무 크면 폭만 줄인다."""
+    img = Image.open(src).convert("RGB")
+    if img.width > max_width:
+        img = img.resize((max_width, round(img.height * max_width / img.width)), Image.LANCZOS)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    img.save(out, "PNG", optimize=True)
+
+
+def run_for_image(cfg: Config, prompt: str, out: Path, convert, timeout: int, what: str = "그림") -> Path:
+    """Codex에 그림 한 장을 만들게 하고, 그 파일을 convert(원본, out)로 옮긴다.
+    작업 폴더에 저장한 그림이 있으면 그것을, 없으면 image_gen 기본 폴더의 새 그림을 쓴다."""
     exe = shutil.which(cfg.codex_bin)
     if not exe:
         raise CodexAccountError(f"'{cfg.codex_bin}' 명령을 찾지 못했습니다(Codex CLI 미설치)")
@@ -83,17 +94,23 @@ def generate_image(cfg: Config, prompt: str, out: Path) -> Path:
         cmd.append("-")                                   # 프롬프트는 stdin(EOF까지)으로
         started = time.time() - 2
         try:
-            proc = subprocess.run(cmd, input=prompt.strip() + "\n" + PROMPT_TAIL, cwd=work, env=env,
+            proc = subprocess.run(cmd, input=prompt, cwd=work, env=env,
                                   capture_output=True, text=True, encoding="utf-8", errors="replace",
-                                  timeout=cfg.codex_image_timeout)
+                                  timeout=timeout)
         except subprocess.TimeoutExpired as e:
-            raise CodexImageError(f"Codex 그림 생성 시간 초과({cfg.codex_image_timeout}초)") from e
-    output = (proc.stdout or "") + "\n" + (proc.stderr or "")
-    if proc.returncode != 0 and _LOGIN_OR_LIMIT.search(output):
-        raise CodexAccountError(f"Codex 로그인·사용 한도 문제로 그림을 만들지 못했습니다: {output.strip()[-400:]}")
-    m = re.search(r"session id:\s*([0-9a-fA-F-]{8,})", output)
-    found = _find_new_image(gen_dir, m.group(1) if m else None, started)
-    if not found:
-        raise CodexImageError(f"Codex가 그림을 만들지 않았습니다(exit {proc.returncode}): {output.strip()[-400:]}")
-    _to_16x9_png(found, out)
+            raise CodexImageError(f"Codex {what} 생성 시간 초과({timeout}초)") from e
+        output = (proc.stdout or "") + "\n" + (proc.stderr or "")
+        if proc.returncode != 0 and _LOGIN_OR_LIMIT.search(output):
+            raise CodexAccountError(f"Codex 로그인·사용 한도 문제로 {what}을 만들지 못했습니다: {output.strip()[-400:]}")
+        saved = [p for p in Path(work).rglob("*") if p.suffix.lower() in IMAGE_EXTS]
+        m = re.search(r"session id:\s*([0-9a-fA-F-]{8,})", output)
+        found = (max(saved, key=lambda p: p.stat().st_mtime) if saved
+                 else _find_new_image(gen_dir, m.group(1) if m else None, started))
+        if not found:
+            raise CodexImageError(f"Codex가 {what}을 만들지 않았습니다(exit {proc.returncode}): {output.strip()[-400:]}")
+        convert(found, out)
     return out
+
+
+def generate_image(cfg: Config, prompt: str, out: Path) -> Path:
+    return run_for_image(cfg, prompt.strip() + "\n" + PROMPT_TAIL, out, _to_16x9_png, cfg.codex_image_timeout)

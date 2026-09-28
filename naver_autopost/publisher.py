@@ -18,6 +18,7 @@ from playwright.sync_api import BrowserContext, Frame, Locator, Page, sync_playw
 from .config import Config
 from . import se_markup
 from .content import html_to_text, split_segments
+from .images import THUMBNAIL_SIZE
 
 log = logging.getLogger(__name__)
 
@@ -212,6 +213,50 @@ class _Editor:
         self.page.wait_for_timeout(1500)
         self.move_to_end()
 
+    def center_small_image(self, width: int) -> bool:
+        """방금 올린 이미지를 '작게'(원본 크기) + 가운데 정렬로 바꾼다. 기본값은 '문서 너비'·왼쪽 정렬이라
+        600px 그림도 본문 폭(약 886px)으로 늘어난다. 실패해도 발행은 계속하고 False를 돌려준다."""
+        scope = self.scopes[0]
+        comp = scope.locator(SELECTORS["image_component"][0]).last
+        if not comp.count() or not comp.locator("img").count():
+            log.warning("썸네일 이미지를 찾지 못해 크기·정렬을 바꾸지 못했습니다")
+            return False
+        try:
+            comp.locator("img").first.click(timeout=5_000)
+            self.page.wait_for_timeout(500)
+            toolbar = comp.locator(".se-context-toolbar-image")
+            small = toolbar.locator("button[data-name='content-mode-without-pagefull'][data-value='normal']")
+            if small.count() and not small.first.is_visible():
+                toolbar.locator("button.se-context-toolbar-group-toggle-button:visible").first.click(timeout=3_000)
+                self.page.wait_for_timeout(300)
+            if small.count():
+                small.first.click(timeout=3_000)
+                self.page.wait_for_timeout(700)
+            align = scope.locator("button[data-name='align-drop-down-with-justify']:visible")
+            if align.count():
+                align.first.click(timeout=3_000)
+                self.page.wait_for_timeout(300)
+                for sel in ("button[data-value='center']:visible", "button[class*='align-center']:visible"):
+                    opt = scope.locator(sel)
+                    if opt.count():
+                        opt.first.click(timeout=3_000)
+                        break
+                self.page.wait_for_timeout(500)
+            section = comp.locator(".se-section-image").first
+            shown = comp.locator("img.se-image-resource").first
+            centered = "se-section-align-center" in (section.get_attribute("class") or "")
+            shown_w = int(float(shown.get_attribute("width") or shown.evaluate("e => e.clientWidth") or 0))
+        except Exception as e:  # noqa: BLE001 - 서식만 실패한 것이므로 발행은 계속한다
+            log.warning("썸네일 크기·정렬 변경 실패(문서 너비로 들어갑니다): %s", e)
+            self.move_to_end()
+            return False
+        self.move_to_end()
+        if centered and abs(shown_w - width) <= 2:
+            log.info("썸네일: %dpx, 가운데 정렬", shown_w)
+            return True
+        log.warning("썸네일 크기·정렬이 기대와 다릅니다(너비 %spx, 가운데 정렬 %s)", shown_w, centered)
+        return False
+
 
 def _shot(page: Page, cfg: Config, name: str) -> None:
     try:
@@ -279,6 +324,7 @@ def _publish(page: Page, cfg: Config, post: dict, images: dict[str, Path], dry_r
 
     ed.find("body").last.click()
     ed.upload_image(images["thumbnail"])
+    ed.center_small_image(THUMBNAIL_SIZE)
     if cfg.style_mode == "native":
         # SR 기존 글과 같은 서식(인용구 챕터·요약표·16pt 본문·포스트잇 한 줄 요약·링크 카드)
         for kind, value in se_markup.to_segments(post["body_html"]):

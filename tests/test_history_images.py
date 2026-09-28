@@ -26,7 +26,7 @@ def test_images_render(tmp_path):
     post = make_post()
     thumb = images.make_thumbnail(post["thumbnail"], tmp_path / "t.png")
     card = images.make_card(post["card"], tmp_path / "c.png")
-    assert Image.open(thumb).size == (1200, 1200)
+    assert Image.open(thumb).size == (600, 600)
     assert Image.open(card).size[0] == 1200
 
 

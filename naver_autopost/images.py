@@ -1,4 +1,4 @@
-"""대표 썸네일(1200x1200)과 요약 카드(1200x700)를 Pillow로 그린다.
+"""대표 썸네일(600x600)과 요약 카드(1200x700)를 Pillow로 그린다.
 
 education-insight-extraction 4단계 레이아웃 규칙을 따른다: 가운데 정렬,
 실제 렌더링 폭으로 x 계산, 메인 줄 수에 따라 보조 문구 y를 동적으로 계산.
@@ -103,7 +103,20 @@ def _draw_centered_line(draw, text: str, y: int, font, canvas_w: int, fill, high
         draw.text((x, y), text, font=font, fill=fill)
 
 
-def make_thumbnail(thumb: dict, out: Path, size: int = 1200) -> Path:
+THUMBNAIL_SIZE = 600       # 블로그 본문 맨 위에 600x600, 가운데 정렬로 넣는다
+_DRAW_SIZE = 1200          # 글자가 선명하도록 크게 그린 뒤 줄인다
+
+
+def _save_thumbnail(img: Image.Image, out: Path, size: int) -> Path:
+    if img.size != (size, size):
+        img = img.resize((size, size), Image.LANCZOS)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    img.save(out, "PNG", optimize=True)
+    return out
+
+
+def make_thumbnail(thumb: dict, out: Path, size: int = THUMBNAIL_SIZE) -> Path:
+    final_size, size = size, _DRAW_SIZE
     img = Image.new("RGB", (size, size), BG)
     draw = ImageDraw.Draw(img)
     main_font_size = 120
@@ -139,9 +152,7 @@ def make_thumbnail(thumb: dict, out: Path, size: int = 1200) -> Path:
         _draw_centered_line(draw, line, y, sub_font, size, "#dbe4f0")
         y += sub_gap
 
-    out.parent.mkdir(parents=True, exist_ok=True)
-    img.save(out, "PNG", optimize=True)
-    return out
+    return _save_thumbnail(img, out, final_size)
 
 
 def make_card(card: dict, out: Path, width: int = 1200, tone: str = BG) -> Path:
@@ -212,7 +223,8 @@ def childhood_tone(domain: str | None) -> str:
     return CHILDHOOD_TONES.get((domain or "").strip().upper()[:1], CHILDHOOD_DEFAULT_TONE)
 
 
-def make_thumbnail_childhood(thumb: dict, domain: str | None, out: Path, size: int = 1200) -> Path:
+def make_thumbnail_childhood(thumb: dict, domain: str | None, out: Path, size: int = THUMBNAIL_SIZE) -> Path:
+    final_size, size = size, _DRAW_SIZE
     tone = childhood_tone(domain)
     accent = "#ffcf5a" if tone in WARM_TONES else "#ffd23f"
     img = Image.new("RGB", (size, size), tone)
@@ -241,6 +253,4 @@ def make_thumbnail_childhood(thumb: dict, domain: str | None, out: Path, size: i
     if thumb.get("sub"):
         draw.text((96, y_end + 84), thumb["sub"], font=_font("regular", 48), fill=accent)
 
-    out.parent.mkdir(parents=True, exist_ok=True)
-    img.save(out, "PNG", optimize=True)
-    return out
+    return _save_thumbnail(img, out, final_size)

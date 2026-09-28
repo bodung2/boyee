@@ -120,7 +120,7 @@ def validate(post: dict, profile: Profile | None = None) -> list[str]:
     if markers.count("card") != 1:
         errors.append(f"[[IMAGE:card]] 표시는 정확히 1번이어야 합니다(현재 {markers.count('card')}번)")
     illust_names = {i.get("name") for i in post.get("illustrations") or []}
-    unknown = sorted(set(markers) - {"card"} - illust_names)
+    unknown = sorted(set(markers) - {"card", "infographic"} - illust_names)  # 인포그래픽은 발행 직전에 넣는다
     if unknown:
         errors.append(f"알 수 없는 이미지 표시: {unknown}")
     dupes = sorted({m for m in markers if markers.count(m) > 1})

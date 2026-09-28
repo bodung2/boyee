@@ -1,5 +1,5 @@
 """하루 1편: 글쓰기 → 구조 검증 → 일러스트(ChatGPT·Codex) → Claude 팩트체크 → ChatGPT 팩트체크
-→ 이미지 → 네이버 발행 → 이력 기록 → 알림."""
+→ 핵심 인포그래픽(Codex onepage 스킬) → 이미지 → 네이버 발행 → 이력 기록 → 알림."""
 from __future__ import annotations
 
 import json
@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import codex_image, content, gemini_client, generate, history, images, notify, openai_client
+from . import codex_image, content, gemini_client, generate, history, images, infographic, notify, openai_client
 from .config import Config
 from .errors import ExternalAccountError
 
@@ -181,7 +181,7 @@ def _attempt(cfg: Config, today: str, out_dir: Path, feedback: str, resume: bool
 
     if cfg.profile.illustrations and not stage.get("illustrated"):
         post["illustrations"] = (post.get("illustrations") or [])[:cfg.illustration_count]
-        extra = {m.group(1) for m in content.IMAGE_MARKER.finditer(post["body_html"])} - {"card"} \
+        extra = {m.group(1) for m in content.IMAGE_MARKER.finditer(post["body_html"])} - {"card", infographic.NAME} \
             - {i.get("name") for i in post["illustrations"]}
         post["body_html"] = content.remove_markers(post["body_html"], extra)
         _make_illustrations(cfg, post, out_dir)
@@ -266,6 +266,24 @@ def produce(cfg: Config, today: str, out_dir: Path) -> dict:
     raise RuntimeError(f"{cfg.max_attempts}번 시도했지만 발행 기준을 통과한 글을 만들지 못했습니다.\n{feedback[:800]}")
 
 
+def add_infographic(cfg: Config, post: dict, out_dir: Path) -> bool:
+    """팩트체크를 통과한 최종 글로 핵심 인포그래픽을 만들어 '한 줄 요약' 앞에 넣는다.
+    만들지 못하면 인포그래픽만 빼고 발행은 계속한다(False)."""
+    if not cfg.infographic:
+        return True
+    path = out_dir / f"{infographic.NAME}.png"
+    if not path.exists():
+        try:
+            infographic.generate(cfg, post, path)
+            log.info("인포그래픽 생성(codex %s 스킬)", cfg.infographic_skill)
+        except Exception as e:  # noqa: BLE001 - 사용 한도·로그인 문제여도 글은 발행한다
+            log.warning("인포그래픽 생성 실패(인포그래픽 없이 발행): %s", e)
+            return False
+    post["body_html"] = infographic.insert_marker(post["body_html"])
+    _save_json(out_dir / "post.json", post)
+    return True
+
+
 def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
     names = post.get("image_names") or {}
 
@@ -289,6 +307,15 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
         path = out_dir / f"{ill.get('name')}.png"
         if path.exists():
             imgs[ill["name"]] = path
+    info = out_dir / f"{infographic.NAME}.png"
+    if info.exists():
+        thumb_name = str(names.get("thumbnail") or "")
+        default = (thumb_name.replace("썸네일", "인포그래픽") if "썸네일" in thumb_name
+                   else f"{thumb_name}_인포그래픽" if thumb_name else infographic.NAME)
+        named = fname(infographic.NAME, default)
+        if named != info:
+            shutil.copyfile(info, named)
+        imgs[infographic.NAME] = named
     # 본문에 표시가 남아 있는데 파일이 없는 이미지는 지운다(발행 중 오류 방지).
     missing = {m.group(1) for m in content.IMAGE_MARKER.finditer(post["body_html"])} - set(imgs)
     post["body_html"] = content.remove_markers(post["body_html"], missing)
@@ -339,6 +366,7 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
 
             out_dir = cfg.output_dir / today
             post = produce(cfg, today, out_dir)
+            info_ok = add_infographic(cfg, post, out_dir)
             imgs = render_images(cfg, post, out_dir)
             post["blog_category"] = cfg.category_for(post.get("lane"))
             log.info("카테고리: %s (레인 %s)", post["blog_category"] or "(기본)", post.get("lane", "-"))
@@ -359,6 +387,8 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
             cat_note = f"카테고리: {post.get('blog_category') or '(기본)'}"
             if post.get("_category_ok") is False:
                 cat_note += " ⚠️ 이 카테고리를 찾지 못해 기본 카테고리로 들어갔습니다"
+            if not info_ok:
+                cat_note += "\n⚠️ 인포그래픽을 만들지 못해 빼고 올렸습니다(로그 확인)"
             if dry_run:
                 notify.send(cfg, f"[{label} 자동발행 테스트] 최종 발행 직전까지 확인했습니다: {post['title']}\n{cat_note}")
                 return 0
