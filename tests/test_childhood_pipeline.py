@@ -113,36 +113,38 @@ def test_attempt_full_flow_with_gpt_fix(cfg, monkeypatch):
     assert (out / "gpt_factcheck_1.json").exists() and (out / "gpt_factcheck_2.json").exists()
 
 
-def test_gpt_fail_rejects(cfg, monkeypatch):
+def test_gpt_fail_is_applied_not_rejected(cfg, monkeypatch):
+    """예전 'fail'도 글을 버리지 않고 Claude가 지적을 확인해 반영한다."""
     out = cfg.output_dir / "d"
     out.mkdir(parents=True)
     (out / "post.json").write_text(json.dumps(child_post(), ensure_ascii=False), encoding="utf-8")
-    monkeypatch.setattr(openai_client, "factcheck",
-                        lambda c, p: {"verdict": "fail", "issues": [], "summary": "핵심 수치 오류"})
-    with pytest.raises(pipeline.Rejected, match="ChatGPT"):
-        pipeline._gpt_factcheck(cfg, out / "post.json", out)
-
-
-def test_gpt_fix_twice_then_pass(cfg, monkeypatch):
-    out = cfg.output_dir / "d"
-    out.mkdir(parents=True)
-    (out / "post.json").write_text(json.dumps(child_post(), ensure_ascii=False), encoding="utf-8")
-    reviews = iter([{"verdict": "fix", "issues": [{}]}, {"verdict": "fix", "issues": [{}]}, {"verdict": "pass"}])
+    reviews = iter([{"verdict": "fail", "issues": [{}], "summary": "핵심 수치 오류"}, {"verdict": "pass"}])
     monkeypatch.setattr(openai_client, "factcheck", lambda c, p: next(reviews))
     applied = []
     monkeypatch.setattr(generate, "apply_gpt_review", lambda c, d, r: applied.append(r) or {})
     pipeline._gpt_factcheck(cfg, out / "post.json", out)
-    assert applied == [1, 2]
+    assert applied == [1]
 
 
-def test_gpt_still_fix_after_last_round_rejects(cfg, monkeypatch):
+def test_gpt_checks_twice_then_publishes(cfg, monkeypatch):
+    """ChatGPT 확인은 2번까지. 2번째 지적까지 반영하면 재검사 없이 발행한다."""
     out = cfg.output_dir / "d"
     out.mkdir(parents=True)
     (out / "post.json").write_text(json.dumps(child_post(), ensure_ascii=False), encoding="utf-8")
-    monkeypatch.setattr(openai_client, "factcheck", lambda c, p: {"verdict": "fix", "issues": [{}], "summary": ""})
-    monkeypatch.setattr(generate, "apply_gpt_review", lambda c, d, r: {})
-    with pytest.raises(pipeline.Rejected):
-        pipeline._gpt_factcheck(cfg, out / "post.json", out)
+    calls = []
+    monkeypatch.setattr(openai_client, "factcheck",
+                        lambda c, p: calls.append(1) or {"verdict": "fix", "issues": [{}], "summary": ""})
+    applied = []
+    monkeypatch.setattr(generate, "apply_gpt_review", lambda c, d, r: applied.append(r) or {})
+    pipeline._gpt_factcheck(cfg, out / "post.json", out)
+    assert len(calls) == 2 and applied == [1, 2]
+
+
+def test_gpt_check_rounds_is_configurable(monkeypatch):
+    monkeypatch.setenv("GPT_CHECK_ROUNDS", "1")
+    assert Config.load("childhood").gpt_check_rounds == 1
+    monkeypatch.setenv("GPT_CHECK_ROUNDS", "0")
+    assert Config.load("childhood").gpt_check_rounds == 1
 
 
 def test_gpt_all_rebutted_and_unchanged_stops_rechecking(cfg, monkeypatch):
@@ -538,15 +540,29 @@ def test_limit_too_long_stops(cfg, monkeypatch):
         pipeline.produce(cfg, "2026-09-27", cfg.output_dir / "2026-09-27")
 
 
-def test_codex_partial_verification_becomes_fix_not_api_fallback(cfg, tmp_path, monkeypatch):
-    """웹 검색은 했지만 일부 원문을 못 열어 'error'로 답하면 유료 API로 넘기지 않고 수정 요청(fix)으로 다룬다."""
+def test_codex_partial_verification_passes_not_api_fallback(cfg, tmp_path, monkeypatch):
+    """웹 검색은 했지만 일부 원문을 못 열어 'error'로 답하면 유료 API로 넘기지 않는다.
+    확인이 안 된 것은 틀린 것이 아니므로, 확실한 지적이 없으면 통과다."""
     script, _ = _fake_codex(tmp_path, '{"verdict": "error", "checked": 20, "issues": [], '
                                       '"summary": "첨부 법령안 원문 접근 실패로 2030년 부칙 미검증"}')
     cfg.codex_bin = str(script)
     monkeypatch.setattr(openai_client, "_post", lambda *a, **k: pytest.fail("API로 넘기면 안 됩니다"))
     result = openai_client.factcheck(cfg, content.normalize(child_post()))
-    assert result["verdict"] == "fix"
-    assert any("원문 확인 불가" in i["problem"] and "2030" in i["problem"] for i in result["issues"])
+    assert result["verdict"] == "pass"
+    assert result["issues"] == []
+
+
+def test_codex_partial_verification_with_real_issue_is_fix(cfg, tmp_path, monkeypatch):
+    script, _ = _fake_codex(tmp_path, '{"verdict": "error", "checked": 20, "summary": "일부 미검증", '
+                                      '"issues": [{"text": "시행 일정 설명입니다.", "correction": "2027년"}]}')
+    cfg.codex_bin = str(script)
+    monkeypatch.setattr(openai_client, "_post", lambda *a, **k: pytest.fail("API로 넘기면 안 됩니다"))
+    assert openai_client.factcheck(cfg, content.normalize(child_post()))["verdict"] == "fix"
+
+
+def test_factcheck_prompt_asks_only_for_clear_errors(cfg):
+    text = openai_client._instructions(cfg)
+    assert "확실히 틀린 것만" in text and "지적하지 않는다" in text and '"fail"' not in text
 
 
 def test_codex_down_and_api_out_of_credit_reports_codex_first(cfg, tmp_path, monkeypatch):

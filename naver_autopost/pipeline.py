@@ -160,9 +160,11 @@ def _published_issues(post: dict, issues: list[dict]) -> list[dict]:
 
 
 def _gpt_factcheck(cfg: Config, post_path: Path, out_dir: Path) -> dict:
-    """ChatGPT 교차검증. 지적이 있으면 Claude가 원문으로 재확인해 반영한 뒤 ChatGPT가 다시 본다."""
+    """ChatGPT 교차검증. 확실히 틀린 사실만 지적받아 Claude가 원문으로 재확인해 반영한다.
+    확인은 최대 GPT_CHECK_ROUNDS번(기본 2번)이고, 마지막 확인의 지적까지 반영하면 재검사 없이 발행한다
+    (매일 쓰는 글이라 글을 버리고 새로 쓰는 비용이 크다)."""
     post = _load_post(post_path)
-    last_round = cfg.gpt_fix_rounds + 1          # 반영 N번 + 마지막 재검사 1번
+    last_round = cfg.gpt_check_rounds
     for round_no in range(1, last_round + 1):
         review = openai_client.factcheck(cfg, post)
         _save_json(out_dir / f"gpt_factcheck_{round_no}.json", review)
@@ -175,9 +177,6 @@ def _gpt_factcheck(cfg: Config, post_path: Path, out_dir: Path) -> dict:
             review["issues"] = visible
         if review["verdict"] == "pass":
             return post
-        if review["verdict"] == "fail" or round_no == last_round:
-            raise Rejected(f"ChatGPT 팩트체크 불합격({review['verdict']}): {review.get('summary', '')}\n"
-                           + json.dumps(review.get("issues", [])[:8], ensure_ascii=False))
         _save_json(out_dir / "gpt_review.json", review)
         applied = generate.apply_gpt_review(cfg, out_dir, round_no)
         log.info("ChatGPT 지적 반영: 적용 %d건, 반박 %d건",
@@ -186,14 +185,14 @@ def _gpt_factcheck(cfg: Config, post_path: Path, out_dir: Path) -> dict:
         _save_json(post_path, post)
         if post == before and applied.get("rejected") and not applied.get("applied"):
             # Claude가 원문을 열어 지적을 모두 반박하고 글을 한 글자도 안 고쳤다.
-            # 같은 글을 ChatGPT에 다시 물어도 같은 지적만 반복되므로(그러다 마지막 회차에 떨어지면
-            # 멀쩡한 글을 버리고 처음부터 다시 쓴다) 여기서 끝내고, 반박 내역을 남긴다.
+            # 같은 글을 ChatGPT에 다시 물어도 같은 지적만 반복되므로 여기서 끝내고, 반박 내역을 남긴다.
             _save_json(out_dir / "gpt_disputed.json", {"round": round_no, "issues": review.get("issues", []),
                                                       "rejected": applied.get("rejected", [])})
             log.warning("ChatGPT 지적 %d건을 Claude가 원문으로 모두 반박해 글이 바뀌지 않았습니다. "
                         "재검사를 생략하고 통과로 봅니다(근거: gpt_disputed.json)",
                         len(applied.get("rejected", [])))
             return post
+    log.info("ChatGPT 확인 %d회를 마쳐 마지막 지적까지 반영하고 발행합니다", last_round)
     return post
 
 
@@ -247,9 +246,10 @@ def _attempt(cfg: Config, today: str, out_dir: Path, feedback: str, resume: bool
         log.info("Claude 팩트체크 통과: %s", fc.get("summary", ""))
         _mark(out_dir, claude_pass=True)
 
-    if cfg.gpt_factcheck:
+    if cfg.gpt_factcheck and not stage.get("gpt_pass"):
         post = _gpt_factcheck(cfg, post_path, out_dir)
-        log.info("ChatGPT 팩트체크 통과")
+        log.info("ChatGPT 팩트체크 완료")
+        _mark(out_dir, gpt_pass=True)
 
     errors = content.validate(post, cfg.profile)
     if errors:

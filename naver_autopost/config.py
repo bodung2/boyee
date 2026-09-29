@@ -69,7 +69,7 @@ class Config:
     openai_image_quality: str
     openai_factcheck_model: str
     gpt_factcheck: bool
-    gpt_fix_rounds: int
+    gpt_check_rounds: int
     illustration_count: int
     infographic: bool
     infographic_skill: str
@@ -141,7 +141,7 @@ class Config:
             openai_image_quality=env("OPENAI_IMAGE_QUALITY", "medium").strip(),
             openai_factcheck_model=env("OPENAI_FACTCHECK_MODEL", "gpt-5.5").strip(),
             gpt_factcheck=_bool("GPT_FACTCHECK", True),
-            gpt_fix_rounds=int(env("GPT_FIX_ROUNDS", "2")),
+            gpt_check_rounds=max(1, int(env("GPT_CHECK_ROUNDS", "2"))),
             illustration_count=int(env("ILLUSTRATION_COUNT", "2")),
             infographic=_bool("INFOGRAPHIC", True),
             infographic_skill=env("INFOGRAPHIC_SKILL", "onepage").strip(),

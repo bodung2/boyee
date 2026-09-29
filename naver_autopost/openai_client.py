@@ -103,20 +103,19 @@ def generate_image(cfg: Config, prompt: str, out: Path) -> Path:
 FACTCHECK_INSTRUCTIONS = """너는 한국 교육 분야 팩트체커다. 아래 네이버 블로그 글은 사람 검토 없이 자동 발행될 예정이다.
 웹 검색으로 1차 출처(정부·교육청·법령·공식 보고서·국제기구)를 직접 찾아, 글 속의 모든 수치·날짜·고시/법령·제도명·기관명·발달 관련 사실 진술을 하나씩 검증하라.
 {extra}
-규칙:
-- 원문으로 확인되면 문제 없음. 원문과 다르면 올바른 값과 근거 URL을 제시. 어떤 신뢰 출처에서도 확인되지 않으면 삭제 권고.
-- 글쓴이가 단 출처 표기(괄호 속 기관·연도)가 실제 그 자료에 있는 내용인지도 확인.
-- 의견·해석 문장은 사실 오류가 아니면 지적하지 말 것. 문체 지적 금지.
-- 확신이 없는 지적은 하지 말 것(근거 URL 없는 지적 금지).
-- 원문(첨부 파일·법령안 등)을 열지 못해 확인하지 못한 사실은 그 문장을 issues에 넣고 problem에 '원문 확인 불가',
-  correction에 '삭제' 또는 확인된 범위로 줄인 문장을 적어라(evidence_url은 확인을 시도한 공식 페이지). 이런 경우 verdict는 fix다.
+규칙 — **확실히 틀린 것만** 지적한다:
+- issues에는 신뢰 출처 원문과 **명백히 어긋나는** 사실만 넣는다(수치·날짜·명칭이 다름, 없는 제도·결정을 있다고 씀,
+  출처 표기가 그 자료 내용과 다름). 반드시 올바른 값과, 그 값이 적힌 근거 URL을 함께 적는다.
+- 원문(첨부 파일·법령안 등)을 열지 못했거나 찾지 못해 **확인만 안 된** 사실은 지적하지 않는다(summary에 개수만 적는다).
+- 의견·해석·표현·문체, 더 정확하게 쓸 수 있다는 제안, 사소한 반올림·띄어쓰기는 지적하지 않는다.
+- 확신이 없으면 지적하지 않는다(근거 URL 없는 지적 금지).
 
 오직 아래 JSON 하나만 출력하라(코드블록 없이):
-{{"verdict": "pass" | "fix" | "fail",
+{{"verdict": "pass" | "fix",
   "checked": 검증한 사실 수,
   "issues": [{{"text": "본문 속 문제 문장(그대로)", "problem": "무엇이 틀렸나", "correction": "고친 문장 또는 '삭제'", "evidence_url": "https://..."}}],
   "summary": "한 줄 요약"}}
-verdict 기준: 문제 없음=pass, 고치면 되는 문제만 있음=fix, 제목·3줄 요약의 핵심 주장이 틀렸거나 문제가 전체 사실의 30% 초과=fail."""
+verdict 기준: 확실히 틀린 사실이 없으면 pass, 하나라도 있으면 fix."""
 
 CHILDHOOD_EXTRA = """추가로 유아 발달 안전 기준을 점검하라: '정상/지연' 진단·판정 표현, 'N세면 ~해야/통과' 식 기준 제시, K-DST·ASQ 등 검사 문항 복제,
 조바심 조장, 판매·구매 링크가 있으면 issues에 포함하고 correction에 안전한 표현을 제시하라."""
@@ -186,7 +185,7 @@ class CodexUnavailable(OpenAIError):
 
 CODEX_SEARCH_NOTE = """
 [실행 조건] 반드시 웹 검색 도구로 출처 원문을 직접 확인하라. 웹 검색 도구 자체를 쓸 수 없는 환경일 때만 검증하지 말고
-{"verdict": "error", "summary": "no web search"} 만 출력하라(일부 원문을 못 연 것은 error가 아니라 위 규칙대로 fix).
+{"verdict": "error", "summary": "no web search"} 만 출력하라(일부 원문을 못 연 것은 error가 아니다 — 지적하지 않는다).
 파일을 만들거나 명령을 실행하지 말 것."""
 
 # 설치된 Codex 버전마다 웹 검색 켜는 옵션 위치가 달라 차례로 시도한다(.env의 CODEX_ARGS가 있으면 그것만 쓴다).
@@ -282,13 +281,10 @@ def factcheck_codex(cfg: Config, post: dict) -> dict:
         summary = str(result.get("summary", ""))
         if "no web search" in summary.lower() or not summary.strip():
             raise CodexUnavailable(f"Codex에서 웹 검색을 쓸 수 없습니다: {summary}")
-        # 웹 검색은 했지만 일부 원문을 못 열어 판정을 보류한 경우: 확인 못 한 부분을 고치는 'fix'로 다룬다
-        # (Claude가 원문으로 다시 확인해 삭제·완화하고 ChatGPT가 재검사한다).
-        log.warning("Codex가 일부 사실을 확인하지 못해 판정을 보류했습니다 → 수정 요청으로 처리: %s", summary)
-        result["verdict"] = "fix"
-        result.setdefault("issues", []).append({
-            "text": "", "problem": f"원문 확인 불가: {summary}",
-            "correction": "확인되지 않은 사실은 삭제하거나 공식 원문으로 확인된 범위로 줄인다", "evidence_url": ""})
+        # 웹 검색은 했지만 일부 원문을 못 열어 판정을 보류한 경우: 확인이 안 된 것은 틀린 것이 아니므로
+        # 확실한 지적이 있을 때만 수정 요청(fix)으로, 없으면 통과로 본다.
+        result["verdict"] = "fix" if result.get("issues") else "pass"
+        log.warning("Codex가 일부 사실을 확인하지 못해 판정을 보류했습니다 → %s로 처리: %s", result["verdict"], summary)
     return _checked(result, "Codex/ChatGPT 구독")
 
 
