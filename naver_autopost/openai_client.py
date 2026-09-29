@@ -241,6 +241,8 @@ def run_codex(cfg: Config, prompt: str) -> str:
                    "--output-last-message", str(last_msg)]
             if cfg.codex_model:
                 cmd += ["--model", cfg.codex_model]
+            if cfg.codex_effort:
+                cmd += ["-c", f"model_reasoning_effort={cfg.codex_effort}"]
             cmd.append("-")                      # 프롬프트는 stdin으로
             # API 키가 환경에 있으면 Codex가 구독 대신 API 결제로 돌 수 있어 빼고 넘긴다.
             env = {k: v for k, v in os.environ.items() if k not in ("OPENAI_API_KEY", "CODEX_API_KEY")}

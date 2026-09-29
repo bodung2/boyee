@@ -674,3 +674,17 @@ def test_default_retry_times_are_staggered(monkeypatch):
     assert Config.load("childhood").retry_time == "15:00"
     monkeypatch.setenv("RETRY_TIME_CHILDHOOD", "12:00")
     assert Config.load("childhood").retry_time == "12:00"
+
+
+def test_model_defaults_split_heavy_and_light(monkeypatch):
+    for k in ("CLAUDE_MODEL", "CLAUDE_MODEL_LIGHT", "CODEX_REASONING_EFFORT"):
+        monkeypatch.setenv(k, "")
+    c = Config.load("edu")
+    assert (c.claude_model, c.claude_model_light, c.codex_effort) == ("sonnet", "haiku", "medium")
+
+
+def test_light_steps_use_light_model(cfg, monkeypatch, tmp_path):
+    seen = []
+    monkeypatch.setattr(generate, "_run_claude", lambda c, p, log_file, light=False: seen.append(light))
+    generate.apply_gpt_review(cfg, tmp_path, 1)
+    assert seen == [True]

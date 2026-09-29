@@ -51,7 +51,8 @@ class Config:
     data_dir: Path
     log_dir: Path
     claude_bin: str
-    claude_model: str
+    claude_model: str          # 글쓰기·Claude 팩트체크
+    claude_model_light: str    # ChatGPT 지적 반영·소셜 초안(단순 작업)
     generate_timeout: int
     max_attempts: int
     openai_api_key: str
@@ -62,6 +63,7 @@ class Config:
     codex_bin: str
     codex_args: str
     codex_model: str
+    codex_effort: str          # 팩트체크 추론 강도(low/medium/high), 비우면 Codex 기본값
     codex_timeout: int
     codex_image_timeout: int
     openai_image_model: str
@@ -123,7 +125,9 @@ class Config:
             data_dir=data_dir,
             log_dir=Path(env("LOG_DIR", str(ROOT / "logs"))),
             claude_bin=env("CLAUDE_BIN", "claude").strip(),
-            claude_model=env("CLAUDE_MODEL", "").strip(),
+            # 비용 절약: 글쓰기·팩트체크는 sonnet, 단순 작업은 haiku(Claude Code 모델 별칭 = 최신 버전)
+            claude_model=(env("CLAUDE_MODEL") or "sonnet").strip(),
+            claude_model_light=(env("CLAUDE_MODEL_LIGHT") or "haiku").strip(),
             generate_timeout=int(env("GENERATE_TIMEOUT_SEC", "3600")),
             max_attempts=int(env("MAX_ATTEMPTS", "2")),
             openai_api_key=env("OPENAI_API_KEY", "").strip(),
@@ -134,6 +138,7 @@ class Config:
             codex_bin=env("CODEX_BIN", "codex").strip(),
             codex_args=env("CODEX_ARGS", "").strip(),
             codex_model=env("CODEX_MODEL", "").strip(),
+            codex_effort=(env("CODEX_REASONING_EFFORT") or "medium").strip(),
             codex_timeout=int(env("CODEX_TIMEOUT_SEC", "1200")),
             codex_image_timeout=int(env("CODEX_IMAGE_TIMEOUT_SEC", "360")),
             openai_image_model=env("OPENAI_IMAGE_MODEL", "gpt-image-2").strip(),

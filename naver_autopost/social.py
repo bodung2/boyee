@@ -122,7 +122,7 @@ def draft(cfg: Config, out_dir: Path, blog_url: str) -> dict:
         )
         if feedback:
             prompt += f"\n\n직전 초안은 아래 이유로 거부되었다. 고쳐서 다시 저장하라:\n{feedback}"
-        generate._run_claude(cfg, prompt, out_dir / f"claude_social_{attempt}.log")
+        generate._run_claude(cfg, prompt, out_dir / f"claude_social_{attempt}.log", light=True)
         if not path.exists():
             feedback = "social.json이 만들어지지 않았습니다"
             continue

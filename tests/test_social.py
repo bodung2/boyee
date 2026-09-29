@@ -231,7 +231,8 @@ def test_draft_retries_with_feedback(cfg, monkeypatch):
     today, out = _published_day(cfg)
     prompts = []
 
-    def fake_claude(c, prompt, log_file):
+    def fake_claude(c, prompt, log_file, light=False):
+        assert light
         prompts.append(prompt)
         data = good_social()
         if len(prompts) == 1:
