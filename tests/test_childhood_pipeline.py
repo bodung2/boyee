@@ -145,6 +145,38 @@ def test_gpt_still_fix_after_last_round_rejects(cfg, monkeypatch):
         pipeline._gpt_factcheck(cfg, out / "post.json", out)
 
 
+def test_gpt_all_rebutted_and_unchanged_stops_rechecking(cfg, monkeypatch):
+    out = cfg.output_dir / "d"
+    out.mkdir(parents=True)
+    (out / "post.json").write_text(json.dumps(child_post(), ensure_ascii=False), encoding="utf-8")
+    calls = []
+    monkeypatch.setattr(openai_client, "factcheck", lambda c, p: calls.append(1) or {
+        "verdict": "fix", "issues": [{"text": "정책 설명 문장입니다."}], "summary": ""})
+    monkeypatch.setattr(generate, "apply_gpt_review", lambda c, d, r: {
+        "applied": [], "rejected": [{"text": "정책 설명 문장입니다.", "reason": "원문이 뒷받침"}]})
+    pipeline._gpt_factcheck(cfg, out / "post.json", out)
+    assert len(calls) == 1
+    assert json.loads((out / "gpt_disputed.json").read_text(encoding="utf-8"))["rejected"]
+
+
+def test_gpt_rebutted_but_post_edited_is_rechecked(cfg, monkeypatch):
+    out = cfg.output_dir / "d"
+    out.mkdir(parents=True)
+    post_path = out / "post.json"
+    post_path.write_text(json.dumps(child_post(), ensure_ascii=False), encoding="utf-8")
+    reviews = iter([{"verdict": "fix", "issues": [{"text": "정책 설명 문장입니다."}]}, {"verdict": "pass"}])
+    monkeypatch.setattr(openai_client, "factcheck", lambda c, p: next(reviews))
+
+    def edit(c, d, r):
+        post = json.loads(post_path.read_text(encoding="utf-8"))
+        post["title"] += " 수정"
+        post_path.write_text(json.dumps(post, ensure_ascii=False), encoding="utf-8")
+        return {"applied": [], "rejected": [{"text": "x", "reason": "y"}]}
+    monkeypatch.setattr(generate, "apply_gpt_review", edit)
+    pipeline._gpt_factcheck(cfg, post_path, out)
+    assert not (out / "gpt_disputed.json").exists()
+
+
 def test_bad_image_from_claude_review_is_dropped(cfg, monkeypatch):
     out = cfg.output_dir / "2026-09-27"
     monkeypatch.setattr(generate, "write_post", _fake_write(child_post()))

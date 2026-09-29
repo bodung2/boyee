@@ -182,8 +182,18 @@ def _gpt_factcheck(cfg: Config, post_path: Path, out_dir: Path) -> dict:
         applied = generate.apply_gpt_review(cfg, out_dir, round_no)
         log.info("ChatGPT 지적 반영: 적용 %d건, 반박 %d건",
                  len(applied.get("applied", [])), len(applied.get("rejected", [])))
-        post = _load_post(post_path)
+        before, post = post, _load_post(post_path)
         _save_json(post_path, post)
+        if post == before and applied.get("rejected") and not applied.get("applied"):
+            # Claude가 원문을 열어 지적을 모두 반박하고 글을 한 글자도 안 고쳤다.
+            # 같은 글을 ChatGPT에 다시 물어도 같은 지적만 반복되므로(그러다 마지막 회차에 떨어지면
+            # 멀쩡한 글을 버리고 처음부터 다시 쓴다) 여기서 끝내고, 반박 내역을 남긴다.
+            _save_json(out_dir / "gpt_disputed.json", {"round": round_no, "issues": review.get("issues", []),
+                                                      "rejected": applied.get("rejected", [])})
+            log.warning("ChatGPT 지적 %d건을 Claude가 원문으로 모두 반박해 글이 바뀌지 않았습니다. "
+                        "재검사를 생략하고 통과로 봅니다(근거: gpt_disputed.json)",
+                        len(applied.get("rejected", [])))
+            return post
     return post
 
 
