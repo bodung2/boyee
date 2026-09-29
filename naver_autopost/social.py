@@ -444,6 +444,16 @@ def blog_post(cfg: Config, date: str) -> tuple[dict, str]:
     return post, entry["url"]
 
 
+def _fallback_image(post: dict, out_dir: Path) -> Path | None:
+    names = post.get("image_names") or {}
+    for key in ("card", "thumbnail"):
+        stem = "".join(ch for ch in str(names.get(key) or key) if ch not in '\\/:*?"<>|').strip() or key
+        for path in (out_dir / f"{stem}.png", out_dir / f"{key}.png"):
+            if path.exists():
+                return path
+    return None
+
+
 def publish(cfg: Config, date: str, dry_run: bool = False) -> int:
     """저녁 예약 작업: 그날 블로그 글의 소셜 초안을 쓰레드·인스타에 올린다."""
     label = cfg.profile.label
@@ -480,6 +490,12 @@ def publish(cfg: Config, date: str, dry_run: bool = False) -> int:
             log.info("인포그래픽이 없어 지금 만들었습니다")
         except Exception as e:  # noqa: BLE001 - 쓰레드는 글만이라도 올린다
             log.warning("인포그래픽 생성 실패: %s", e)
+    if not image.exists():
+        # Codex 한도 등으로 인포그래픽이 없으면 PC에서 그린 요약 카드(없으면 썸네일)로 대신 올린다.
+        # 인스타그램은 이미지가 꼭 있어야 한다.
+        image = _fallback_image(post, out_dir) or image
+        if image.exists():
+            log.info("인포그래픽 대신 %s 이미지로 올립니다", image.name)
     image_urls: list[str] = []
     if image.exists():
         jpeg = to_instagram_jpeg(image, out_dir / "social_image.jpg")

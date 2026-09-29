@@ -192,6 +192,25 @@ def test_without_infographic_threads_is_text_and_instagram_fails(cfg, monkeypatc
     assert "threads" in state and "instagram" not in state
 
 
+def test_no_infographic_uses_summary_card_instead(cfg, monkeypatch):
+    """Codex 한도로 인포그래픽을 못 만들면 PC에서 그린 요약 카드로 인스타·쓰레드를 올린다."""
+    today, out = _published_day(cfg, good_social(), infographic=False)
+    Image.new("RGB", (1080, 1080), "white").save(out / "card.png")
+
+    def fail(*a):
+        raise RuntimeError("workspace is out of credits")
+    monkeypatch.setattr(social.infographic, "generate", fail)
+    jpeg_src = []
+    real = social.to_instagram_jpeg
+    monkeypatch.setattr(social, "to_instagram_jpeg", lambda src, dst: jpeg_src.append(src) or real(src, dst))
+    meta = FakeMeta()
+    monkeypatch.setattr(social, "_request", meta)
+    monkeypatch.setattr(social, "_sleep", lambda s: None)
+    assert social.publish(cfg, today) == 0
+    assert jpeg_src == [out / "card.png"]
+    assert [c for c in meta.calls if c[1].endswith("/T1/threads")][0][2]["media_type"] == "IMAGE"
+
+
 def test_edited_draft_that_breaks_rules_is_not_posted(cfg, monkeypatch):
     bad = good_social()
     bad["threads"]["text"] = "주소를 지워버렸어요"
