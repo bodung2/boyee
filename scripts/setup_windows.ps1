@@ -2,14 +2,14 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Profile edu
 #   powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Profile childhood
 # 기본 시각(Codex·Claude 사용량이 겹치지 않게 떨어뜨림)
-#   교육: 블로그 06:00, 막힌 날 재시도 10:00, 인스타·쓰레드 20:00
-#   유아: 블로그 12:00, 막힌 날 재시도 16:00, 인스타·쓰레드 21:00
+#   교육: 블로그 06:00, 막힌 날 재시도 11:00, 인스타·쓰레드 20:00
+#   유아: 블로그 12:00, 막힌 날 재시도 15:00, 인스타·쓰레드 21:00
 #   바꾸려면 -Time, -RetryTime, -SocialTime 을 주고, 끄려면 -RetryTime off / -SocialTime off
 #   (이미 발행한 날엔 재시도 실행이 바로 끝나고, 멈춘 날엔 멈춘 단계부터 이어서 한다)
 param([string]$Profile = "childhood", [string]$Time = "", [string]$SocialTime = "", [string]$RetryTime = "")
 $IsChild = $Profile -eq "childhood"
 if ($Time -eq "") { $Time = if ($IsChild) { "12:00" } else { "06:00" } }
-if ($RetryTime -eq "") { $RetryTime = if ($IsChild) { "16:00" } else { "10:00" } }
+if ($RetryTime -eq "") { $RetryTime = if ($IsChild) { "15:00" } else { "11:00" } }
 if ($SocialTime -eq "") { $SocialTime = if ($IsChild) { "21:00" } else { "20:00" } }
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
@@ -46,6 +46,13 @@ if ($SocialTime -ne "off") {
     $SocialTrigger = New-ScheduledTaskTrigger -Daily -At $SocialTime
     $SocialSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -ExecutionTimeLimit (New-TimeSpan -Hours 2) -MultipleInstances IgnoreNew
     Register-ScheduledTask -TaskName $SocialTask -Action $SocialAction -Trigger $SocialTrigger -Settings $SocialSettings -Principal $Principal -Force | Out-Null
+}
+
+Write-Host ""
+Write-Host "등록된 예약 시각:"
+Get-ScheduledTask -TaskName "NaverAutoPost*$Profile" | ForEach-Object {
+    $times = ($_.Triggers | ForEach-Object { ([datetime]$_.StartBoundary).ToString("HH:mm") }) -join ", "
+    Write-Host ("   {0}: {1}" -f $_.TaskName, $times)
 }
 
 Write-Host ""
