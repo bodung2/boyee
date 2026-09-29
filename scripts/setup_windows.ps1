@@ -1,13 +1,16 @@
-﻿# Windows 집 PC 설치 스크립트 (PowerShell에서 한 번 실행)
-#   powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Profile childhood -Time 06:00
-#   (교육 정책 글도 켜려면 -Profile edu -Time 07:00 으로 한 번 더 실행)
-#   인스타·쓰레드 저녁 발행 시각: -SocialTime 20:00 (끄려면 -SocialTime off)
-#   아침 발행이 막혔을 때(사용 한도·잔액 부족 등) 다시 시도할 시각: -RetryTime 11:00 (끄려면 -RetryTime off)
-#   기본값은 교육 11:00, 유아 11:30(두 블로그가 겹치지 않게)
+﻿# Windows 집 PC 설치 스크립트 (PowerShell에서 블로그마다 한 번씩 실행)
+#   powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Profile edu
+#   powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Profile childhood
+# 기본 시각(Codex·Claude 사용량이 겹치지 않게 떨어뜨림)
+#   교육: 블로그 06:00, 막힌 날 재시도 10:00, 인스타·쓰레드 20:00
+#   유아: 블로그 12:00, 막힌 날 재시도 16:00, 인스타·쓰레드 21:00
+#   바꾸려면 -Time, -RetryTime, -SocialTime 을 주고, 끄려면 -RetryTime off / -SocialTime off
 #   (이미 발행한 날엔 재시도 실행이 바로 끝나고, 멈춘 날엔 멈춘 단계부터 이어서 한다)
-param([string]$Profile = "childhood", [string]$Time = "06:00", [string]$SocialTime = "20:00",
-      [string]$RetryTime = "")
-if ($RetryTime -eq "") { $RetryTime = if ($Profile -eq "childhood") { "11:30" } else { "11:00" } }
+param([string]$Profile = "childhood", [string]$Time = "", [string]$SocialTime = "", [string]$RetryTime = "")
+$IsChild = $Profile -eq "childhood"
+if ($Time -eq "") { $Time = if ($IsChild) { "12:00" } else { "06:00" } }
+if ($RetryTime -eq "") { $RetryTime = if ($IsChild) { "16:00" } else { "10:00" } }
+if ($SocialTime -eq "") { $SocialTime = if ($IsChild) { "21:00" } else { "20:00" } }
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root

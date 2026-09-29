@@ -5,10 +5,10 @@
 | 프로필 | 글 규칙(원본 스킬) | 자동 발행용 스킬 | 상태 |
 |---|---|---|---|
 | `childhood` (기본) | early-childhood-insight-extraction | `.claude/skills/childhood-auto-post`, `childhood-auto-factcheck` | **사용 중** |
-| `edu` | education-insight-extraction | `.claude/skills/edu-auto-post`, `edu-auto-factcheck` | 교육 블로그(flw3148), 매일 05:00 |
+| `edu` | education-insight-extraction | `.claude/skills/edu-auto-post`, `edu-auto-factcheck` | 교육 블로그(flw3148), 매일 06:00 |
 
 ```
-[작업 스케줄러, 매일 06:00]  python -m naver_autopost run --profile childhood
+[작업 스케줄러, 매일 12:00]  python -m naver_autopost run --profile childhood
   ① 글쓰기(Claude)       클러스터 큐로 주제 선정 → 자료 10개+ 정독·교차검증 → post.json
                            (본문, 요약 카드 문구, 썸네일 문구, 일러스트 프롬프트, 출처, 검증용 사실 목록)
   ② 구조 검증            자리표시자, 발달 진단·통과 표현, 판매 링크, 출처 부족 → 차단
@@ -40,7 +40,7 @@
 ```powershell
 git clone https://github.com/bodung2/boyee.git
 cd boyee
-powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Profile childhood -Time 06:00
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Profile childhood   # 블로그 12:00, 재시도 16:00, 소셜 21:00
 notepad .env        # NAVER_BLOG_ID, NAVER_CATEGORY_CHILDHOOD 입력
 .venv\Scripts\python.exe -m naver_autopost check-ai   # ChatGPT 그림·웹 검색 연결 확인
 .venv\Scripts\python.exe -m naver_autopost login    # 뜬 창에서 네이버 로그인("로그인 상태 유지" 체크)
@@ -98,7 +98,7 @@ notepad .env        # NAVER_BLOG_ID, NAVER_CATEGORY_CHILDHOOD 입력
 - `.env`에 `NAVER_BLOG_ID_EDU=flw3148`을 넣습니다. 자동화용 크롬은 `.browser-profile-edu`로 **유아 계정과 따로** 씁니다. 로그인이 섞이지 않고, 두 작업이 동시에 돌아도 됩니다.
 - 최초 1회 로그인: `python -m naver_autopost login --profile edu` (교육 블로그 계정으로, '로그인 상태 유지' 체크)
 - 카테고리는 글 종류로 자동 결정됩니다. 교직 실무(B 레인)는 '교직 꿀팁', 나머지는 '교육 정책 인사이트'입니다.
-- 예약: `scripts\setup_windows.ps1 -Profile edu -Time 05:00`
+- 예약: `scripts\setup_windows.ps1 -Profile edu` (블로그 06:00, 막힌 날 재시도 10:00, 인스타·쓰레드 20:00)
 
 ## 블로그 디자인 (SR 기존 글과 동일)
 

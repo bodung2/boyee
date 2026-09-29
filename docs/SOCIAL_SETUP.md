@@ -54,7 +54,9 @@
 
 이미지는 imgbb 외에 키 없이 쓰는 catbox·litterbox·tmpfiles에도 올려 주소 후보를 여러 개 만듭니다. Meta가 한 주소를 거절하면 다음 주소로 다시 시도합니다. 그래서 imgbb 키가 없어도 동작합니다.
 각 주소가 정말 사진 파일로 열리는지 먼저 확인하는데, 이 PC에서 접속이 안 되는 주소(국내망 차단·지연)는 Meta 서버에서는 열릴 수 있어 후보로 남겨 두고 마지막에 시도합니다.
-모든 주소가 거절되면 쓰레드는 글만 올리고, 인스타그램은 실패로 남깁니다(이미지가 꼭 필요합니다). 실패한 채널은 명령을 다시 실행하면 그 채널만 다시 올립니다.
+모든 주소가 거절되면 쓰레드는 글만 올리고, 인스타그램은 실패로 남깁니다. 실패한 채널은 명령을 다시 실행하면 그 채널만 다시 올립니다.
+
+인포그래픽을 만들지 못한 날(Codex 한도·크레딧 부족 등)은 **인스타그램을 올리지 않고** 알림으로 알려 줍니다. 쓰레드는 글만 올립니다. 나중에 인포그래픽을 만들 수 있게 되면 `social-publish`를 다시 실행하세요. 인스타그램만 올립니다.
 
 ## 5. 확인하고 저녁 예약 걸기
 
@@ -70,10 +72,10 @@
 .venv\Scripts\python.exe -m naver_autopost social-publish --profile edu --dry-run
 ```
 
-저녁 예약 작업은 설치 스크립트를 다시 실행하면 함께 등록됩니다. 블로그 발행 시각은 지금 쓰는 값을 그대로 넣으세요.
+저녁 예약 작업은 설치 스크립트를 다시 실행하면 함께 등록됩니다. 시각은 기본값이 들어갑니다(교육 블로그 06:00·소셜 20:00, 유아 블로그 12:00·소셜 21:00).
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Profile edu -Time 05:00 -SocialTime 19:30
-powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Profile childhood -Time 06:00 -SocialTime 20:00
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Profile edu
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Profile childhood
 ```
 
 ## 동작 요약

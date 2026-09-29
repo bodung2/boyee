@@ -444,16 +444,6 @@ def blog_post(cfg: Config, date: str) -> tuple[dict, str]:
     return post, entry["url"]
 
 
-def _fallback_image(post: dict, out_dir: Path) -> Path | None:
-    names = post.get("image_names") or {}
-    for key in ("card", "thumbnail"):
-        stem = "".join(ch for ch in str(names.get(key) or key) if ch not in '\\/:*?"<>|').strip() or key
-        for path in (out_dir / f"{stem}.png", out_dir / f"{key}.png"):
-            if path.exists():
-                return path
-    return None
-
-
 def publish(cfg: Config, date: str, dry_run: bool = False) -> int:
     """저녁 예약 작업: 그날 블로그 글의 소셜 초안을 쓰레드·인스타에 올린다."""
     label = cfg.profile.label
@@ -490,12 +480,12 @@ def publish(cfg: Config, date: str, dry_run: bool = False) -> int:
             log.info("인포그래픽이 없어 지금 만들었습니다")
         except Exception as e:  # noqa: BLE001 - 쓰레드는 글만이라도 올린다
             log.warning("인포그래픽 생성 실패: %s", e)
-    if not image.exists():
-        # Codex 한도 등으로 인포그래픽이 없으면 PC에서 그린 요약 카드(없으면 썸네일)로 대신 올린다.
-        # 인스타그램은 이미지가 꼭 있어야 한다.
-        image = _fallback_image(post, out_dir) or image
-        if image.exists():
-            log.info("인포그래픽 대신 %s 이미지로 올립니다", image.name)
+    skipped = []
+    if not image.exists() and "instagram" in todo:
+        # 인스타그램은 그 글의 인포그래픽으로만 올린다. 없으면 오늘은 올리지 않는다(다음 실행 때 다시 시도).
+        todo.remove("instagram")
+        skipped.append("instagram: 인포그래픽이 없어 올리지 않았습니다(만들 수 있게 되면 social-publish를 다시 실행)")
+        log.warning("인포그래픽이 없어 인스타그램은 올리지 않습니다")
     image_urls: list[str] = []
     if image.exists():
         jpeg = to_instagram_jpeg(image, out_dir / "social_image.jpg")
@@ -518,7 +508,8 @@ def publish(cfg: Config, date: str, dry_run: bool = False) -> int:
         except Exception as e:  # noqa: BLE001 - 한 채널이 실패해도 다른 채널은 올린다
             log.exception("%s 발행 실패", ch)
             failed.append(f"{ch}: {e}")
-    lines = [f"[{label} 소셜 발행] {post.get('title', '')}"] + results + [f"⚠️ {f}" for f in failed]
+    lines = ([f"[{label} 소셜 발행] {post.get('title', '')}"] + results
+             + [f"⏸️ {s}" for s in skipped] + [f"⚠️ {f}" for f in failed])
     notify.send(cfg, "\n".join(lines))
     return 1 if failed else 0
 

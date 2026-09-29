@@ -180,35 +180,36 @@ def test_missing_infographic_is_made_before_posting(cfg, monkeypatch):
     assert any(c[1].endswith("/I1/media") for c in meta.calls)
 
 
-def test_without_infographic_threads_is_text_and_instagram_fails(cfg, monkeypatch):
+def test_without_infographic_threads_is_text_and_instagram_is_skipped(cfg, monkeypatch):
     today, out = _published_day(cfg, good_social(), infographic=False)
     cfg.infographic = False
     meta = FakeMeta()
     monkeypatch.setattr(social, "_request", meta)
-    assert social.publish(cfg, today) == 1
+    sent = []
+    monkeypatch.setattr(social.notify, "send", lambda c, msg: sent.append(msg))
+    assert social.publish(cfg, today) == 0
     th = [c for c in meta.calls if c[1].endswith("/T1/threads")][0][2]
     assert th["media_type"] == "TEXT"
+    assert not any(c[1].endswith("/I1/media") for c in meta.calls)
     state = json.loads((out / "social_state.json").read_text(encoding="utf-8"))
     assert "threads" in state and "instagram" not in state
+    assert "인포그래픽이 없어" in sent[-1]
 
 
-def test_no_infographic_uses_summary_card_instead(cfg, monkeypatch):
-    """Codex 한도로 인포그래픽을 못 만들면 PC에서 그린 요약 카드로 인스타·쓰레드를 올린다."""
+def test_failed_infographic_does_not_post_instagram_with_other_images(cfg, monkeypatch):
+    """Codex 한도로 인포그래픽을 못 만들면 요약 카드가 있어도 인스타는 올리지 않는다."""
     today, out = _published_day(cfg, good_social(), infographic=False)
     Image.new("RGB", (1080, 1080), "white").save(out / "card.png")
 
     def fail(*a):
         raise RuntimeError("workspace is out of credits")
     monkeypatch.setattr(social.infographic, "generate", fail)
-    jpeg_src = []
-    real = social.to_instagram_jpeg
-    monkeypatch.setattr(social, "to_instagram_jpeg", lambda src, dst: jpeg_src.append(src) or real(src, dst))
     meta = FakeMeta()
     monkeypatch.setattr(social, "_request", meta)
     monkeypatch.setattr(social, "_sleep", lambda s: None)
     assert social.publish(cfg, today) == 0
-    assert jpeg_src == [out / "card.png"]
-    assert [c for c in meta.calls if c[1].endswith("/T1/threads")][0][2]["media_type"] == "IMAGE"
+    assert not any(c[1].endswith("/I1/media") for c in meta.calls)
+    assert [c for c in meta.calls if c[1].endswith("/T1/threads")][0][2]["media_type"] == "TEXT"
 
 
 def test_edited_draft_that_breaks_rules_is_not_posted(cfg, monkeypatch):
