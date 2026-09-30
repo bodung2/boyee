@@ -688,3 +688,22 @@ def test_light_steps_use_light_model(cfg, monkeypatch, tmp_path):
     monkeypatch.setattr(generate, "_run_claude", lambda c, p, log_file, light=False: seen.append(light))
     generate.apply_gpt_review(cfg, tmp_path, 1)
     assert seen == [True]
+
+
+def test_locked_codex_image_is_retried_then_falls_back(tmp_path, monkeypatch):
+    from naver_autopost import codex_image
+    monkeypatch.setattr(codex_image, "_sleep", lambda s: None)
+    locked, copy, out = tmp_path / "work.png", tmp_path / "gen.png", tmp_path / "out.png"
+    calls = []
+
+    def convert(src, dst):
+        calls.append(src)
+        if src == locked:
+            raise PermissionError(13, "Permission denied")
+        dst.write_bytes(b"ok")
+
+    codex_image._convert_first_readable([locked, copy], out, convert, "인포그래픽", tries=3)
+    assert calls == [locked] * 3 + [copy] and out.read_bytes() == b"ok"
+
+    with pytest.raises(codex_image.CodexImageError, match="읽지 못했습니다"):
+        codex_image._convert_first_readable([locked], out, convert, "인포그래픽", tries=2)
