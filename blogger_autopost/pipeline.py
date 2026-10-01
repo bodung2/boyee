@@ -54,22 +54,41 @@ def _load_post(out_dir: Path) -> dict:
         raise Rejected(f"post.json이 올바른 JSON이 아닙니다: {e}") from e
 
 
-def sync_history(cfg: BloggerConfig) -> int:
-    """블로그에 이미 있는 글(직접 쓴 글 포함)을 이력에 넣는다. 주제 중복 피하기·내부 링크용."""
+def sync_history(cfg: BloggerConfig) -> tuple[int, int, set[str]]:
+    """블로그와 발행 이력을 맞춘다. 블로그에 있는데 이력에 없는 글(직접 쓴 글 포함)은 넣고,
+    이력에 있는데 블로그에서 지운 글(공개·예약 어디에도 없음)은 뺀다. 주제 중복 피하기·내부 링크·오늘 발행 여부에 쓴다.
+    (추가 수, 삭제 수, 블로그에 지금 있는 글 ID들)"""
+    live = api.list_posts(cfg, status="live")
+    alive = live + api.list_posts(cfg, status="scheduled")
+    ids = {str(p.get("id")) for p in alive if p.get("id")}
     entries = history.load(cfg.history_file)
-    known = {e.get("url", "").rstrip("/") for e in entries}
+    kept = [e for e in entries if not (e.get("source") in ("autopost", "blog") and e.get("post_id")
+                                       and str(e["post_id"]) not in ids)]
+    removed = len(entries) - len(kept)
+    for e in entries:
+        if e not in kept:
+            log.info("블로그에서 지운 글을 이력에서 뺍니다: %s %s", e.get("date"), e.get("title"))
+    known = {e.get("url", "").rstrip("/") for e in kept} | {str(e.get("post_id")) for e in kept if e.get("post_id")}
     added = 0
-    for p in api.list_posts(cfg):
+    for p in live:
         url = (p.get("url") or "").rstrip("/")
-        if not url or url in known:
+        if not url or url in known or str(p.get("id")) in known:
             continue
-        entries.append({"date": (p.get("published") or "")[:10], "title": p.get("title", ""), "url": url,
-                        "labels": p.get("labels", []), "post_id": p.get("id"), "source": "blog"})
+        kept.append({"date": (p.get("published") or "")[:10], "title": p.get("title", ""), "url": url,
+                     "labels": p.get("labels", []), "post_id": p.get("id"), "source": "blog"})
         known.add(url)
         added += 1
-    if added:
-        history.save(cfg.history_file, entries)
-    return added
+    if added or removed:
+        history.save(cfg.history_file, kept)
+    return added, removed, ids
+
+
+def published_today(cfg: BloggerConfig, today: str) -> dict | None:
+    """오늘 자동 발행(예약 포함)한 글. 예약 글은 주소가 아직 없을 수 있어 주소 유무는 보지 않는다."""
+    for e in history.load(cfg.history_file):
+        if e.get("source") == "autopost" and e.get("date") == today:
+            return e
+    return None
 
 
 def _check_and_fix(cfg: BloggerConfig, out_dir: Path) -> dict:
@@ -192,7 +211,8 @@ def _publish(cfg: BloggerConfig, post: dict, out_dir: Path, draft_only: bool) ->
         return {"id": post_id, "status": "DRAFT", "url": ""}
     when = publish_at(cfg)
     result = api.publish(cfg, post_id, when)
-    _mark(out_dir, published=True, url=result.get("url", ""), status=result.get("status", ""))
+    _mark(out_dir, published=True, post_id=str(result.get("id") or post_id), url=result.get("url", ""),
+          status=result.get("status", ""))
     return result
 
 
@@ -201,26 +221,33 @@ def run(cfg: BloggerConfig, draft: bool = False, force: bool = False) -> int:
     setup_logging(cfg, f"blogger-{today}")
     try:
         with _Lock(cfg.log_dir / ".run-blogger.lock"):
-            done = history.published_on(cfg.history_file, today)
-            if done and not force:
-                log.info("오늘(%s)은 이미 발행했습니다: %s", today, done["url"])
-                return 0
-            out_dir = cfg.output_dir / today
-            if _load(out_dir / "stage.json").get("published"):
-                if not force:
-                    log.info("오늘(%s) 글은 이미 발행(예약)했습니다", today)
-                    return 0
-                stamp = datetime.now(KST).strftime("%H%M%S")
-                shutil.move(str(out_dir), str(out_dir.with_name(f"{out_dir.name}-published-{stamp}")))
-            # 글쓰기(수십 분) 전에 구글 로그인·블로그부터 확인한다.
+            # 글쓰기(수십 분) 전에 구글 로그인·블로그부터 확인하고, 블로그와 발행 이력을 맞춘다
+            # (블로그에서 지운 글은 이력에서 빠지므로, 오늘 글을 지우면 다시 실행할 때 새로 쓴다).
             blog_id = api.resolve_blog_id(cfg)
             log.info("블로그 확인: %s", blog_id)
+            alive: set[str] | None = None
             try:
-                log.info("발행 목록 동기화: 이력에 없던 %d편 추가", sync_history(cfg))
+                added, removed, alive = sync_history(cfg)
+                log.info("발행 목록 동기화: 이력에 없던 %d편 추가, 블로그에서 지운 %d편 제외", added, removed)
             except ExternalAccountError:
                 raise
             except Exception as e:  # noqa: BLE001 - 동기화 실패로 발행을 멈추지는 않는다
                 log.warning("발행 목록 동기화 실패(계속 진행): %s", e)
+
+            done = published_today(cfg, today)
+            if done and not force:
+                log.info("오늘(%s)은 이미 발행(예약)했습니다: %s %s", today, done.get("title"), done.get("url"))
+                return 0
+            out_dir = cfg.output_dir / today
+            stage = _load(out_dir / "stage.json")
+            if stage.get("published"):
+                deleted = alive is not None and str(stage.get("post_id")) not in alive
+                if not (force or deleted):
+                    log.info("오늘(%s) 글은 이미 발행(예약)했습니다", today)
+                    return 0
+                log.info("오늘 글을 새로 씁니다(%s)", "블로그에서 지운 글" if deleted else "--force")
+                stamp = datetime.now(KST).strftime("%H%M%S")
+                shutil.move(str(out_dir), str(out_dir.with_name(f"{out_dir.name}-published-{stamp}")))
 
             post = produce(cfg, today, out_dir)
             photo_note = _add_images(cfg, post, out_dir)

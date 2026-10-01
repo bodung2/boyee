@@ -49,7 +49,8 @@ def main(argv: list[str] | None = None) -> int:
         return run(cfg, draft=args.draft, force=args.force)
     if args.cmd == "sync-history":
         from .pipeline import sync_history
-        print(f"이력에 없던 {sync_history(cfg)}편을 추가했습니다: {cfg.history_file}")
+        added, removed, _ = sync_history(cfg)
+        print(f"이력에 없던 {added}편 추가, 블로그에서 지운 {removed}편 제외: {cfg.history_file}")
         return 0
     return 1
 
