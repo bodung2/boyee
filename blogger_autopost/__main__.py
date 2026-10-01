@@ -49,7 +49,8 @@ def main(argv: list[str] | None = None) -> int:
         return run(cfg, draft=args.draft, force=args.force)
     if args.cmd == "sync-history":
         from .pipeline import sync_history
-        print(f"이력에 없던 {sync_history(cfg)}편을 추가했습니다: {cfg.history_file}")
+        added, removed, _ = sync_history(cfg)
+        print(f"이력에 없던 {added}편 추가, 블로그에서 지운 {removed}편 제외: {cfg.history_file}")
         return 0
     return 1
 
@@ -79,14 +80,29 @@ def _check(cfg: BloggerConfig, search: bool) -> int:
         ok = False
         print(f"❌ {e}")
 
-    print(f"4) 예약 발행 시각: {cfg.publish_time + ' (한국 시각)' if cfg.publish_time else '없음(글이 완성되는 즉시 발행)'}")
+    print("4) 생성 그림용 구글 드라이브: ", end="")
+    if cfg.illustrations <= 0:
+        print("끔(BLOGGER_ILLUSTRATIONS=0)")
+    elif not api.has_scope(cfg, api.DRIVE_SCOPE):
+        ok = False
+        print("❌ 드라이브 권한이 없습니다 → python -m blogger_autopost auth 다시 실행")
+    else:
+        from . import hosting
+        try:
+            hosting._folder_id(cfg)
+            print(f"✅ 드라이브 '{hosting.FOLDER_NAME}' 폴더에 그림을 올립니다")
+        except Exception as e:  # noqa: BLE001
+            ok = False
+            print(f"❌ {e}")
 
-    print(f"5) 글쓰기 모델: {cfg.codex_model or '(Codex 기본값)'}, 추론 {cfg.codex_effort or '(기본값)'}"
-          f" / 안 되면 {cfg.codex_fallback_model or '없음'}. 사진: 글마다 최대 {cfg.photos}장(위키미디어 커먼즈)")
+    print(f"5) 예약 발행 시각: {cfg.publish_time + ' (한국 시각)' if cfg.publish_time else '없음(글이 완성되는 즉시 발행)'}")
+    print(f"6) 글쓰기 모델: {cfg.codex_model or '(Codex 기본값)'}, 추론 {cfg.codex_effort or '(기본값)'}"
+          f" / 안 되면 {cfg.codex_fallback_model or '없음'}. 그림: 글마다 생성 그림 {cfg.illustrations}장"
+          f" + 실제 사진 {cfg.photos}장(위키미디어 커먼즈)")
 
     if search:
         from naver_autopost.openai_client import CODEX_SELFTEST, _extract_json
-        print("6) Codex(ChatGPT 구독) 모델·웹 검색 ... (1~3분)")
+        print("7) Codex(ChatGPT 구독) 모델·웹 검색 ... (1~3분)")
         try:
             r = _extract_json(writer._codex(cfg, CODEX_SELFTEST, None, "read-only", cfg.codex_timeout))
             if cfg.model_note:

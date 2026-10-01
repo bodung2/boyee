@@ -103,18 +103,19 @@ def generate_image(cfg: Config, prompt: str, out: Path) -> Path:
 FACTCHECK_INSTRUCTIONS = """너는 한국 교육 분야 팩트체커다. 아래 네이버 블로그 글은 사람 검토 없이 자동 발행될 예정이다.
 웹 검색으로 1차 출처(정부·교육청·법령·공식 보고서·국제기구)를 직접 찾아, 글 속의 모든 수치·날짜·고시/법령·제도명·기관명·발달 관련 사실 진술을 하나씩 검증하라.
 {extra}
-규칙:
-- 원문으로 확인되면 문제 없음. 원문과 다르면 올바른 값과 근거 URL을 제시. 어떤 신뢰 출처에서도 확인되지 않으면 삭제 권고.
-- 글쓴이가 단 출처 표기(괄호 속 기관·연도)가 실제 그 자료에 있는 내용인지도 확인.
-- 의견·해석 문장은 사실 오류가 아니면 지적하지 말 것. 문체 지적 금지.
-- 확신이 없는 지적은 하지 말 것(근거 URL 없는 지적 금지).
+규칙 — **확실히 틀린 것만** 지적한다:
+- issues에는 신뢰 출처 원문과 **명백히 어긋나는** 사실만 넣는다(수치·날짜·명칭이 다름, 없는 제도·결정을 있다고 씀,
+  출처 표기가 그 자료 내용과 다름). 반드시 올바른 값과, 그 값이 적힌 근거 URL을 함께 적는다.
+- 원문(첨부 파일·법령안 등)을 열지 못했거나 찾지 못해 **확인만 안 된** 사실은 지적하지 않는다(summary에 개수만 적는다).
+- 의견·해석·표현·문체, 더 정확하게 쓸 수 있다는 제안, 사소한 반올림·띄어쓰기는 지적하지 않는다.
+- 확신이 없으면 지적하지 않는다(근거 URL 없는 지적 금지).
 
 오직 아래 JSON 하나만 출력하라(코드블록 없이):
-{{"verdict": "pass" | "fix" | "fail",
+{{"verdict": "pass" | "fix",
   "checked": 검증한 사실 수,
   "issues": [{{"text": "본문 속 문제 문장(그대로)", "problem": "무엇이 틀렸나", "correction": "고친 문장 또는 '삭제'", "evidence_url": "https://..."}}],
   "summary": "한 줄 요약"}}
-verdict 기준: 문제 없음=pass, 고치면 되는 문제만 있음=fix, 제목·3줄 요약의 핵심 주장이 틀렸거나 문제가 전체 사실의 30% 초과=fail."""
+verdict 기준: 확실히 틀린 사실이 없으면 pass, 하나라도 있으면 fix."""
 
 CHILDHOOD_EXTRA = """추가로 유아 발달 안전 기준을 점검하라: '정상/지연' 진단·판정 표현, 'N세면 ~해야/통과' 식 기준 제시, K-DST·ASQ 등 검사 문항 복제,
 조바심 조장, 판매·구매 링크가 있으면 issues에 포함하고 correction에 안전한 표현을 제시하라."""
@@ -183,8 +184,9 @@ class CodexUnavailable(OpenAIError):
 
 
 CODEX_SEARCH_NOTE = """
-[실행 조건] 반드시 웹 검색 도구로 출처 원문을 직접 확인하라. 웹 검색을 쓸 수 없는 환경이면 검증하지 말고
-{"verdict": "error", "summary": "no web search"} 만 출력하라. 파일을 만들거나 명령을 실행하지 말 것."""
+[실행 조건] 반드시 웹 검색 도구로 출처 원문을 직접 확인하라. 웹 검색 도구 자체를 쓸 수 없는 환경일 때만 검증하지 말고
+{"verdict": "error", "summary": "no web search"} 만 출력하라(일부 원문을 못 연 것은 error가 아니다 — 지적하지 않는다).
+파일을 만들거나 명령을 실행하지 말 것."""
 
 # 설치된 Codex 버전마다 웹 검색 켜는 옵션 위치가 달라 차례로 시도한다(.env의 CODEX_ARGS가 있으면 그것만 쓴다).
 CODEX_SEARCH_VARIANTS = (
@@ -193,7 +195,8 @@ CODEX_SEARCH_VARIANTS = (
     ("exec", "-c", "tools.web_search=true"),
 )
 _CLI_USAGE_ERROR = re.compile(r"unexpected argument|unrecognized|Usage:", re.I)
-_LOGIN_OR_LIMIT = re.compile(r"not logged in|login|usage limit|rate limit|quota|401|unauthorized", re.I)
+_LOGIN_OR_LIMIT = re.compile(r"not logged in|login|usage limit|rate limit|quota|401|unauthorized|"
+                            r"out of credits|credit|refill|billing", re.I)
 
 
 def _codex_variants(cfg: Config) -> list[tuple[str, ...]]:
@@ -203,15 +206,38 @@ def _codex_variants(cfg: Config) -> list[tuple[str, ...]]:
     return list(CODEX_SEARCH_VARIANTS)
 
 
+_ERROR_LINE = re.compile(r"error|failed|limit|disconnected|timed out|unauthorized|refused", re.I)
+
+
+def _codex_error_detail(cfg: Config, proc: subprocess.CompletedProcess) -> str:
+    """Codex는 진행 기록 전체를 stderr로 내보내므로 끝부분만으로는 원인이 안 보인다.
+    전체 출력을 logs/codex_last_error.log에 남기고, 오류로 보이는 줄만 골라 돌려준다."""
+    out = f"--- stdout ---\n{proc.stdout or ''}\n--- stderr ---\n{proc.stderr or ''}"
+    try:
+        cfg.log_dir.mkdir(parents=True, exist_ok=True)
+        (cfg.log_dir / "codex_last_error.log").write_text(out, encoding="utf-8")
+    except OSError:
+        pass
+    lines: list[str] = []
+    for ln in out.splitlines():
+        ln = ln.strip()
+        # Codex가 되풀이해 보여 주는 우리 지시문(verdict JSON 예시 등)은 오류가 아니다
+        if not _ERROR_LINE.search(ln) or len(ln) >= 400 or '"verdict"' in ln or ln in lines:
+            continue
+        lines.append(ln)
+    return (" | ".join(lines[-3:]) or (proc.stderr or "").strip()[-300:]) + " (전체: logs/codex_last_error.log)"
+
+
 def run_codex(cfg: Config, prompt: str, cwd: Path | None = None, sandbox: str = "read-only",
               timeout: int | None = None, images: list[Path] | None = None) -> str:
     """Codex CLI를 웹 검색을 켜고 실행해 마지막 답변을 돌려준다.
     기본은 읽기 전용 임시 폴더. cwd·sandbox="workspace-write"를 주면 그 폴더에 파일을 쓸 수 있다.
-    images를 주면 그 그림들을 첫 메시지에 붙여 보여 준다. cfg.codex_effort가 있으면 추론 단계를 정한다."""
+    images를 주면 그 그림들을 첫 메시지에 붙여 보여 준다."""
     timeout = timeout or cfg.codex_timeout
     exe = shutil.which(cfg.codex_bin)
     if not exe:
         raise CodexUnavailable(f"'{cfg.codex_bin}' 명령을 찾지 못했습니다(Codex CLI 미설치)")
+    retried = False
     with tempfile.TemporaryDirectory() as tmp:
         last_msg = Path(tmp) / "last.txt"
         for variant in _codex_variants(cfg):
@@ -232,13 +258,26 @@ def run_codex(cfg: Config, prompt: str, cwd: Path | None = None, sandbox: str = 
                                       text=True, encoding="utf-8", errors="replace", timeout=timeout)
             except subprocess.TimeoutExpired as e:
                 raise CodexUnavailable(f"Codex 시간 초과({timeout}초)") from e
-            err = ((proc.stderr or "") + "\n" + (proc.stdout or "")).strip()[-800:]
+            err = (proc.stderr or "")[-800:]
             if proc.returncode != 0 and _CLI_USAGE_ERROR.search(err) and not last_msg.exists():
                 log.info("Codex 옵션 조합 %s 미지원 → 다음 조합", " ".join(variant))
                 continue
             if proc.returncode != 0:
-                kind = "로그인·사용 한도" if _LOGIN_OR_LIMIT.search(err) else "실행 오류"
-                raise CodexUnavailable(f"Codex {kind}(exit {proc.returncode}): {err.strip()[-400:]}")
+                detail = _codex_error_detail(cfg, proc)
+                if _LOGIN_OR_LIMIT.search(detail):
+                    raise CodexUnavailable(f"Codex 로그인·사용 한도·크레딧 문제(exit {proc.returncode}): {detail}")
+                if not retried:                  # 연결 끊김 같은 일시적 오류는 한 번 더 해 본다
+                    retried = True
+                    log.warning("Codex 실행 오류(exit %s) → 한 번 더 시도: %s", proc.returncode, detail)
+                    last_msg.unlink(missing_ok=True)
+                    proc = subprocess.run(cmd, input=prompt, cwd=str(cwd or tmp), env=env, capture_output=True,
+                                          text=True, encoding="utf-8", errors="replace", timeout=timeout)
+                    if proc.returncode == 0:
+                        log.info("Codex 실행 옵션: %s", " ".join(variant))
+                        return last_msg.read_text(encoding="utf-8") if last_msg.exists() else proc.stdout
+                    detail = _codex_error_detail(cfg, proc)
+                kind = "로그인·사용 한도·크레딧 문제" if _LOGIN_OR_LIMIT.search(detail) else "실행 오류"
+                raise CodexUnavailable(f"Codex {kind}(exit {proc.returncode}): {detail}")
             log.info("Codex 실행 옵션: %s", " ".join(variant))
             return last_msg.read_text(encoding="utf-8") if last_msg.exists() else proc.stdout
     raise CodexUnavailable("설치된 Codex에서 웹 검색 옵션을 켜지 못했습니다. .env의 CODEX_ARGS를 확인하세요")
@@ -248,7 +287,13 @@ def factcheck_codex(cfg: Config, post: dict) -> dict:
     prompt = _instructions(cfg) + CODEX_SEARCH_NOTE + "\n\n" + _article(post)
     result = _extract_json(run_codex(cfg, prompt))
     if result.get("verdict") == "error":
-        raise CodexUnavailable(f"Codex에서 웹 검색을 쓸 수 없습니다: {result.get('summary', '')}")
+        summary = str(result.get("summary", ""))
+        if "no web search" in summary.lower() or not summary.strip():
+            raise CodexUnavailable(f"Codex에서 웹 검색을 쓸 수 없습니다: {summary}")
+        # 웹 검색은 했지만 일부 원문을 못 열어 판정을 보류한 경우: 확인이 안 된 것은 틀린 것이 아니므로
+        # 확실한 지적이 있을 때만 수정 요청(fix)으로, 없으면 통과로 본다.
+        result["verdict"] = "fix" if result.get("issues") else "pass"
+        log.warning("Codex가 일부 사실을 확인하지 못해 판정을 보류했습니다 → %s로 처리: %s", result["verdict"], summary)
     return _checked(result, "Codex/ChatGPT 구독")
 
 
@@ -269,7 +314,12 @@ def factcheck(cfg: Config, post: dict) -> dict:
         except CodexUnavailable as e:
             if cfg.openai_api_key:
                 log.warning("%s → OpenAI API로 팩트체크합니다", e)
-                return factcheck_api(cfg, post)
+                try:
+                    return factcheck_api(cfg, post)
+                except OpenAIError as api_err:
+                    # 대체 수단까지 막혔으면 진짜 원인(Codex)을 먼저 알린다.
+                    raise CodexAccountError(f"ChatGPT(Codex) 팩트체크 실패: {e}\n"
+                                            f"대체 OpenAI API도 실패: {str(api_err)[:200]}") from api_err
             raise CodexAccountError(f"ChatGPT(Codex) 팩트체크를 할 수 없습니다: {e}") from e
     return factcheck_api(cfg, post)
 

@@ -3,6 +3,7 @@
 output/
 logs/
 data/published*.json
+data/social_tokens*.json
 assets/*
 !assets/README.md
 __pycache__/

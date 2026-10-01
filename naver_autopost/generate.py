@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -78,20 +79,23 @@ def _claude_bin(cfg: Config) -> str:
     return found
 
 
-def _run_claude(cfg: Config, prompt: str, log_file: Path) -> None:
+def _run_claude(cfg: Config, prompt: str, log_file: Path, light: bool = False) -> None:
     cmd = [
         _claude_bin(cfg), "-p",
         "--permission-mode", "acceptEdits",
         "--allowedTools", ",".join(ALLOWED_TOOLS),
         "--output-format", "json",
     ]
-    if cfg.claude_model:
-        cmd += ["--model", cfg.claude_model]
-    log.info("Claude 실행: %s", log_file.name)
+    model = cfg.claude_model_light if light else cfg.claude_model
+    if model:
+        cmd += ["--model", model]
+    log.info("Claude 실행(%s): %s", model or "기본 모델", log_file.name)
     try:
         proc = subprocess.run(
             # 프롬프트는 stdin으로 넘긴다(Windows의 claude.cmd는 여러 줄 한글 인자를 망가뜨린다).
             cmd, input=prompt, cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
+            # Claude가 돌리는 확인용 python이 Windows 콘솔(cp949)에서 이모지를 출력하다 멈추지 않게 한다.
+            env={**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"},
             errors="replace", timeout=cfg.generate_timeout,
         )
     except subprocess.TimeoutExpired as e:
@@ -168,5 +172,5 @@ def apply_gpt_review(cfg: Config, out_dir: Path, round_no: int) -> dict:
     )
     path = out_dir / "gpt_applied.json"
     path.unlink(missing_ok=True)
-    _run_claude(cfg, prompt, out_dir / f"claude_apply_gpt_{round_no}.log")
+    _run_claude(cfg, prompt, out_dir / f"claude_apply_gpt_{round_no}.log", light=True)
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
