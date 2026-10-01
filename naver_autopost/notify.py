@@ -11,12 +11,16 @@ log = logging.getLogger(__name__)
 
 
 def send(cfg: Config, text: str) -> None:
+    send_text(cfg.telegram_bot_token, cfg.telegram_chat_id, text)
+
+
+def send_text(bot_token: str, chat_id: str, text: str) -> None:
     log.info("알림: %s", text)
-    if not (cfg.telegram_bot_token and cfg.telegram_chat_id):
+    if not (bot_token and chat_id):
         return
-    body = json.dumps({"chat_id": cfg.telegram_chat_id, "text": text, "disable_web_page_preview": False}).encode()
+    body = json.dumps({"chat_id": chat_id, "text": text, "disable_web_page_preview": False}).encode()
     req = urllib.request.Request(
-        f"https://api.telegram.org/bot{cfg.telegram_bot_token}/sendMessage",
+        f"https://api.telegram.org/bot{bot_token}/sendMessage",
         data=body, headers={"Content-Type": "application/json"},
     )
     try:
