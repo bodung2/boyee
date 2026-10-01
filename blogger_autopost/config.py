@@ -35,6 +35,7 @@ class BloggerConfig:
     photos: int
     photo_candidates: int
     illustrations: int
+    photo_fallback: bool
     image_model: str
     image_timeout: int
     telegram_bot_token: str
@@ -75,6 +76,8 @@ class BloggerConfig:
             photos=int(env("BLOGGER_PHOTOS", "1")),
             photo_candidates=int(env("BLOGGER_PHOTO_CANDIDATES", "6")),
             illustrations=int(env("BLOGGER_ILLUSTRATIONS", "2")),
+            # 실제 사진을 못 찾으면 그 자리에 실사풍 생성 이미지를 대신 넣는다('AI가 만든 이미지' 표기)
+            photo_fallback=_bool("BLOGGER_PHOTO_FALLBACK", True),
             image_model=env("BLOGGER_IMAGE_MODEL", "").strip(),
             image_timeout=int(env("CODEX_IMAGE_TIMEOUT_SEC", "360")),
             telegram_bot_token=env("TELEGRAM_BOT_TOKEN", "").strip(),

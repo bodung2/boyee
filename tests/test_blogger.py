@@ -54,7 +54,7 @@ elif "PHOTO REVIEW" in prompt:
     out.write_text(json.dumps({{"choices": {{s: s + "c1" for s in slots}}, "notes": {{}}}}))
 elif "ILLUSTRATION REVIEW" in prompt:
     import re
-    ids = re.findall(r"= (i\\d+):", prompt)
+    ids = re.findall(r"= ([ip]\\d+) ", prompt)
     out.write_text(json.dumps({{i: ("ok" if i != "i2" or "REJECT_I2" not in prompt else "text in image") for i in ids}}))
 elif "FINDINGS" in prompt:
     post = json.loads(pathlib.Path("post.json").read_text())
@@ -101,6 +101,7 @@ def cfg(tmp_path, monkeypatch):
     c.codex_model = ""
     c.photos = 0
     c.illustrations = 0
+    c.photo_fallback = False
     c.telegram_bot_token = c.telegram_chat_id = ""
     return c
 
@@ -441,3 +442,45 @@ def test_drive_upload_returns_working_url(cfg, tmp_path, monkeypatch):
     assert checked[0] == "https://lh3.googleusercontent.com/d/FILE1"
     assert any(u.endswith("/files/FILE1/permissions") for u, _ in calls)
     assert json.loads(cfg.token_file.with_name("blogger_drive_folder.json").read_text())["id"] == "FOLDER"
+
+
+def test_missing_photo_is_replaced_by_photorealistic_ai_image(cfg, tmp_path, monkeypatch):
+    script, state = fake_codex(tmp_path)
+    post = dict(POST,
+                photos=[{"section": 1, "subject": "Namsan tower at dusk", "search": "zzz",
+                         "fallback_prompt": "Namsan Seoul Tower at dusk seen from a street", "caption": "Namsan"}],
+                illustrations=[{"section": 0, "prompt": "a traveller with a map-free phone", "caption": "Plan"}])
+    (state / "post.json").write_text(json.dumps(post))
+    cfg.codex_bin = str(script)
+    cfg.photos, cfg.illustrations, cfg.photo_fallback = 1, 1, True
+    _with_drive_token(cfg, tmp_path)
+    monkeypatch.setattr(photos, "_get", lambda params, fetch=None: {"query": {"pages": []}})
+    prompts = {}
+
+    def fake_generate(img_cfg, prompt, out):
+        prompts[out.name] = prompt
+        from PIL import Image
+        Image.new("RGB", (64, 36)).save(out)
+        return out
+    monkeypatch.setattr(illustrations.codex_image, "generate_image", fake_generate)
+    monkeypatch.setattr(illustrations.hosting, "upload", lambda c, path, name: f"https://x/{path.stem}")
+    fake = FakeBlogger()
+    fake.install(monkeypatch)
+    assert pipeline.run(cfg) == 0
+
+    html = fake.drafts["1"]["content"]
+    assert '<h2>How it works</h2><figure' in html and "https://x/photo_ai_1" in html
+    assert "AI-generated image (not an actual photo)" in html and "AI-generated illustration" in html
+    assert "photorealistic" in prompts["photo_ai_1.png"] and "Namsan Seoul Tower" in prompts["photo_ai_1.png"]
+    assert "NOT a photorealistic" in prompts["illust_1.png"]
+    review = [p.read_text(encoding="utf-8") for p in state.glob("prompt_*.txt")
+              if "ILLUSTRATION REVIEW" in p.read_text(encoding="utf-8")][0]
+    assert "p1 (kind=photo)" in review and "i1 (kind=illustration)" in review
+    stage = json.loads((cfg.output_dir / pipeline.today_kst() / "stage.json").read_text())
+    assert "실사풍 생성 이미지 1장" in stage["illustrations_note"]
+
+
+def test_no_fallback_when_disabled(cfg, tmp_path):
+    post = dict(POST, photo_misses=[{"section": 1, "subject": "x"}])
+    cfg.illustrations, cfg.photo_fallback = 0, False
+    assert illustrations._jobs(cfg, post) == []

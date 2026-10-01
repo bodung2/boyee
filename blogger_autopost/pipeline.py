@@ -117,8 +117,9 @@ def _add_images(cfg: BloggerConfig, post: dict, out_dir: Path) -> str:
     """팩트체크를 통과한 글에 실제 사진(커먼즈)과 생성 그림을 넣는다. 그림 때문에 발행이 멈추지는 않는다.
     알림용 메모를 돌려준다. 이미 넣은 단계는 이어서 실행할 때 다시 하지 않는다."""
     notes = []
-    steps = (("photos", cfg.photos, photos.add_photos), ("illustrations", cfg.illustrations,
-                                                         illustrations.add_illustrations))
+    fallback = cfg.photos if cfg.photo_fallback else 0      # 못 찾은 사진 자리를 채울 실사풍 생성 이미지
+    steps = (("photos", cfg.photos, photos.add_photos),
+             ("illustrations", cfg.illustrations + fallback, illustrations.add_illustrations))
     for name, count, step in steps:
         stage = _load(out_dir / "stage.json")
         if count <= 0:
@@ -130,6 +131,8 @@ def _add_images(cfg: BloggerConfig, post: dict, out_dir: Path) -> str:
             n, note = step(cfg, post, out_dir)
         except Exception as e:  # noqa: BLE001 - 사용 한도·네트워크 문제여도 글은 발행한다
             log.warning("%s 넣기 실패(빼고 발행): %s", name, e)
+            if name == "photos":                 # 사진 검색 자체가 실패해도 그 자리는 생성 이미지로 채운다
+                post["photo_misses"] = [w for w in post.get("photos") or [] if isinstance(w, dict)][:cfg.photos]
             notes.append(f"⚠️ {'실제 사진' if name == 'photos' else '생성 그림'}을 넣지 못했습니다: {str(e)[:150]}")
             continue
         _save(out_dir / "post.json", post)

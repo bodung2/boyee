@@ -157,6 +157,8 @@ def add_photos(cfg: BloggerConfig, post: dict, out_dir: Path, fetch=None, fetch_
     wants = wants[:cfg.photos]
     if not wants:
         return 0, "실제 사진 0장(글쓴이가 사진 자리를 정하지 않음)"
+    # 못 찾은 자리는 생성 그림 단계가 실사풍 이미지로 대신 채운다.
+    post["photo_misses"] = []
     slots, pool = [], {}
     for i, want in enumerate(wants, 1):
         slot = {"id": f"s{i}", "subject": want.get("subject") or want.get("search"), "candidates": []}
@@ -174,6 +176,7 @@ def add_photos(cfg: BloggerConfig, post: dict, out_dir: Path, fetch=None, fetch_
             slots.append((want, slot))
         else:
             log.warning("사진 '%s': 쓸 수 있는 라이선스의 후보가 없습니다(검색어 %s)", slot["subject"], _queries(want))
+            post["photo_misses"].append(want)
     if not slots:
         return 0, "실제 사진 0장(커먼즈에 쓸 수 있는 후보 없음)"
     choices = writer.review_photos(cfg, post["title"], [s for _, s in slots])
@@ -184,6 +187,7 @@ def add_photos(cfg: BloggerConfig, post: dict, out_dir: Path, fetch=None, fetch_
         pick = pool.get(choices.get(slot["id"], ""))
         if not pick or pick["title"] in used:
             log.warning("사진 '%s': 후보 %d장이 모두 검수에서 떨어졌습니다", slot["subject"], len(slot["candidates"]))
+            post["photo_misses"].append(want)
             continue
         used.add(pick["title"])
         body = insert(body, int(want.get("section") or 0), figure_html(pick, want))

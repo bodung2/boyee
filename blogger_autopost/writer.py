@@ -45,7 +45,8 @@ Save ONE file named post.json (UTF-8) in the current working directory, exactly 
   "illustrations": [{{"section": 1, "prompt": "detailed English image-generation prompt", "alt": "alt text",
                      "caption": "short caption"}}],
   "photos": [{{"section": 2, "subject": "exactly what the photo must show", "search": "Wikimedia Commons search words",
-              "alternatives": ["other search words", "..."], "alt": "alt text", "caption": "short caption"}}]
+              "alternatives": ["other search words", "..."], "fallback_prompt": "photorealistic English image prompt",
+              "alt": "alt text", "caption": "short caption"}}]
 }}
 body_html rules:
 - An HTML fragment only: <p>, <h2>, <h3>, <ul>/<ol>/<li>, <table>, <blockquote>, <strong>, <em>, <a href>, <hr>.
@@ -62,6 +63,8 @@ body_html rules:
   something that really exists in Korea. A reviewer will reject photos that do not clearly show it.
 - "search": 2-5 English keywords with proper names (e.g. "Gyeongbokgung Geunjeongjeon"); no generic mood words.
   "alternatives": 1-2 other searches for the same subject in case the first finds nothing usable.
+  "fallback_prompt": if no usable real photo is found, an image model will make a photorealistic image from this
+  English prompt instead (labelled as AI-generated). Describe a typical, generic scene of the subject; no text or signs.
 - Prefer well-known places, buildings, food, objects and signs over people.
 "sources" lists every page you actually read to verify the facts (at least {min_sources}).
 After saving post.json, reply with just: done
@@ -244,13 +247,15 @@ Blog post title: {title}
 
 {items}
 
+Each image is either kind=illustration (must look like an illustration) or kind=photo (must look like a natural,
+realistic photograph; it will be labelled as AI-generated).
 An image is "ok" only if ALL are true:
 - it fits its description and would help a reader of this post,
 - no text, letters, numbers, signs with writing, logos or watermarks (garbled pseudo-text counts as text),
 - no distorted faces, hands or bodies, no obvious generation glitches,
 - nothing offensive, sexual, graphic, or culturally wrong for Korea (e.g. Japanese or Chinese clothing,
   architecture or flags presented as Korean),
-- it does not look like a real photograph that could mislead readers.
+- kind=illustration: it does not look like a real photograph. kind=photo: it looks realistic and natural.
 Otherwise give a short reason.
 
 Output ONLY one JSON object (no code fence): {{"<id>": "ok" or "reason", ...}}
@@ -259,7 +264,8 @@ Output ONLY one JSON object (no code fence): {{"<id>": "ok" or "reason", ...}}
 
 def review_illustrations(cfg: BloggerConfig, title: str, items: list[dict]) -> dict:
     """items: [{"id", "desc", "path"}] → {id: "ok" | 이유}"""
-    lines = [f"image #{n} = {it['id']}: {it['desc']}" for n, it in enumerate(items, 1)]
+    lines = [f"image #{n} = {it['id']} (kind={it.get('kind', 'illustration')}): {it['desc']}"
+             for n, it in enumerate(items, 1)]
     prompt = ILLUSTRATION_REVIEW_PROMPT.format(title=title, items="\n".join(lines))
     result = _extract_json(_codex(cfg, prompt, None, "read-only", cfg.codex_timeout,
                                   images=[it["path"] for it in items]))
