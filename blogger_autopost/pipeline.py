@@ -13,7 +13,7 @@ from naver_autopost.errors import ExternalAccountError
 from naver_autopost.notify import send_text
 from naver_autopost.pipeline import KST, _Lock, today_kst
 
-from . import api, content, photos, writer
+from . import api, content, illustrations, photos, writer
 from .config import BloggerConfig
 
 log = logging.getLogger(__name__)
@@ -113,22 +113,33 @@ def _attempt(cfg: BloggerConfig, today: str, out_dir: Path, feedback: str, resum
     return post
 
 
-def _add_photos(cfg: BloggerConfig, post: dict, out_dir: Path) -> str:
-    """팩트체크를 통과한 글에 커먼즈 사진을 넣는다. 사진 때문에 발행이 멈추지는 않는다. 알림용 한 줄을 돌려준다."""
-    stage = _load(out_dir / "stage.json")
-    if cfg.photos <= 0:
-        return ""
-    if stage.get("photos_done"):
-        return f"사진 {stage.get('photos', 0)}장"
-    try:
-        n = photos.add_photos(cfg, post, out_dir)
-    except Exception as e:  # noqa: BLE001 - 사용 한도·네트워크 문제여도 글은 발행한다
-        log.warning("사진 넣기 실패(사진 없이 발행): %s", e)
-        return "⚠️ 사진을 넣지 못해 글만 올렸습니다(로그 확인)"
-    _save(out_dir / "post.json", post)
-    _mark(out_dir, photos_done=True, photos=n)
-    log.info("사진 %d장을 넣었습니다", n)
-    return f"사진 {n}장"
+def _add_images(cfg: BloggerConfig, post: dict, out_dir: Path) -> str:
+    """팩트체크를 통과한 글에 실제 사진(커먼즈)과 생성 그림을 넣는다. 그림 때문에 발행이 멈추지는 않는다.
+    알림용 메모를 돌려준다. 이미 넣은 단계는 이어서 실행할 때 다시 하지 않는다."""
+    notes = []
+    fallback = cfg.photos if cfg.photo_fallback else 0      # 못 찾은 사진 자리를 채울 실사풍 생성 이미지
+    steps = (("photos", cfg.photos, photos.add_photos),
+             ("illustrations", cfg.illustrations + fallback, illustrations.add_illustrations))
+    for name, count, step in steps:
+        stage = _load(out_dir / "stage.json")
+        if count <= 0:
+            continue
+        if stage.get(f"{name}_done"):
+            notes.append(stage.get(f"{name}_note", ""))
+            continue
+        try:
+            n, note = step(cfg, post, out_dir)
+        except Exception as e:  # noqa: BLE001 - 사용 한도·네트워크 문제여도 글은 발행한다
+            log.warning("%s 넣기 실패(빼고 발행): %s", name, e)
+            if name == "photos":                 # 사진 검색 자체가 실패해도 그 자리는 생성 이미지로 채운다
+                post["photo_misses"] = [w for w in post.get("photos") or [] if isinstance(w, dict)][:cfg.photos]
+            notes.append(f"⚠️ {'실제 사진' if name == 'photos' else '생성 그림'}을 넣지 못했습니다: {str(e)[:150]}")
+            continue
+        _save(out_dir / "post.json", post)
+        _mark(out_dir, **{f"{name}_done": True, f"{name}_note": note})
+        log.info(note)
+        notes.append(note)
+    return " · ".join(n for n in notes if n)
 
 
 def produce(cfg: BloggerConfig, today: str, out_dir: Path) -> dict:
@@ -212,7 +223,7 @@ def run(cfg: BloggerConfig, draft: bool = False, force: bool = False) -> int:
                 log.warning("발행 목록 동기화 실패(계속 진행): %s", e)
 
             post = produce(cfg, today, out_dir)
-            photo_note = _add_photos(cfg, post, out_dir)
+            photo_note = _add_images(cfg, post, out_dir)
             result = _publish(cfg, post, out_dir, draft_only=draft)
             if draft:
                 notify(cfg, f"[{LABEL} 테스트] 초안으로만 저장했습니다(발행 안 함): {post['title']}\n"
