@@ -69,12 +69,12 @@ elif "FINDINGS" in prompt:
 
 class FakeBlogger:
     def __init__(self):
-        self.drafts, self.published, self.live = {}, [], []
+        self.drafts, self.published, self.live, self.scheduled = {}, [], [], []
 
     def install(self, monkeypatch):
         monkeypatch.setattr(api, "resolve_blog_id", lambda cfg: "123")
         monkeypatch.setattr(api, "list_posts", lambda cfg, status="live", limit=2000:
-                            list(self.live) if status == "live" else [])
+                            list(self.live) if status == "live" else list(self.scheduled) if status == "scheduled" else [])
         monkeypatch.setattr(api, "create_draft", self.create_draft)
         monkeypatch.setattr(api, "publish", self.publish)
 
@@ -85,8 +85,14 @@ class FakeBlogger:
 
     def publish(self, cfg, post_id, when=None):
         self.published.append((post_id, when))
-        return {"id": post_id, "status": "SCHEDULED" if when else "LIVE",
+        post = {"id": post_id, "status": "SCHEDULED" if when else "LIVE", "title": self.drafts[post_id]["title"],
                 "url": f"https://myblog.blogspot.com/2026/09/post-{post_id}.html"}
+        (self.scheduled if when else self.live).append(post)
+        return post
+
+    def delete(self, post_id):
+        self.live = [p for p in self.live if p["id"] != post_id]
+        self.scheduled = [p for p in self.scheduled if p["id"] != post_id]
 
 
 @pytest.fixture
@@ -484,3 +490,21 @@ def test_no_fallback_when_disabled(cfg, tmp_path):
     post = dict(POST, photo_misses=[{"section": 1, "subject": "x"}])
     cfg.illustrations, cfg.photo_fallback = 0, False
     assert illustrations._jobs(cfg, post) == []
+
+
+def test_deleted_scheduled_post_is_rewritten_on_rerun(cfg, tmp_path, monkeypatch):
+    script, state = fake_codex(tmp_path)
+    cfg.codex_bin = str(script)
+    fake = FakeBlogger()
+    fake.install(monkeypatch)
+    monkeypatch.setattr(pipeline, "publish_at", lambda c: "2026-10-01T21:00:00+09:00")
+    assert pipeline.run(cfg) == 0
+    assert pipeline.run(cfg) == 0                     # 예약 글이 살아 있으면 다시 쓰지 않는다
+    assert len(fake.published) == 1
+
+    fake.delete("1")                                   # 사용자가 블로거에서 예약 글을 지움
+    assert pipeline.run(cfg) == 0
+    assert [p[0] for p in fake.published] == ["1", "2"]
+    entries = history.load(cfg.history_file)
+    assert [e["post_id"] for e in entries if e["source"] == "autopost"] == ["2"]
+    assert sum("DELIVERABLE" in p.read_text(encoding="utf-8") for p in state.glob("prompt_*.txt")) == 2
