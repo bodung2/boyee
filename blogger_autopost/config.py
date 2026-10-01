@@ -34,6 +34,9 @@ class BloggerConfig:
     min_body_chars: int
     photos: int
     photo_candidates: int
+    illustrations: int
+    image_model: str
+    image_timeout: int
     telegram_bot_token: str
     telegram_chat_id: str
     model_note: str = ""        # 실행 중 대체 모델로 바뀌면 알림에 붙일 문구
@@ -68,8 +71,12 @@ class BloggerConfig:
             max_attempts=int(env("BLOGGER_MAX_ATTEMPTS", "2")),
             min_sources=int(env("BLOGGER_MIN_SOURCES", "3")),
             min_body_chars=int(env("BLOGGER_MIN_BODY_CHARS", "2000")),
-            photos=int(env("BLOGGER_PHOTOS", "3")),
-            photo_candidates=int(env("BLOGGER_PHOTO_CANDIDATES", "4")),
+            # 글마다 실제 사진(위키미디어 커먼즈) 1장 + 생성 그림 2장
+            photos=int(env("BLOGGER_PHOTOS", "1")),
+            photo_candidates=int(env("BLOGGER_PHOTO_CANDIDATES", "6")),
+            illustrations=int(env("BLOGGER_ILLUSTRATIONS", "2")),
+            image_model=env("BLOGGER_IMAGE_MODEL", "").strip(),
+            image_timeout=int(env("CODEX_IMAGE_TIMEOUT_SEC", "360")),
             telegram_bot_token=env("TELEGRAM_BOT_TOKEN", "").strip(),
             telegram_chat_id=env("TELEGRAM_CHAT_ID", "").strip(),
         )

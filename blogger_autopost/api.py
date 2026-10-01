@@ -24,7 +24,10 @@ from .config import BloggerConfig
 
 log = logging.getLogger(__name__)
 
-SCOPE = "https://www.googleapis.com/auth/blogger"
+BLOGGER_SCOPE = "https://www.googleapis.com/auth/blogger"
+# 생성 그림을 올릴 드라이브 권한(이 프로그램이 만든 파일만 다룰 수 있는 가장 좁은 권한)
+DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
+SCOPE = f"{BLOGGER_SCOPE} {DRIVE_SCOPE}"
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://www.googleapis.com/blogger/v3"
@@ -131,6 +134,14 @@ def _serve_until(server: http.server.HTTPServer, result: dict, timeout: int) -> 
     server.timeout = 1
     while not result and time.time() < deadline:
         server.handle_request()
+
+
+def has_scope(cfg: BloggerConfig, scope: str) -> bool:
+    """저장된 로그인 토큰에 그 권한이 들어 있는지(예전에 블로거 권한만으로 로그인했으면 드라이브 권한이 없다)."""
+    if not cfg.token_file.exists():
+        return False
+    granted = json.loads(cfg.token_file.read_text(encoding="utf-8")).get("scope", "")
+    return scope in granted.split()
 
 
 def access_token(cfg: BloggerConfig) -> str:

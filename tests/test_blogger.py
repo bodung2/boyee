@@ -5,7 +5,7 @@ from datetime import datetime
 
 import pytest
 
-from blogger_autopost import api, content, photos, pipeline, writer
+from blogger_autopost import api, content, hosting, illustrations, photos, pipeline, writer
 from blogger_autopost.config import BloggerConfig
 from naver_autopost import history
 from naver_autopost.pipeline import KST
@@ -52,6 +52,10 @@ elif "PHOTO REVIEW" in prompt:
     import re
     slots = re.findall(r"Slot (s\\d+)", prompt)
     out.write_text(json.dumps({{"choices": {{s: s + "c1" for s in slots}}, "notes": {{}}}}))
+elif "ILLUSTRATION REVIEW" in prompt:
+    import re
+    ids = re.findall(r"= (i\\d+):", prompt)
+    out.write_text(json.dumps({{i: ("ok" if i != "i2" or "REJECT_I2" not in prompt else "text in image") for i in ids}}))
 elif "FINDINGS" in prompt:
     post = json.loads(pathlib.Path("post.json").read_text())
     post["title"] = post["title"] + " (fixed)"
@@ -96,6 +100,7 @@ def cfg(tmp_path, monkeypatch):
     c.codex_args = "exec --search"
     c.codex_model = ""
     c.photos = 0
+    c.illustrations = 0
     c.telegram_bot_token = c.telegram_chat_id = ""
     return c
 
@@ -327,3 +332,112 @@ def test_model_and_effort_args_and_fallback(cfg, tmp_path, monkeypatch):
     assert args[args.index("--model") + 1] == "gpt-5.6-terra"
     assert "model_reasoning_effort=low" in args
     assert "gpt-5.6-terra" in cfg.model_note
+
+
+def _with_drive_token(cfg, tmp_path, scope=api.SCOPE):
+    cfg.token_file = tmp_path / "tok.json"
+    cfg.token_file.write_text(json.dumps({"refresh_token": "r", "access_token": "a", "expires_at": 9e12,
+                                          "scope": scope}))
+
+
+def test_photos_and_illustrations_in_one_post(cfg, tmp_path, monkeypatch):
+    script, state = fake_codex(tmp_path)
+    body = BODY.replace("<h2>Sources</h2>", "<h2>Getting there</h2><p>x</p><h2>Sources</h2>")
+    post = dict(POST, body_html=body,
+                photos=[{"section": 2, "subject": "Gyeongbokgung palace", "search": "nothing-here",
+                         "alternatives": ["Gyeongbokgung"], "alt": "Palace", "caption": "Real palace"}],
+                illustrations=[{"section": 0, "prompt": "a traveller tapping a card", "alt": "tap", "caption": "Tap in"},
+                               {"section": 1, "prompt": "a map-free subway scene", "alt": "sub", "caption": "Ride"}])
+    (state / "post.json").write_text(json.dumps(post))
+    cfg.codex_bin = str(script)
+    cfg.photos, cfg.illustrations = 1, 2
+    _with_drive_token(cfg, tmp_path)
+    searched = []
+
+    def fake_get(params, fetch=None):
+        searched.append(params["gsrsearch"])
+        return fake_commons("") if "Gyeongbokgung" in params["gsrsearch"] else {"query": {"pages": []}}
+    monkeypatch.setattr(photos, "_get", fake_get)
+    monkeypatch.setattr(photos, "_download", lambda url, out, fb=None: (out.parent.mkdir(parents=True, exist_ok=True),
+                                                                         out.write_bytes(b"jpg"), out)[2])
+    generated = []
+
+    def fake_generate(img_cfg, prompt, out):
+        generated.append(prompt)
+        from PIL import Image
+        Image.new("RGB", (64, 36)).save(out)
+        return out
+    monkeypatch.setattr(illustrations.codex_image, "generate_image", fake_generate)
+    uploads = []
+    monkeypatch.setattr(illustrations.hosting, "upload",
+                        lambda c, path, name: uploads.append(name) or f"https://lh3.googleusercontent.com/d/{path.stem}")
+    fake = FakeBlogger()
+    fake.install(monkeypatch)
+    assert pipeline.run(cfg) == 0
+
+    html = fake.drafts["1"]["content"]
+    assert searched[:2] == ["filetype:bitmap nothing-here", "filetype:bitmap Gyeongbokgung"]
+    assert html.startswith('<figure') and "/d/illust_1" in html.split("<p>Intro")[0]
+    assert '<h2>How it works</h2><figure' in html and "/d/illust_2" in html
+    assert '<h2>Getting there</h2><figure' in html and "Gyeongbokgung.jpg" in html
+    assert html.count("AI-generated illustration") == 2 and html.count("<figure") == 3
+    assert all("NOT a photorealistic photo" in p for p in generated) and len(uploads) == 2
+    stage = json.loads((cfg.output_dir / pipeline.today_kst() / "stage.json").read_text())
+    assert stage["illustrations_note"] == "생성 그림 2장" and stage["photos_note"] == "실제 사진 1장"
+    write_prompt = (state / "prompt_0.txt").read_text(encoding="utf-8")
+    assert "follow\nits guidance on images" in write_prompt and "exactly 2" in write_prompt
+
+
+def test_rejected_illustration_is_dropped(cfg, tmp_path, monkeypatch):
+    script, state = fake_codex(tmp_path)
+    post = dict(POST, title="REJECT_I2 post", illustrations=[{"section": 0, "prompt": "a"}, {"section": 1, "prompt": "b"}])
+    (state / "post.json").write_text(json.dumps(post))
+    cfg.codex_bin = str(script)
+    cfg.illustrations = 2
+    _with_drive_token(cfg, tmp_path)
+
+    def fake_generate(img_cfg, prompt, out):
+        from PIL import Image
+        Image.new("RGB", (64, 36)).save(out)
+        return out
+    monkeypatch.setattr(illustrations.codex_image, "generate_image", fake_generate)
+    monkeypatch.setattr(illustrations.hosting, "upload", lambda c, path, name: f"https://x/{path.stem}")
+    fake = FakeBlogger()
+    fake.install(monkeypatch)
+    assert pipeline.run(cfg) == 0
+    html = fake.drafts["1"]["content"]
+    assert "https://x/illust_1" in html and "illust_2" not in html
+
+
+def test_illustrations_skipped_without_drive_scope(cfg, tmp_path, monkeypatch):
+    post = dict(POST, illustrations=[{"section": 0, "prompt": "a"}])
+    cfg.illustrations = 2
+    _with_drive_token(cfg, tmp_path, scope=api.BLOGGER_SCOPE)
+    monkeypatch.setattr(illustrations.codex_image, "generate_image",
+                        lambda *a: (_ for _ in ()).throw(AssertionError("should not generate")))
+    n, note = illustrations.add_illustrations(cfg, post, tmp_path)
+    assert n == 0 and "auth" in note
+
+
+def test_drive_upload_returns_working_url(cfg, tmp_path, monkeypatch):
+    _with_drive_token(cfg, tmp_path)
+    from PIL import Image
+    img = tmp_path / "a.png"
+    Image.new("RGB", (2000, 1125)).save(img)
+    calls = []
+
+    def fake_call(c, url, body=None, content_type="application/json", method=None):
+        calls.append((url, content_type))
+        if "folder" in (body or b"").decode("latin-1") and "upload" not in url:
+            return {"id": "FOLDER"}
+        if "upload" in url:
+            assert b'"parents": ["FOLDER"]' in body
+            return {"id": "FILE1"}
+        return {}
+    monkeypatch.setattr(hosting, "_call", fake_call)
+    checked = []
+    url = hosting.upload(cfg, img, "x.jpg", check=lambda u: checked.append(u) or "thumbnail" in u, wait=0)
+    assert url == "https://drive.google.com/thumbnail?id=FILE1&sz=w1600"
+    assert checked[0] == "https://lh3.googleusercontent.com/d/FILE1"
+    assert any(u.endswith("/files/FILE1/permissions") for u, _ in calls)
+    assert json.loads(cfg.token_file.with_name("blogger_drive_folder.json").read_text())["id"] == "FOLDER"

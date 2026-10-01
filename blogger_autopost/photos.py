@@ -124,23 +124,43 @@ def insert(body: str, section: int, fig: str) -> str:
     return body[:m.end()] + fig + body[m.end():]
 
 
-def add_photos(cfg: BloggerConfig, post: dict, out_dir: Path, fetch=None, fetch_bytes=None) -> int:
-    """post["photos"]대로 사진을 찾아·검수해 body_html에 넣고 넣은 장수를 돌려준다. 실패해도 예외 없이 0."""
+def _queries(want: dict) -> list[str]:
+    alts = want.get("alternatives") or []
+    if isinstance(alts, str):
+        alts = [alts]
+    seen: list[str] = []
+    for q in [want.get("search"), *alts[:2], want.get("subject")]:
+        q = str(q or "").strip()
+        if q and q.lower() not in {s.lower() for s in seen}:
+            seen.append(q)
+    return seen
+
+
+def _candidates(cfg: BloggerConfig, want: dict, fetch=None) -> list[dict]:
+    """첫 검색어부터 차례로 찾아 후보를 모은다(라이선스·크기에서 다 떨어지면 다음 검색어)."""
+    found: list[dict] = []
+    for q in _queries(want):
+        try:
+            for c in search(q, cfg.photo_candidates, fetch):
+                if c["title"] not in {f["title"] for f in found}:
+                    found.append(c)
+        except Exception as e:  # noqa: BLE001
+            log.warning("커먼즈 검색 실패(%s): %s", q, e)
+        if len(found) >= cfg.photo_candidates:
+            break
+    return found[:cfg.photo_candidates]
+
+
+def add_photos(cfg: BloggerConfig, post: dict, out_dir: Path, fetch=None, fetch_bytes=None) -> tuple[int, str]:
+    """post["photos"]대로 사진을 찾아·검수해 body_html에 넣는다. (넣은 장수, 알림용 메모). 실패해도 예외 없이."""
     wants = [w for w in (post.get("photos") or []) if isinstance(w, dict) and (w.get("search") or w.get("subject"))]
     wants = wants[:cfg.photos]
     if not wants:
-        return 0
-    slots, pool, used = [], {}, set()
+        return 0, "실제 사진 0장(글쓴이가 사진 자리를 정하지 않음)"
+    slots, pool = [], {}
     for i, want in enumerate(wants, 1):
-        try:
-            cands = search(want.get("search") or want.get("subject"), cfg.photo_candidates, fetch)
-        except Exception as e:  # noqa: BLE001
-            log.warning("커먼즈 검색 실패(%s): %s", want.get("search"), e)
-            continue
         slot = {"id": f"s{i}", "subject": want.get("subject") or want.get("search"), "candidates": []}
-        for j, c in enumerate(cands, 1):
-            if c["title"] in used:
-                continue
+        for j, c in enumerate(_candidates(cfg, want, fetch), 1):
             cid = f"s{i}c{j}"
             try:
                 c["path"] = _download(c["thumb_url"], out_dir / "photos" / f"{cid}.jpg", fetch_bytes)
@@ -152,16 +172,18 @@ def add_photos(cfg: BloggerConfig, post: dict, out_dir: Path, fetch=None, fetch_
             slot["candidates"].append(c)
         if slot["candidates"]:
             slots.append((want, slot))
+        else:
+            log.warning("사진 '%s': 쓸 수 있는 라이선스의 후보가 없습니다(검색어 %s)", slot["subject"], _queries(want))
     if not slots:
-        log.info("쓸 만한 커먼즈 사진 후보가 없습니다")
-        return 0
+        return 0, "실제 사진 0장(커먼즈에 쓸 수 있는 후보 없음)"
     choices = writer.review_photos(cfg, post["title"], [s for _, s in slots])
 
-    body, added, chosen = post["body_html"], 0, []
+    body, added, chosen, used = post["body_html"], 0, [], set()
     # 뒤쪽 섹션부터 넣어야 앞쪽 h2 위치가 밀리지 않는다.
     for want, slot in sorted(slots, key=lambda ws: -int(ws[0].get("section") or 0)):
         pick = pool.get(choices.get(slot["id"], ""))
         if not pick or pick["title"] in used:
+            log.warning("사진 '%s': 후보 %d장이 모두 검수에서 떨어졌습니다", slot["subject"], len(slot["candidates"]))
             continue
         used.add(pick["title"])
         body = insert(body, int(want.get("section") or 0), figure_html(pick, want))
@@ -169,4 +191,4 @@ def add_photos(cfg: BloggerConfig, post: dict, out_dir: Path, fetch=None, fetch_
         added += 1
     post["body_html"] = body
     post["photo_credits"] = chosen
-    return added
+    return added, f"실제 사진 {added}장" + ("" if added == len(wants) else "(후보가 검수에서 떨어짐)")
