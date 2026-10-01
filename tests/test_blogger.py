@@ -5,7 +5,7 @@ from datetime import datetime
 
 import pytest
 
-from blogger_autopost import api, content, pipeline, writer
+from blogger_autopost import api, content, photos, pipeline, writer
 from blogger_autopost.config import BloggerConfig
 from naver_autopost import history
 from naver_autopost.pipeline import KST
@@ -18,12 +18,13 @@ POST = {"title": "How the T-money Card Works in Seoul", "body_html": BODY, "labe
         "sources": [{"title": f"s{i}", "publisher": "p", "url": f"https://example.org/{i}"} for i in range(3)]}
 
 
-def fake_codex(tmp_path, verdicts=("pass",)):
+def fake_codex(tmp_path, verdicts=("pass",), refuse=()):
     """가짜 codex: 글쓰기 프롬프트면 post.json을, 팩트체크면 판정 JSON을, 수정 요청이면 고친 post.json을 만든다."""
     state = tmp_path / "codex_state"
     state.mkdir(exist_ok=True)
     (state / "verdicts.json").write_text(json.dumps(list(verdicts)))
     (state / "post.json").write_text(json.dumps(POST))
+    (state / "refuse.json").write_text(json.dumps(list(refuse)))
     script = tmp_path / "codex"
     script.write_text(f"""#!{sys.executable}
 import json, pathlib, sys
@@ -31,6 +32,10 @@ state = pathlib.Path({str(state)!r})
 args = sys.argv[1:]
 out = pathlib.Path(args[args.index("--output-last-message") + 1])
 prompt = sys.stdin.read()
+if "--model" in args and args[args.index("--model") + 1] in json.loads((state / "refuse.json").read_text()):
+    sys.stderr.write("ERROR: The 'gpt-5.6-sol' model is not supported when using Codex with a ChatGPT account.")
+    sys.exit(1)
+(state / f"args_{{len(list(state.glob('args_*.txt')))}}.txt").write_text(json.dumps(args))
 n = len(list(state.glob("prompt_*.txt")))
 (state / f"prompt_{{n}}.txt").write_text(prompt, encoding="utf-8")
 if "DELIVERABLE" in prompt:
@@ -43,6 +48,10 @@ elif "independent fact-checker" in prompt:
     issues = [] if v == "pass" else [{{"text": "A verified sentence", "problem": "x", "correction": "y",
                                         "evidence_url": "https://e.org"}}]
     out.write_text(json.dumps({{"verdict": v, "checked": 9, "issues": issues, "summary": v}}))
+elif "PHOTO REVIEW" in prompt:
+    import re
+    slots = re.findall(r"Slot (s\\d+)", prompt)
+    out.write_text(json.dumps({{"choices": {{s: s + "c1" for s in slots}}, "notes": {{}}}}))
 elif "FINDINGS" in prompt:
     post = json.loads(pathlib.Path("post.json").read_text())
     post["title"] = post["title"] + " (fixed)"
@@ -86,6 +95,7 @@ def cfg(tmp_path, monkeypatch):
     c.publish_time = ""
     c.codex_args = "exec --search"
     c.codex_model = ""
+    c.photos = 0
     c.telegram_bot_token = c.telegram_chat_id = ""
     return c
 
@@ -223,3 +233,97 @@ def test_access_token_refresh(cfg, tmp_path, monkeypatch):
     assert sent["grant_type"] == "refresh_token" and sent["refresh_token"] == "r1"
     assert json.loads(cfg.token_file.read_text())["refresh_token"] == "r1"
     assert api.access_token(cfg) == "new"            # 만료 전에는 다시 요청하지 않는다
+
+
+def commons_page(i, title, license="CC BY-SA 4.0", width=4000, mime="image/jpeg", restrictions=""):
+    return {"index": i, "title": f"File:{title}.jpg", "imageinfo": [{
+        "mime": mime, "width": width, "height": 3000,
+        "thumburl": f"https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/{title}.jpg/1200px-{title}.jpg",
+        "thumbwidth": 1200, "thumbheight": 900,
+        "descriptionurl": f"https://commons.wikimedia.org/wiki/File:{title}.jpg",
+        "extmetadata": {"LicenseShortName": {"value": license}, "Artist": {"value": "<a href='u'>Kim</a>"},
+                        "LicenseUrl": {"value": "https://creativecommons.org/licenses/by-sa/4.0"},
+                        "ImageDescription": {"value": f"{title} in Seoul"},
+                        "Restrictions": {"value": restrictions}}}]}
+
+
+def fake_commons(url):
+    return {"query": {"pages": [
+        commons_page(1, "NC_photo", license="CC BY-NC-SA 2.0"),
+        commons_page(2, "Tiny", width=300),
+        commons_page(3, "Person", restrictions="personality"),
+        commons_page(4, "Gyeongbokgung"),
+        commons_page(5, "Gyeongbokgung_2", license="Public domain"),
+    ]}}
+
+
+def test_license_filter():
+    infos = {p["title"]: p["imageinfo"][0] for p in fake_commons("")["query"]["pages"]}
+    assert not photos.license_ok(infos["File:NC_photo.jpg"])
+    assert not photos.license_ok(infos["File:Person.jpg"])
+    assert photos.license_ok(infos["File:Gyeongbokgung.jpg"])
+    gfdl = commons_page(9, "g", license="GFDL")["imageinfo"][0]
+    kogl = commons_page(9, "k", license="KOGL Type 1")["imageinfo"][0]
+    assert not photos.license_ok(gfdl) and photos.license_ok(kogl)
+    assert [c["title"] for c in photos.search("x", fetch=fake_commons)] == \
+        ["File:Gyeongbokgung.jpg", "File:Gyeongbokgung_2.jpg"]
+
+
+def test_insert_positions():
+    body = "<p>a</p><h2>One</h2><p>b</p><h2>Two</h2><p>c</p>"
+    assert photos.insert(body, 0, "[F]").startswith("[F]<p>a")
+    assert photos.insert(body, 2, "[F]") == "<p>a</p><h2>One</h2><p>b</p><h2>Two</h2>[F]<p>c</p>"
+    assert photos.insert(body, 9, "[F]").endswith("<h2>Two</h2>[F]<p>c</p>")
+
+
+def test_run_with_photos(cfg, tmp_path, monkeypatch):
+    script, state = fake_codex(tmp_path)
+    post = dict(POST, photos=[{"section": 1, "subject": "Gyeongbokgung palace", "search": "Gyeongbokgung",
+                               "alt": "Palace", "caption": "Gyeongbokgung in spring"}])
+    (state / "post.json").write_text(json.dumps(post))
+    cfg.codex_bin = str(script)
+    cfg.photos = 3
+    monkeypatch.setattr(photos, "_get", lambda params, fetch=None: fake_commons(""))
+    monkeypatch.setattr(photos, "_download", lambda url, out, fb=None: (out.parent.mkdir(parents=True, exist_ok=True),
+                                                                         out.write_bytes(b"jpg"), out)[2])
+    fake = FakeBlogger()
+    fake.install(monkeypatch)
+    assert pipeline.run(cfg) == 0
+    body = fake.drafts["1"]["content"]
+    assert '<h2>How it works</h2><figure' in body
+    assert "1200px-Gyeongbokgung.jpg" in body and "CC BY-SA 4.0" in body and "Kim" in body
+    assert "NC_photo" not in body
+    review_args = [json.loads(p.read_text()) for p in state.glob("args_*.txt")
+                   if "--image" in json.loads(p.read_text())]
+    assert len(review_args) == 1
+    imgs = [a for i, a in enumerate(review_args[0]) if review_args[0][i - 1] == "--image"]
+    assert len(imgs) == 2 and all(a.endswith(".jpg") for a in imgs)
+    assert "-" == review_args[0][-1]
+
+
+def test_photo_failure_still_publishes(cfg, tmp_path, monkeypatch):
+    script, state = fake_codex(tmp_path)
+    (state / "post.json").write_text(json.dumps(dict(POST, photos=[{"section": 0, "search": "x", "subject": "x"}])))
+    cfg.codex_bin = str(script)
+    cfg.photos = 3
+
+    def boom(params, fetch=None):
+        raise OSError("network down")
+    monkeypatch.setattr(photos, "_get", boom)
+    fake = FakeBlogger()
+    fake.install(monkeypatch)
+    assert pipeline.run(cfg) == 0
+    assert "<figure" not in fake.drafts["1"]["content"]
+
+
+def test_model_and_effort_args_and_fallback(cfg, tmp_path, monkeypatch):
+    script, state = fake_codex(tmp_path, refuse=("gpt-5.6-sol",))
+    cfg.codex_bin = str(script)
+    cfg.codex_model, cfg.codex_effort, cfg.codex_fallback_model = "gpt-5.6-sol", "low", "gpt-5.6-terra"
+    fake = FakeBlogger()
+    fake.install(monkeypatch)
+    assert pipeline.run(cfg) == 0
+    args = json.loads((state / "args_0.txt").read_text())
+    assert args[args.index("--model") + 1] == "gpt-5.6-terra"
+    assert "model_reasoning_effort=low" in args
+    assert "gpt-5.6-terra" in cfg.model_note

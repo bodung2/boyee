@@ -23,6 +23,8 @@ class BloggerConfig:
     codex_bin: str
     codex_args: str
     codex_model: str
+    codex_effort: str
+    codex_fallback_model: str
     codex_timeout: int
     write_timeout: int
     factcheck: bool
@@ -30,8 +32,11 @@ class BloggerConfig:
     max_attempts: int
     min_sources: int
     min_body_chars: int
+    photos: int
+    photo_candidates: int
     telegram_bot_token: str
     telegram_chat_id: str
+    model_note: str = ""        # 실행 중 대체 모델로 바뀌면 알림에 붙일 문구
 
     @classmethod
     def load(cls) -> "BloggerConfig":
@@ -52,7 +57,10 @@ class BloggerConfig:
             log_dir=Path(env("LOG_DIR", str(ROOT / "logs"))),
             codex_bin=env("CODEX_BIN", "codex").strip(),
             codex_args=env("CODEX_ARGS", "").strip(),
-            codex_model=(env("BLOGGER_CODEX_MODEL") or env("CODEX_MODEL", "")).strip(),
+            # 블로거 글은 GPT-5.6 Sol(추론 low = ChatGPT의 'Light')로 쓴다. ChatGPT 로그인으로 Sol을 못 쓰면 대체 모델로.
+            codex_model=env("BLOGGER_CODEX_MODEL", "gpt-5.6-sol").strip(),
+            codex_effort=env("BLOGGER_CODEX_EFFORT", "low").strip(),
+            codex_fallback_model=env("BLOGGER_CODEX_FALLBACK_MODEL", "gpt-5.6-terra").strip(),
             codex_timeout=int(env("CODEX_TIMEOUT_SEC", "1200")),
             write_timeout=int(env("BLOGGER_WRITE_TIMEOUT_SEC", "3600")),
             factcheck=_bool("BLOGGER_FACTCHECK", True),
@@ -60,6 +68,8 @@ class BloggerConfig:
             max_attempts=int(env("BLOGGER_MAX_ATTEMPTS", "2")),
             min_sources=int(env("BLOGGER_MIN_SOURCES", "3")),
             min_body_chars=int(env("BLOGGER_MIN_BODY_CHARS", "2000")),
+            photos=int(env("BLOGGER_PHOTOS", "3")),
+            photo_candidates=int(env("BLOGGER_PHOTO_CANDIDATES", "4")),
             telegram_bot_token=env("TELEGRAM_BOT_TOKEN", "").strip(),
             telegram_chat_id=env("TELEGRAM_CHAT_ID", "").strip(),
         )

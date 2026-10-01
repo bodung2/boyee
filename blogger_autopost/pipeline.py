@@ -13,7 +13,7 @@ from naver_autopost.errors import ExternalAccountError
 from naver_autopost.notify import send_text
 from naver_autopost.pipeline import KST, _Lock, today_kst
 
-from . import api, content, writer
+from . import api, content, photos, writer
 from .config import BloggerConfig
 
 log = logging.getLogger(__name__)
@@ -113,6 +113,24 @@ def _attempt(cfg: BloggerConfig, today: str, out_dir: Path, feedback: str, resum
     return post
 
 
+def _add_photos(cfg: BloggerConfig, post: dict, out_dir: Path) -> str:
+    """팩트체크를 통과한 글에 커먼즈 사진을 넣는다. 사진 때문에 발행이 멈추지는 않는다. 알림용 한 줄을 돌려준다."""
+    stage = _load(out_dir / "stage.json")
+    if cfg.photos <= 0:
+        return ""
+    if stage.get("photos_done"):
+        return f"사진 {stage.get('photos', 0)}장"
+    try:
+        n = photos.add_photos(cfg, post, out_dir)
+    except Exception as e:  # noqa: BLE001 - 사용 한도·네트워크 문제여도 글은 발행한다
+        log.warning("사진 넣기 실패(사진 없이 발행): %s", e)
+        return "⚠️ 사진을 넣지 못해 글만 올렸습니다(로그 확인)"
+    _save(out_dir / "post.json", post)
+    _mark(out_dir, photos_done=True, photos=n)
+    log.info("사진 %d장을 넣었습니다", n)
+    return f"사진 {n}장"
+
+
 def produce(cfg: BloggerConfig, today: str, out_dir: Path) -> dict:
     """발행할 글을 만든다. 떨어지면 BLOGGER_MAX_ATTEMPTS번까지 다른 주제로 새로 쓴다."""
     feedback = ""
@@ -194,10 +212,11 @@ def run(cfg: BloggerConfig, draft: bool = False, force: bool = False) -> int:
                 log.warning("발행 목록 동기화 실패(계속 진행): %s", e)
 
             post = produce(cfg, today, out_dir)
+            photo_note = _add_photos(cfg, post, out_dir)
             result = _publish(cfg, post, out_dir, draft_only=draft)
             if draft:
                 notify(cfg, f"[{LABEL} 테스트] 초안으로만 저장했습니다(발행 안 함): {post['title']}\n"
-                            "블로거 관리 화면 > 글 목록에서 확인하세요.")
+                            "블로거 관리 화면 > 글 목록에서 확인하세요." + (f"\n{photo_note}" if photo_note else ""))
                 return 0
             url = result.get("url", "")
             scheduled = str(result.get("status", "")).upper() == "SCHEDULED"
@@ -206,7 +225,8 @@ def run(cfg: BloggerConfig, draft: bool = False, force: bool = False) -> int:
                 "topic": post.get("topic", ""), "post_id": result.get("id"), "source": "autopost",
             })
             when = f" ({cfg.publish_time} 예약)" if scheduled else ""
-            notify(cfg, f"[{LABEL} 자동발행 완료{when}] {post['title']}\n{url}")
+            notes = "\n".join(n for n in (photo_note, cfg.model_note) if n)
+            notify(cfg, f"[{LABEL} 자동발행 완료{when}] {post['title']}\n{url}" + (f"\n{notes}" if notes else ""))
             return 0
     except Exception as e:
         log.exception("블로거 자동 발행 실패")

@@ -81,11 +81,16 @@ def _check(cfg: BloggerConfig, search: bool) -> int:
 
     print(f"4) 예약 발행 시각: {cfg.publish_time + ' (한국 시각)' if cfg.publish_time else '없음(글이 완성되는 즉시 발행)'}")
 
+    print(f"5) 글쓰기 모델: {cfg.codex_model or '(Codex 기본값)'}, 추론 {cfg.codex_effort or '(기본값)'}"
+          f" / 안 되면 {cfg.codex_fallback_model or '없음'}. 사진: 글마다 최대 {cfg.photos}장(위키미디어 커먼즈)")
+
     if search:
-        from naver_autopost.openai_client import codex_selftest
-        print("5) Codex(ChatGPT 구독) 웹 검색 ... (1~3분)")
+        from naver_autopost.openai_client import CODEX_SELFTEST, _extract_json
+        print("6) Codex(ChatGPT 구독) 모델·웹 검색 ... (1~3분)")
         try:
-            r = codex_selftest(cfg)
+            r = _extract_json(writer._codex(cfg, CODEX_SELFTEST, None, "read-only", cfg.codex_timeout))
+            if cfg.model_note:
+                print(f"   {cfg.model_note}")
             print(f"   ✅ {r.get('title', '')} {r.get('url', '')}" if r.get("ok") else f"   ❌ 웹 검색 꺼짐: {r.get('reason')}")
             ok &= bool(r.get("ok"))
         except Exception as e:  # noqa: BLE001

@@ -40,12 +40,21 @@ Save ONE file named post.json (UTF-8) in the current working directory, exactly 
   "labels": ["3 to 8 Blogger labels"],
   "topic": "one-line description of the topic",
   "summary": "one-sentence summary",
-  "sources": [{{"title": "source page title", "publisher": "who published it", "url": "https://..."}}]
+  "sources": [{{"title": "source page title", "publisher": "who published it", "url": "https://..."}}],
+  "photos": [{{"section": 0, "subject": "exactly what the photo must show", "search": "Wikimedia Commons search words",
+              "alt": "alt text", "caption": "short caption"}}]
 }}
 body_html rules:
 - An HTML fragment only: <p>, <h2>, <h3>, <ul>/<ol>/<li>, <table>, <blockquote>, <strong>, <em>, <a href>, <hr>.
 - No <html>, <head>, <body>, <h1> (Blogger shows the title itself), no <script>, <style>, <iframe>, no Markdown.
-- No images and no image placeholders; do not reference pictures that are not there.
+- Do not put <img> tags or image placeholders in body_html, and do not refer to pictures in the text.
+  Photos are added automatically from "photos" below.
+"photos" ({photos} at most, or [] if no photo would help): real photos to look for on Wikimedia Commons.
+- "section": 0 = top of the post, N = right after the N-th <h2> heading.
+- "subject": a concrete, checkable subject in English (e.g. "Seoul subway ticket gates with a T-money card reader"),
+  something that really exists in Korea. A reviewer will reject photos that do not clearly show it.
+- "search": 2-5 English keywords with proper names (e.g. "Gyeongbokgung Geunjeongjeon"); no generic mood words.
+- Prefer places, buildings, food, objects and signs over people.
 - If the skill asks for a sources/references section, put it inside body_html as HTML with real links.
 "sources" lists every page you actually read to verify the facts (at least {min_sources}).
 After saving post.json, reply with just: done
@@ -111,9 +120,24 @@ def _history_lines(entries: list[dict]) -> str:
     return "\n".join(lines) or "(none yet)"
 
 
-def _codex(cfg: BloggerConfig, prompt: str, cwd: Path | None, sandbox: str, timeout: int) -> str:
+_MODEL_REFUSED = re.compile(r"model.{0,80}(not supported|not available|does not exist|not found|unknown|access)"
+                            r"|(unsupported|unknown|invalid) model", re.I | re.S)
+
+
+def _codex(cfg: BloggerConfig, prompt: str, cwd: Path | None, sandbox: str, timeout: int,
+           images: list[Path] | None = None) -> str:
     try:
-        return run_codex(cfg, prompt, cwd=cwd, sandbox=sandbox, timeout=timeout)
+        try:
+            return run_codex(cfg, prompt, cwd=cwd, sandbox=sandbox, timeout=timeout, images=images)
+        except CodexUnavailable as e:
+            # ChatGPT 로그인(구독)으로는 Sol을 못 쓰는 경우가 있다 → 대체 모델로 이번 실행을 계속한다.
+            if not (cfg.codex_fallback_model and cfg.codex_model != cfg.codex_fallback_model
+                    and _MODEL_REFUSED.search(str(e))):
+                raise
+            log.warning("모델 %s을(를) 쓸 수 없어 %s(으)로 바꿉니다: %s", cfg.codex_model, cfg.codex_fallback_model, e)
+            cfg.model_note = f"⚠️ {cfg.codex_model}을(를) 쓸 수 없어 {cfg.codex_fallback_model}(으)로 썼습니다"
+            cfg.codex_model = cfg.codex_fallback_model
+            return run_codex(cfg, prompt, cwd=cwd, sandbox=sandbox, timeout=timeout, images=images)
     except CodexUnavailable as e:
         # 미설치·로그인 풀림·구독 사용 한도: 다시 써 봐야 소용없으니 멈추고 알린다(다음 실행에서 이어서).
         raise CodexAccountError(f"Codex(ChatGPT)를 쓸 수 없습니다: {e}") from e
@@ -128,7 +152,7 @@ def write_post(cfg: BloggerConfig, out_dir: Path, today: str, history: list[dict
           f"{feedback}\n") if feedback else ""
     prompt = WRITE_PROMPT.replace("${skill}", f"${cfg.skill}").format(
         skill=cfg.skill, skill_hint=hint, today=today, history=_history_lines(history), feedback=fb,
-        min_sources=cfg.min_sources)
+        min_sources=cfg.min_sources, photos=cfg.photos)
     (out_dir / "write_prompt.txt").write_text(prompt, encoding="utf-8")
     log.info("Codex 글쓰기 시작(%s 스킬)", cfg.skill)
     reply = _codex(cfg, prompt, out_dir, "workspace-write", cfg.write_timeout)
@@ -171,3 +195,36 @@ def apply_fixes(cfg: BloggerConfig, out_dir: Path, issues: list[dict]) -> dict:
         return json.loads(applied.read_text(encoding="utf-8")) if applied.exists() else {}
     except json.JSONDecodeError:
         return {}
+
+
+PHOTO_REVIEW_PROMPT = """PHOTO REVIEW. You are choosing photos for a public blog post about Korea.
+The attached images are candidates from Wikimedia Commons, in the order listed below. Look at each image itself.
+Blog post title: {title}
+
+For each slot pick the ONE best candidate, or null if none is clearly right. A candidate is acceptable only if:
+- it clearly shows the slot's subject (not just something loosely related),
+- it is really in / of Korea (reject anything that looks like Japan, China or elsewhere),
+- no watermark, no large overlaid text or logo, not a screenshot, map or diagram unless the subject asks for it,
+- no identifiable private person as the main subject, nothing graphic, offensive or misleading,
+- reasonable quality (not blurry, not tiny, not badly cropped).
+
+{slots}
+
+Output ONLY one JSON object (no code fence):
+{{"choices": {{"<slot id>": "<candidate id>" or null}}, "notes": {{"<candidate id>": "why rejected / chosen"}}}}
+"""
+
+
+def review_photos(cfg: BloggerConfig, title: str, slots: list[dict]) -> dict:
+    """slots: [{"id", "subject", "candidates": [{"id", "title", "description", "path"}]}] → {slot id: candidate id}"""
+    lines, images = [], []
+    for slot in slots:
+        lines.append(f"Slot {slot['id']} — must show: {slot['subject']}")
+        for c in slot["candidates"]:
+            images.append(c["path"])
+            lines.append(f"  image #{len(images)} = candidate {c['id']}: {c['title']} — {c['description'][:200]}")
+    prompt = PHOTO_REVIEW_PROMPT.format(title=title, slots="\n".join(lines))
+    result = _extract_json(_codex(cfg, prompt, None, "read-only", cfg.codex_timeout, images=images))
+    choices = result.get("choices") or {}
+    log.info("사진 검수: %s", choices)
+    return {str(k): str(v) for k, v in choices.items() if v}
