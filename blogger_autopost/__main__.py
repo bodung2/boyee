@@ -5,6 +5,7 @@
   python -m blogger_autopost run            오늘 글 1편 생성·검수·발행(작업 스케줄러가 매일 실행)
   python -m blogger_autopost run --draft    발행하지 않고 블로거 '초안'으로만 저장(설치 확인용)
   python -m blogger_autopost sync-history   블로그에 있는 글을 발행 이력에 가져오기
+  python -m blogger_autopost diagnose       검색 유입 진단 자료(글·공개 페이지·서치 콘솔)를 모아 GitHub에 올리기
 """
 from __future__ import annotations
 
@@ -27,6 +28,8 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument("--draft", action="store_true", help="발행하지 않고 초안으로만 저장")
     run_p.add_argument("--force", action="store_true", help="오늘 이미 발행했어도 한 편 더")
     sub.add_parser("sync-history")
+    diag = sub.add_parser("diagnose")
+    diag.add_argument("--no-push", action="store_true", help="GitHub에 올리지 않고 파일만 만든다")
     args = parser.parse_args(argv)
     cfg = BloggerConfig.load()
 
@@ -47,12 +50,41 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "run":
         from .pipeline import run
         return run(cfg, draft=args.draft, force=args.force)
+    if args.cmd == "diagnose":
+        return _diagnose(cfg, push=not args.no_push)
     if args.cmd == "sync-history":
         from .pipeline import sync_history
         added, removed, _ = sync_history(cfg)
         print(f"이력에 없던 {added}편 추가, 블로그에서 지운 {removed}편 제외: {cfg.history_file}")
         return 0
     return 1
+
+
+def _diagnose(cfg: BloggerConfig, push: bool) -> int:
+    import json
+
+    from naver_autopost.__main__ import _push_diagnostics
+    from naver_autopost.config import ROOT
+
+    from . import diagnose
+    print("블로그 글·공개 페이지·서치 콘솔 자료를 모으는 중입니다(1~3분)...")
+    path = diagnose.run(cfg, ROOT / "diagnostics" / "blogger")
+    r = json.loads(path.read_text(encoding="utf-8"))
+    posts = r["posts"]
+    print(f"  글 {len(posts)}편(예약 {len(r['scheduled'])}편), 평균 {sum(p['words'] for p in posts) // max(len(posts), 1)}단어")
+    home = r["public_pages"]["home"]
+    print(f"  홈 HTTP {home['status']}, 메타 설명: {'있음' if home.get('meta_description') else '없음'}, "
+          f"사이트맵 URL {r['public_pages']['sitemap'].get('url_count')}개")
+    sc = r["search_console"]
+    if sc.get("_error"):
+        print(f"  서치 콘솔: ❌ {sc['_error']}")
+    else:
+        rows = (sc.get("by_date") or {}).get("rows", [])
+        print(f"  서치 콘솔(90일): 노출 {sum(x['impressions'] for x in rows):.0f}회, 클릭 {sum(x['clicks'] for x in rows):.0f}회")
+        states = [i.get("coverageState") or i.get("error") for i in sc.get("inspections", [])]
+        print(f"  색인 상태(최근 글): {states[:5]}")
+    print(f"  저장: {path}")
+    return 0 if not push else _push_diagnostics("Blogger search traffic diagnostics")
 
 
 def _check(cfg: BloggerConfig, search: bool) -> int:

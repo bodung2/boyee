@@ -508,3 +508,52 @@ def test_deleted_scheduled_post_is_rewritten_on_rerun(cfg, tmp_path, monkeypatch
     entries = history.load(cfg.history_file)
     assert [e["post_id"] for e in entries if e["source"] == "autopost"] == ["2"]
     assert sum("DELIVERABLE" in p.read_text(encoding="utf-8") for p in state.glob("prompt_*.txt")) == 2
+
+
+def test_diagnose_collects_report(cfg, tmp_path, monkeypatch):
+    from blogger_autopost import diagnose
+    _with_drive_token(cfg, tmp_path)
+    post = {"id": "1", "title": "T-money guide", "url": "https://kb.blogspot.com/2026/10/t.html",
+            "published": "2026-10-01T21:00:00+09:00", "labels": ["Transport"],
+            "content": '<p>Hello world text</p><h2>A</h2><img src="x" alt="a"><img src="y">'
+                       '<a href="https://kb.blogspot.com/2026/09/o.html">o</a><a href="https://gov.kr">g</a>'}
+
+    def fake_request(c, method, path, params=None, body=None):
+        if path.endswith("/posts"):
+            return {"items": [post]}
+        return {"name": "Korea Breakdown", "url": "https://kb.blogspot.com/", "posts": {"totalItems": 1}}
+    monkeypatch.setattr(api, "resolve_blog_id", lambda c: "123")
+    monkeypatch.setattr(api, "request", fake_request)
+    monkeypatch.setattr(api, "list_posts", lambda c, status="live", limit=2000: [])
+    page = ('<html><head><title>T-money guide</title><meta name="robots" content="index,follow">'
+            '<link rel="canonical" href="https://kb.blogspot.com/2026/10/t.html"></head></html>')
+    monkeypatch.setattr(diagnose, "_fetch", lambda url: (200, "<loc>a</loc><loc>b</loc>" if "sitemap" in url else page, {}))
+    calls = []
+
+    def fake_google(c, url, body=None):
+        calls.append(url)
+        if url.endswith("/sites"):
+            return {"siteEntry": [{"siteUrl": "https://kb.blogspot.com/"}]}
+        if "searchAnalytics" in url:
+            return {"rows": [{"keys": ["2026-10-02"], "clicks": 0, "impressions": 3}]}
+        if "inspect" in url:
+            return {"inspectionResult": {"indexStatusResult": {"coverageState": "Discovered - currently not indexed"}}}
+        return {}
+    monkeypatch.setattr(diagnose, "_google", fake_google)
+
+    report = json.loads(diagnose.run(cfg, tmp_path / "diag").read_text(encoding="utf-8"))
+    p = report["posts"][0]
+    assert (p["images"], p["images_without_alt"], p["internal_links"], p["external_links"]) == (2, 1, 1, 1)
+    home = report["public_pages"]["home"]
+    assert home["meta_description"] is None and home["meta_robots"] == "index,follow"
+    assert report["public_pages"]["sitemap"]["url_count"] == 2
+    sc = report["search_console"]
+    assert sc["site"] == "https://kb.blogspot.com/"
+    assert sc["inspections"][0]["coverageState"] == "Discovered - currently not indexed"
+    assert "content" not in json.dumps(report["posts"])        # 본문 전체는 담지 않는다
+
+
+def test_diagnose_without_search_console_scope(cfg, tmp_path):
+    from blogger_autopost import diagnose
+    _with_drive_token(cfg, tmp_path, scope=f"{api.BLOGGER_SCOPE} {api.DRIVE_SCOPE}")
+    assert "auth" in diagnose.search_console(cfg, "https://kb.blogspot.com/", [])["_error"]
