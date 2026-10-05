@@ -119,7 +119,9 @@ Codex(ChatGPT 구독)에 설치된 `korea-explained-blogger` 스킬로 글을 �
                               못 찾으면 그 자리에 실사풍 생성 이미지를 대신 넣음('AI-generated image (not an actual photo)' 표기)
   ⑤-2 생성 그림 2장           스킬의 그림 지침대로 글쓴이가 정한 프롬프트 → ChatGPT 이미지(Codex)로 일러스트 생성
                               → Codex가 검수(글자·왜곡·한국과 안 맞는 요소) → 구글 드라이브에 올려 본문에 넣음('AI-generated' 표기)
-                              어느 그림이든 실패하면 그 그림만 빼고 발행, 알림에 이유 표시
+                              글마다 항상 3장(일러스트 2 + 실제 사진 또는 실사풍 1): 글쓴이가 자리를 덜 정하면 기본 자리로 채우고,
+                              생성 실패·검수 탈락은 이유를 반영해 그림마다 최대 3번 다시 그림(BLOGGER_IMAGE_TRIES)
+                              그래도 안 되면 그 그림만 빼고 발행, 알림에 이유 표시
   ⑥ 발행                     블로거 초안 저장 → 발행(BLOGGER_PUBLISH_TIME이 있으면 그 시각으로 예약)
   ⑦ 기록·알림                data/published_blogger.json, 텔레그램 알림
 ```

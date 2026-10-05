@@ -151,7 +151,7 @@ def _add_images(cfg: BloggerConfig, post: dict, out_dir: Path) -> str:
         except Exception as e:  # noqa: BLE001 - 사용 한도·네트워크 문제여도 글은 발행한다
             log.warning("%s 넣기 실패(빼고 발행): %s", name, e)
             if name == "photos":                 # 사진 검색 자체가 실패해도 그 자리는 생성 이미지로 채운다
-                post["photo_misses"] = [w for w in post.get("photos") or [] if isinstance(w, dict)][:cfg.photos]
+                post["photo_misses"] = photos.photo_wants(cfg, post)
             notes.append(f"⚠️ {'실제 사진' if name == 'photos' else '생성 그림'}을 넣지 못했습니다: {str(e)[:150]}")
             continue
         _save(out_dir / "post.json", post)

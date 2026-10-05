@@ -55,7 +55,11 @@ elif "PHOTO REVIEW" in prompt:
 elif "ILLUSTRATION REVIEW" in prompt:
     import re
     ids = re.findall(r"= ([ip]\\d+) ", prompt)
-    out.write_text(json.dumps({{i: ("ok" if i != "i2" or "REJECT_I2" not in prompt else "text in image") for i in ids}}))
+    verdict = {{i: ("ok" if i != "i2" or "REJECT_I2" not in prompt else "text in image") for i in ids}}
+    if "REJECT_ONCE_I1" in prompt and "i1" in verdict and not (state / "rejected_once").exists():
+        (state / "rejected_once").write_text("1")
+        verdict["i1"] = "garbled letters on a sign"
+    out.write_text(json.dumps(verdict))
 elif "FINDINGS" in prompt:
     post = json.loads(pathlib.Path("post.json").read_text())
     post["title"] = post["title"] + " (fixed)"
@@ -627,3 +631,51 @@ def test_check_meta_counts_description_tags(cfg, monkeypatch):
     rows = {r["title"]: r for r in diagnose.check_meta(cfg, renderer=None)}
     assert rows["A"]["meta_description"] == "Short answer about A." and rows["A"]["tags"] == 1
     assert rows["B"]["tags"] == 0 and rows["B"]["og_description"] == "og text" and rows["C"]["tags"] == 2
+
+
+def _fake_images(monkeypatch, prompts):
+    def fake_generate(img_cfg, prompt, out):
+        prompts[out.name] = prompt
+        from PIL import Image
+        Image.new("RGB", (64, 36)).save(out)
+        return out
+    monkeypatch.setattr(illustrations.codex_image, "generate_image", fake_generate)
+    monkeypatch.setattr(illustrations.hosting, "upload", lambda c, path, name: f"https://x/{path.stem}")
+
+
+def test_always_three_images_even_without_plans_or_commons_hits(cfg, tmp_path, monkeypatch):
+    script, state = fake_codex(tmp_path)
+    body = BODY.replace("<h2>Sources</h2>", "<h2>Getting there</h2><p>x</p><h2>Sources</h2>")
+    (state / "post.json").write_text(json.dumps(dict(POST, body_html=body)))     # 그림·사진 계획 없음
+    cfg.codex_bin = str(script)
+    cfg.photos, cfg.illustrations, cfg.photo_fallback = 1, 2, True
+    _with_drive_token(cfg, tmp_path)
+    monkeypatch.setattr(photos, "_get", lambda params, fetch=None: {"query": {"pages": []}})
+    prompts = {}
+    _fake_images(monkeypatch, prompts)
+    fake = FakeBlogger()
+    fake.install(monkeypatch)
+    assert pipeline.run(cfg) == 0
+
+    html = fake.drafts["1"]["content"]
+    assert html.count("<figure") == 3
+    assert html.count("AI-generated illustration") == 2 and html.count("not an actual photo") == 1
+    assert "photorealistic" in prompts["photo_ai_1.png"] and "T-money" in prompts["photo_ai_1.png"]
+    assert "How it works" in prompts["illust_1.png"] or "How it works" in prompts["illust_2.png"]
+
+
+def test_rejected_image_is_redrawn_with_the_reason(cfg, tmp_path, monkeypatch):
+    script, state = fake_codex(tmp_path)
+    post = dict(POST, title="REJECT_ONCE_I1 post", illustrations=[{"section": 1, "prompt": "a subway gate"}])
+    (state / "post.json").write_text(json.dumps(post))
+    cfg.codex_bin = str(script)
+    cfg.illustrations = 1
+    _with_drive_token(cfg, tmp_path)
+    prompts = {}
+    _fake_images(monkeypatch, prompts)
+    fake = FakeBlogger()
+    fake.install(monkeypatch)
+    assert pipeline.run(cfg) == 0
+    html = fake.drafts["1"]["content"]
+    assert "https://x/illust_1_try2" in html and "https://x/illust_1\"" not in html
+    assert "rejected because: garbled letters on a sign" in prompts["illust_1_try2.png"]

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import html
 import logging
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -52,52 +53,91 @@ def _photo_prompt(want: dict) -> str:
     return base.strip() + PHOTO_STYLE
 
 
+def _default_illustration(post: dict, n: int) -> dict:
+    """글쓴이가 그림 자리를 모자라게 정했을 때 채우는 기본 일러스트(n번째 소제목 아래)."""
+    topic = str(post.get("topic") or post.get("title") or "").strip()
+    heads = re.findall(r"<h2[^>]*>(.*?)</h2>", post.get("body_html", ""), re.I | re.S)
+    head = html.unescape(re.sub(r"<[^>]+>", "", heads[n - 1])).strip() if len(heads) >= n else ""
+    return {"section": n, "prompt": f"An explanatory illustration for a blog post about {topic}"
+                                    + (f", for the section '{head}'" if head else "") + ", set in South Korea.",
+            "alt": head or topic, "caption": ""}
+
+
 def _jobs(cfg: BloggerConfig, post: dict) -> list[tuple[str, dict, str, str]]:
-    """(id, want, kind, prompt) 목록: 일러스트 + 실제 사진을 못 찾은 자리의 실사풍 대체 이미지."""
-    jobs = [(f"i{i}", w, "illustration", w["prompt"] + STYLE)
-            for i, w in enumerate([w for w in (post.get("illustrations") or [])
-                                   if isinstance(w, dict) and w.get("prompt")][:cfg.illustrations], 1)]
+    """(id, want, kind, prompt) 목록: 일러스트 cfg.illustrations개(모자라면 기본 그림으로 채움)
+    + 실제 사진을 못 찾은 자리의 실사풍 대체 이미지."""
+    wants = [w for w in (post.get("illustrations") or []) if isinstance(w, dict) and w.get("prompt")]
+    # 기본 그림은 다른 그림·사진과 같은 소제목 아래에 겹치지 않게 둔다.
+    used = {int(w.get("section") or 0) for w in wants + photos.photo_wants(cfg, post)}
+    n = 1
+    while len(wants) < cfg.illustrations:
+        while n in used:
+            n += 1
+        wants.append(_default_illustration(post, n))
+        used.add(n)
+    jobs = [(f"i{i}", w, "illustration", w["prompt"] + STYLE) for i, w in enumerate(wants[:cfg.illustrations], 1)]
     if cfg.photo_fallback:
         jobs += [(f"p{i}", w, "photo", _photo_prompt(w))
                  for i, w in enumerate(post.get("photo_misses") or [], 1) if isinstance(w, dict)]
     return jobs
 
 
+def _path(out_dir: Path, cid: str, kind: str, attempt: int) -> Path:
+    stem = f"illust_{cid[1:]}" if kind == "illustration" else f"photo_ai_{cid[1:]}"
+    return out_dir / (f"{stem}.png" if attempt == 1 else f"{stem}_try{attempt}.png")
+
+
 def add_illustrations(cfg: BloggerConfig, post: dict, out_dir: Path) -> tuple[int, str]:
-    """그림을 만들어 넣는다. (넣은 장수, 알림용 메모)"""
+    """그림을 만들어 넣는다. 생성이 실패하거나 검수에서 떨어진 그림은 이유를 반영해 다시 그린다
+    (그림마다 최대 cfg.image_tries번). (넣은 장수, 알림용 메모)"""
     jobs = _jobs(cfg, post)
     if not jobs:
-        return 0, "생성 그림 0장(글쓴이가 그림 자리를 정하지 않음)"
+        return 0, ""
     if not api.has_scope(cfg, api.DRIVE_SCOPE):
         return 0, "⚠️ 생성 그림을 뺐습니다: 드라이브 권한이 없습니다 → python -m blogger_autopost auth 다시 실행"
 
-    made = []
-    for cid, want, kind, prompt in jobs:
-        path = out_dir / (f"illust_{cid[1:]}.png" if kind == "illustration" else f"photo_ai_{cid[1:]}.png")
-        if not path.exists():
-            try:
-                codex_image.generate_image(_image_cfg(cfg), prompt, path)
-                log.info("생성 그림 %s(%s) 완료", cid, kind)
-            except ExternalAccountError:
-                raise
-            except Exception as e:  # noqa: BLE001
-                log.warning("생성 그림 %s 실패: %s", cid, e)
-                continue
-        made.append((cid, want, kind, path))
-    if not made:
-        return 0, "⚠️ 생성 그림을 만들지 못했습니다(로그 확인)"
+    pending = {cid: (want, kind, prompt) for cid, want, kind, prompt in jobs}
+    accepted: dict[str, Path] = {}
+    reasons: dict[str, str] = {}
+    for attempt in range(1, max(cfg.image_tries, 1) + 1):
+        made = []
+        for cid, (want, kind, prompt) in pending.items():
+            path = _path(out_dir, cid, kind, attempt)
+            if reasons.get(cid):
+                prompt += f"\nA previous version was rejected because: {reasons[cid]}. Avoid that."
+            if not path.exists():
+                try:
+                    codex_image.generate_image(_image_cfg(cfg), prompt, path)
+                    log.info("생성 그림 %s(%s) %d번째 완료", cid, kind, attempt)
+                except ExternalAccountError:
+                    raise
+                except Exception as e:  # noqa: BLE001
+                    log.warning("생성 그림 %s %d번째 실패: %s", cid, attempt, e)
+                    reasons[cid] = f"generation failed: {str(e)[:100]}"
+                    continue
+            made.append((cid, want, kind, path))
+        if made:
+            verdicts = writer.review_illustrations(cfg, post["title"], [
+                {"id": cid, "kind": kind, "path": p,
+                 "desc": w.get("alt") or w.get("subject") or w.get("prompt", "")[:200]} for cid, w, kind, p in made])
+            for cid, _, _, path in made:
+                verdict = verdicts.get(cid, "missing")
+                if verdict == "ok":
+                    accepted[cid] = path
+                    pending.pop(cid)
+                else:
+                    reasons[cid] = verdict
+                    log.warning("생성 그림 %s %d번째 검수 탈락: %s", cid, attempt, verdict)
+        if not pending:
+            break
 
-    verdicts = writer.review_illustrations(cfg, post["title"], [
-        {"id": cid, "kind": kind, "path": p,
-         "desc": w.get("alt") or w.get("subject") or w.get("prompt", "")[:200]} for cid, w, kind, p in made])
     added, body, problems, counts = 0, post["body_html"], [], {"illustration": 0, "photo": 0}
-    for cid, want, kind, path in sorted(made, key=lambda m: -int(m[1].get("section") or 0)):
-        verdict = verdicts.get(cid, "missing")
-        if verdict != "ok":
-            problems.append(f"{cid}: {verdict}")
-            continue
+    problems += [f"{cid}: {reasons.get(cid, '실패')}" for cid in pending]
+    order = {cid: (want, kind) for cid, want, kind, _ in jobs}
+    for cid in sorted(accepted, key=lambda c: -int(order[c][0].get("section") or 0)):
+        want, kind = order[cid]
         try:
-            url = hosting.upload(cfg, path, f"{out_dir.name}-{path.stem}.jpg")
+            url = hosting.upload(cfg, accepted[cid], f"{out_dir.name}-{accepted[cid].stem}.jpg")
         except hosting.HostingError as e:
             log.warning("그림 올리기 실패: %s", e)
             problems.append(str(e))

@@ -156,12 +156,26 @@ def _candidates(cfg: BloggerConfig, want: dict, fetch=None) -> list[dict]:
     return found[:cfg.photo_candidates]
 
 
-def add_photos(cfg: BloggerConfig, post: dict, out_dir: Path, fetch=None, fetch_bytes=None) -> tuple[int, str]:
-    """post["photos"]대로 사진을 찾아·검수해 body_html에 넣는다. (넣은 장수, 알림용 메모). 실패해도 예외 없이."""
+def default_photo_want(post: dict) -> dict:
+    """글쓴이가 사진 자리를 정하지 않았을 때 쓰는 기본 사진 자리(두 번째 소제목 아래, 글 주제로 검색)."""
+    topic = str(post.get("topic") or post.get("title") or "").strip()
+    sections = len(re.findall(r"<h2\b", post.get("body_html", ""), re.I))
+    return {"section": 2 if sections >= 2 else 1, "subject": topic, "search": topic,
+            "fallback_prompt": f"A natural, realistic everyday scene in South Korea that illustrates: {topic}",
+            "alt": topic, "caption": ""}
+
+
+def photo_wants(cfg: BloggerConfig, post: dict) -> list[dict]:
     wants = [w for w in (post.get("photos") or []) if isinstance(w, dict) and (w.get("search") or w.get("subject"))]
-    wants = wants[:cfg.photos]
+    return (wants or [default_photo_want(post)])[:cfg.photos]
+
+
+def add_photos(cfg: BloggerConfig, post: dict, out_dir: Path, fetch=None, fetch_bytes=None) -> tuple[int, str]:
+    """post["photos"]대로 사진을 찾아·검수해 body_html에 넣는다. (넣은 장수, 알림용 메모). 실패해도 예외 없이.
+    사진 자리는 항상 cfg.photos개다(글쓴이가 안 정했으면 기본 자리). 못 찾은 자리는 photo_misses에 남긴다."""
+    wants = photo_wants(cfg, post)
     if not wants:
-        return 0, "실제 사진 0장(글쓴이가 사진 자리를 정하지 않음)"
+        return 0, ""
     # 못 찾은 자리는 생성 그림 단계가 실사풍 이미지로 대신 채운다.
     post["photo_misses"] = []
     slots, pool = [], {}
