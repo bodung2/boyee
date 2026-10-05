@@ -5,7 +5,7 @@ from datetime import datetime
 
 import pytest
 
-from blogger_autopost import api, content, hosting, illustrations, photos, pipeline, writer
+from blogger_autopost import api, content, hosting, illustrations, infographic, photos, pipeline, writer
 from blogger_autopost.config import BloggerConfig
 from naver_autopost import history
 from naver_autopost.pipeline import KST
@@ -112,6 +112,7 @@ def cfg(tmp_path, monkeypatch):
     c.photos = 0
     c.illustrations = 0
     c.photo_fallback = False
+    c.infographic = False
     c.telegram_bot_token = c.telegram_chat_id = ""
     return c
 
@@ -679,3 +680,52 @@ def test_rejected_image_is_redrawn_with_the_reason(cfg, tmp_path, monkeypatch):
     html = fake.drafts["1"]["content"]
     assert "https://x/illust_1_try2" in html and "https://x/illust_1\"" not in html
     assert "rejected because: garbled letters on a sign" in prompts["illust_1_try2.png"]
+
+
+def test_infographic_placement_cover_first_and_before_sources():
+    body = BODY                                            # ends with <h2>Sources</h2><ul>...</ul>
+    out = infographic.place(body, "https://x/info", "T-money guide")
+    assert out.startswith('<div class="kb-cover" style="display:none"><img src="https://x/info"')
+    assert out.index('class="kb-infographic"') < out.index("<h2>Sources</h2>")
+    assert infographic.place(out, "https://x/info2", "T-money guide").count("kb-infographic") == 1
+    no_sources = infographic.place("<p>a</p><h2>B</h2><p>b</p>", "https://x/i", "T")
+    assert no_sources.endswith("</figure>")
+
+
+def test_leading_image_move_keeps_cover_on_top():
+    from blogger_autopost import seo
+    body = infographic.place(AUTO_BODY, "https://x/info", "Sizes")
+    new, n = seo.move_leading_images(body)
+    assert n == 1 and new.startswith('<div class="kb-cover"')
+    assert new.index("<p>A Korean apartment") < new.index("<figure")
+
+
+def test_infographic_is_reviewed_retried_and_becomes_cover(cfg, tmp_path, monkeypatch):
+    cfg.infographic, cfg.image_tries = True, 3
+    _with_drive_token(cfg, tmp_path)
+    prompts, verdicts = [], iter(["number 63% is not in the post", "ok"])
+
+    def fake_run(img_cfg, prompt, out, convert, timeout, what=""):
+        prompts.append(prompt)
+        from PIL import Image
+        Image.new("RGB", (100, 150)).save(out)
+        return out
+    monkeypatch.setattr(infographic.codex_image, "run_for_image", fake_run)
+    monkeypatch.setattr(infographic, "review", lambda c, post, path: next(verdicts))
+    monkeypatch.setattr(infographic.hosting, "upload", lambda c, path, name: f"https://x/{path.stem}")
+    post = dict(POST)
+    n, note = infographic.add(cfg, post, tmp_path)
+    assert n == 1 and "대표 이미지" in note
+    assert "$onepage" in prompts[0] and "Korea, Explained" in prompts[0]
+    assert "rejected because: number 63% is not in the post" in prompts[1]
+    assert post["body_html"].startswith('<div class="kb-cover" style="display:none"><img src="https://x/infographic_try2"')
+
+
+def test_infographic_gives_up_cleanly(cfg, tmp_path, monkeypatch):
+    cfg.infographic, cfg.image_tries = True, 2
+    _with_drive_token(cfg, tmp_path)
+    monkeypatch.setattr(infographic.codex_image, "run_for_image",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no image")))
+    post = dict(POST)
+    n, note = infographic.add(cfg, post, tmp_path)
+    assert n == 0 and "빼고" in note and post["body_html"] == POST["body_html"]

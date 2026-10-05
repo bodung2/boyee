@@ -13,7 +13,7 @@ from naver_autopost.errors import ExternalAccountError
 from naver_autopost.notify import send_text
 from naver_autopost.pipeline import KST, _Lock, today_kst
 
-from . import api, content, illustrations, photos, seo, writer
+from . import api, content, illustrations, infographic, photos, seo, writer
 from .config import BloggerConfig
 
 log = logging.getLogger(__name__)
@@ -138,7 +138,8 @@ def _add_images(cfg: BloggerConfig, post: dict, out_dir: Path) -> str:
     notes = []
     fallback = cfg.photos if cfg.photo_fallback else 0      # 못 찾은 사진 자리를 채울 실사풍 생성 이미지
     steps = (("photos", cfg.photos, photos.add_photos),
-             ("illustrations", cfg.illustrations + fallback, illustrations.add_illustrations))
+             ("illustrations", cfg.illustrations + fallback, illustrations.add_illustrations),
+             ("infographic", int(cfg.infographic), infographic.add))
     for name, count, step in steps:
         stage = _load(out_dir / "stage.json")
         if count <= 0:
@@ -152,7 +153,8 @@ def _add_images(cfg: BloggerConfig, post: dict, out_dir: Path) -> str:
             log.warning("%s 넣기 실패(빼고 발행): %s", name, e)
             if name == "photos":                 # 사진 검색 자체가 실패해도 그 자리는 생성 이미지로 채운다
                 post["photo_misses"] = photos.photo_wants(cfg, post)
-            notes.append(f"⚠️ {'실제 사진' if name == 'photos' else '생성 그림'}을 넣지 못했습니다: {str(e)[:150]}")
+            what = {"photos": "실제 사진", "illustrations": "생성 그림", "infographic": "인포그래픽"}[name]
+            notes.append(f"⚠️ {what}을 넣지 못했습니다: {str(e)[:150]}")
             continue
         _save(out_dir / "post.json", post)
         _mark(out_dir, **{f"{name}_done": True, f"{name}_note": note})

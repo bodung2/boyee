@@ -37,6 +37,9 @@ class BloggerConfig:
     illustrations: int
     photo_fallback: bool
     image_tries: int
+    infographic: bool
+    infographic_skill: str
+    infographic_timeout: int
     image_model: str
     image_timeout: int
     telegram_bot_token: str
@@ -81,6 +84,10 @@ class BloggerConfig:
             photo_fallback=_bool("BLOGGER_PHOTO_FALLBACK", True),
             # 생성 그림이 실패하거나 검수에서 떨어지면 이유를 반영해 다시 그리는 최대 횟수(그림마다)
             image_tries=int(env("BLOGGER_IMAGE_TRIES", "3")),
+            # 글 끝 한 장 인포그래픽(Codex onepage 스킬) — 글의 대표 이미지(검색·공유·Pinterest)로도 쓴다
+            infographic=_bool("BLOGGER_INFOGRAPHIC", True),
+            infographic_skill=(env("BLOGGER_INFOGRAPHIC_SKILL") or env("INFOGRAPHIC_SKILL") or "onepage").strip(),
+            infographic_timeout=int(env("INFOGRAPHIC_TIMEOUT_SEC", "900")),
             image_model=env("BLOGGER_IMAGE_MODEL", "").strip(),
             image_timeout=int(env("CODEX_IMAGE_TIMEOUT_SEC", "360")),
             telegram_bot_token=env("TELEGRAM_BOT_TOKEN", "").strip(),
