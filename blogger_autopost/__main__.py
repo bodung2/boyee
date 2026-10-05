@@ -84,7 +84,11 @@ def _check_meta(cfg: BloggerConfig) -> int:
             print(f"⚠️ {r['title']}: 검색 설명 태그가 {r['tags']}개입니다(테마에 두 번 들어감)")
         else:
             ok = False
-            print(f"❌ {r['title']}: 검색 설명 없음 (HTTP {r['status']})")
+            why = ("태그는 있는데 내용이 비어 있음 → 테마 3줄은 들어갔지만 블로거가 글 요약을 못 넘겨줌" if r["tags"]
+                   else "검색 설명 태그 자체가 없음 → 테마에 3줄이 아직 없거나, 저장이 안 됐거나, head 밖에 들어감")
+            print(f"❌ {r['title']}: {why} (HTTP {r['status']})")
+            if r.get("og_description"):
+                print(f"     (참고: 공유용 설명 og:description은 있음: {r['og_description'][:90]})")
     print("모든 글에 검색 설명이 나옵니다." if ok and rows else
           "검색 설명이 빠진 글이 있습니다 → docs/blogger-meta-description.xml 안내대로 테마에 넣었는지 확인하세요.")
     return 0 if ok else 1

@@ -63,6 +63,7 @@ def page_seo(html_text: str) -> dict:
         "meta_description_tags": len(re.findall(r'<meta[^>]+name=["\']description["\']', html_text, re.I)),
         "meta_robots": meta("robots"),
         "og_image": meta("og:image"),
+        "og_description": meta("og:description"),
         "canonical": canon.group(1) if canon else None,
         "h1_count": len(re.findall(r"<h1\b", html_text, re.I)),
         "has_adsense": "adsbygoogle" in html_text,
@@ -176,5 +177,6 @@ def check_meta(cfg: BloggerConfig, limit: int = 8) -> list[dict]:
         status, text, _ = _fetch(p["url"])
         seo = page_seo(text) if status == 200 else {}
         out.append({"title": p.get("title"), "url": p["url"], "status": status,
-                    "meta_description": seo.get("meta_description"), "tags": seo.get("meta_description_tags", 0)})
+                    "meta_description": seo.get("meta_description"), "tags": seo.get("meta_description_tags", 0),
+                    "og_description": seo.get("og_description")})
     return out
