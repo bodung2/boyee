@@ -164,7 +164,9 @@ Codex(ChatGPT 구독)에 설치된 `korea-explained-blogger` 스킬로 글을 �
   실행할 때마다 블로그와 발행 이력을 맞추므로, 지운 글은 이력·내부 링크 후보에서도 빠집니다.
 - **글 모양(검색용)**: 글은 핵심 답 문단으로 시작하고(그림은 그 뒤), 끝에 같은 라벨의 관련 글 3개 링크가 붙습니다.
   이미 발행한 글에도 똑같이 적용하려면 `python -m blogger_autopost fix-posts`(미리보기) → `fix-posts --apply`(적용, 백업 저장).
-  블로거 API로는 글별 '검색 설명'을 넣을 수 없어, 알림에 검색 설명 문장을 함께 보내 줍니다(원하면 편집 화면에 붙여넣기).
+  블로거 API로는 글별 '검색 설명'을 넣을 수 없어서, **테마가 글의 첫 문단을 검색 설명으로 내보내게** 합니다(한 번만 설정).
+  `docs/blogger-meta-description.xml` 안내대로 테마 HTML에 3줄을 넣고 `python -m blogger_autopost check-meta`로 확인합니다.
+  자동 글의 첫 문단은 120~155자의 핵심 답으로 쓰므로 그 문장이 그대로 검색 설명이 됩니다.
 - **검색 유입 진단**: `python -m blogger_autopost diagnose` → 글 통계(분량·제목·그림·링크), 공개 페이지 태그(메타 설명·robots·사이트맵),
   서치 콘솔(최근 90일 노출·클릭·검색어, 최근 글 색인 상태)을 `diagnostics/blogger/report.json`에 모아 GitHub에 올립니다(비밀 값 없음).
   서치 콘솔 자료는 블로그가 서치 콘솔에 등록되어 있고, 구글 클라우드에서 **Google Search Console API**를 켠 뒤 `auth`를 다시 해야 들어갑니다.

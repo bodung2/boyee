@@ -278,8 +278,6 @@ def run(cfg: BloggerConfig, draft: bool = False, force: bool = False) -> int:
             })
             when = f" ({cfg.publish_time} 예약)" if scheduled else ""
             notes = "\n".join(n for n in (photo_note, cfg.model_note) if n)
-            if post.get("search_description"):
-                notes += ("\n" if notes else "") + f"검색 설명(선택, 블로거 편집 화면에 붙여넣기): {post['search_description']}"
             notify(cfg, f"[{LABEL} 자동발행 완료{when}] {post['title']}\n{url}" + (f"\n{notes}" if notes else ""))
             return 0
     except Exception as e:

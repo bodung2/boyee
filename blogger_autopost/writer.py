@@ -41,7 +41,7 @@ Save ONE file named post.json (UTF-8) in the current working directory, exactly 
   "labels": ["3 to 8 Blogger labels"],
   "topic": "one-line description of the topic",
   "summary": "one-sentence summary",
-  "search_description": "search-result description, 120-155 characters, with the main search phrase",
+  "search_description": "the exact text of the opening paragraph (120-155 characters)",
   "sources": [{{"title": "source page title", "publisher": "who published it", "url": "https://..."}}],
   "illustrations": [{{"section": 1, "prompt": "detailed English image-generation prompt", "alt": "alt text",
                      "caption": "short caption"}}],
@@ -52,8 +52,10 @@ Save ONE file named post.json (UTF-8) in the current working directory, exactly 
 body_html rules:
 - An HTML fragment only: <p>, <h2>, <h3>, <ul>/<ol>/<li>, <table>, <blockquote>, <strong>, <em>, <a href>, <hr>.
 - No <html>, <head>, <body>, <h1> (Blogger shows the title itself), no <script>, <style>, <iframe>, no Markdown.
-- Start body_html with a <p> that directly answers the reader's main question in 1-2 sentences (Google often
-  shows the opening text in search results). Never start with an image, a caption or a heading.
+- Start body_html with a <p> that directly answers the reader's main question in 1-2 sentences, 120-155
+  characters, containing the main search phrase. The blog uses this opening paragraph as the page's meta
+  description in search results, so make it a complete, self-contained summary (no "In this post..." filler).
+  Put the same text in "search_description". Never start with an image, a caption or a heading.
 - Do not put <img> tags or image placeholders in body_html. Images are inserted automatically from
   "illustrations" and "photos" ("section": 0 = right after that opening paragraph, N = right after the N-th <h2>).
   Spread them over different sections where a picture really helps the reader.

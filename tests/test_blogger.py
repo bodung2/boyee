@@ -614,3 +614,16 @@ def test_fix_posts_preview_and_apply(cfg, tmp_path, monkeypatch):
     restored = {}
     monkeypatch.setattr(api, "update_content", lambda c, pid, content: restored.__setitem__(pid, content))
     assert fixposts.restore(cfg, backup) == 2 and restored["3"] == AUTO_BODY
+
+
+def test_check_meta_counts_description_tags(cfg, monkeypatch):
+    from blogger_autopost import diagnose
+    monkeypatch.setattr(api, "list_posts", lambda c, status="live", limit=2000: [
+        {"title": "A", "url": "https://b/a"}, {"title": "B", "url": "https://b/b"}, {"title": "C", "url": "https://b/c"}])
+    pages = {"https://b/a": '<meta content="Short answer about A." name="description"/>',
+             "https://b/b": "<title>B</title>",
+             "https://b/c": '<meta name="description" content="x"><meta content="y" name="description"/>'}
+    monkeypatch.setattr(diagnose, "_fetch", lambda url: (200, pages[url], {}))
+    rows = {r["title"]: r for r in diagnose.check_meta(cfg)}
+    assert rows["A"]["meta_description"] == "Short answer about A." and rows["A"]["tags"] == 1
+    assert rows["B"]["tags"] == 0 and rows["C"]["tags"] == 2
