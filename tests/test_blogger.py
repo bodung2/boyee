@@ -283,7 +283,7 @@ def test_license_filter():
 
 def test_insert_positions():
     body = "<p>a</p><h2>One</h2><p>b</p><h2>Two</h2><p>c</p>"
-    assert photos.insert(body, 0, "[F]").startswith("[F]<p>a")
+    assert photos.insert(body, 0, "[F]").startswith("<p>a</p>[F]<h2>One")       # 글은 그림으로 시작하지 않는다
     assert photos.insert(body, 2, "[F]") == "<p>a</p><h2>One</h2><p>b</p><h2>Two</h2>[F]<p>c</p>"
     assert photos.insert(body, 9, "[F]").endswith("<h2>Two</h2>[F]<p>c</p>")
 
@@ -384,7 +384,7 @@ def test_photos_and_illustrations_in_one_post(cfg, tmp_path, monkeypatch):
 
     html = fake.drafts["1"]["content"]
     assert searched[:2] == ["filetype:bitmap nothing-here", "filetype:bitmap Gyeongbokgung"]
-    assert html.startswith('<figure') and "/d/illust_1" in html.split("<p>Intro")[0]
+    assert html.startswith("<p>Intro paragraph about the topic.</p><figure") and "/d/illust_1" in html.split("<h2>")[0]
     assert '<h2>How it works</h2><figure' in html and "/d/illust_2" in html
     assert '<h2>Getting there</h2><figure' in html and "Gyeongbokgung.jpg" in html
     assert html.count("AI-generated illustration") == 2 and html.count("<figure") == 3
@@ -557,3 +557,60 @@ def test_diagnose_without_search_console_scope(cfg, tmp_path):
     from blogger_autopost import diagnose
     _with_drive_token(cfg, tmp_path, scope=f"{api.BLOGGER_SCOPE} {api.DRIVE_SCOPE}")
     assert "auth" in diagnose.search_console(cfg, "https://kb.blogspot.com/", [])["_error"]
+
+
+AUTO_BODY = ('<figure style="margin:1.5em 0;text-align:center"><img src="https://x/1" alt="a"><figcaption>'
+             'Editorial illustration: sizes<br>AI-generated illustration</figcaption></figure>'
+             '<p>A Korean apartment can be described as 84 square meters.</p><h2>Why</h2><p>Because.</p>')
+
+
+def test_move_leading_images_for_auto_and_editor_posts():
+    from blogger_autopost import seo
+    new, n = seo.move_leading_images(AUTO_BODY)
+    assert n == 1 and new.startswith("<p>A Korean apartment") and new.index("<figure") < new.index("<h2>")
+    editor = ('<table align="center" class="tr-caption-container"><tbody><tr><td><a href="u"><img src="i"></a></td></tr>'
+              '<tr><td class="tr-caption">Editorial illustration</td></tr></tbody></table><br>'
+              '<p>Quick answer: phones are banned during class.</p><p>More.</p>')
+    new, n = seo.move_leading_images(editor)
+    assert n == 1 and new.startswith("<br><p>Quick answer") and new.index("tr-caption") > new.index("</p>")
+    assert seo.move_leading_images("<p>Text first</p><figure>x</figure>") == ("<p>Text first</p><figure>x</figure>", 0)
+
+
+def test_related_links_are_picked_by_labels_and_replaced_not_duplicated():
+    from blogger_autopost import seo
+    cands = [{"url": "https://b/1", "title": "Trash", "labels": ["Life in Korea"], "published": "2026-10-02"},
+             {"url": "https://b/2", "title": "Jeonse", "labels": ["Housing in Korea", "Renting"], "published": "2026-09-01"},
+             {"url": "https://b/3", "title": "Me", "labels": ["Housing in Korea"], "published": "2026-10-03"},
+             {"url": "https://b/4", "title": "Hagwon", "labels": ["Education"], "published": "2026-08-28"},
+             {"url": "https://b/5", "title": "Teachers", "labels": ["Education"], "published": "2026-08-31"}]
+    body, ch = seo.improve(AUTO_BODY, "https://b/3", "Me", ["Housing in Korea", "Life in Korea"], cands)
+    assert ch["related"] == ["Trash", "Jeonse", "Teachers"]     # 라벨 겹침 1개끼리는 최근 글 먼저
+    assert body.count('class="kb-related"') == 1 and "https://b/3" not in body
+    again, _ = seo.improve(body, "https://b/3", "Me", ["Housing in Korea", "Life in Korea"], cands)
+    assert again == body                                   # 여러 번 고쳐도 같은 결과
+
+
+def test_fix_posts_preview_and_apply(cfg, tmp_path, monkeypatch):
+    from blogger_autopost import fixposts
+    live = [{"id": "3", "title": "Sizes", "url": "https://b/3", "labels": ["Housing"], "published": "2026-10-03",
+             "content": AUTO_BODY},
+            {"id": "2", "title": "Jeonse", "url": "https://b/2", "labels": ["Housing"], "published": "2026-09-01",
+             "content": "<p>Jeonse text</p>"}]
+    monkeypatch.setattr(api, "resolve_blog_id", lambda c: "123")
+    monkeypatch.setattr(api, "request", lambda c, m, path, params=None, body=None:
+                        {"items": live if params["status"] == "live" else []})
+    updates = {}
+    monkeypatch.setattr(api, "update_content", lambda c, pid, content: updates.__setitem__(pid, content))
+
+    preview = fixposts.run(cfg)
+    assert {r["id"] for r in preview} == {"2", "3"} and not updates
+    sizes = next(r for r in preview if r["id"] == "3")
+    assert sizes["moved_images"] == 1 and sizes["opening_after"].startswith("A Korean apartment")
+
+    fixposts.run(cfg, apply=True)
+    assert set(updates) == {"2", "3"} and 'href="https://b/2"' in updates["3"]
+    backup = next((cfg.output_dir / "backup").iterdir())
+    assert (backup / "3.html").read_text(encoding="utf-8") == AUTO_BODY
+    restored = {}
+    monkeypatch.setattr(api, "update_content", lambda c, pid, content: restored.__setitem__(pid, content))
+    assert fixposts.restore(cfg, backup) == 2 and restored["3"] == AUTO_BODY
