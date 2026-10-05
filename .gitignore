@@ -11,3 +11,5 @@ __pycache__/
 .venv/
 .pytest_cache/
 secrets/
+persona/
+docs/persona_answers*
