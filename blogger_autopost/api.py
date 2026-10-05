@@ -27,7 +27,9 @@ log = logging.getLogger(__name__)
 BLOGGER_SCOPE = "https://www.googleapis.com/auth/blogger"
 # 생성 그림을 올릴 드라이브 권한(이 프로그램이 만든 파일만 다룰 수 있는 가장 좁은 권한)
 DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
-SCOPE = f"{BLOGGER_SCOPE} {DRIVE_SCOPE}"
+# 검색 유입 진단(diagnose)용 서치 콘솔 읽기 권한
+SEARCH_CONSOLE_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly"
+SCOPE = f"{BLOGGER_SCOPE} {DRIVE_SCOPE} {SEARCH_CONSOLE_SCOPE}"
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://www.googleapis.com/blogger/v3"
