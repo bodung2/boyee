@@ -1,5 +1,6 @@
 """티스토리 '논쟁 × 공식 통계' 자동 발행: 주제 선정·제보·검증·전체 흐름·가짜 에디터 발행을 확인한다."""
 import json
+import re
 from datetime import date, datetime
 
 import pytest
@@ -320,3 +321,59 @@ def test_find_post_url_from_rss(cfg, monkeypatch):
     monkeypatch.setattr(publisher.urllib.request, "urlopen", lambda req, timeout=20: Resp())
     assert publisher.find_post_url(cfg, "순자산 상위 10%  기준은 얼마?") == "https://myblog.tistory.com/4"
     assert publisher.find_post_url(cfg, "없는 글") is None
+
+
+LOGIN_PAGE = """<!doctype html><meta charset="utf-8">
+<a class="link_kakao_id" href="https://www.tistory.com/auth/kakao">카카오계정으로 로그인</a>"""
+
+
+def _route_login_flow(ctx):
+    """TSSESSION이 없으면 글쓰기 화면이 로그인 화면으로 보내고, 카카오 버튼을 누르면 쿠키를 받고 돌아온다."""
+    def serve(route):
+        url = route.request.url
+        has = "TSSESSION=" in (route.request.headers.get("cookie") or "")
+        if "/manage/newpost" in url and not has:
+            route.fulfill(status=200, content_type="text/html",
+                          body="<script>location.href='https://www.tistory.com/auth/login?redirectUrl=x'</script>")
+        elif "/manage/newpost" in url:
+            route.fulfill(status=200, content_type="text/html", body="<title>editor</title>")
+        elif "/auth/login" in url:
+            route.fulfill(status=200, content_type="text/html", body=LOGIN_PAGE)
+        elif "/auth/kakao" in url:
+            route.fulfill(status=200, content_type="text/html", body=(
+                "<script>document.cookie='TSSESSION=abc; domain=.tistory.com; path=/; secure';"
+                "location.href='https://myblog.tistory.com/manage/newpost/'</script>"))
+        else:
+            route.fulfill(status=200, body="")
+    ctx.route(re.compile(r"https://[^/]*tistory\.com/.*"), serve)
+
+
+def test_login_kept_by_kakao_auto_login_and_saved_cookies(cfg, monkeypatch):
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    from naver_autopost.publisher import _launch as real_launch
+
+    def launch(p, c, headless):
+        ctx = real_launch(p, c, headless=True)
+        _route_login_flow(ctx)
+        return ctx
+
+    monkeypatch.setattr(publisher, "_launch", launch)
+    try:
+        with sync_playwright() as p:
+            ctx = publisher._open(p, cfg, headless=True)
+            page = ctx.new_page()
+            assert publisher._ensure_logged_in(page, cfg, timeout=15)      # 로그인 화면 → 카카오 버튼 → 글쓰기 화면
+            publisher._save_cookies(ctx, cfg)
+            ctx.close()
+    except Exception as e:  # noqa: BLE001
+        if "Executable doesn't exist" in str(e):
+            pytest.skip("브라우저 없음")
+        raise
+    saved = json.loads(publisher._state_file(cfg).read_text(encoding="utf-8"))
+    assert any(c["name"] == "TSSESSION" for c in saved)
+    with sync_playwright() as p:                                         # 다시 열면 저장한 쿠키로 바로 들어간다
+        ctx = publisher._open(p, cfg, headless=True)
+        assert any(c["name"] == "TSSESSION" for c in ctx.cookies("https://www.tistory.com"))
+        ctx.close()
+    assert publisher.check_session(cfg)

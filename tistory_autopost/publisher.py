@@ -57,40 +57,110 @@ def _on_login_page(url: str) -> bool:
     return "/auth/login" in url or "accounts.kakao.com" in url or "logins.daum.net" in url
 
 
+# 티스토리 로그인 쿠키(TSSESSION)는 브라우저를 닫으면 사라지는 세션 쿠키라서, 로그인 직후 쿠키를
+# 파일로 따로 저장해 두었다가 브라우저를 열 때마다 다시 넣는다. 서버에서 만료됐으면 카카오 자동 로그인
+# ('로그인 상태 유지')으로 다시 들어간다.
+KAKAO_LOGIN_BUTTONS = ["a.link_kakao_id", "a:has-text('카카오계정으로 로그인')", "button:has-text('카카오계정으로 로그인')",
+                       "a:has-text('카카오 계정으로 로그인')"]
+
+
+def _state_file(cfg: TistoryConfig) -> Path:
+    return cfg.profile_dir / "tistory_cookies.json"
+
+
+def _open(p, cfg: TistoryConfig, headless: bool):
+    ctx = _launch(p, cfg, headless=headless)
+    path = _state_file(cfg)
+    if path.exists():
+        try:
+            cookies = json.loads(path.read_text(encoding="utf-8"))
+            now = time.time()
+            # 이미 만료된 쿠키는 넣지 않는다(세션 쿠키는 expires=-1).
+            ctx.add_cookies([c for c in cookies if c.get("expires", -1) in (-1, None) or c["expires"] > now])
+        except Exception as e:  # noqa: BLE001 - 저장 쿠키가 깨져도 프로필 로그인으로 계속한다
+            log.warning("저장된 로그인 쿠키를 읽지 못했습니다: %s", e)
+    return ctx
+
+
+def _save_cookies(ctx, cfg: TistoryConfig) -> None:
+    cookies = [c for c in ctx.cookies() if any(d in c.get("domain", "") for d in ("tistory.com", "kakao.com", "daum.net"))]
+    path = _state_file(cfg)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(cookies, ensure_ascii=False), encoding="utf-8")
+
+
+def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bool:
+    """글쓰기 화면을 연다. 로그인 화면으로 가면 카카오 자동 로그인 버튼을 눌러 기다린다."""
+    page.goto(_newpost_url(cfg), wait_until="domcontentloaded")
+    deadline = time.time() + timeout
+    clicked = 0
+    while time.time() < deadline:
+        page.wait_for_timeout(1500)
+        url = page.url
+        if "/manage" in url and not _on_login_page(url):
+            return True
+        if "/auth/login" in url and clicked < 2:
+            for sel in KAKAO_LOGIN_BUTTONS:
+                btn = page.locator(sel)
+                try:
+                    if btn.count() and btn.first.is_visible():
+                        log.info("카카오 자동 로그인 시도")
+                        btn.first.click()
+                        clicked += 1
+                        break
+                except Exception:  # noqa: BLE001 - 화면 전환 중
+                    pass
+        elif "accounts.kakao.com" in url and page.locator("input[type='password']").count():
+            log.warning("카카오 비밀번호 입력 화면입니다(자동 로그인이 풀림)")
+            return False
+    return False
+
+
 def login(cfg: TistoryConfig, wait_minutes: int = 5) -> None:
-    """최초 1회: 열린 창에서 카카오 계정으로 직접 로그인하면 세션이 프로필에 저장된다."""
+    """최초 1회: 열린 창에서 카카오 계정으로 직접 로그인하면 세션을 저장한다."""
     with sync_playwright() as p:
-        ctx = _launch(p, cfg, headless=False)
-        page = ctx.pages[0] if ctx.pages else ctx.new_page()
-        page.goto("https://www.tistory.com/auth/login")
-        print("열린 브라우저에서 티스토리(카카오 계정)에 로그인하세요. '로그인 상태 유지'를 체크하세요.")
-        deadline = time.time() + wait_minutes * 60
-        ok = False
-        while time.time() < deadline:
-            time.sleep(3)
-            if any(c["name"] == "TSSESSION" for c in ctx.cookies("https://www.tistory.com")):
-                ok = True
-                break
-        time.sleep(2)
-        ctx.close()
-    if not ok:
-        raise SessionExpired(f"{wait_minutes}분 안에 로그인이 확인되지 않았습니다")
+        ctx = _open(p, cfg, headless=False)
+        try:
+            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            page.on("dialog", lambda d: d.dismiss())
+            page.goto("https://www.tistory.com/auth/login")
+            print("열린 브라우저에서 티스토리(카카오 계정)에 로그인하세요. '로그인 상태 유지'를 꼭 체크하세요.")
+            deadline = time.time() + wait_minutes * 60
+            ok = False
+            while time.time() < deadline:
+                page.wait_for_timeout(3000)
+                if any(c["name"] == "TSSESSION" for c in ctx.cookies("https://www.tistory.com")):
+                    ok = True
+                    break
+            if not ok:
+                raise SessionExpired(f"{wait_minutes}분 안에 로그인이 확인되지 않았습니다")
+            # 블로그 글쓰기 화면까지 열어 두 도메인의 로그인 쿠키를 모두 만든 뒤 저장한다.
+            if not _ensure_logged_in(page, cfg, timeout=60):
+                raise SessionExpired(f"로그인은 됐지만 {_newpost_url(cfg)} 글쓰기 화면이 열리지 않습니다. "
+                                     ".env의 TISTORY_BLOG가 이 계정의 블로그 주소인지 확인하세요.")
+            page.wait_for_timeout(3000)
+            _save_cookies(ctx, cfg)
+        finally:
+            ctx.close()
     if not check_session(cfg):
-        raise SessionExpired("로그인은 됐지만 글쓰기 화면이 열리지 않습니다. 블로그 주소(TISTORY_BLOG)와 "
-                             "'로그인 상태 유지' 체크를 확인하세요.")
+        raise SessionExpired("창을 다시 열자 로그인이 풀렸습니다. 다시 `login`을 실행하고 "
+                             "카카오 로그인 화면에서 '로그인 상태 유지'를 체크하세요.")
     print("로그인 확인. 창을 다시 열어도 로그인이 유지됩니다.")
 
 
 def check_session(cfg: TistoryConfig) -> bool:
-    """저장된 프로필로 글쓰기 화면이 열리는지 확인한다(약 10초)."""
+    """저장된 로그인으로 글쓰기 화면이 열리는지 확인한다(10~45초)."""
     with sync_playwright() as p:
-        ctx = _launch(p, cfg, headless=cfg.headless)
+        ctx = _open(p, cfg, headless=cfg.headless)
         try:
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
             page.on("dialog", lambda d: d.dismiss())
-            page.goto(_newpost_url(cfg), wait_until="domcontentloaded")
-            page.wait_for_timeout(3000)
-            return not _on_login_page(page.url) and "/manage" in page.url
+            ok = _ensure_logged_in(page, cfg)
+            if ok:
+                _save_cookies(ctx, cfg)          # 새로 받은 쿠키로 갱신
+            else:
+                log.warning("로그인 확인 실패. 마지막 화면: %s", page.url)
+            return ok
         finally:
             ctx.close()
 
@@ -221,10 +291,9 @@ def find_post_url(cfg: TistoryConfig, title: str) -> str | None:
 def _fill_editor(cfg: TistoryConfig, page: Page, post: dict, out_dir: Path) -> Locator:
     """제목·본문·카테고리·태그를 넣고 발행 창에서 '공개'를 고른 뒤, 마지막 발행 버튼을 돌려준다."""
     try:
-        page.goto(_newpost_url(cfg), wait_until="domcontentloaded")
-        page.wait_for_timeout(2500)
-        if _on_login_page(page.url):
+        if not _ensure_logged_in(page, cfg):
             raise SessionExpired("티스토리 로그인이 풀려 있습니다. `python -m tistory_autopost login`으로 다시 로그인하세요.")
+        page.wait_for_timeout(1500)
         _find(page, "title", timeout=20_000)
         _switch_to_html(page)
         _set_body(page, post["body_html"])
@@ -260,7 +329,7 @@ def publish(cfg: TistoryConfig, post: dict, out_dir: Path, dry_run: bool = False
             log.warning("같은 제목의 글이 이미 블로그에 있어 새로 올리지 않습니다: %s", same)
             return same
     with sync_playwright() as p:
-        ctx = _launch(p, cfg, headless=cfg.headless)
+        ctx = _open(p, cfg, headless=cfg.headless)
         try:
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
             page.on("dialog", _on_dialog)
@@ -291,12 +360,12 @@ def diagnose(cfg: TistoryConfig, out_dir: Path) -> Path:
     """글쓰기 화면의 버튼·입력칸 목록과 스크린샷을 저장한다(화면이 바뀌어 발행이 실패할 때)."""
     out_dir.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
-        ctx = _launch(p, cfg, headless=cfg.headless)
+        ctx = _open(p, cfg, headless=cfg.headless)
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         page.on("dialog", _on_dialog)
         try:
-            page.goto(_newpost_url(cfg), wait_until="domcontentloaded")
-            page.wait_for_timeout(4000)
+            _ensure_logged_in(page, cfg)
+            page.wait_for_timeout(3000)
             _shot(page, out_dir, "newpost")
             controls = page.evaluate(
                 """() => [...document.querySelectorAll('button, input, textarea, select, [role=option], .CodeMirror')]
