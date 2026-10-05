@@ -113,10 +113,15 @@ def figure_html(photo: dict, want: dict) -> str:
             f'{caption + "<br>" if caption else ""}{credit}</figcaption></figure>')
 
 
+_FIRST_PARA_END = re.compile(r"<p\b[^>]*>(?:(?!</p>).)*?\w(?:(?!</p>).)*?</p\s*>", re.I | re.S)
+
+
 def insert(body: str, section: int, fig: str) -> str:
-    """section 0 = 맨 위, N = N번째 <h2> 바로 다음(없으면 맨 끝 앞의 마지막 h2 다음)."""
+    """section 0 = 첫 문단 바로 다음(글이 그림으로 시작하지 않게), N = N번째 <h2> 바로 다음
+    (h2가 그보다 적으면 마지막 h2 다음)."""
     if section <= 0:
-        return fig + body
+        m = _FIRST_PARA_END.search(body)
+        return body[:m.end()] + fig + body[m.end():] if m else fig + body
     heads = list(re.finditer(r"</h2\s*>", body, re.I))
     if not heads:
         return fig + body

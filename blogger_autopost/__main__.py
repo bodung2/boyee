@@ -6,12 +6,15 @@
   python -m blogger_autopost run --draft    발행하지 않고 블로거 '초안'으로만 저장(설치 확인용)
   python -m blogger_autopost sync-history   블로그에 있는 글을 발행 이력에 가져오기
   python -m blogger_autopost diagnose       검색 유입 진단 자료(글·공개 페이지·서치 콘솔)를 모아 GitHub에 올리기
+  python -m blogger_autopost fix-posts      이미 발행한 글 다듬기 미리보기(그림을 첫 문단 뒤로, 관련 글 링크)
+  python -m blogger_autopost fix-posts --apply   실제로 고치기(바꾸기 전 본문은 output/blogger/backup/에 저장)
 """
 from __future__ import annotations
 
 import argparse
 import shutil
 import sys
+from pathlib import Path
 
 from .config import BloggerConfig
 
@@ -28,6 +31,9 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument("--draft", action="store_true", help="발행하지 않고 초안으로만 저장")
     run_p.add_argument("--force", action="store_true", help="오늘 이미 발행했어도 한 편 더")
     sub.add_parser("sync-history")
+    fix = sub.add_parser("fix-posts")
+    fix.add_argument("--apply", action="store_true", help="미리보기가 아니라 실제로 블로그 글을 고친다")
+    fix.add_argument("--restore", type=Path, help="이 백업 폴더의 본문으로 글을 되돌린다")
     diag = sub.add_parser("diagnose")
     diag.add_argument("--no-push", action="store_true", help="GitHub에 올리지 않고 파일만 만든다")
     args = parser.parse_args(argv)
@@ -50,6 +56,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "run":
         from .pipeline import run
         return run(cfg, draft=args.draft, force=args.force)
+    if args.cmd == "fix-posts":
+        return _fix_posts(cfg, args.apply, args.restore)
     if args.cmd == "diagnose":
         return _diagnose(cfg, push=not args.no_push)
     if args.cmd == "sync-history":
@@ -58,6 +66,30 @@ def main(argv: list[str] | None = None) -> int:
         print(f"이력에 없던 {added}편 추가, 블로그에서 지운 {removed}편 제외: {cfg.history_file}")
         return 0
     return 1
+
+
+def _fix_posts(cfg: BloggerConfig, apply: bool, restore: Path | None) -> int:
+    from . import fixposts
+    if restore:
+        print(f"{fixposts.restore(cfg, restore)}편을 백업 본문으로 되돌렸습니다.")
+        return 0
+    report = fixposts.run(cfg, apply=apply)
+    if not report:
+        print("고칠 글이 없습니다(이미 다듬어져 있음).")
+        return 0
+    for r in report:
+        print(f"\n■ {r['title']}")
+        if r["moved_images"]:
+            print(f"  A. 맨 앞 그림 {r['moved_images']}개 → 첫 문단 뒤로")
+            print(f"     전: {r['opening_before']}")
+            print(f"     후: {r['opening_after']}")
+        print(f"  B. 관련 글: {', '.join(r['related']) or '(없음)'}")
+    if apply:
+        print(f"\n✅ {len(report)}편을 고쳤습니다. 되돌리려면: python -m blogger_autopost fix-posts --restore "
+              f"{cfg.output_dir / 'backup'}\\<날짜폴더>")
+    else:
+        print("\n(미리보기입니다. 실제로 고치려면: python -m blogger_autopost fix-posts --apply)")
+    return 0
 
 
 def _diagnose(cfg: BloggerConfig, push: bool) -> int:

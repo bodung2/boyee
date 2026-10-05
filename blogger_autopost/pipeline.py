@@ -13,7 +13,7 @@ from naver_autopost.errors import ExternalAccountError
 from naver_autopost.notify import send_text
 from naver_autopost.pipeline import KST, _Lock, today_kst
 
-from . import api, content, illustrations, photos, writer
+from . import api, content, illustrations, photos, seo, writer
 from .config import BloggerConfig
 
 log = logging.getLogger(__name__)
@@ -161,6 +161,19 @@ def _add_images(cfg: BloggerConfig, post: dict, out_dir: Path) -> str:
     return " · ".join(n for n in notes if n)
 
 
+def related_candidates(cfg: BloggerConfig) -> list[dict]:
+    """관련 글 후보: 이력 중 주소가 있는(공개된) 글."""
+    return [e for e in history.load(cfg.history_file) if e.get("url") and e.get("title")]
+
+
+def _polish(cfg: BloggerConfig, post: dict, out_dir: Path) -> None:
+    """발행 직전: 글이 그림으로 시작하지 않게 하고, 끝에 관련 글 링크를 넣는다(여러 번 해도 같은 결과)."""
+    post["body_html"], changes = seo.improve(post["body_html"], "", post["title"], post.get("labels", []),
+                                             related_candidates(cfg))
+    _save(out_dir / "post.json", post)
+    log.info("본문 다듬기: 그림 %d개를 첫 문단 뒤로, 관련 글 %s", changes["moved_images"], changes["related"])
+
+
 def produce(cfg: BloggerConfig, today: str, out_dir: Path) -> dict:
     """발행할 글을 만든다. 떨어지면 BLOGGER_MAX_ATTEMPTS번까지 다른 주제로 새로 쓴다."""
     feedback = ""
@@ -251,6 +264,7 @@ def run(cfg: BloggerConfig, draft: bool = False, force: bool = False) -> int:
 
             post = produce(cfg, today, out_dir)
             photo_note = _add_images(cfg, post, out_dir)
+            _polish(cfg, post, out_dir)
             result = _publish(cfg, post, out_dir, draft_only=draft)
             if draft:
                 notify(cfg, f"[{LABEL} 테스트] 초안으로만 저장했습니다(발행 안 함): {post['title']}\n"
@@ -264,6 +278,8 @@ def run(cfg: BloggerConfig, draft: bool = False, force: bool = False) -> int:
             })
             when = f" ({cfg.publish_time} 예약)" if scheduled else ""
             notes = "\n".join(n for n in (photo_note, cfg.model_note) if n)
+            if post.get("search_description"):
+                notes += ("\n" if notes else "") + f"검색 설명(선택, 블로거 편집 화면에 붙여넣기): {post['search_description']}"
             notify(cfg, f"[{LABEL} 자동발행 완료{when}] {post['title']}\n{url}" + (f"\n{notes}" if notes else ""))
             return 0
     except Exception as e:

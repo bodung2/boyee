@@ -41,6 +41,7 @@ Save ONE file named post.json (UTF-8) in the current working directory, exactly 
   "labels": ["3 to 8 Blogger labels"],
   "topic": "one-line description of the topic",
   "summary": "one-sentence summary",
+  "search_description": "search-result description, 120-155 characters, with the main search phrase",
   "sources": [{{"title": "source page title", "publisher": "who published it", "url": "https://..."}}],
   "illustrations": [{{"section": 1, "prompt": "detailed English image-generation prompt", "alt": "alt text",
                      "caption": "short caption"}}],
@@ -51,9 +52,14 @@ Save ONE file named post.json (UTF-8) in the current working directory, exactly 
 body_html rules:
 - An HTML fragment only: <p>, <h2>, <h3>, <ul>/<ol>/<li>, <table>, <blockquote>, <strong>, <em>, <a href>, <hr>.
 - No <html>, <head>, <body>, <h1> (Blogger shows the title itself), no <script>, <style>, <iframe>, no Markdown.
+- Start body_html with a <p> that directly answers the reader's main question in 1-2 sentences (Google often
+  shows the opening text in search results). Never start with an image, a caption or a heading.
 - Do not put <img> tags or image placeholders in body_html. Images are inserted automatically from
-  "illustrations" and "photos", right after the <h2> heading you choose ("section": 0 = top of the post,
-  N = right after the N-th <h2>). Spread them over different sections where a picture really helps the reader.
+  "illustrations" and "photos" ("section": 0 = right after that opening paragraph, N = right after the N-th <h2>).
+  Spread them over different sections where a picture really helps the reader.
+- Internal links: where it genuinely helps, link to 2-3 related posts from the "Already published posts" list
+  inside the text, using their exact URLs. Never invent URLs. (A short related-posts list is also added
+  automatically at the end, so do not add your own "related posts" section.)
 - If the skill asks for a sources/references section, put it inside body_html as HTML with real links.
 "illustrations" (exactly {illustrations}): pictures an image model will draw for this post.
 - "prompt": a detailed English prompt in an illustration style (not a photorealistic photo) that explains or

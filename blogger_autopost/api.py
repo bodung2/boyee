@@ -236,6 +236,12 @@ def create_draft(cfg: BloggerConfig, title: str, content: str, labels: list[str]
                    {"kind": "blogger#post", "title": title, "content": content, "labels": labels})
 
 
+def update_content(cfg: BloggerConfig, post_id: str, content: str) -> dict:
+    """이미 발행·예약한 글의 본문만 바꾼다(제목·라벨·발행일은 그대로)."""
+    blog = resolve_blog_id(cfg)
+    return request(cfg, "PATCH", f"/blogs/{blog}/posts/{post_id}", None, {"content": content})
+
+
 def publish(cfg: BloggerConfig, post_id: str, publish_at: str | None = None) -> dict:
     """초안을 발행한다. publish_at(RFC3339 미래 시각)을 주면 그 시각에 올라가도록 예약한다."""
     blog = resolve_blog_id(cfg)
