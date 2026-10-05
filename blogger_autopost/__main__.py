@@ -6,6 +6,7 @@
   python -m blogger_autopost run --draft    발행하지 않고 블로거 '초안'으로만 저장(설치 확인용)
   python -m blogger_autopost sync-history   블로그에 있는 글을 발행 이력에 가져오기
   python -m blogger_autopost diagnose       검색 유입 진단 자료(글·공개 페이지·서치 콘솔)를 모아 GitHub에 올리기
+  python -m blogger_autopost check-meta     글 페이지에 검색 설명(meta description)이 실제로 나오는지 확인
   python -m blogger_autopost fix-posts      이미 발행한 글 다듬기 미리보기(그림을 첫 문단 뒤로, 관련 글 링크)
   python -m blogger_autopost fix-posts --apply   실제로 고치기(바꾸기 전 본문은 output/blogger/backup/에 저장)
 """
@@ -31,6 +32,7 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument("--draft", action="store_true", help="발행하지 않고 초안으로만 저장")
     run_p.add_argument("--force", action="store_true", help="오늘 이미 발행했어도 한 편 더")
     sub.add_parser("sync-history")
+    sub.add_parser("check-meta")
     fix = sub.add_parser("fix-posts")
     fix.add_argument("--apply", action="store_true", help="미리보기가 아니라 실제로 블로그 글을 고친다")
     fix.add_argument("--restore", type=Path, help="이 백업 폴더의 본문으로 글을 되돌린다")
@@ -56,6 +58,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "run":
         from .pipeline import run
         return run(cfg, draft=args.draft, force=args.force)
+    if args.cmd == "check-meta":
+        return _check_meta(cfg)
     if args.cmd == "fix-posts":
         return _fix_posts(cfg, args.apply, args.restore)
     if args.cmd == "diagnose":
@@ -66,6 +70,24 @@ def main(argv: list[str] | None = None) -> int:
         print(f"이력에 없던 {added}편 추가, 블로그에서 지운 {removed}편 제외: {cfg.history_file}")
         return 0
     return 1
+
+
+def _check_meta(cfg: BloggerConfig) -> int:
+    from . import diagnose
+    rows = diagnose.check_meta(cfg)
+    ok = True
+    for r in rows:
+        if r["tags"] == 1 and r["meta_description"]:
+            print(f"✅ {r['title']}\n     {r['meta_description']}")
+        elif r["tags"] > 1:
+            ok = False
+            print(f"⚠️ {r['title']}: 검색 설명 태그가 {r['tags']}개입니다(테마에 두 번 들어감)")
+        else:
+            ok = False
+            print(f"❌ {r['title']}: 검색 설명 없음 (HTTP {r['status']})")
+    print("모든 글에 검색 설명이 나옵니다." if ok and rows else
+          "검색 설명이 빠진 글이 있습니다 → docs/blogger-meta-description.xml 안내대로 테마에 넣었는지 확인하세요.")
+    return 0 if ok else 1
 
 
 def _fix_posts(cfg: BloggerConfig, apply: bool, restore: Path | None) -> int:

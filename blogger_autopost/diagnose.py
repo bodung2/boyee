@@ -60,6 +60,7 @@ def page_seo(html_text: str) -> dict:
     return {
         "title_tag": html.unescape(title.group(1).strip()) if title else None,
         "meta_description": meta("description"),
+        "meta_description_tags": len(re.findall(r'<meta[^>]+name=["\']description["\']', html_text, re.I)),
         "meta_robots": meta("robots"),
         "og_image": meta("og:image"),
         "canonical": canon.group(1) if canon else None,
@@ -166,3 +167,14 @@ def run(cfg: BloggerConfig, out_dir: Path) -> Path:
     path = out_dir / "report.json"
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
+
+
+def check_meta(cfg: BloggerConfig, limit: int = 8) -> list[dict]:
+    """최근 공개 글 페이지에 검색 설명(meta description)이 실제로 나오는지 확인한다."""
+    out = []
+    for p in api.list_posts(cfg, status="live")[:limit]:
+        status, text, _ = _fetch(p["url"])
+        seo = page_seo(text) if status == 200 else {}
+        out.append({"title": p.get("title"), "url": p["url"], "status": status,
+                    "meta_description": seo.get("meta_description"), "tags": seo.get("meta_description_tags", 0)})
+    return out

@@ -1,0 +1,13 @@
+<!--
+  구글 블로거 테마에 '검색 설명(meta description)' 자동 출력 넣기 — 한 번만 하면 된다.
+
+  블로거 API로는 글마다 검색 설명을 넣을 수 없어서, 테마가 글의 첫 문단(블로거가 만드는 글 요약,
+  data:view.description)을 검색 설명으로 내보내게 한다. 자동 글은 첫 문단을 120~155자의 핵심 답으로
+  쓰므로 그 문장이 그대로 검색 설명이 된다. 편집 화면에서 검색 설명을 직접 넣은 글은 그 값을 그대로 쓴다.
+
+  넣는 곳: 블로거 → 테마 → '맞춤설정' 옆 ▼ → HTML 편집 → Ctrl+F로 all-head-content 검색
+          → 그 줄 바로 아래에 아래 3줄을 붙여넣고 저장(오른쪽 위 디스크 아이콘).
+-->
+<b:if cond='data:view.isSingleItem and !data:blog.metaDescription'>
+  <meta expr:content='data:view.description.escaped' name='description'/>
+</b:if>
