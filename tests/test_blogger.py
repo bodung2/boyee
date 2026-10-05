@@ -621,9 +621,9 @@ def test_check_meta_counts_description_tags(cfg, monkeypatch):
     monkeypatch.setattr(api, "list_posts", lambda c, status="live", limit=2000: [
         {"title": "A", "url": "https://b/a"}, {"title": "B", "url": "https://b/b"}, {"title": "C", "url": "https://b/c"}])
     pages = {"https://b/a": '<meta content="Short answer about A." name="description"/>',
-             "https://b/b": "<title>B</title>",
+             "https://b/b": '<title>B</title><meta content="og text" property="og:description"/>',
              "https://b/c": '<meta name="description" content="x"><meta content="y" name="description"/>'}
     monkeypatch.setattr(diagnose, "_fetch", lambda url: (200, pages[url], {}))
     rows = {r["title"]: r for r in diagnose.check_meta(cfg)}
     assert rows["A"]["meta_description"] == "Short answer about A." and rows["A"]["tags"] == 1
-    assert rows["B"]["tags"] == 0 and rows["C"]["tags"] == 2
+    assert rows["B"]["tags"] == 0 and rows["B"]["og_description"] == "og text" and rows["C"]["tags"] == 2
