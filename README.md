@@ -162,6 +162,39 @@ Codex(ChatGPT 구독)에 설치된 `korea-explained-blogger` 스킬로 글을 �
 - 글 규칙은 Codex 스킬(`korea-explained-blogger`)을 그대로 따르고, 자동 발행에 필요한 규칙(질문 금지, 확인 못 한 사실 삭제, 경험 지어내기 금지, 출력 형식)만
   `blogger_autopost/writer.py`의 프롬프트로 덧붙입니다.
 
+## 이웃 후보 추천 (유아·교육, 하루 5곳씩)
+
+내 블로그와 주제가 비슷하고 **최근 7일 안에 글을 쓴** 네이버 블로그를 찾아, 콘텐츠 관리 시트(`블로그_콘텐츠_관리시트`)의
+**'유아 이웃 후보'**, **'교육 이웃 후보'** 탭에 하루 5곳씩 적습니다. 탭은 처음 실행할 때 자동으로 만들어집니다.
+
+**네이버에는 아무것도 쓰지 않습니다.** 댓글·이웃 신청 자동화는 네이버 운영정책 위반이라 블로그 제재 위험이 있어서,
+프로그램은 공개된 검색 결과·RSS·글만 읽고, 방문·댓글·이웃 신청은 시트를 보고 직접 합니다.
+
+```
+[작업 스케줄러, 매일 19:00]  scripts\run_neighbors.bat  (유아 → 교육 순서)
+  ① 검색        기본 검색어 + 최근 내 글 태그로 네이버 블로그 최신 글 검색(날짜마다 검색어를 바꿈)
+  ② 거르기      내 블로그·이미 시트에 있는 블로그 제외 → RSS로 최근 7일 안 글 1편 이상, 최근 30일 글 2편 이상인 곳만
+  ③ 고르기      Claude가 최근 글 본문을 읽고 광고·체험단·짜깁기 블로그를 빼고 5곳 선정(맞는 곳이 적으면 적게)
+  ④ 시트 기록   추천일 | 블로그 이름 | 블로그 주소 | 최근 글 제목·링크·날짜 | 최근 30일 글 수 | 추천 이유 | 글 요약 | 댓글 아이디어 | 방문함☐ | 메모
+```
+
+- 한 번 시트에 올라간 블로그는 다시 추천하지 않습니다. '방문함'과 '메모'(노란 칸)는 직접 관리용입니다.
+- '댓글 아이디어'는 그대로 붙여넣는 완성 댓글이 아니라, 글을 읽고 무엇에 대해 말하면 좋을지 적은 참고용입니다.
+- 결과: `logs/neighbors-<프로필>-날짜.log`, `output/<프로필>/neighbors/날짜/`(candidates.json, picks.json)
+
+### 최초 1회 설정
+
+1. **구글 시트 API 켜기**: 블로거용으로 만든 구글 클라우드 프로젝트에서 API 및 서비스 → 라이브러리 → **Google Sheets API** → 사용.
+   (블로거를 아직 설정하지 않았다면 위 '구글 블로거 → 최초 1회 설정'의 2번대로 OAuth 클라이언트를 만들어 `secrets\blogger_client_secret.json`에 둡니다.)
+2. **시트 쓰기 승인**: `.venv\Scripts\python.exe -m naver_autopost sheets-auth` → 시트 주인 구글 계정으로 '허용'
+3. **(권장) 네이버 검색 API 키**: [developers.naver.com](https://developers.naver.com/apps/#/register) → 애플리케이션 등록 → 사용 API **검색** →
+   받은 Client ID/Secret을 `.env`의 `NAVER_SEARCH_CLIENT_ID`, `NAVER_SEARCH_CLIENT_SECRET`에 입력(무료, 하루 25,000회).
+   없으면 검색 결과 화면을 읽는데, 네이버 화면이 바뀌면 후보를 못 찾을 수 있습니다.
+4. 시험 실행: `.venv\Scripts\python.exe -m naver_autopost neighbors --profile childhood` → 시트에 '유아 이웃 후보' 탭이 생겼는지 확인
+5. 예약: `powershell -ExecutionPolicy Bypass -File scripts\setup_neighbors_windows.ps1 -Time 19:00`
+
+검색어는 `naver_autopost/profiles.py`의 `neighbor_keywords` 또는 `.env`의 `NEIGHBOR_KEYWORDS_CHILDHOOD`/`_EDU`로 바꿉니다.
+
 ## 블로그 디자인 (SR 기존 글과 동일)
 
 `STYLE_MODE=native`(기본): 기존 글(https://blog.naver.com/kkus_i/224403935438)의 서식을 그대로 재현합니다.

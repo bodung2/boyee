@@ -5,6 +5,8 @@
   python -m naver_autopost preview output/childhood/날짜      post.json으로 이미지·HTML 미리보기만 생성
   python -m naver_autopost import-history 시트.csv --profile childhood  발행 이력 가져오기
   python -m naver_autopost check-ai                          그림 생성·Codex(ChatGPT) 웹 검색 연결 확인
+  python -m naver_autopost sheets-auth                       최초 1회 구글 시트 쓰기 승인(이웃 후보 추천용)
+  python -m naver_autopost neighbors --profile childhood     이웃 후보 5곳을 콘텐츠 관리 시트에 추가
 """
 from __future__ import annotations
 
@@ -57,6 +59,9 @@ def main(argv: list[str] | None = None) -> int:
     imp = with_profile(sub.add_parser("import-history"))
     imp.add_argument("csv", type=Path)
     with_profile(sub.add_parser("check-ai"))
+    nb = with_profile(sub.add_parser("neighbors"))
+    nb.add_argument("--force", action="store_true", help="오늘 이미 추천했어도 한 번 더")
+    sub.add_parser("sheets-auth")
     args = parser.parse_args(argv)
     cfg = Config.load(getattr(args, "profile", profiles.DEFAULT_PROFILE))
 
@@ -124,6 +129,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "check-ai":
         return _check_ai(cfg)
+    if args.cmd == "neighbors":
+        from .neighbors import run as run_neighbors
+        return run_neighbors(cfg, force=args.force)
+    if args.cmd == "sheets-auth":
+        from . import sheets
+        sheets.authorize(sheets.SheetsAuth.load())
+        print("구글 시트 승인 완료. 이제 neighbors 명령이 콘텐츠 관리 시트에 쓸 수 있습니다.")
+        return 0
     if args.cmd == "record":
         from . import history
         from .pipeline import today_kst
