@@ -170,13 +170,43 @@ def run(cfg: BloggerConfig, out_dir: Path) -> Path:
     return path
 
 
-def check_meta(cfg: BloggerConfig, limit: int = 8) -> list[dict]:
-    """최근 공개 글 페이지에 검색 설명(meta description)이 실제로 나오는지 확인한다."""
+def render(urls: list[str]) -> dict[str, str]:
+    """구글처럼 스크립트를 실행한 뒤의 페이지 HTML(Playwright 크롬). 실패하면 빈 dict."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return {}
+    out: dict[str, str] = {}
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(user_agent=UA)
+            for url in urls:
+                try:
+                    page.goto(url, wait_until="load", timeout=45000)
+                    page.wait_for_timeout(500)
+                    out[url] = page.content()
+                except Exception as e:  # noqa: BLE001
+                    log.warning("렌더링 실패(%s): %s", url, e)
+            browser.close()
+    except Exception as e:  # noqa: BLE001
+        log.warning("브라우저를 띄우지 못했습니다(스크립트 실행 전 HTML로 확인): %s", e)
+    return out
+
+
+def check_meta(cfg: BloggerConfig, limit: int = 8, renderer=render) -> list[dict]:
+    """최근 공개 글 페이지에 검색 설명(meta description)이 나오는지 확인한다.
+    테마 스크립트가 채우는 설명도 보이도록, 가능하면 스크립트를 실행한 뒤의 페이지로 본다."""
+    posts = api.list_posts(cfg, status="live")[:limit]
+    rendered = renderer([p["url"] for p in posts]) if renderer else {}
     out = []
-    for p in api.list_posts(cfg, status="live")[:limit]:
-        status, text, _ = _fetch(p["url"])
+    for p in posts:
+        if p["url"] in rendered:
+            status, text = 200, rendered[p["url"]]
+        else:
+            status, text, _ = _fetch(p["url"])
         seo = page_seo(text) if status == 200 else {}
-        out.append({"title": p.get("title"), "url": p["url"], "status": status,
+        out.append({"title": p.get("title"), "url": p["url"], "status": status, "rendered": p["url"] in rendered,
                     "meta_description": seo.get("meta_description"), "tags": seo.get("meta_description_tags", 0),
                     "og_description": seo.get("og_description")})
     return out
