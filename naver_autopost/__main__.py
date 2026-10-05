@@ -274,7 +274,9 @@ def _push_diagnostics(message: str) -> int:
     import subprocess
 
     from .config import ROOT
-    git = ["git", "-c", "user.name=naver-autopost", "-c", "user.email=naver-autopost@localhost"]
+    # 집 PC의 로컬 브랜치 이름이 추적하는 원격 브랜치와 달라도 그 원격 브랜치로 올린다.
+    git = ["git", "-c", "user.name=naver-autopost", "-c", "user.email=naver-autopost@localhost",
+           "-c", "push.default=upstream"]
     steps = [git + ["pull", "--no-rebase", "--no-edit"], git + ["add", "diagnostics"],
              git + ["commit", "-m", message], git + ["push"]]
     for cmd in steps:
