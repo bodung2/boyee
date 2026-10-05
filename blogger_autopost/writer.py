@@ -66,7 +66,7 @@ body_html rules:
 "illustrations" (exactly {illustrations}): pictures an image model will draw for this post.
 - "prompt": a detailed English prompt in an illustration style (not a photorealistic photo) that explains or
   sets the scene for that section. No text, letters, numbers, logos or maps in the picture.
-"photos" (exactly {photos}, or [] if nothing real could be shown): a real photo to find on Wikimedia Commons.
+"photos" (exactly {photos}, always): a real photo to find on Wikimedia Commons.
 - "subject": a concrete, checkable subject in English (e.g. "Seoul subway ticket gates with a T-money card reader"),
   something that really exists in Korea. A reviewer will reject photos that do not clearly show it.
 - "search": 2-5 English keywords with proper names (e.g. "Gyeongbokgung Geunjeongjeon"); no generic mood words.
