@@ -75,6 +75,9 @@ def main(argv: list[str] | None = None) -> int:
 def _check_meta(cfg: BloggerConfig) -> int:
     from . import diagnose
     rows = diagnose.check_meta(cfg)
+    if rows and not any(r["rendered"] for r in rows):
+        print("(참고: 브라우저를 띄우지 못해 스크립트 실행 전 HTML로 확인합니다. 테마 스크립트로 채우는 설명은 안 보일 수 있습니다\n"
+              " → .venv\\Scripts\\python.exe -m playwright install chromium 후 다시 실행)")
     ok = True
     for r in rows:
         if r["tags"] == 1 and r["meta_description"]:
@@ -84,8 +87,8 @@ def _check_meta(cfg: BloggerConfig) -> int:
             print(f"⚠️ {r['title']}: 검색 설명 태그가 {r['tags']}개입니다(테마에 두 번 들어감)")
         else:
             ok = False
-            why = ("태그는 있는데 내용이 비어 있음 → 테마 3줄은 들어갔지만 블로거가 글 요약을 못 넘겨줌" if r["tags"]
-                   else "검색 설명 태그 자체가 없음 → 테마에 3줄이 아직 없거나, 저장이 안 됐거나, head 밖에 들어감")
+            why = ("태그는 있는데 내용이 비어 있음 → 테마 코드가 예전 3줄이거나, 새 스크립트가 본문을 못 찾음" if r["tags"]
+                   else "검색 설명 태그 자체가 없음 → 테마에 코드가 아직 없거나, 저장이 안 됐거나, head 밖에 들어감")
             print(f"❌ {r['title']}: {why} (HTTP {r['status']})")
             if r.get("og_description"):
                 print(f"     (참고: 공유용 설명 og:description은 있음: {r['og_description'][:90]})")
