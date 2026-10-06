@@ -707,3 +707,31 @@ def test_locked_codex_image_is_retried_then_falls_back(tmp_path, monkeypatch):
 
     with pytest.raises(codex_image.CodexImageError, match="읽지 못했습니다"):
         codex_image._convert_first_readable([locked], out, convert, "인포그래픽", tries=2)
+
+
+def test_no_post_written_retries_with_another_topic(cfg, monkeypatch):
+    """Claude가 원문을 못 열어 글 없이 질문으로 끝나면, 그날을 포기하지 않고 다른 주제로 다시 쓴다."""
+    out = cfg.output_dir / "2026-10-07"
+    feedbacks = []
+    good = _fake_write(child_post())
+
+    def write_post(c, out_dir, today, feedback=""):
+        feedbacks.append(feedback)
+        if len(feedbacks) == 1:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            raise generate.NoPostError("post.json이 만들어지지 않았습니다")
+        return good(c, out_dir, today, feedback)
+    monkeypatch.setattr(generate, "write_post", write_post)
+    monkeypatch.setattr(gemini_client, "generate_image",
+                        lambda c, prompt, path: (path.parent.mkdir(parents=True, exist_ok=True), path.write_bytes(b"png"), path)[2])
+
+    def fake_claude_fc(c, out_dir):
+        fc = {"verdict": "pass", "images": {}, "summary": "ok"}
+        (out_dir / "factcheck.json").write_text(json.dumps(fc), encoding="utf-8")
+        return fc
+    monkeypatch.setattr(generate, "factcheck", fake_claude_fc)
+    monkeypatch.setattr(openai_client, "factcheck", lambda c, p: {"verdict": "pass", "issues": [], "summary": "ok"})
+
+    post = pipeline.produce(cfg, "2026-10-07", out)
+    assert post["title"] and len(feedbacks) == 2
+    assert "다른 주제" in feedbacks[1]

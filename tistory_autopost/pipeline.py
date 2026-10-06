@@ -140,7 +140,10 @@ def _attempt(cfg: TistoryConfig, today: str, out_dir: Path, feedback: str, resum
     stage = _load(out_dir / "stage.json") if resume else {}
     if not stage.get("written"):
         brief = topic_brief(cfg, date.fromisoformat(today))
-        writer.write_post(cfg, out_dir, today, brief, feedback)
+        try:
+            writer.write_post(cfg, out_dir, today, brief, feedback)
+        except generate.NoPostError as e:
+            raise Rejected(f"{e}. 원문을 확인할 수 있는 다음 후보 주제로 질문하지 말고 끝까지 써라.") from e
         _mark(out_dir, written=True)
     else:
         log.info("이미 쓴 글을 이어서 처리합니다")

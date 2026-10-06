@@ -214,7 +214,11 @@ def _attempt(cfg: Config, today: str, out_dir: Path, feedback: str, resume: bool
     post_path = out_dir / "post.json"
     stage = _stage(out_dir) if resume else {}
     if not stage.get("written"):
-        generate.write_post(cfg, out_dir, today, feedback)
+        try:
+            generate.write_post(cfg, out_dir, today, feedback)
+        except generate.NoPostError as e:
+            raise Rejected(f"{e}. 직전 주제는 원문을 확인하지 못했을 수 있으니 원문을 열 수 있는 다른 주제를 골라 "
+                           "질문하지 말고 끝까지 써라.") from e
         post = _load_post(post_path)
         _save_json(post_path, post)
         errors = content.validate(post, cfg.profile)
