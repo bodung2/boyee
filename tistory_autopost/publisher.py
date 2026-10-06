@@ -19,6 +19,7 @@ from playwright.sync_api import Locator, Page, sync_playwright
 from naver_autopost.content import html_to_text
 from naver_autopost.publisher import MOD, _launch
 
+from . import style
 from .config import TistoryConfig
 
 log = logging.getLogger(__name__)
@@ -37,6 +38,10 @@ SELECTORS = {
     "publish_open": ["#publish-layer-btn", "button:has-text('완료')"],
     "visibility_public": ["#open20", "input[name='basicSet'][value='20']", "label[for='open20']"],
     "publish_confirm": ["#publish-btn", "button:has-text('공개 발행')", "button:has-text('발행')"],
+    "attach_open": ["#mceu_0-open", "#mceu_0 button", "button[aria-label*='첨부']", "button:has-text('첨부')",
+                    "[id*='attach'] button"],
+    "attach_photo": ["#attach-image", "[id*='attach-image']", "[role='menuitem']:has-text('사진')",
+                     "li:has-text('사진')", "button:has-text('사진')"],
 }
 
 
@@ -439,15 +444,81 @@ def find_post_url(cfg: TistoryConfig, title: str) -> str | None:
     return item["url"] if item else None
 
 
-def _fill_editor(cfg: TistoryConfig, page: Page, post: dict, out_dir: Path) -> Locator:
+IMAGE_CODE = re.compile(r"\[##_Image(?:Grid)?\|.*?_##\]", re.S)
+_IMG_COUNT = """() => { const ed = window.tinymce && window.tinymce.activeEditor;
+    return ed ? (ed.getContent().match(/<img\\b|\\[##_Image/g) || []).length : -1; }"""
+
+
+def _choose_file(page: Page, path: Path) -> None:
+    """첨부 > 사진으로 파일 고르는 창을 열어 그림을 넣는다. 창이 안 뜨면 화면의 파일 입력칸에 바로 넣는다."""
+    try:
+        with page.expect_file_chooser(timeout=8_000) as chooser:
+            _find(page, "attach_open", timeout=5_000).click()
+            page.wait_for_timeout(500)
+            item = _maybe(page, "attach_photo", timeout=3_000)
+            if item:
+                item.click()
+        chooser.value.set_files(str(path))
+        return
+    except Exception as e:  # noqa: BLE001 - 아래 방법으로 다시 시도
+        log.info("파일 선택 창을 열지 못해 입력칸에 바로 넣습니다: %s", e)
+        page.keyboard.press("Escape")
+    inputs = page.locator("input[type='file']")
+    if not inputs.count():
+        raise PublishError("그림을 올릴 파일 입력칸을 찾지 못했습니다")
+    target = next((inputs.nth(i) for i in range(inputs.count())
+                   if "image" in (inputs.nth(i).get_attribute("accept") or "")), inputs.first)
+    target.set_input_files(str(path))
+
+
+def _upload_images(page: Page, images: list[tuple[str, Path]], out_dir: Path) -> dict[str, str]:
+    """기본 모드에서 그림을 차례로 올리고 HTML 모드로 바꿔, 티스토리가 만든 이미지 코드([##_Image|..._##])를
+    올린 순서대로 그림 이름에 짝지어 돌려준다. 실패한 그림은 빼고 계속한다."""
+    if not images:
+        return {}
+    uploaded: list[str] = []
+    for name, path in images:
+        before = page.evaluate(_IMG_COUNT)
+        try:
+            _choose_file(page, path)
+        except Exception as e:  # noqa: BLE001
+            log.warning("그림 %s 올리기 실패: %s", name, e)
+            continue
+        deadline = time.time() + 60
+        while time.time() < deadline:
+            page.wait_for_timeout(1000)
+            now = page.evaluate(_IMG_COUNT)
+            if now == -1 or now > before:
+                break
+        if now == -1:
+            page.wait_for_timeout(6000)       # 편집기 내용을 읽을 수 없으면 넉넉히 기다린다
+        uploaded.append(name)
+        log.info("그림 올림: %s", name)
+    _shot(page, out_dir, "images_uploaded")
+    _switch_to_html(page)
+    codes = IMAGE_CODE.findall(_cm_value(page))
+    if not codes:
+        codes = re.findall(r"<figure\b.*?</figure>|<img\b[^>]*>", _cm_value(page), flags=re.S | re.I)
+    if len(codes) != len(uploaded):
+        log.warning("올린 그림 %d장, 편집기에서 찾은 이미지 코드 %d개", len(uploaded), len(codes))
+    return dict(zip(uploaded, codes))
+
+
+def _fill_editor(cfg: TistoryConfig, page: Page, post: dict, out_dir: Path,
+                 images: list[tuple[str, Path]] | None = None) -> Locator:
     """제목·본문·카테고리·태그를 넣고 발행 창에서 '공개'를 고른 뒤, 마지막 발행 버튼을 돌려준다."""
     try:
         if not _ensure_logged_in(page, cfg):
             raise SessionExpired("티스토리 로그인이 풀려 있습니다. `python -m tistory_autopost login`으로 다시 로그인하세요.")
         page.wait_for_timeout(1500)
         _find(page, "title", timeout=20_000)
+        codes = _upload_images(page, images or [], out_dir)
+        post["_images_ok"] = len(codes)
         _switch_to_html(page)
-        _set_body(page, post["body_html"])
+        captions = {i.get("name", ""): i.get("caption") or "" for i in post.get("illustrations") or []}
+        body = style.stylize(post["body_html"], codes, captions)
+        post["_final_html"] = body
+        _set_body(page, body)
         title_box = _find(page, "title")
         title_box.click()
         title_box.fill(post["title"])
@@ -457,7 +528,7 @@ def _fill_editor(cfg: TistoryConfig, page: Page, post: dict, out_dir: Path) -> L
 
         log.info("편집기 상태: %s", json.dumps(editor_state(page, out_dir), ensure_ascii=False)[:500])
         filled = body_length(page)
-        if filled["length"] < min(200, len(post["body_html"]) // 2):
+        if filled["length"] < min(200, len(body) // 2):
             raise PublishError(f"본문이 편집기에 들어가지 않아 발행하지 않습니다({filled})")
         log.info("발행 전 본문 확인: %s 모드, %d자", filled["mode"], filled["length"])
         _find(page, "publish_open").click()
@@ -512,8 +583,9 @@ def _verify_published(page: Page, cfg: TistoryConfig, post: dict, out_dir: Path)
     return url
 
 
-def publish(cfg: TistoryConfig, post: dict, out_dir: Path, dry_run: bool = False) -> str:
-    """글을 발행하고 주소를 돌려준다. dry_run이면 마지막 '공개 발행' 직전에 멈춘다."""
+def publish(cfg: TistoryConfig, post: dict, out_dir: Path, dry_run: bool = False,
+            images: list[tuple[str, Path]] | None = None) -> str:
+    """글을 발행하고 주소를 돌려준다. images는 [(그림 이름, 파일)] 순서. dry_run이면 마지막 '공개 발행' 직전에 멈춘다."""
     if not dry_run:
         same = find_post_url(cfg, post["title"])
         if same:
@@ -524,7 +596,7 @@ def publish(cfg: TistoryConfig, post: dict, out_dir: Path, dry_run: bool = False
         try:
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
             page.on("dialog", _on_dialog)
-            confirm = _fill_editor(cfg, page, post, out_dir)
+            confirm = _fill_editor(cfg, page, post, out_dir, images)
             if dry_run:
                 log.info("테스트 실행: 공개 발행 직전에 멈춥니다. 스크린샷: %s", out_dir)
                 page.wait_for_timeout(5000 if cfg.headless else 20_000)

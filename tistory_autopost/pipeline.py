@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shutil
 import time
 from datetime import date, datetime
 from pathlib import Path
 
-from naver_autopost import generate, history
+from naver_autopost import codex_image, generate, history, infographic
+from naver_autopost.errors import ExternalAccountError
 from naver_autopost.notify import send_text
 from naver_autopost.pipeline import KST, _Lock, today_kst
 
@@ -89,6 +91,51 @@ def _gpt_check(cfg: TistoryConfig, out_dir: Path) -> dict:
     return post
 
 
+def make_illustrations(cfg: TistoryConfig, post: dict, out_dir: Path) -> None:
+    """post.json의 illustrations 프롬프트로 상황 그림을 만든다(ChatGPT 이미지, Codex). 실패한 그림은 뺀다."""
+    keep = []
+    for ill in (post.get("illustrations") or [])[:cfg.illustration_count]:
+        name = re.sub(r"\W", "", str(ill.get("name") or ""))
+        if not name or not ill.get("prompt"):
+            continue
+        path = out_dir / f"{name}.png"
+        if not path.exists():
+            try:
+                codex_image.generate_image(cfg, ill["prompt"], path)
+                log.info("그림 생성: %s", name)
+            except ExternalAccountError:
+                raise
+            except Exception as e:  # noqa: BLE001 - 그림 하나 때문에 글을 버리지 않는다
+                log.warning("그림 %s 생성 실패: %s", name, e)
+                continue
+        keep.append({**ill, "name": name})
+    post["illustrations"] = keep
+
+
+def add_infographic(cfg: TistoryConfig, post: dict, out_dir: Path) -> None:
+    """검수를 통과한 글로 핵심 숫자 인포그래픽을 만들어 한 줄 요약 앞에 넣는다. 실패해도 발행은 계속한다."""
+    if not cfg.infographic:
+        return
+    path = out_dir / f"{infographic.NAME}.png"
+    if not path.exists():
+        try:
+            infographic.generate(cfg, post, path)
+            log.info("인포그래픽 생성")
+        except Exception as e:  # noqa: BLE001
+            log.warning("인포그래픽 생성 실패(빼고 발행): %s", e)
+            return
+    post["body_html"] = infographic.insert_marker(post["body_html"])
+    if not any(i.get("name") == infographic.NAME for i in post.get("illustrations") or []):
+        post.setdefault("illustrations", []).append(
+            {"name": infographic.NAME, "caption": "한 장으로 보는 핵심 숫자", "alt": post.get("title", "")})
+
+
+def image_files(post: dict, out_dir: Path) -> list[tuple[str, Path]]:
+    """본문에 자리가 있고 파일도 있는 그림만, 본문에 나오는 순서대로."""
+    names = re.findall(r"\[\[IMAGE:(\w+)\]\]", post.get("body_html", ""))
+    return [(n, out_dir / f"{n}.png") for n in dict.fromkeys(names) if (out_dir / f"{n}.png").exists()]
+
+
 def _attempt(cfg: TistoryConfig, today: str, out_dir: Path, feedback: str, resume: bool) -> dict:
     stage = _load(out_dir / "stage.json") if resume else {}
     if not stage.get("written"):
@@ -103,8 +150,21 @@ def _attempt(cfg: TistoryConfig, today: str, out_dir: Path, feedback: str, resum
     if errors:
         raise Rejected("구조 검증 실패:\n- " + "\n- ".join(errors))
 
+    if not stage.get("illustrated"):
+        make_illustrations(cfg, post, out_dir)
+        _save(out_dir / "post.json", post)
+        _mark(out_dir, illustrated=True)
+
     if not stage.get("claude_pass"):
         fc = writer.factcheck(cfg, out_dir)
+        bad = {n for n, v in (fc.get("images") or {}).items() if not str(v).startswith("ok")}
+        if bad:
+            post = _load_post(out_dir)
+            log.warning("검수에서 빠진 그림: %s", sorted(bad))
+            post["illustrations"] = [i for i in post.get("illustrations") or [] if i.get("name") not in bad]
+            for n in bad:
+                (out_dir / f"{n}.png").unlink(missing_ok=True)
+            _save(out_dir / "post.json", post)
         if fc.get("verdict") != "pass":
             raise Rejected(f"Claude 팩트체크 불합격: {fc.get('summary', '')}\n"
                            + json.dumps(fc.get("issues", [])[:10], ensure_ascii=False))
@@ -194,8 +254,11 @@ def run(cfg: TistoryConfig, dry_run: bool = False, force: bool = False) -> int:
                     while datetime.now(KST) < e.reset_at:
                         _sleep(min(300, max(1, (e.reset_at - datetime.now(KST)).total_seconds())))
 
-            url = publisher.publish(cfg, post, out_dir, dry_run=dry_run)
-            cat_note = f"카테고리: {cfg.category or '(없음)'}"
+            add_infographic(cfg, post, out_dir)
+            _save(out_dir / "post.json", post)
+            imgs = image_files(post, out_dir)
+            url = publisher.publish(cfg, post, out_dir, dry_run=dry_run, images=imgs)
+            cat_note = f"그림 {post.get('_images_ok', 0)}/{len(imgs)}장 · 카테고리: {cfg.category or '(없음)'}"
             if post.get("_category_ok") is False:
                 cat_note += " ⚠️ 카테고리를 찾지 못해 카테고리 없이 올렸습니다"
                 seen = post.get("_category_seen") or []
@@ -247,7 +310,9 @@ def republish(cfg: TistoryConfig, day: str | None = None, dry_run: bool = False)
             same = publisher.find_post_url(cfg, post["title"])
             if same and not dry_run:
                 raise RuntimeError(f"블로그에 같은 제목의 글이 아직 있습니다. 티스토리에서 먼저 삭제하세요: {same}")
-            url = publisher.publish(cfg, post, out_dir, dry_run=dry_run)
+            add_infographic(cfg, post, out_dir)
+            _save(out_dir / "post.json", post)
+            url = publisher.publish(cfg, post, out_dir, dry_run=dry_run, images=image_files(post, out_dir))
             if dry_run:
                 notify(cfg, f"[{LABEL} 다시 올리기 테스트] 공개 발행 직전까지 확인했습니다: {post['title']}")
                 return 0

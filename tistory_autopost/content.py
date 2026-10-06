@@ -13,7 +13,9 @@ PRIMARY_DOMAINS = (
 )
 # 계층·성별 갈등 소재라 평가·조롱으로 읽히는 말은 막는다(숫자와 해석만 쓴다).
 JUDGMENT_WORDS = ("흙수저는", "루저", "패배자", "한남", "김치녀", "개념녀", "거지들", "노력을 안", "노력 부족")
-EXTRA_FORBIDDEN = ("[[IMAGE", "<!--", "이 글은 AI")
+EXTRA_FORBIDDEN = ("<!--", "이 글은 AI", "style=")
+# 도발적인 말투는 좋지만 욕설은 안 된다(애드센스·검색 품질)
+PROFANITY = ("씨발", "시발", "ㅅㅂ", "병신", "좆", "존나", "졸라", "개새", "미친놈", "꺼져")
 MAX_TAGS = 10
 
 
@@ -84,10 +86,17 @@ def validate(post: dict, min_sources: int = 4, min_primary: int = 2, min_data_po
         missing = [k for k in ("value", "stat", "period", "source_url") if not str(d.get(k, "")).strip()]
         if missing:
             errors.append(f"data_points[{i}]에 {', '.join(missing)} 없음")
+    for block, what in (("summary", "3줄 요약"), ("oneline", "한 줄 요약")):
+        if f'data-block="{block}"' not in body:
+            errors.append(f'{what}(<div data-block="{block}">)이 없습니다')
+    markers = set(re.findall(r"\[\[IMAGE:(\w+)\]\]", body))
+    ills = {str(i.get("name")) for i in post.get("illustrations") or [] if isinstance(i, dict)}
+    if markers - ills:
+        errors.append(f"그림 자리 {sorted(markers - ills)}에 맞는 illustrations가 없습니다")
     if not post.get("tags"):
         errors.append("태그가 없습니다")
     visible = f"{title}\n{text}"
-    for phrase in (*FORBIDDEN_PHRASES, *EXTRA_FORBIDDEN, *JUDGMENT_WORDS):
+    for phrase in (*FORBIDDEN_PHRASES, *EXTRA_FORBIDDEN, *JUDGMENT_WORDS, *PROFANITY):
         if phrase in visible or phrase in body:
             errors.append(f"금지 문구: {phrase}")
     links = re.findall(r'<a\b[^>]*href="(https?://[^"]+)"', body, flags=re.I)
