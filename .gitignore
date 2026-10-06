@@ -1,9 +1,10 @@
 .env
-.browser-profile/
+.browser-profile*/
 output/
 logs/
 data/published*.json
 data/social_tokens*.json
+data/tistory_inbox.json
 assets/*
 !assets/README.md
 __pycache__/
