@@ -198,6 +198,8 @@ def run(cfg: TistoryConfig, dry_run: bool = False, force: bool = False) -> int:
             cat_note = f"카테고리: {cfg.category or '(없음)'}"
             if post.get("_category_ok") is False:
                 cat_note += " ⚠️ 카테고리를 찾지 못해 카테고리 없이 올렸습니다"
+                seen = post.get("_category_seen") or []
+                cat_note += ("\n화면에 보인 카테고리: " + ", ".join(seen)) if seen else "\n(카테고리 목록을 읽지 못했습니다)"
             if dry_run:
                 notify(cfg, f"[{LABEL} 테스트] 공개 발행 직전까지 확인했습니다: {post['title']}\n{cat_note}\n"
                             f"스크린샷: {out_dir}")

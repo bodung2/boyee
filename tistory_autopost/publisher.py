@@ -29,7 +29,9 @@ SELECTORS = {
     "mode_html": ["#editor-mode-html", "#editor-mode-html-text", "[id*='editor-mode-html']", "text=HTML"],
     "codemirror": [".CodeMirror"],
     "category_open": ["#category-btn", "button:has-text('카테고리')"],
-    "category_item": ["#category-list [role='option']", "#category-list .mce-menu-item", "[class*='category'] [role='option']"],
+    "category_item": ["#category-list [role='option']", "#category-list .mce-menu-item", "#category-list li",
+                      "[class*='category'] [role='option']", "[id*='category'] li", "[class*='category'] li",
+                      "[role='listbox'] [role='option']"],
     "tag_input": ["#tagText", "input[placeholder*='태그']"],
     "publish_open": ["#publish-layer-btn", "button:has-text('완료')"],
     "visibility_public": ["#open20", "input[name='basicSet'][value='20']", "label[for='open20']"],
@@ -223,7 +225,15 @@ def _set_body(page: Page, body_html: str) -> None:
     log.info("본문 입력(HTML %d자)", ok)
 
 
-def _select_category(page: Page, name: str) -> bool:
+def _category_label(text: str) -> str:
+    """'- 숫자로 보는 한국 (3)' → '숫자로 보는 한국'(하위 카테고리 표시·글 수 제거)."""
+    text = re.sub(r"\s+", " ", text or "").strip()
+    text = re.sub(r"^[-·ㄴ└\s]+", "", text)
+    return re.sub(r"\s*\(\d+\)$", "", text).strip()
+
+
+def _select_category(page: Page, name: str, post: dict | None = None, out_dir: Path | None = None) -> bool:
+    """카테고리를 고른다. 못 찾으면 화면에 보인 카테고리 이름을 post['_category_seen']에 남긴다."""
     if not name:
         return True
     opener = _maybe(page, "category_open")
@@ -231,18 +241,36 @@ def _select_category(page: Page, name: str) -> bool:
         log.warning("카테고리 버튼을 찾지 못했습니다")
         return False
     opener.click()
-    page.wait_for_timeout(500)
-    for sel in SELECTORS["category_item"]:
-        items = page.locator(sel)
-        for i in range(items.count()):
-            item = items.nth(i)
-            label = re.sub(r"\s+", " ", item.inner_text()).strip().lstrip("-").strip()
-            if label == name:
-                item.click()
-                log.info("카테고리 선택: %s", name)
-                return True
+    want = _category_label(name)
+    seen: list[str] = []
+    deadline = time.time() + 4
+    while time.time() < deadline:           # 목록이 늦게 뜨는 경우를 기다린다
+        page.wait_for_timeout(400)
+        for sel in SELECTORS["category_item"]:
+            items = page.locator(sel)
+            for i in range(min(items.count(), 200)):
+                item = items.nth(i)
+                try:
+                    if not item.is_visible():
+                        continue
+                    label = _category_label(item.inner_text())
+                except Exception:  # noqa: BLE001
+                    continue
+                if label and label not in seen:
+                    seen.append(label)
+                if label == want:
+                    item.click()
+                    log.info("카테고리 선택: %s", name)
+                    return True
+        if seen:
+            break
+    if out_dir is not None:
+        _shot(page, out_dir, "category_not_found")
     page.keyboard.press("Escape")
-    log.warning("카테고리 '%s'를 찾지 못해 카테고리 없이 올립니다", name)
+    log.warning("카테고리 '%s'를 찾지 못해 카테고리 없이 올립니다. 화면에 보인 카테고리: %s",
+                name, ", ".join(seen[:30]) or "(목록을 읽지 못함)")
+    if post is not None:
+        post["_category_seen"] = seen[:30]
     return False
 
 
@@ -300,7 +328,7 @@ def _fill_editor(cfg: TistoryConfig, page: Page, post: dict, out_dir: Path) -> L
         title_box = _find(page, "title")
         title_box.click()
         title_box.fill(post["title"])
-        post["_category_ok"] = _select_category(page, cfg.category)
+        post["_category_ok"] = _select_category(page, cfg.category, post, out_dir)
         _add_tags(page, post.get("tags", []))
         _shot(page, out_dir, "editor_filled")
 
@@ -367,9 +395,14 @@ def diagnose(cfg: TistoryConfig, out_dir: Path) -> Path:
             _ensure_logged_in(page, cfg)
             page.wait_for_timeout(3000)
             _shot(page, out_dir, "newpost")
+            opener = _maybe(page, "category_open")   # 카테고리 목록도 펼쳐서 함께 저장한다
+            if opener:
+                opener.click()
+                page.wait_for_timeout(1500)
+                _shot(page, out_dir, "category_open")
             controls = page.evaluate(
-                """() => [...document.querySelectorAll('button, input, textarea, select, [role=option], .CodeMirror')]
-                    .slice(0, 400).map(e => ({tag: e.tagName, id: e.id, cls: String(e.className).slice(0, 80),
+                """() => [...document.querySelectorAll('button, input, textarea, select, [role=option], li, .CodeMirror')]
+                    .slice(0, 600).map(e => ({tag: e.tagName, id: e.id, cls: String(e.className).slice(0, 80),
                       name: e.getAttribute('name'), type: e.getAttribute('type'),
                       placeholder: e.getAttribute('placeholder'), text: (e.innerText || e.value || '').slice(0, 40)}))"""
             )

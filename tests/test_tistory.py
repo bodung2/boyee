@@ -377,3 +377,24 @@ def test_login_kept_by_kakao_auto_login_and_saved_cookies(cfg, monkeypatch):
         assert any(c["name"] == "TSSESSION" for c in ctx.cookies("https://www.tistory.com"))
         ctx.close()
     assert publisher.check_session(cfg)
+
+
+def test_category_label_strips_prefix_and_count():
+    assert publisher._category_label("- 숫자로 보는 한국 (3)") == "숫자로 보는 한국"
+    assert publisher._category_label("  숫자로  보는 한국 ") == "숫자로 보는 한국"
+
+
+def test_category_not_found_reports_seen_names(cfg, monkeypatch, tmp_path):
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    html = ("<button id='category-btn' onclick=\"document.getElementById('category-list').style.display='block'\">카테고리</button>"
+            "<ul id='category-list' style='display:none'><li>일상 (12)</li><li>- 코인 (40)</li></ul>")
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        page = b.new_page()
+        page.set_content(html)
+        post = {}
+        assert publisher._select_category(page, "숫자로 보는 한국", post, tmp_path) is False
+        assert post["_category_seen"] == ["일상", "코인"]
+        assert publisher._select_category(page, "코인") is True
+        b.close()
