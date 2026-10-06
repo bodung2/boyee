@@ -113,36 +113,70 @@ def test_attempt_full_flow_with_gpt_fix(cfg, monkeypatch):
     assert (out / "gpt_factcheck_1.json").exists() and (out / "gpt_factcheck_2.json").exists()
 
 
-def test_gpt_fail_rejects(cfg, monkeypatch):
+def test_gpt_fail_is_applied_not_rejected(cfg, monkeypatch):
+    """예전 'fail'도 글을 버리지 않고 Claude가 지적을 확인해 반영한다."""
     out = cfg.output_dir / "d"
     out.mkdir(parents=True)
     (out / "post.json").write_text(json.dumps(child_post(), ensure_ascii=False), encoding="utf-8")
-    monkeypatch.setattr(openai_client, "factcheck",
-                        lambda c, p: {"verdict": "fail", "issues": [], "summary": "핵심 수치 오류"})
-    with pytest.raises(pipeline.Rejected, match="ChatGPT"):
-        pipeline._gpt_factcheck(cfg, out / "post.json", out)
-
-
-def test_gpt_fix_twice_then_pass(cfg, monkeypatch):
-    out = cfg.output_dir / "d"
-    out.mkdir(parents=True)
-    (out / "post.json").write_text(json.dumps(child_post(), ensure_ascii=False), encoding="utf-8")
-    reviews = iter([{"verdict": "fix", "issues": [{}]}, {"verdict": "fix", "issues": [{}]}, {"verdict": "pass"}])
+    reviews = iter([{"verdict": "fail", "issues": [{}], "summary": "핵심 수치 오류"}, {"verdict": "pass"}])
     monkeypatch.setattr(openai_client, "factcheck", lambda c, p: next(reviews))
     applied = []
     monkeypatch.setattr(generate, "apply_gpt_review", lambda c, d, r: applied.append(r) or {})
     pipeline._gpt_factcheck(cfg, out / "post.json", out)
-    assert applied == [1, 2]
+    assert applied == [1]
 
 
-def test_gpt_still_fix_after_last_round_rejects(cfg, monkeypatch):
+def test_gpt_checks_twice_then_publishes(cfg, monkeypatch):
+    """ChatGPT 확인은 2번까지. 2번째 지적까지 반영하면 재검사 없이 발행한다."""
     out = cfg.output_dir / "d"
     out.mkdir(parents=True)
     (out / "post.json").write_text(json.dumps(child_post(), ensure_ascii=False), encoding="utf-8")
-    monkeypatch.setattr(openai_client, "factcheck", lambda c, p: {"verdict": "fix", "issues": [{}], "summary": ""})
-    monkeypatch.setattr(generate, "apply_gpt_review", lambda c, d, r: {})
-    with pytest.raises(pipeline.Rejected):
-        pipeline._gpt_factcheck(cfg, out / "post.json", out)
+    calls = []
+    monkeypatch.setattr(openai_client, "factcheck",
+                        lambda c, p: calls.append(1) or {"verdict": "fix", "issues": [{}], "summary": ""})
+    applied = []
+    monkeypatch.setattr(generate, "apply_gpt_review", lambda c, d, r: applied.append(r) or {})
+    pipeline._gpt_factcheck(cfg, out / "post.json", out)
+    assert len(calls) == 2 and applied == [1, 2]
+
+
+def test_gpt_check_rounds_is_configurable(monkeypatch):
+    monkeypatch.setenv("GPT_CHECK_ROUNDS", "1")
+    assert Config.load("childhood").gpt_check_rounds == 1
+    monkeypatch.setenv("GPT_CHECK_ROUNDS", "0")
+    assert Config.load("childhood").gpt_check_rounds == 1
+
+
+def test_gpt_all_rebutted_and_unchanged_stops_rechecking(cfg, monkeypatch):
+    out = cfg.output_dir / "d"
+    out.mkdir(parents=True)
+    (out / "post.json").write_text(json.dumps(child_post(), ensure_ascii=False), encoding="utf-8")
+    calls = []
+    monkeypatch.setattr(openai_client, "factcheck", lambda c, p: calls.append(1) or {
+        "verdict": "fix", "issues": [{"text": "정책 설명 문장입니다."}], "summary": ""})
+    monkeypatch.setattr(generate, "apply_gpt_review", lambda c, d, r: {
+        "applied": [], "rejected": [{"text": "정책 설명 문장입니다.", "reason": "원문이 뒷받침"}]})
+    pipeline._gpt_factcheck(cfg, out / "post.json", out)
+    assert len(calls) == 1
+    assert json.loads((out / "gpt_disputed.json").read_text(encoding="utf-8"))["rejected"]
+
+
+def test_gpt_rebutted_but_post_edited_is_rechecked(cfg, monkeypatch):
+    out = cfg.output_dir / "d"
+    out.mkdir(parents=True)
+    post_path = out / "post.json"
+    post_path.write_text(json.dumps(child_post(), ensure_ascii=False), encoding="utf-8")
+    reviews = iter([{"verdict": "fix", "issues": [{"text": "정책 설명 문장입니다."}]}, {"verdict": "pass"}])
+    monkeypatch.setattr(openai_client, "factcheck", lambda c, p: next(reviews))
+
+    def edit(c, d, r):
+        post = json.loads(post_path.read_text(encoding="utf-8"))
+        post["title"] += " 수정"
+        post_path.write_text(json.dumps(post, ensure_ascii=False), encoding="utf-8")
+        return {"applied": [], "rejected": [{"text": "x", "reason": "y"}]}
+    monkeypatch.setattr(generate, "apply_gpt_review", edit)
+    pipeline._gpt_factcheck(cfg, post_path, out)
+    assert not (out / "gpt_disputed.json").exists()
 
 
 def test_bad_image_from_claude_review_is_dropped(cfg, monkeypatch):
@@ -504,3 +538,200 @@ def test_limit_too_long_stops(cfg, monkeypatch):
     monkeypatch.setattr(pipeline, "_sleep", lambda s: pytest.fail("기다리면 안 됨"))
     with pytest.raises(generate.GenerationError, match="최대 대기"):
         pipeline.produce(cfg, "2026-09-27", cfg.output_dir / "2026-09-27")
+
+
+def test_codex_partial_verification_passes_not_api_fallback(cfg, tmp_path, monkeypatch):
+    """웹 검색은 했지만 일부 원문을 못 열어 'error'로 답하면 유료 API로 넘기지 않는다.
+    확인이 안 된 것은 틀린 것이 아니므로, 확실한 지적이 없으면 통과다."""
+    script, _ = _fake_codex(tmp_path, '{"verdict": "error", "checked": 20, "issues": [], '
+                                      '"summary": "첨부 법령안 원문 접근 실패로 2030년 부칙 미검증"}')
+    cfg.codex_bin = str(script)
+    monkeypatch.setattr(openai_client, "_post", lambda *a, **k: pytest.fail("API로 넘기면 안 됩니다"))
+    result = openai_client.factcheck(cfg, content.normalize(child_post()))
+    assert result["verdict"] == "pass"
+    assert result["issues"] == []
+
+
+def test_codex_partial_verification_with_real_issue_is_fix(cfg, tmp_path, monkeypatch):
+    script, _ = _fake_codex(tmp_path, '{"verdict": "error", "checked": 20, "summary": "일부 미검증", '
+                                      '"issues": [{"text": "시행 일정 설명입니다.", "correction": "2027년"}]}')
+    cfg.codex_bin = str(script)
+    monkeypatch.setattr(openai_client, "_post", lambda *a, **k: pytest.fail("API로 넘기면 안 됩니다"))
+    assert openai_client.factcheck(cfg, content.normalize(child_post()))["verdict"] == "fix"
+
+
+def test_factcheck_prompt_asks_only_for_clear_errors(cfg):
+    text = openai_client._instructions(cfg)
+    assert "확실히 틀린 것만" in text and "지적하지 않는다" in text and '"fail"' not in text
+
+
+def test_codex_down_and_api_out_of_credit_reports_codex_first(cfg, tmp_path, monkeypatch):
+    script, _ = _fake_codex(tmp_path, '{"verdict": "error", "summary": "no web search"}')
+    cfg.codex_bin = str(script)
+    cfg.openai_api_key = "k"
+
+    def no_credit(*a, **k):
+        raise openai_client.OpenAIAccountError("HTTP 429 credit_balance_exhausted")
+
+    monkeypatch.setattr(openai_client, "_post", no_credit)
+    with pytest.raises(openai_client.CodexAccountError) as e:
+        openai_client.factcheck(cfg, content.normalize(child_post()))
+    msg = str(e.value)
+    assert msg.index("no web search") < msg.index("credit_balance_exhausted")
+
+
+def test_codex_crash_is_retried_once_and_logged(cfg, tmp_path):
+    """Codex는 진행 기록을 stderr로 내보내 끝부분엔 원인이 없다 → 전체를 파일로 남기고 오류 줄만 보여준다."""
+    state = tmp_path / "count"
+    script = tmp_path / "codex_flaky"
+    script.write_text(f"""#!{__import__('sys').executable}
+import sys, pathlib
+p = pathlib.Path({str(state)!r}); n = int(p.read_text()) if p.exists() else 0; p.write_text(str(n + 1))
+args = sys.argv[1:]; sys.stdin.read()
+if n == 0:
+    sys.stderr.write("ERROR: stream disconnected before completion\\n...Clements(1999), Duncan 외(2007)\\ncodex\\n"); sys.exit(1)
+pathlib.Path(args[args.index("--output-last-message") + 1]).write_text('{{"verdict": "pass", "issues": []}}')
+""", encoding="utf-8")
+    script.chmod(0o755)
+    cfg.codex_bin = str(script)
+    cfg.log_dir = tmp_path / "logs"
+    assert openai_client.factcheck(cfg, content.normalize(child_post()))["verdict"] == "pass"
+    assert state.read_text() == "2"
+    assert "stream disconnected" in (cfg.log_dir / "codex_last_error.log").read_text(encoding="utf-8")
+
+
+
+def test_retry_note_before_and_after_retry_time(cfg):
+    from datetime import datetime
+    cfg.retry_time = "11:00"
+    assert "11:00에 자동으로 한 번 더" in pipeline.retry_note(cfg, datetime(2026, 9, 29, 5, 33, tzinfo=pipeline.KST))
+    assert "지나" in pipeline.retry_note(cfg, datetime(2026, 9, 29, 11, 20, tzinfo=pipeline.KST))
+    cfg.retry_time = "off"
+    assert pipeline.retry_note(cfg) == ""
+
+
+
+def test_codex_out_of_credits_is_an_account_problem_not_retried(cfg, tmp_path):
+    state = tmp_path / "count"
+    script = tmp_path / "codex_broke"
+    script.write_text(f"""#!{__import__('sys').executable}
+import sys, pathlib
+p = pathlib.Path({str(state)!r}); p.write_text(str(int(p.read_text()) + 1 if p.exists() else 1))
+sys.stdin.read()
+sys.stderr.write('{{"verdict": "error", "summary": "no web search"}} 만 출력하라\\n'
+                 'ERROR: Your workspace is out of credits. Ask your workspace owner to refill in order to continue.\\n'
+                 'ERROR: Your workspace is out of credits. Ask your workspace owner to refill in order to continue.\\n')
+sys.exit(1)
+""", encoding="utf-8")
+    script.chmod(0o755)
+    cfg.codex_bin = str(script)
+    cfg.log_dir = tmp_path / "logs"
+    cfg.openai_api_key = ""
+    with pytest.raises(openai_client.CodexAccountError) as e:
+        openai_client.factcheck(cfg, content.normalize(child_post()))
+    msg = str(e.value)
+    assert "크레딧 문제" in msg and "out of credits" in msg
+    assert '"verdict"' not in msg and msg.count("out of credits") == 1
+    assert state.read_text() == "1"                      # 크레딧 문제는 다시 해 봐야 소용없다
+
+
+def test_publish_lock_waits_for_the_other_blog(tmp_path, monkeypatch):
+    lock = tmp_path / ".publishing.lock"
+    lock.write_text("123")                                   # 다른 블로그가 발행 중
+    naps = []
+
+    def fake_sleep(sec):
+        naps.append(sec)
+        lock.unlink()                                        # 그사이 다른 쪽이 끝남
+
+    monkeypatch.setattr(pipeline, "_sleep", fake_sleep)
+    with pipeline._PublishLock(lock, poll=5):
+        assert lock.exists()
+    assert naps == [5] and not lock.exists()
+
+
+def test_publish_lock_clears_stale_lock_and_gives_up_eventually(tmp_path, monkeypatch):
+    import os
+    import time
+    lock = tmp_path / ".publishing.lock"
+    lock.write_text("dead")
+    old = time.time() - 3600
+    os.utime(lock, (old, old))                               # 비정상 종료로 남은 잠금
+    with pipeline._PublishLock(lock, stale_sec=1800):
+        pass
+    lock.write_text("busy")
+    monkeypatch.setattr(pipeline, "_sleep", lambda s: None)
+    with pytest.raises(RuntimeError, match="기다리다 멈췄"):
+        with pipeline._PublishLock(lock, wait_sec=0):
+            pass
+
+
+
+def test_default_retry_times_are_staggered(monkeypatch):
+    monkeypatch.delenv("RETRY_TIME_EDU", raising=False)
+    monkeypatch.delenv("RETRY_TIME_CHILDHOOD", raising=False)
+    assert Config.load("edu").retry_time == "11:00"
+    assert Config.load("childhood").retry_time == "15:00"
+    monkeypatch.setenv("RETRY_TIME_CHILDHOOD", "12:00")
+    assert Config.load("childhood").retry_time == "12:00"
+
+
+def test_model_defaults_split_heavy_and_light(monkeypatch):
+    for k in ("CLAUDE_MODEL", "CLAUDE_MODEL_LIGHT", "CODEX_REASONING_EFFORT"):
+        monkeypatch.setenv(k, "")
+    c = Config.load("edu")
+    assert (c.claude_model, c.claude_model_light, c.codex_effort) == ("sonnet", "haiku", "medium")
+
+
+def test_light_steps_use_light_model(cfg, monkeypatch, tmp_path):
+    seen = []
+    monkeypatch.setattr(generate, "_run_claude", lambda c, p, log_file, light=False: seen.append(light))
+    generate.apply_gpt_review(cfg, tmp_path, 1)
+    assert seen == [True]
+
+
+def test_locked_codex_image_is_retried_then_falls_back(tmp_path, monkeypatch):
+    from naver_autopost import codex_image
+    monkeypatch.setattr(codex_image, "_sleep", lambda s: None)
+    locked, copy, out = tmp_path / "work.png", tmp_path / "gen.png", tmp_path / "out.png"
+    calls = []
+
+    def convert(src, dst):
+        calls.append(src)
+        if src == locked:
+            raise PermissionError(13, "Permission denied")
+        dst.write_bytes(b"ok")
+
+    codex_image._convert_first_readable([locked, copy], out, convert, "인포그래픽", tries=3)
+    assert calls == [locked] * 3 + [copy] and out.read_bytes() == b"ok"
+
+    with pytest.raises(codex_image.CodexImageError, match="읽지 못했습니다"):
+        codex_image._convert_first_readable([locked], out, convert, "인포그래픽", tries=2)
+
+
+def test_no_post_written_retries_with_another_topic(cfg, monkeypatch):
+    """Claude가 원문을 못 열어 글 없이 질문으로 끝나면, 그날을 포기하지 않고 다른 주제로 다시 쓴다."""
+    out = cfg.output_dir / "2026-10-07"
+    feedbacks = []
+    good = _fake_write(child_post())
+
+    def write_post(c, out_dir, today, feedback=""):
+        feedbacks.append(feedback)
+        if len(feedbacks) == 1:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            raise generate.NoPostError("post.json이 만들어지지 않았습니다")
+        return good(c, out_dir, today, feedback)
+    monkeypatch.setattr(generate, "write_post", write_post)
+    monkeypatch.setattr(gemini_client, "generate_image",
+                        lambda c, prompt, path: (path.parent.mkdir(parents=True, exist_ok=True), path.write_bytes(b"png"), path)[2])
+
+    def fake_claude_fc(c, out_dir):
+        fc = {"verdict": "pass", "images": {}, "summary": "ok"}
+        (out_dir / "factcheck.json").write_text(json.dumps(fc), encoding="utf-8")
+        return fc
+    monkeypatch.setattr(generate, "factcheck", fake_claude_fc)
+    monkeypatch.setattr(openai_client, "factcheck", lambda c, p: {"verdict": "pass", "issues": [], "summary": "ok"})
+
+    post = pipeline.produce(cfg, "2026-10-07", out)
+    assert post["title"] and len(feedbacks) == 2
+    assert "다른 주제" in feedbacks[1]

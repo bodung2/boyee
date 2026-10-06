@@ -34,6 +34,14 @@ class BloggerConfig:
     min_body_chars: int
     photos: int
     photo_candidates: int
+    illustrations: int
+    photo_fallback: bool
+    image_tries: int
+    infographic: bool
+    infographic_skill: str
+    infographic_timeout: int
+    image_model: str
+    image_timeout: int
     telegram_bot_token: str
     telegram_chat_id: str
     model_note: str = ""        # 실행 중 대체 모델로 바뀌면 알림에 붙일 문구
@@ -68,8 +76,20 @@ class BloggerConfig:
             max_attempts=int(env("BLOGGER_MAX_ATTEMPTS", "2")),
             min_sources=int(env("BLOGGER_MIN_SOURCES", "3")),
             min_body_chars=int(env("BLOGGER_MIN_BODY_CHARS", "2000")),
-            photos=int(env("BLOGGER_PHOTOS", "3")),
-            photo_candidates=int(env("BLOGGER_PHOTO_CANDIDATES", "4")),
+            # 글마다 실제 사진(위키미디어 커먼즈) 1장 + 생성 그림 2장
+            photos=int(env("BLOGGER_PHOTOS", "1")),
+            photo_candidates=int(env("BLOGGER_PHOTO_CANDIDATES", "6")),
+            illustrations=int(env("BLOGGER_ILLUSTRATIONS", "2")),
+            # 실제 사진을 못 찾으면 그 자리에 실사풍 생성 이미지를 대신 넣는다('AI가 만든 이미지' 표기)
+            photo_fallback=_bool("BLOGGER_PHOTO_FALLBACK", True),
+            # 생성 그림이 실패하거나 검수에서 떨어지면 이유를 반영해 다시 그리는 최대 횟수(그림마다)
+            image_tries=int(env("BLOGGER_IMAGE_TRIES", "3")),
+            # 글 끝 한 장 인포그래픽(Codex onepage 스킬) — 글의 대표 이미지(검색·공유·Pinterest)로도 쓴다
+            infographic=_bool("BLOGGER_INFOGRAPHIC", True),
+            infographic_skill=(env("BLOGGER_INFOGRAPHIC_SKILL") or env("INFOGRAPHIC_SKILL") or "onepage").strip(),
+            infographic_timeout=int(env("INFOGRAPHIC_TIMEOUT_SEC", "900")),
+            image_model=env("BLOGGER_IMAGE_MODEL", "").strip(),
+            image_timeout=int(env("CODEX_IMAGE_TIMEOUT_SEC", "360")),
             telegram_bot_token=env("TELEGRAM_BOT_TOKEN", "").strip(),
             telegram_chat_id=env("TELEGRAM_CHAT_ID", "").strip(),
         )

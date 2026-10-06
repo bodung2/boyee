@@ -51,7 +51,8 @@ class Config:
     data_dir: Path
     log_dir: Path
     claude_bin: str
-    claude_model: str
+    claude_model: str          # 글쓰기·Claude 팩트체크
+    claude_model_light: str    # ChatGPT 지적 반영·소셜 초안(단순 작업)
     generate_timeout: int
     max_attempts: int
     openai_api_key: str
@@ -62,6 +63,7 @@ class Config:
     codex_bin: str
     codex_args: str
     codex_model: str
+    codex_effort: str          # 팩트체크 추론 강도(low/medium/high), 비우면 Codex 기본값
     codex_timeout: int
     codex_image_timeout: int
     openai_image_model: str
@@ -69,13 +71,23 @@ class Config:
     openai_image_quality: str
     openai_factcheck_model: str
     gpt_factcheck: bool
-    gpt_fix_rounds: int
+    gpt_check_rounds: int
     illustration_count: int
     infographic: bool
     infographic_skill: str
     infographic_timeout: int
+    social_draft: bool
+    social_account: str
+    threads_token: str
+    threads_user_id: str
+    threads_with_image: bool
+    instagram_token: str
+    instagram_user_id: str
+    instagram_api_version: str
+    imgbb_api_key: str
     style_mode: str
     limit_wait_max_min: int
+    retry_time: str
     telegram_bot_token: str
     telegram_chat_id: str
 
@@ -113,7 +125,9 @@ class Config:
             data_dir=data_dir,
             log_dir=Path(env("LOG_DIR", str(ROOT / "logs"))),
             claude_bin=env("CLAUDE_BIN", "claude").strip(),
-            claude_model=env("CLAUDE_MODEL", "").strip(),
+            # 비용 절약: 글쓰기·팩트체크는 sonnet, 단순 작업은 haiku(Claude Code 모델 별칭 = 최신 버전)
+            claude_model=(env("CLAUDE_MODEL") or "sonnet").strip(),
+            claude_model_light=(env("CLAUDE_MODEL_LIGHT") or "haiku").strip(),
             generate_timeout=int(env("GENERATE_TIMEOUT_SEC", "3600")),
             max_attempts=int(env("MAX_ATTEMPTS", "2")),
             openai_api_key=env("OPENAI_API_KEY", "").strip(),
@@ -124,6 +138,7 @@ class Config:
             codex_bin=env("CODEX_BIN", "codex").strip(),
             codex_args=env("CODEX_ARGS", "").strip(),
             codex_model=env("CODEX_MODEL", "").strip(),
+            codex_effort=(env("CODEX_REASONING_EFFORT") or "medium").strip(),
             codex_timeout=int(env("CODEX_TIMEOUT_SEC", "1200")),
             codex_image_timeout=int(env("CODEX_IMAGE_TIMEOUT_SEC", "360")),
             openai_image_model=env("OPENAI_IMAGE_MODEL", "gpt-image-2").strip(),
@@ -131,13 +146,28 @@ class Config:
             openai_image_quality=env("OPENAI_IMAGE_QUALITY", "medium").strip(),
             openai_factcheck_model=env("OPENAI_FACTCHECK_MODEL", "gpt-5.5").strip(),
             gpt_factcheck=_bool("GPT_FACTCHECK", True),
-            gpt_fix_rounds=int(env("GPT_FIX_ROUNDS", "2")),
+            gpt_check_rounds=max(1, int(env("GPT_CHECK_ROUNDS", "2"))),
             illustration_count=int(env("ILLUSTRATION_COUNT", "2")),
             infographic=_bool("INFOGRAPHIC", True),
             infographic_skill=env("INFOGRAPHIC_SKILL", "onepage").strip(),
             infographic_timeout=int(env("INFOGRAPHIC_TIMEOUT_SEC", "900")),
+            # 소셜 계정은 블로그마다 따로: THREADS_ACCESS_TOKEN_EDU / THREADS_ACCESS_TOKEN_CHILDHOOD …
+            # (다른 계정에 잘못 올라가지 않도록 프로필 이름이 붙은 값만 읽는다)
+            social_draft=_bool("SOCIAL_DRAFT", True),
+            social_account=(env(f"SOCIAL_ACCOUNT_{profile.name.upper()}") or "").strip(),
+            threads_token=(env(f"THREADS_ACCESS_TOKEN_{profile.name.upper()}") or "").strip(),
+            threads_user_id=(env(f"THREADS_USER_ID_{profile.name.upper()}") or "").strip(),
+            threads_with_image=_bool("THREADS_WITH_IMAGE", True),
+            instagram_token=(env(f"INSTAGRAM_ACCESS_TOKEN_{profile.name.upper()}") or "").strip(),
+            instagram_user_id=(env(f"INSTAGRAM_USER_ID_{profile.name.upper()}") or "").strip(),
+            instagram_api_version=env("INSTAGRAM_API_VERSION", "v23.0").strip(),
+            imgbb_api_key=env("IMGBB_API_KEY", "").strip(),
             style_mode=env("STYLE_MODE", "native").strip().lower(),
             limit_wait_max_min=int(env("CLAUDE_LIMIT_WAIT_MAX_MIN", "330")),
+            # 아침 발행이 막히면 이 시각에 예약 작업이 한 번 더 돌린다(setup_windows.ps1 -RetryTime과 같게). off면 끔
+            # 기본값: 교육 11:00(06:00 발행), 유아 15:00(12:00 발행) — 두 블로그가 겹치지 않게
+            retry_time=(env(f"RETRY_TIME_{profile.name.upper()}")
+                        or ("15:00" if profile.name == "childhood" else "11:00")).strip(),
             telegram_bot_token=env("TELEGRAM_BOT_TOKEN", "").strip(),
             telegram_chat_id=env("TELEGRAM_CHAT_ID", "").strip(),
         )

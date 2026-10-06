@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -10,6 +11,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from . import persona
 from .config import ROOT, Config
 
 log = logging.getLogger(__name__)
@@ -26,6 +28,10 @@ ALLOWED_TOOLS = [
 
 class GenerationError(RuntimeError):
     pass
+
+
+class NoPostError(GenerationError):
+    """Claude가 post.json을 만들지 않고 끝났다(원문을 못 열어 질문으로 끝내는 등). 다른 주제로 다시 쓰면 된다."""
 
 
 class ClaudeLimitError(GenerationError):
@@ -78,20 +84,23 @@ def _claude_bin(cfg: Config) -> str:
     return found
 
 
-def _run_claude(cfg: Config, prompt: str, log_file: Path) -> None:
+def _run_claude(cfg: Config, prompt: str, log_file: Path, light: bool = False) -> None:
     cmd = [
         _claude_bin(cfg), "-p",
         "--permission-mode", "acceptEdits",
         "--allowedTools", ",".join(ALLOWED_TOOLS),
         "--output-format", "json",
     ]
-    if cfg.claude_model:
-        cmd += ["--model", cfg.claude_model]
-    log.info("Claude 실행: %s", log_file.name)
+    model = cfg.claude_model_light if light else cfg.claude_model
+    if model:
+        cmd += ["--model", model]
+    log.info("Claude 실행(%s): %s", model or "기본 모델", log_file.name)
     try:
         proc = subprocess.run(
             # 프롬프트는 stdin으로 넘긴다(Windows의 claude.cmd는 여러 줄 한글 인자를 망가뜨린다).
             cmd, input=prompt, cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
+            # Claude가 돌리는 확인용 python이 Windows 콘솔(cp949)에서 이모지를 출력하다 멈추지 않게 한다.
+            env={**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"},
             errors="replace", timeout=cfg.generate_timeout,
         )
     except subprocess.TimeoutExpired as e:
@@ -124,6 +133,18 @@ def _rel(path: Path) -> Path:
     return path.relative_to(ROOT) if path.is_relative_to(ROOT) else path
 
 
+def _persona_lines(cfg: Config, recent: bool = True) -> str:
+    """페르소나 파일 위치(없으면 '(없음)')와 최근 자동 글에서 쓴 에피소드 번호."""
+    p = persona.path()
+    if not p.exists():
+        return "PERSONA_FILE=(없음)\n"
+    lines = f"PERSONA_FILE={_rel(p)}\n"
+    if recent:
+        used = persona.recent_used(sorted(cfg.data_dir.glob("published_*.json")))
+        lines += f"RECENT_PERSONA_EPISODES={','.join(used) or '(없음)'}\n"
+    return lines
+
+
 def write_post(cfg: Config, out_dir: Path, today: str, feedback: str = "") -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     related = [p for p in sorted(cfg.data_dir.glob("published_*.json")) if p != cfg.history_file]
@@ -131,23 +152,25 @@ def write_post(cfg: Config, out_dir: Path, today: str, feedback: str = "") -> Pa
         f"/{cfg.profile.write_skill}\n\n"
         f"TODAY={today}\nOUTPUT_DIR={_rel(out_dir)}\nHISTORY_FILE={_rel(cfg.history_file)}\n"
         f"RELATED_HISTORY_FILES={','.join(str(_rel(p)) for p in related) or '(없음)'}\n"
-        f"ILLUSTRATIONS={cfg.illustration_count if cfg.profile.illustrations else 0}\n\n"
+        f"ILLUSTRATIONS={cfg.illustration_count if cfg.profile.illustrations else 0}\n"
+        f"{_persona_lines(cfg)}\n"
         f"스킬 지침대로 오늘의 {cfg.profile.label} 정보성 글 1편을 완성해 OUTPUT_DIR/post.json에 저장하라. "
-        "사람 검토 없이 자동 발행되므로 사실 정확성이 최우선이다. 질문하지 말고 끝까지 진행하라."
+        "사람 검토 없이 자동 발행되므로 사실 정확성이 최우선이다. 질문하지 말고 끝까지 진행하라. "
+        "고른 주제의 원문(보도자료·PDF 등)을 열 수 없으면 사람에게 묻지 말고, 원문을 확인할 수 있는 다른 주제로 바꿔 끝까지 써라."
     )
     if feedback:
         prompt += f"\n\n직전 시도는 아래 이유로 발행이 거부되었다. 다른 주제를 고르거나 문제를 해결하라:\n{feedback}"
     _run_claude(cfg, prompt, out_dir / "claude_write.log")
     post_path = out_dir / "post.json"
     if not post_path.exists():
-        raise GenerationError("post.json이 만들어지지 않았습니다")
+        raise NoPostError("post.json이 만들어지지 않았습니다(Claude가 글을 쓰지 않고 끝남)")
     return post_path
 
 
 def factcheck(cfg: Config, out_dir: Path) -> dict:
     prompt = (
         f"/{cfg.profile.factcheck_skill}\n\n"
-        f"OUTPUT_DIR={_rel(out_dir)}\nMODE=check\n\n"
+        f"OUTPUT_DIR={_rel(out_dir)}\nMODE=check\n{_persona_lines(cfg, recent=False)}\n"
         "스킬 지침대로 post.json(과 일러스트가 있으면 그 이미지)을 검수하고 factcheck.json을 저장하라. "
         "질문하지 말고 끝까지 진행하라."
     )
@@ -162,11 +185,11 @@ def apply_gpt_review(cfg: Config, out_dir: Path, round_no: int) -> dict:
     """ChatGPT 지적을 Claude가 원문으로 재확인해 맞는 것만 반영한다(한쪽 모델의 오판 방지)."""
     prompt = (
         f"/{cfg.profile.factcheck_skill}\n\n"
-        f"OUTPUT_DIR={_rel(out_dir)}\nMODE=apply_gpt_review\n\n"
+        f"OUTPUT_DIR={_rel(out_dir)}\nMODE=apply_gpt_review\n{_persona_lines(cfg, recent=False)}\n"
         "스킬 지침의 MODE=apply_gpt_review 절차대로 gpt_review.json의 지적을 원문과 대조해 반영하고 "
         "gpt_applied.json을 저장하라. 질문하지 말고 끝까지 진행하라."
     )
     path = out_dir / "gpt_applied.json"
     path.unlink(missing_ok=True)
-    _run_claude(cfg, prompt, out_dir / f"claude_apply_gpt_{round_no}.log")
+    _run_claude(cfg, prompt, out_dir / f"claude_apply_gpt_{round_no}.log", light=True)
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}

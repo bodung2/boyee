@@ -1,0 +1,535 @@
+"""티스토리 '논쟁 × 공식 통계' 자동 발행: 주제 선정·제보·검증·전체 흐름·가짜 에디터 발행을 확인한다."""
+import json
+import re
+from datetime import date, datetime
+
+import pytest
+
+from naver_autopost import history
+from naver_autopost.pipeline import KST
+from tistory_autopost import content, inbox, pipeline, publisher, topics, writer
+from tistory_autopost.config import TistoryConfig
+
+TOPICS = [
+    {"id": "a", "debate": "d", "title_hint": "A", "stats": [{"name": "s", "org": "o"}], "release_months": [12], "priority": 1},
+    {"id": "b", "debate": "d", "title_hint": "B", "stats": [], "release_months": [10], "priority": 1},
+    {"id": "c", "debate": "d", "title_hint": "C", "stats": [], "release_months": [3], "priority": 2},
+    {"id": "d", "debate": "d", "title_hint": "D", "stats": [], "release_months": [6], "priority": 3},
+]
+
+ROWS = "".join(f"<tr><td>{i}억원 이상</td><td>{70 - i * 10}%</td></tr>" for i in range(1, 6))
+BODY = (
+    '<div data-block="summary"><ul><li>평균 순자산은 4억 7,144만원</li><li>둘</li><li>셋</li></ul></div>'
+    "<p>SNS에 또 자산 얘기 돌던데, 자 까 보자. 2025년 가계금융복지조사 기준임.</p>"
+    "<p>[[IMAGE:illust_a]]</p>"
+    '<div data-block="highlight"><ul><li>가구 평균 순자산: <strong>4억 7,144만원</strong></li></ul></div>'
+    f"<h2>내 위치 찾기</h2><table><thead><tr><th>구간</th><th>비율</th></tr></thead><tbody>{ROWS}</tbody></table>"
+    "<h2>나눠 보기</h2><p>" + "연령대별 순자산은 50대가 제일 많음. " * 80 + "</p>"
+    '<table data-chart="bar"><tr><td>40대</td><td>4억 8,389만원</td></tr><tr><td>50대</td><td>5억 5,161만원</td></tr></table>'
+    "<p>[[IMAGE:illust_b]]</p>"
+    "<h2>숫자에 속지 않는 법</h2><p>가구 단위 통계임.</p>"
+    '<div data-block="oneline"><p>평균은 남의 집 얘기.</p></div>'
+    '<div data-block="sources"><ul><li><a href="https://mods.go.kr/board.es?x=1">국가데이터처 — 2025년 가계금융복지조사</a></li></ul></div>'
+)
+ILLUSTRATIONS = [{"name": "illust_a", "prompt": "a person", "desc_ko": "도입", "caption": "현타 옴"},
+                 {"name": "illust_b", "prompt": "a city", "desc_ko": "반전", "caption": "반전"}]
+POINT = {"value": "4억 7,144만원", "label": "평균 순자산", "stat": "가계금융복지조사", "period": "2025년 3월 말",
+         "source_url": "https://mods.go.kr/board.es?x=1"}
+POST = {
+    "title": "순자산 상위 10% 기준은 얼마? 2025 가계금융복지조사",
+    "topic_id": "a", "lane": "queue", "tip_id": "",
+    "body_html": BODY, "tags": ["순자산", "#가계금융복지조사", "순자산"], "illustrations": ILLUSTRATIONS,
+    "data_points": [POINT] * 6,
+    "sources": [
+        {"title": "보도자료", "publisher": "국가데이터처", "url": "https://mods.go.kr/board.es?x=1"},
+        {"title": "브리핑", "publisher": "정책브리핑", "url": "https://www.korea.kr/briefing/x"},
+        {"title": "KOSIS", "publisher": "KOSIS", "url": "https://kosis.kr/statHtml/x"},
+        {"title": "기사", "publisher": "언론", "url": "https://news.example.com/a"},
+    ],
+}
+
+
+@pytest.fixture
+def cfg(tmp_path):
+    c = TistoryConfig.load()
+    c.blog_name = "myblog"
+    c.category = "통계로 보는 세상"
+    c.output_dir = tmp_path / "out"
+    c.history_file = tmp_path / "published_tistory.json"
+    c.inbox_file = tmp_path / "inbox.json"
+    c.topics_file = tmp_path / "topics.json"
+    c.topics_file.write_text(json.dumps({"topics": TOPICS}), encoding="utf-8")
+    c.log_dir = tmp_path / "logs"
+    c.telegram_bot_token = c.telegram_chat_id = ""
+    c.headless = True
+    c.browser_channel = ""
+    c.profile_dir = tmp_path / "profile"
+    return c
+
+
+# ---------------------------------------------------------------- 주제 선정
+
+def test_rank_prefers_fresh_and_upcoming_and_skips_written():
+    today = date(2026, 10, 5)
+    ranked = topics.rank(TOPICS, [{"topic_id": "c", "date": "2026-04-01", "url": "u"}], today)
+    ids = [c.topic["id"] for c in ranked]
+    assert "c" not in ids
+    assert ids[:2] == ["b", "a"]           # 이번 달 발표(b) > 두 달 뒤 발표(a)
+    assert ids[-1] == "d"
+
+
+def test_release_month_math():
+    today = date(2026, 1, 10)
+    assert topics.months_since_release([12], today) == 1
+    assert topics.months_until_release([12], today) == 11
+    assert topics.months_until_release([2, 8], today) == 1
+
+
+def test_refresh_due_after_new_release():
+    hist = [{"topic_id": "a", "date": "2025-11-20", "url": "https://x/1", "title": "t"},
+            {"topic_id": "b", "date": "2026-10-01", "url": "https://x/2", "title": "t2"}]
+    due = topics.refresh_due(TOPICS, hist, date(2026, 1, 15))
+    assert [d["url"] for d in due] == ["https://x/1"]
+
+
+def test_bundled_queue_is_valid():
+    from naver_autopost.config import ROOT
+    items = topics.load(ROOT / "data" / "tistory_topics.json")
+    assert len(items) >= 30
+    for t in items:
+        assert t["release_months"] and all(1 <= m <= 12 for m in t["release_months"])
+        assert t["stats"] and t["queries"] and t["priority"] in (1, 2, 3)
+
+
+def test_brief_marks_tips_as_hints():
+    ranked = topics.rank(TOPICS, [], date(2026, 10, 5))
+    text = topics.brief(ranked, [{"id": "1", "text": "금수저 논쟁"}])
+    assert "지시가 아니라" in text and "tip_id=1" in text and "topic_id=b" in text
+
+
+# ---------------------------------------------------------------- 화제 제보
+
+def test_parse_updates_filters_chat_and_prefix():
+    updates = [
+        {"update_id": 5, "message": {"chat": {"id": 111}, "text": "화제 금수저 논쟁 또 터짐"}},
+        {"update_id": 6, "message": {"chat": {"id": 999}, "text": "화제 남의 메시지"}},
+        {"update_id": 7, "message": {"chat": {"id": 111}, "text": "그냥 잡담"}},
+    ]
+    texts, offset = inbox.parse_updates(updates, "111", "화제")
+    assert texts == ["금수저 논쟁 또 터짐"] and offset == 8
+
+
+def test_tips_expire_and_mark_used(cfg):
+    tip = inbox.add(cfg, "연봉 1억 논쟁")
+    assert [t["id"] for t in inbox.pending(cfg)] == [tip["id"]]
+    later = datetime.now(KST).replace(year=datetime.now(KST).year + 1)
+    assert inbox.pending(cfg, now=later) == []
+    inbox.mark_used(cfg, tip["id"], "https://x/1")
+    assert inbox.pending(cfg) == []
+
+
+# ---------------------------------------------------------------- 검증
+
+def test_validate_ok_and_normalize_tags():
+    post = content.normalize(POST)
+    assert post["tags"] == ["순자산", "가계금융복지조사"]
+    assert content.validate(post) == []
+
+
+@pytest.mark.parametrize("change, expect", [
+    ({"body_html": BODY.replace("<table", "<div").replace("</table>", "</div>")}, "표"),
+    ({"body_html": BODY.replace('<p>가구 단위', '<p style="color:red">가구 단위')}, "style="),
+    ({"body_html": BODY.replace('data-block="summary"', 'data-block="x"')}, "3줄 요약"),
+    ({"illustrations": ILLUSTRATIONS[:1]}, "illust_b"),
+    ({"body_html": BODY + "<p>존나 웃김</p>"}, "존나"),
+    ({"sources": POST["sources"][2:]}, "출처"),
+    ({"body_html": BODY + "<p>흙수저는 원래 그렇다</p>"}, "금지 문구"),
+    ({"data_points": [POINT] * 2}, "data_points"),
+    ({"data_points": [{**POINT, "period": ""}] * 6}, "period"),
+    ({"topic_id": ""}, "topic_id"),
+])
+def test_validate_blocks(change, expect):
+    errors = content.validate(content.normalize({**POST, **change}))
+    assert any(expect in e for e in errors), errors
+
+
+def test_sanitize_keeps_tables_and_styles_but_drops_scripts():
+    dirty = ('<h1>t</h1><div style="width:40%" onclick="x()">a</div><script>alert(1)</script>'
+             '<a href="javascript:alert(1)">b</a><iframe src="https://e"></iframe><table><tr><td>1</td></tr></table>')
+    clean = content.sanitize_html(dirty)
+    assert 'style="width:40%"' in clean and "<table>" in clean
+    assert "onclick" not in clean and "<script" not in clean and "javascript:" not in clean
+    assert "<iframe" not in clean and "<h1>" not in clean
+
+
+# ---------------------------------------------------------------- 전체 흐름(가짜 Claude·Codex·브라우저)
+
+class Fakes:
+    def __init__(self, cfg, monkeypatch, post=None, gpt=("pass",), claude="pass"):
+        self.cfg, self.post, self.gpt, self.claude = cfg, post or POST, list(gpt), claude
+        self.published, self.briefs = [], []
+        monkeypatch.setattr(writer, "write_post", self.write_post)
+        monkeypatch.setattr(writer, "factcheck", lambda c, out: {"verdict": self.claude, "summary": "ok"})
+        monkeypatch.setattr(writer, "gpt_factcheck", self.gpt_factcheck)
+        monkeypatch.setattr(writer, "apply_gpt_review", self.apply)
+        monkeypatch.setattr(publisher, "check_session", lambda c: True)
+        monkeypatch.setattr(publisher, "publish", self.publish)
+        monkeypatch.setattr(pipeline.codex_image, "generate_image", self.image)
+        monkeypatch.setattr(pipeline.infographic, "generate", lambda c, post, out: self.image(c, "", out))
+        self.images = []
+
+    def image(self, cfg, prompt, out):
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(b"png")
+        return out
+
+    def write_post(self, cfg, out_dir, today, brief, feedback=""):
+        self.briefs.append(brief)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "post.json").write_text(json.dumps(self.post, ensure_ascii=False), encoding="utf-8")
+        return out_dir / "post.json"
+
+    def gpt_factcheck(self, cfg, post):
+        v = self.gpt.pop(0) if len(self.gpt) > 1 else self.gpt[0]
+        return {"verdict": v, "issues": [] if v == "pass" else [{"text": "x"}], "summary": v}
+
+    def apply(self, cfg, out_dir, round_no):
+        return {"applied": ["x"], "rejected": []}
+
+    def publish(self, cfg, post, out_dir, dry_run=False, images=None):
+        self.images.append([n for n, _ in images or []])
+        if dry_run:
+            return ""
+        self.published.append(post["title"])
+        return "https://myblog.tistory.com/1"
+
+
+def test_run_publishes_records_and_marks_tip(cfg, monkeypatch):
+    tip = inbox.add(cfg, "금수저 논쟁")
+    fakes = Fakes(cfg, monkeypatch, post={**POST, "lane": "tip", "tip_id": tip["id"]}, gpt=("fix", "pass"))
+    assert pipeline.run(cfg) == 0
+    assert fakes.published == [POST["title"]]
+    assert "금수저 논쟁" in fakes.briefs[0]
+    entry = history.load(cfg.history_file)[-1]
+    assert entry["topic_id"] == "a" and entry["lane"] == "tip" and entry["url"].endswith("/1")
+    assert inbox.pending(cfg) == []
+    assert pipeline.run(cfg) == 0 and len(fakes.published) == 1      # 하루 1편
+
+
+def test_run_rejects_then_gives_up(cfg, monkeypatch):
+    fakes = Fakes(cfg, monkeypatch, gpt=("fail",))
+    assert pipeline.run(cfg) == 1
+    assert fakes.published == [] and len(fakes.briefs) == cfg.max_attempts
+
+
+def test_dry_run_does_not_record(cfg, monkeypatch):
+    Fakes(cfg, monkeypatch)
+    assert pipeline.run(cfg, dry_run=True) == 0
+    assert history.load(cfg.history_file) == []
+
+
+def test_resume_skips_passed_stages(cfg, monkeypatch):
+    fakes = Fakes(cfg, monkeypatch)
+    out = cfg.output_dir / pipeline.today_kst()
+    out.mkdir(parents=True)
+    (out / "post.json").write_text(json.dumps(POST, ensure_ascii=False), encoding="utf-8")
+    (out / "stage.json").write_text(json.dumps({"written": True, "claude_pass": True}))
+    monkeypatch.setattr(writer, "factcheck", lambda c, o: pytest.fail("이미 통과한 검수를 다시 함"))
+    assert pipeline.run(cfg) == 0
+    assert fakes.briefs == [] and fakes.published
+
+
+# ---------------------------------------------------------------- 발행기(가짜 티스토리 에디터)
+
+MOCK_EDITOR = r"""<!doctype html><meta charset="utf-8"><body>
+<textarea id="post-title-inp" placeholder="제목을 입력하세요"></textarea>
+<button id="editor-mode-layer-btn-open" onclick="document.getElementById('modes').style.display='block'">기본모드</button>
+<div id="modes" style="display:none"><div id="editor-mode-html" onclick="toHtml()">HTML</div></div>
+<div class="CodeMirror" id="hidden-cm" style="display:none">숨은 편집기</div>
+<button id="mceu_0-open" onclick="document.getElementById('attach-menu').style.display='block'">첨부</button>
+<div id="attach-menu" style="display:none"><div id="attach-image" onclick="document.getElementById('f').click()">사진</div></div>
+<input type="file" id="f" accept="image/*" style="display:none">
+<div id="cm-host"></div>
+<button id="category-btn" onclick="document.getElementById('category-list').style.display='block'">카테고리</button>
+<div id="category-list" style="display:none">
+  <div role="option" onclick="window.cat='일상'">일상</div>
+  <div role="option" onclick="window.cat='통계로 보는 세상'">- 통계로 보는 세상</div>
+</div>
+<input id="tagText" placeholder="태그입력">
+<button id="publish-layer-btn" onclick="document.getElementById('layer').style.display='block'">완료</button>
+<div id="layer" style="display:none">
+  <input type="radio" name="basicSet" id="open0" value="0" checked><label for="open0">비공개</label>
+  <input type="radio" name="basicSet" id="open20" value="20"><label for="open20">공개</label>
+  <button id="publish-btn" onclick="publish()">공개 발행</button>
+</div>
+<script>
+window.tags = []; window.uploaded = [];
+window.tinymce = {activeEditor: {getContent: () => window.uploaded.join('')}};
+document.getElementById('f').addEventListener('change', e => {
+  const n = e.target.files[0].name;
+  setTimeout(() => window.uploaded.push('[##_Image|kage@abc/' + n + '|CDM|1.3|{}_##]'), 300);
+  e.target.value = '';
+});
+(() => { let hv = ''; document.getElementById('hidden-cm').CodeMirror =
+  {setValue: x => { hv = x; }, getValue: () => hv, save: () => {}, focus: () => {}}; })();
+document.getElementById('tagText').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { window.tags.push(e.target.value); e.target.value = ''; }
+});
+function toHtml() {
+  if (!confirm('HTML 모드로 전환하시겠습니까?')) return;
+  const el = document.createElement('div'); el.className = 'CodeMirror'; el.textContent = 'cm';
+  let v = window.uploaded.join('\\n'); el.CodeMirror = {setValue: x => { v = x; }, getValue: () => v, save: () => {}, focus: () => {}, refresh: () => {}};
+  document.getElementById('cm-host').appendChild(el);
+}
+function publish() {
+  const cm = document.querySelector('#cm-host .CodeMirror').CodeMirror;
+  localStorage.setItem('result', JSON.stringify({
+    title: document.getElementById('post-title-inp').value, body: cm.getValue(), cat: window.cat,
+    tags: window.tags, open: document.querySelector('input[name=basicSet]:checked').value}));
+  location.href = '/manage/posts/';
+}
+</script>"""
+
+
+PUBLISHED_PAGE = """<!doctype html><meta charset="utf-8"><body><script>
+const r = JSON.parse(localStorage.getItem('result') || '{}');
+document.title = JSON.stringify(r);
+document.body.insertAdjacentHTML('beforeend', '<h1>' + (r.title || '') + '</h1>' + (window.EMPTY ? '' : (r.body || '')));
+</script></body>"""
+
+
+def _mock_publish(cfg, monkeypatch, tmp_path, editor=MOCK_EDITOR, empty_page=False):
+    from naver_autopost.publisher import _launch as real_launch
+    result = {}
+
+    def launch(p, c, headless):
+        ctx = real_launch(p, c, headless=True)
+
+        def serve(route):
+            url = route.request.url
+            if "/manage/newpost" in url:
+                route.fulfill(status=200, content_type="text/html", body=editor)
+            else:
+                page = PUBLISHED_PAGE.replace("<script>", "<script>window.EMPTY=true;" if empty_page else "<script>", 1)
+                route.fulfill(status=200, content_type="text/html", body=page)
+        ctx.route("https://myblog.tistory.com/**", serve)
+        original_close = ctx.close
+
+        def close():
+            for page in ctx.pages:
+                if "/manage/newpost" not in page.url and page.url.startswith("https://myblog"):
+                    result.update(json.loads(page.title() or "{}"))
+            original_close()
+        ctx.close = close
+        return ctx
+
+    monkeypatch.setattr(publisher, "_launch", launch)
+    monkeypatch.setattr(publisher, "find_post_url", lambda c, t: None)
+    monkeypatch.setattr(publisher, "rss_item", lambda c, t: {"url": "https://myblog.tistory.com/1", "text_length": None})
+    post = content.normalize(POST)
+    images = []
+    for name in ("illust_a", "illust_b"):
+        path = tmp_path / f"{name}.png"
+        path.write_bytes(b"png")
+        images.append((name, path))
+    url = publisher.publish(cfg, post, tmp_path / "shots", images=images)
+    return url, post, result
+
+
+def test_publish_on_mock_editor(cfg, monkeypatch, tmp_path):
+    pytest.importorskip("playwright")
+    url, post, result = _mock_publish(cfg, monkeypatch, tmp_path)
+    assert url == "https://myblog.tistory.com/1"
+    assert result["title"] == POST["title"]
+    assert result["body"] == post["_final_html"]
+    a, b = result["body"].index("[##_Image|kage@abc/illust_a.png"), result["body"].index("[##_Image|kage@abc/illust_b.png")
+    assert a < b and post["_images_ok"] == 2 and "현타 옴" in result["body"]
+    assert "border:1px solid #bdbdbd" in result["body"] and "[[IMAGE" not in result["body"]
+    assert result["cat"] == "통계로 보는 세상" and post["_category_ok"] is True
+    assert result["tags"] == ["순자산", "가계금융복지조사"]
+    assert result["open"] == "20"
+    state = json.loads((tmp_path / "shots" / "editor_state.json").read_text(encoding="utf-8"))
+    js_len = len(post["_final_html"].encode("utf-16-le")) // 2      # 브라우저는 이모지를 2글자로 센다
+    assert any(c["visible"] and c["length"] == js_len for c in state["codemirrors"])
+
+
+def test_publish_reports_empty_body_on_published_page(cfg, monkeypatch, tmp_path):
+    pytest.importorskip("playwright")
+    with pytest.raises(publisher.PublishUncertain, match="본문이 비어 있습니다"):
+        _mock_publish(cfg, monkeypatch, tmp_path, empty_page=True)
+    assert (tmp_path / "shots" / "published_page.png").exists()
+
+
+def test_find_post_url_from_rss(cfg, monkeypatch):
+    rss = ("<rss><channel><item><title><![CDATA[다른 글]]></title><link>https://myblog.tistory.com/3</link></item>"
+           "<item><title>순자산 상위 10% 기준은 얼마?</title><link>https://myblog.tistory.com/4</link></item></channel></rss>")
+
+    class Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return rss.encode()
+
+    monkeypatch.setattr(publisher.urllib.request, "urlopen", lambda req, timeout=20: Resp())
+    assert publisher.find_post_url(cfg, "순자산 상위 10%  기준은 얼마?") == "https://myblog.tistory.com/4"
+    assert publisher.find_post_url(cfg, "없는 글") is None
+
+
+LOGIN_PAGE = """<!doctype html><meta charset="utf-8">
+<a class="link_kakao_id" href="https://www.tistory.com/auth/kakao">카카오계정으로 로그인</a>"""
+
+
+def _route_login_flow(ctx):
+    """TSSESSION이 없으면 글쓰기 화면이 로그인 화면으로 보내고, 카카오 버튼을 누르면 쿠키를 받고 돌아온다."""
+    def serve(route):
+        url = route.request.url
+        has = "TSSESSION=" in (route.request.headers.get("cookie") or "")
+        if "/manage/newpost" in url and not has:
+            route.fulfill(status=200, content_type="text/html",
+                          body="<script>location.href='https://www.tistory.com/auth/login?redirectUrl=x'</script>")
+        elif "/manage/newpost" in url:
+            route.fulfill(status=200, content_type="text/html", body="<title>editor</title>")
+        elif "/auth/login" in url:
+            route.fulfill(status=200, content_type="text/html", body=LOGIN_PAGE)
+        elif "/auth/kakao" in url:
+            route.fulfill(status=200, content_type="text/html", body=(
+                "<script>document.cookie='TSSESSION=abc; domain=.tistory.com; path=/; secure';"
+                "location.href='https://myblog.tistory.com/manage/newpost/'</script>"))
+        else:
+            route.fulfill(status=200, body="")
+    ctx.route(re.compile(r"https://[^/]*tistory\.com/.*"), serve)
+
+
+def test_login_kept_by_kakao_auto_login_and_saved_cookies(cfg, monkeypatch):
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    from naver_autopost.publisher import _launch as real_launch
+
+    def launch(p, c, headless):
+        ctx = real_launch(p, c, headless=True)
+        _route_login_flow(ctx)
+        return ctx
+
+    monkeypatch.setattr(publisher, "_launch", launch)
+    try:
+        with sync_playwright() as p:
+            ctx = publisher._open(p, cfg, headless=True)
+            page = ctx.new_page()
+            assert publisher._ensure_logged_in(page, cfg, timeout=15)      # 로그인 화면 → 카카오 버튼 → 글쓰기 화면
+            publisher._save_cookies(ctx, cfg)
+            ctx.close()
+    except Exception as e:  # noqa: BLE001
+        if "Executable doesn't exist" in str(e):
+            pytest.skip("브라우저 없음")
+        raise
+    saved = json.loads(publisher._state_file(cfg).read_text(encoding="utf-8"))
+    assert any(c["name"] == "TSSESSION" for c in saved)
+    with sync_playwright() as p:                                         # 다시 열면 저장한 쿠키로 바로 들어간다
+        ctx = publisher._open(p, cfg, headless=True)
+        assert any(c["name"] == "TSSESSION" for c in ctx.cookies("https://www.tistory.com"))
+        ctx.close()
+    assert publisher.check_session(cfg)
+
+
+def test_category_label_strips_prefix_and_count():
+    assert publisher._category_label("- 숫자로 보는 한국 (3)") == "숫자로 보는 한국"
+    assert publisher._category_label("  숫자로  보는 한국 ") == "숫자로 보는 한국"
+
+
+def test_category_not_found_reports_seen_names(cfg, monkeypatch, tmp_path):
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    html = ("<button id='category-btn' onclick=\"document.getElementById('category-list').style.display='block'\">카테고리</button>"
+            "<ul id='category-list' style='display:none'><li>일상 (12)</li><li>- 코인 (40)</li></ul>")
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        page = b.new_page()
+        page.set_content(html)
+        post = {}
+        assert publisher._select_category(page, "숫자로 보는 한국", post, tmp_path) is False
+        assert post["_category_seen"] == ["일상", "코인"]
+        assert publisher._select_category(page, "코인") is True
+        b.close()
+
+
+def test_republish_reuses_checked_post_and_fixes_history(cfg, monkeypatch):
+    fakes = Fakes(cfg, monkeypatch)
+    day = pipeline.today_kst()
+    out = cfg.output_dir / day
+    out.mkdir(parents=True)
+    (out / "post.json").write_text(json.dumps(POST, ensure_ascii=False), encoding="utf-8")
+    (out / "stage.json").write_text(json.dumps({"written": True, "claude_pass": True, "gpt_pass": True,
+                                                "published": True, "url": "https://myblog.tistory.com/0"}))
+    history.append(cfg.history_file, {"date": day, "title": POST["title"], "url": "https://myblog.tistory.com/0",
+                                       "topic_id": "a", "source": "autopost"})
+    monkeypatch.setattr(publisher, "find_post_url", lambda c, t: "https://myblog.tistory.com/0")
+    assert pipeline.republish(cfg) == 1 and fakes.published == []          # 빈 글을 지우기 전에는 멈춘다
+    monkeypatch.setattr(publisher, "find_post_url", lambda c, t: None)
+    assert pipeline.republish(cfg) == 0
+    assert fakes.published == [POST["title"]] and fakes.briefs == []        # 새로 쓰지 않는다
+    entries = history.load(cfg.history_file)
+    assert len(entries) == 1 and entries[0]["url"] == "https://myblog.tistory.com/1"
+
+
+def test_republish_refuses_unchecked_post(cfg, monkeypatch):
+    fakes = Fakes(cfg, monkeypatch)
+    out = cfg.output_dir / pipeline.today_kst()
+    out.mkdir(parents=True)
+    (out / "post.json").write_text(json.dumps(POST, ensure_ascii=False), encoding="utf-8")
+    (out / "stage.json").write_text(json.dumps({"written": True}))
+    assert pipeline.republish(cfg) == 1 and fakes.published == []
+
+
+def test_publish_refuses_when_body_did_not_stick(cfg, monkeypatch, tmp_path):
+    pytest.importorskip("playwright")
+    from naver_autopost.publisher import _launch as real_launch
+    broken = MOCK_EDITOR.replace("setValue: x => { v = x; }", "setValue: x => {}")
+
+    def launch(p, c, headless):
+        ctx = real_launch(p, c, headless=True)
+        ctx.route("https://myblog.tistory.com/**", lambda r: r.fulfill(status=200, content_type="text/html", body=broken))
+        return ctx
+
+    monkeypatch.setattr(publisher, "_launch", launch)
+    monkeypatch.setattr(publisher, "find_post_url", lambda c, t: None)
+    monkeypatch.setattr(publisher, "_set_body", lambda page, html: None)   # 넣었다고 믿었지만 실제로는 빈 편집기
+    with pytest.raises(publisher.PublishError, match="본문이 편집기에 들어가지 않아"):
+        publisher.publish(cfg, content.normalize(POST), tmp_path / "shots")
+
+
+@pytest.mark.parametrize("html", [
+    # 목록이 category가 붙지 않은 곳에 그려지는 경우(글자로 찾기)
+    "<button id='category-btn' onclick=\"document.getElementById('m').style.display='block'\">카테고리</button>"
+    "<div id='m' class='layer' style='display:none'><div><span>일상</span></div>"
+    "<div><span onclick=\"document.getElementById('category-btn').textContent='숫자로 보는 한국';window.cat=1\">"
+    "- 숫자로 보는 한국 (2)</span></div></div>",
+    # 일반 select 목록
+    "<select id='c' onchange='window.cat=1'><option>카테고리 없음</option><option>숫자로 보는 한국</option></select>",
+])
+def test_category_found_in_other_structures(html):
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        page = b.new_page()
+        page.set_content(html)
+        assert publisher._select_category(page, "숫자로 보는 한국") is True
+        assert page.evaluate("window.cat") == 1
+        b.close()
+
+
+def test_category_debug_saved_when_missing(tmp_path):
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        page = b.new_page()
+        page.set_content("<button id='category-btn'>카테고리</button><p>숫자로 보는 한국 소개글입니다</p>")
+        assert publisher._select_category(page, "숫자로 보는 한국", {}, tmp_path) is False
+        debug = json.loads((tmp_path / "category_debug.json").read_text(encoding="utf-8"))
+        assert any(d["tag"] == "P" for d in debug)
+        b.close()

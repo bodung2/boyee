@@ -86,7 +86,8 @@ def run_for_image(cfg: Config, prompt: str, out: Path, convert, timeout: int, wh
         raise CodexAccountError(f"'{cfg.codex_bin}' 명령을 찾지 못했습니다(Codex CLI 미설치)")
     gen_dir = codex_home() / "generated_images"
     env = {k: v for k, v in os.environ.items() if k not in ("OPENAI_API_KEY", "CODEX_API_KEY")}
-    with tempfile.TemporaryDirectory() as work:
+    # Windows에서는 Codex가 만든 파일을 잠깐 잠그고 있어 폴더 정리가 실패할 수 있다(그림은 이미 옮긴 뒤라 무시).
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as work:
         cmd = [exe, "exec", "-C", work, "-s", "workspace-write", "--skip-git-repo-check",
                "-c", "model_reasoning_effort=low"]
         if cfg.codex_model:
@@ -102,14 +103,35 @@ def run_for_image(cfg: Config, prompt: str, out: Path, convert, timeout: int, wh
         output = (proc.stdout or "") + "\n" + (proc.stderr or "")
         if proc.returncode != 0 and _LOGIN_OR_LIMIT.search(output):
             raise CodexAccountError(f"Codex 로그인·사용 한도 문제로 {what}을 만들지 못했습니다: {output.strip()[-400:]}")
-        saved = [p for p in Path(work).rglob("*") if p.suffix.lower() in IMAGE_EXTS]
+        saved = sorted((p for p in Path(work).rglob("*") if p.suffix.lower() in IMAGE_EXTS),
+                       key=lambda p: p.stat().st_mtime, reverse=True)
         m = re.search(r"session id:\s*([0-9a-fA-F-]{8,})", output)
-        found = (max(saved, key=lambda p: p.stat().st_mtime) if saved
-                 else _find_new_image(gen_dir, m.group(1) if m else None, started))
-        if not found:
+        fallback = _find_new_image(gen_dir, m.group(1) if m else None, started)
+        candidates = saved[:1] + ([fallback] if fallback else [])
+        if not candidates:
             raise CodexImageError(f"Codex가 {what}을 만들지 않았습니다(exit {proc.returncode}): {output.strip()[-400:]}")
-        convert(found, out)
+        _convert_first_readable(candidates, out, convert, what)
     return out
+
+
+def _convert_first_readable(candidates: list[Path], out: Path, convert, what: str,
+                            tries: int = 6, wait: float = 5) -> None:
+    """Windows에서 Codex가 방금 쓴 그림을 아직 잠그고 있으면 PermissionError가 난다.
+    잠시 기다렸다 다시 읽고, 그래도 안 되면 다음 후보(image_gen 기본 폴더의 사본)를 쓴다."""
+    last: Exception | None = None
+    for src in candidates:
+        for i in range(tries):
+            try:
+                convert(src, out)
+                return
+            except PermissionError as e:
+                last = e
+                log.info("%s 파일이 아직 잠겨 있어 %d초 뒤 다시 읽습니다(%d/%d): %s", what, wait, i + 1, tries, src)
+                _sleep(wait)
+    raise CodexImageError(f"Codex가 만든 {what} 파일을 읽지 못했습니다: {last}")
+
+
+_sleep = time.sleep
 
 
 def generate_image(cfg: Config, prompt: str, out: Path) -> Path:
