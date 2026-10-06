@@ -126,9 +126,26 @@ def _save_thumbnail(img: Image.Image, out: Path, size: int) -> Path:
     return out
 
 
-def make_thumbnail(thumb: dict, out: Path, size: int = THUMBNAIL_SIZE) -> Path:
+# 교육 블로그: 주제 레인(edu-auto-post의 A~E)마다 배경색을 정해, 썸네일만 봐도 어떤 주제인지 구분되게 한다.
+# 흰 글자·노란 강조가 모두 잘 읽히는 짙은 색만 쓴다(대비 4.5 이상).
+EDU_TONES = {
+    "A": "#146356",   # 경기교육 정책·이슈 — 딥그린
+    "B": "#87400f",   # 교직 실무 꿀팁 — 번트오렌지
+    "C": "#1f3a5f",   # 전국 교육부 정책 — 남색(기존 색)
+    "D": "#8c2f4b",   # 학부모 관심 교육정보 — 베리
+    "E": "#4b2c82",   # 교육 핵심 동향·인사이트 — 딥퍼플
+}
+
+
+def edu_tone(lane: str | None) -> str:
+    """레인 글자(A~E, '(C)'·'C 레인'도 됨)의 배경색. 모르면 기존 남색."""
+    letter = next((ch for ch in str(lane or "").upper() if ch.isalpha()), "")
+    return EDU_TONES.get(letter, BG)
+
+
+def make_thumbnail(thumb: dict, out: Path, size: int = THUMBNAIL_SIZE, tone: str = BG) -> Path:
     final_size, size = size, _DRAW_SIZE
-    img = Image.new("RGB", (size, size), BG)
+    img = Image.new("RGB", (size, size), tone)
     draw = ImageDraw.Draw(img)
     main_font_size = 120
     main_font = _font("bold", main_font_size)
@@ -153,7 +170,7 @@ def make_thumbnail(thumb: dict, out: Path, size: int = THUMBNAIL_SIZE) -> Path:
         block_h += min_gap + sub_gap * len(sub_lines)
     y = (size - block_h) // 2
 
-    y = _draw_chip(draw, thumb.get("chip", "교육 정책"), size // 2, y, chip_font, ACCENT, BG) + gap_after_chip
+    y = _draw_chip(draw, thumb.get("chip", "교육 정책"), size // 2, y, chip_font, ACCENT, tone) + gap_after_chip
     for line in main_lines:
         _draw_centered_line(draw, line, y, main_font, size, WHITE, thumb.get("highlight", ""))
         y += line_gap

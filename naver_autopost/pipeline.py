@@ -346,9 +346,10 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
             "card": images.make_card(post["card"], fname("card", "card"), tone=tone),
         }
     else:
+        tone = images.edu_tone(post.get("lane"))          # 주제 레인마다 다른 색
         imgs = {
-            "thumbnail": images.make_thumbnail(post["thumbnail"], fname("thumbnail", "thumbnail")),
-            "card": images.make_card(post["card"], fname("card", "card")),
+            "thumbnail": images.make_thumbnail(post["thumbnail"], fname("thumbnail", "thumbnail"), tone=tone),
+            "card": images.make_card(post["card"], fname("card", "card"), tone=tone),
         }
     for ill in post.get("illustrations") or []:
         path = out_dir / f"{ill.get('name')}.png"
