@@ -269,3 +269,13 @@ pip install -r requirements.txt pytest
 python -m pytest -q
 python -m naver_autopost preview output/childhood/2026-09-27 --profile childhood   # 발행 없이 미리보기
 ```
+
+## 코드 자동 업데이트(브랜치 고정)
+
+모든 예약 작업(`scripts/run_*.bat`)은 글을 쓰기 전에 `scripts/self_update.py`를 먼저 실행합니다.
+
+- 작업 폴더가 다른 브랜치로 바뀌어 있으면 기준 브랜치 `claude/optimistic-bell-2admac`로 되돌립니다(고친 파일이 있으면 바꾸지 않고 알림).
+- 끝나지 않은 병합(충돌)은 취소하고, GitHub의 최신 코드를 받아 옵니다. 충돌이 나면 취소하고 지금 코드로 실행합니다.
+- `requirements.txt`가 바뀌었으면 패키지를 다시 설치합니다. 문제가 있을 때만 텔레그램으로 알립니다.
+- 그래서 PR을 병합한 뒤 PC에서 따로 `git pull`을 하지 않아도, 다음 예약 작업부터 새 코드로 돕니다.
+- 기준 브랜치를 바꾸려면 `.env`에 `AUTOPOST_BRANCH=브랜치이름`을 넣습니다.
