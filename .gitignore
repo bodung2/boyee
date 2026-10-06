@@ -14,3 +14,4 @@ __pycache__/
 secrets/
 persona/
 docs/persona_answers*
+data/neighbors*.json

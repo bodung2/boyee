@@ -240,6 +240,39 @@ notepad .env                                              # TISTORY_BLOG, TISTOR
 - 발행 화면을 못 찾는다는 오류가 나면 `python -m tistory_autopost diagnose`를 실행하고 `output/tistory/diagnostics/`를 Claude에게 보여 주세요.
   티스토리 화면 구조는 실제 계정으로 확인하지 못한 상태에서 만들어서, 첫 `--dry-run`에서 셀렉터를 고칠 수 있습니다(`tistory_autopost/publisher.py`의 `SELECTORS`).
 
+## 이웃 후보 추천 (유아·교육, 하루 5곳씩)
+
+내 블로그와 주제가 비슷하고 **최근 7일 안에 글을 쓴** 네이버 블로그를 찾아, 콘텐츠 관리 시트(`블로그_콘텐츠_관리시트`)의
+**'유아 이웃 후보'**, **'교육 이웃 후보'** 탭에 하루 5곳씩 적습니다. 탭은 처음 실행할 때 자동으로 만들어집니다.
+
+**네이버에는 아무것도 쓰지 않습니다.** 댓글·이웃 신청 자동화는 네이버 운영정책 위반이라 블로그 제재 위험이 있어서,
+프로그램은 공개된 검색 결과·RSS·글만 읽고, 방문·댓글·이웃 신청은 시트를 보고 직접 합니다.
+
+```
+[작업 스케줄러, 매일 19:00]  scripts\run_neighbors.bat  (유아 → 교육 순서)
+  ① 검색        기본 검색어 + 최근 내 글 태그로 네이버 블로그 최신 글 검색(날짜마다 검색어를 바꿈)
+  ② 거르기      내 블로그·이미 시트에 있는 블로그 제외 → RSS로 최근 7일 안 글 1편 이상, 최근 30일 글 2편 이상인 곳만
+  ③ 고르기      Claude가 최근 글 본문을 읽고 광고·체험단·짜깁기 블로그를 빼고 5곳 선정(맞는 곳이 적으면 적게)
+  ④ 시트 기록   추천일 | 블로그 이름 | 블로그 주소 | 최근 글 제목·링크·날짜 | 최근 30일 글 수 | 추천 이유 | 글 요약 | 댓글 아이디어 | 방문함☐ | 메모
+```
+
+- 한 번 시트에 올라간 블로그는 다시 추천하지 않습니다. '방문함'과 '메모'(노란 칸)는 직접 관리용입니다.
+- '댓글 아이디어'는 그대로 붙여넣는 완성 댓글이 아니라, 글을 읽고 무엇에 대해 말하면 좋을지 적은 참고용입니다.
+- 결과: `logs/neighbors-<프로필>-날짜.log`, `output/<프로필>/neighbors/날짜/`(candidates.json, picks.json)
+
+### 최초 1회 설정
+
+1. **구글 시트 API 켜기**: 블로거용으로 만든 구글 클라우드 프로젝트에서 API 및 서비스 → 라이브러리 → **Google Sheets API** → 사용.
+   (블로거를 아직 설정하지 않았다면 위 '구글 블로거 → 최초 1회 설정'의 2번대로 OAuth 클라이언트를 만들어 `secrets\blogger_client_secret.json`에 둡니다.)
+2. **시트 쓰기 승인**: `.venv\Scripts\python.exe -m naver_autopost sheets-auth` → 시트 주인 구글 계정으로 '허용'
+3. **(권장) 네이버 검색 API 키**: [developers.naver.com](https://developers.naver.com/apps/#/register) → 애플리케이션 등록 → 사용 API **검색** →
+   받은 Client ID/Secret을 `.env`의 `NAVER_SEARCH_CLIENT_ID`, `NAVER_SEARCH_CLIENT_SECRET`에 입력(무료, 하루 25,000회).
+   없으면 검색 결과 화면을 읽는데, 네이버 화면이 바뀌면 후보를 못 찾을 수 있습니다.
+4. 시험 실행: `.venv\Scripts\python.exe -m naver_autopost neighbors --profile childhood` → 시트에 '유아 이웃 후보' 탭이 생겼는지 확인
+5. 예약: `powershell -ExecutionPolicy Bypass -File scripts\setup_neighbors_windows.ps1 -Time 19:00`
+
+검색어는 `naver_autopost/profiles.py`의 `neighbor_keywords` 또는 `.env`의 `NEIGHBOR_KEYWORDS_CHILDHOOD`/`_EDU`로 바꿉니다.
+
 ## 블로그 디자인 (SR 기존 글과 동일)
 
 `STYLE_MODE=native`(기본): 기존 글(https://blog.naver.com/kkus_i/224403935438)의 서식을 그대로 재현합니다.
@@ -269,3 +302,13 @@ pip install -r requirements.txt pytest
 python -m pytest -q
 python -m naver_autopost preview output/childhood/2026-09-27 --profile childhood   # 발행 없이 미리보기
 ```
+
+## 코드 자동 업데이트(브랜치 고정)
+
+모든 예약 작업(`scripts/run_*.bat`)은 글을 쓰기 전에 `scripts/self_update.py`를 먼저 실행합니다.
+
+- 작업 폴더가 다른 브랜치로 바뀌어 있으면 기준 브랜치 `claude/optimistic-bell-2admac`로 되돌립니다(고친 파일이 있으면 바꾸지 않고 알림).
+- 끝나지 않은 병합(충돌)은 취소하고, GitHub의 최신 코드를 받아 옵니다. 충돌이 나면 취소하고 지금 코드로 실행합니다.
+- `requirements.txt`가 바뀌었으면 패키지를 다시 설치합니다. 문제가 있을 때만 텔레그램으로 알립니다.
+- 그래서 PR을 병합한 뒤 PC에서 따로 `git pull`을 하지 않아도, 다음 예약 작업부터 새 코드로 돕니다.
+- 기준 브랜치를 바꾸려면 `.env`에 `AUTOPOST_BRANCH=브랜치이름`을 넣습니다.
