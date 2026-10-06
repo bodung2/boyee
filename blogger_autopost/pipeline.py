@@ -8,7 +8,7 @@ import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from naver_autopost import history
+from naver_autopost import history, persona
 from naver_autopost.errors import ExternalAccountError
 from naver_autopost.notify import send_text
 from naver_autopost.pipeline import KST, _Lock, today_kst
@@ -277,6 +277,7 @@ def run(cfg: BloggerConfig, draft: bool = False, force: bool = False) -> int:
             history.append(cfg.history_file, {
                 "date": today, "title": post["title"], "url": url, "labels": post["labels"],
                 "topic": post.get("topic", ""), "post_id": result.get("id"), "source": "autopost",
+                "persona_used": persona.clean_used(post.get("persona_used"), persona.load()),
             })
             when = f" ({cfg.publish_time} 예약)" if scheduled else ""
             notes = "\n".join(n for n in (photo_note, cfg.model_note) if n)

@@ -188,6 +188,10 @@ def _check(cfg: BloggerConfig, search: bool) -> int:
             ok = False
             print(f"❌ {e}")
 
+    from naver_autopost import persona
+    ptext = persona.load()
+    print("4-1) 작가 페르소나: " + (f"✅ {persona.path()} (에피소드 {len(persona.episode_ids(ptext))}개)" if ptext
+                                   else f"없음 → 경험·생각 없이 씁니다({persona.path()}에 두면 적용)"))
     print(f"5) 예약 발행 시각: {cfg.publish_time + ' (한국 시각)' if cfg.publish_time else '없음(글이 완성되는 즉시 발행)'}")
     print(f"6) 글쓰기 모델: {cfg.codex_model or '(Codex 기본값)'}, 추론 {cfg.codex_effort or '(기본값)'}"
           f" / 안 되면 {cfg.codex_fallback_model or '없음'}. 그림: 글마다 생성 그림 {cfg.illustrations}장"

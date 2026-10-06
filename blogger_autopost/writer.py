@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 from naver_autopost.codex_image import codex_home
+from naver_autopost import persona
 from naver_autopost.content import html_to_text
 from naver_autopost.openai_client import CodexAccountError, CodexUnavailable, _extract_json, run_codex
 
@@ -31,7 +32,7 @@ This run is fully automatic: nobody reviews the post before it goes live on the 
 
 Already published posts (newest first):
 {history}
-{feedback}
+{persona}{feedback}
 DELIVERABLE (this replaces only the skill's output/delivery format; keep ALL of its writing rules, and follow
 its guidance on images — what to show, style, placement — when you fill "illustrations" and "photos" below):
 Save ONE file named post.json (UTF-8) in the current working directory, exactly this shape:
@@ -45,6 +46,7 @@ Save ONE file named post.json (UTF-8) in the current working directory, exactly 
   "sources": [{{"title": "source page title", "publisher": "who published it", "url": "https://..."}}],
   "illustrations": [{{"section": 1, "prompt": "detailed English image-generation prompt", "alt": "alt text",
                      "caption": "short caption"}}],
+  "persona_used": ["E20"],
   "photos": [{{"section": 2, "subject": "exactly what the photo must show", "search": "Wikimedia Commons search words",
               "alternatives": ["other search words", "..."], "fallback_prompt": "photorealistic English image prompt",
               "alt": "alt text", "caption": "short caption"}}]
@@ -75,6 +77,7 @@ body_html rules:
   English prompt instead (labelled as AI-generated). Describe a typical, generic scene of the subject; no text or signs.
 - Prefer well-known places, buildings, food, objects and signs over people.
 "sources" lists every page you actually read to verify the facts (at least {min_sources}).
+"persona_used": the episode IDs ([E..]) from the author persona you used, or [] if none.
 After saving post.json, reply with just: done
 """
 
@@ -87,6 +90,8 @@ Rules:
   Not confirmable anywhere reliable: recommend deleting it ("삭제" or "delete").
 - Also check that the links in the post and the listed sources really say what the post claims.
 - Do not comment on style, opinions or tone unless they state something false.
+- First-person statements about the author's own experience or opinion ("As a teacher, I...", "In my view...")
+  are not web-checkable; do not flag them. Only check general facts inside them (rules, numbers, names).
 - Only report issues you can back with an evidence URL.
 If you cannot use web search, output only {{"verdict": "error", "summary": "no web search"}}.
 Do not create files or run commands.
@@ -161,6 +166,33 @@ def _codex(cfg: BloggerConfig, prompt: str, cwd: Path | None, sandbox: str, time
         raise CodexAccountError(f"Codex(ChatGPT)를 쓸 수 없습니다: {e}") from e
 
 
+PERSONA_BLOCK = """
+AUTHOR PERSONA (the blog is written by "teacher-K"; the profile below is in Korean — use it as the ONLY source of the
+author's own experiences and opinions):
+- Weave in 0-2 episodes ([E..]) that genuinely fit today's topic, in the first person ("As a teacher, I...",
+  "At home with my two daughters..."). Never invent any experience, anecdote or result that is not in the persona,
+  and do not change its numbers, durations or events (you may rephrase naturally in English).
+- Avoid episodes recently used: {recent}.
+- End the post with a short "my take" paragraph (2-4 sentences) that reflects the persona's views, clearly phrased
+  as opinion ("In my view...", "As a teacher and a parent, I think...").
+- Voice: calm, kind local explainer; no hype, few or no emoji, light humor only occasionally.
+- Never reveal the grade the author teaches, where the author lives or works, or any school or family names.
+- On sensitive topics (politics, extreme views, gender conflict, religion, regional stereotypes, teacher unions)
+  give no personal opinion; if they come up, stay neutral and close by weighing pros and cons.
+--- PERSONA ---
+{text}
+--- END PERSONA ---
+"""
+
+
+def persona_block(cfg: BloggerConfig) -> str:
+    text = persona.load()
+    if not text:
+        return ""
+    recent = persona.recent_used(sorted(cfg.history_file.parent.glob("published_*.json")))
+    return PERSONA_BLOCK.format(recent=", ".join(recent) or "none", text=text.strip())
+
+
 def write_post(cfg: BloggerConfig, out_dir: Path, today: str, history: list[dict], feedback: str = "") -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     skill_file = find_skill(cfg)
@@ -170,6 +202,7 @@ def write_post(cfg: BloggerConfig, out_dir: Path, today: str, history: list[dict
           f"{feedback}\n") if feedback else ""
     prompt = WRITE_PROMPT.replace("${skill}", f"${cfg.skill}").format(
         skill=cfg.skill, skill_hint=hint, today=today, history=_history_lines(history), feedback=fb,
+        persona=persona_block(cfg),
         min_sources=cfg.min_sources, photos=cfg.photos,
         illustrations=cfg.illustrations)
     (out_dir / "write_prompt.txt").write_text(prompt, encoding="utf-8")

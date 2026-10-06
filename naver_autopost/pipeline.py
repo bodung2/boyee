@@ -13,7 +13,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from . import (codex_image, content, gemini_client, generate, history, images, infographic, notify,
-               openai_client, social)
+               openai_client, persona, social)
 from .config import Config
 from .errors import ExternalAccountError
 
@@ -482,6 +482,7 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
                 "category": post.get("blog_category", ""),
                 "lane": post.get("lane", ""), "cluster": post.get("cluster", ""), "domain": post.get("domain"),
                 "tags": post.get("tags", []), "source": "autopost",
+                "persona_used": persona.clean_used(post.get("persona_used"), persona.load()),
             })
             notify.send(cfg, f"[{label} 자동발행 완료] {post['title']}\n{url}\n{cat_note}{_social_drafts(cfg, out_dir, url)}")
             return 0
