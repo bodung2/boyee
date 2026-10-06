@@ -16,7 +16,8 @@ from pathlib import Path
 
 from playwright.sync_api import Locator, Page, sync_playwright
 
-from naver_autopost.publisher import _launch
+from naver_autopost.content import html_to_text
+from naver_autopost.publisher import MOD, _launch
 
 from .config import TistoryConfig
 
@@ -235,23 +236,57 @@ def _switch_to_html(page: Page) -> None:
     log.info("HTML 모드로 전환")
 
 
+def _squash(text: str) -> str:
+    return re.sub(r"\s+", "", text or "")
+
+
+def _cm_value(page: Page) -> str:
+    return page.evaluate(f"() => {{ const e = ({_VISIBLE_CM})(); return e ? e.CodeMirror.getValue() : ''; }}")
+
+
 def _set_body(page: Page, body_html: str) -> None:
-    n = page.evaluate(
-        """([html, findCm]) => {
-            const el = (eval(findCm))();
-            if (!el) return 0;
-            const cm = el.CodeMirror;
-            cm.focus();
-            cm.setValue(html);
-            if (cm.save) cm.save();
-            if (cm.refresh) cm.refresh();
-            return cm.getValue().length;
-        }""",
-        [body_html, _VISIBLE_CM],
-    )
-    if not n:
-        raise PublishError("HTML 편집기에 본문을 넣지 못했습니다")
-    log.info("본문 입력(HTML %d자)", n)
+    """보이는 HTML 편집기에 사람이 입력하듯 넣는다(편집기 값을 코드로 바꾸면 티스토리가 저장하지 않는다)."""
+    cm = page.locator(".CodeMirror:visible").first
+    cm.click()
+    page.keyboard.press(f"{MOD}+A")
+    page.keyboard.press("Delete")
+    page.keyboard.insert_text(body_html)
+    page.wait_for_timeout(800)
+    value = _cm_value(page)
+    if _squash(value) != _squash(body_html):
+        # 자동 들여쓰기·태그 자동 닫기 등으로 내용이 바뀌었으면 값을 바로잡는다(입력 이벤트는 이미 났다).
+        log.warning("입력 결과가 원문과 달라 편집기 값을 바로잡습니다(%d자 → %d자)", len(value), len(body_html))
+        page.evaluate(
+            """([html, findCm]) => { const e = (eval(findCm))(); e.CodeMirror.setValue(html); }""",
+            [body_html, _VISIBLE_CM],
+        )
+        page.keyboard.press("End")
+        page.keyboard.insert_text(" ")
+        page.keyboard.press("Backspace")
+    log.info("본문 입력(HTML %d자)", len(_cm_value(page)))
+
+
+_EDITOR_STATE = """() => {
+    const cms = [...document.querySelectorAll('.CodeMirror')].map(e => ({
+        visible: e.offsetParent !== null, length: e.CodeMirror ? e.CodeMirror.getValue().length : -1}));
+    const ed = window.tinymce && window.tinymce.activeEditor;
+    return {url: location.href, codemirrors: cms,
+        tinymce: ed ? {id: ed.id, length: ed.getContent().length} : null,
+        iframes: [...document.querySelectorAll('iframe')].map(f => f.id || f.name || f.src).slice(0, 10),
+        textareas: [...document.querySelectorAll('textarea')].map(t => ({id: t.id, name: t.name, length: t.value.length}))};
+}"""
+
+
+def editor_state(page: Page, out_dir: Path | None = None) -> dict:
+    """발행 직전 편집기 상태(문제가 생기면 editor_state.json으로 원인을 본다)."""
+    try:
+        state = page.evaluate(_EDITOR_STATE)
+    except Exception as e:  # noqa: BLE001
+        state = {"error": str(e)}
+    if out_dir is not None:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "editor_state.json").write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    return state
 
 
 def body_length(page: Page) -> dict:
@@ -420,6 +455,7 @@ def _fill_editor(cfg: TistoryConfig, page: Page, post: dict, out_dir: Path) -> L
         _add_tags(page, post.get("tags", []))
         _shot(page, out_dir, "editor_filled")
 
+        log.info("편집기 상태: %s", json.dumps(editor_state(page, out_dir), ensure_ascii=False)[:500])
         filled = body_length(page)
         if filled["length"] < min(200, len(post["body_html"]) // 2):
             raise PublishError(f"본문이 편집기에 들어가지 않아 발행하지 않습니다({filled})")
@@ -442,6 +478,38 @@ def _fill_editor(cfg: TistoryConfig, page: Page, post: dict, out_dir: Path) -> L
     except Exception as e:
         _shot(page, out_dir, "publish_error")
         raise PublishError(str(e)) from e
+
+
+def _probe(body_html: str) -> str:
+    """발행된 글 페이지에서 본문이 보이는지 확인할 문장 조각(공백 제거)."""
+    for line in html_to_text(body_html).splitlines():
+        line = _squash(line)
+        if len(line) >= 20:
+            return line[:20]
+    return _squash(html_to_text(body_html))[:20]
+
+
+def _verify_published(page: Page, cfg: TistoryConfig, post: dict, out_dir: Path) -> str:
+    """RSS로 글 주소를 찾고, 그 글을 열어 본문 문장이 실제로 보이는지 확인한다."""
+    url = ""
+    for _ in range(6):                      # RSS 반영까지 잠깐 걸릴 수 있다
+        item = rss_item(cfg, post["title"])
+        if item:
+            url = item["url"]
+            break
+        page.wait_for_timeout(10_000)
+    if not url:
+        log.warning("발행은 했지만 RSS에서 글 주소를 찾지 못했습니다")
+        return f"{cfg.blog_url}/manage/posts/"
+    page.goto(url, wait_until="domcontentloaded")
+    page.wait_for_timeout(2500)
+    probe = _probe(post["body_html"])
+    if probe and probe not in _squash(page.inner_text("body")):
+        _shot(page, out_dir, "published_page")
+        raise PublishUncertain(f"글은 올라갔지만 본문이 비어 있습니다(발행된 글에서 본문 문장을 찾지 못함). "
+                               f"티스토리에서 이 글을 지우고 editor_state.json을 Claude에게 보여 주세요: {url}")
+    log.info("발행된 글에서 본문 확인: %s", url)
+    return url
 
 
 def publish(cfg: TistoryConfig, post: dict, out_dir: Path, dry_run: bool = False) -> str:
@@ -468,17 +536,9 @@ def publish(cfg: TistoryConfig, post: dict, out_dir: Path, dry_run: bool = False
             except Exception as e:
                 _shot(page, out_dir, "after_publish_error")
                 raise PublishUncertain(f"발행 버튼을 누른 뒤 확인하지 못했습니다(블로그에서 직접 확인하세요): {e}") from e
+            return _verify_published(page, cfg, post, out_dir)
         finally:
             ctx.close()
-    for _ in range(6):                      # RSS 반영까지 잠깐 걸릴 수 있다
-        item = rss_item(cfg, post["title"])
-        if item:
-            if item["text_length"] is not None and item["text_length"] < 50:
-                raise PublishUncertain(f"글은 올라갔지만 본문이 비어 있는 것 같습니다. 블로그에서 확인하세요: {item['url']}")
-            return item["url"]
-        time.sleep(10)
-    log.warning("발행은 했지만 RSS에서 글 주소를 찾지 못했습니다")
-    return f"{cfg.blog_url}/manage/posts/"
 
 
 def diagnose(cfg: TistoryConfig, out_dir: Path) -> Path:
