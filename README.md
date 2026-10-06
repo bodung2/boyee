@@ -1,4 +1,4 @@
-# 블로그 완전 자동 발행 (네이버 유아교육 · 교육 정책 · 구글 블로거)
+# 블로그 완전 자동 발행 (네이버 유아교육 · 교육 정책 · 구글 블로거 · 티스토리)
 
 집 PC에서 매일 정해진 시간에 정보성 글 1편을 **주제 선정 → 리서치 → 글쓰기 → 일러스트 → 이중 팩트체크 → 네이버 발행**까지 사람 손 없이 처리합니다.
 
@@ -7,6 +7,7 @@
 | `childhood` (기본) | early-childhood-insight-extraction | `.claude/skills/childhood-auto-post`, `childhood-auto-factcheck` | **사용 중** |
 | `edu` | education-insight-extraction | `.claude/skills/edu-auto-post`, `edu-auto-factcheck` | 교육 블로그(flw3148), 매일 06:00 |
 | 구글 블로거 | Codex 스킬 korea-explained-blogger | `python -m blogger_autopost` ([아래](#구글-블로거-korea-explained-blogger-하루-1편)) | 매일 1편, Blogger API |
+| 티스토리 | `.claude/skills/stats-auto-post`, `stats-auto-factcheck` | `python -m tistory_autopost` ([아래](#티스토리-논쟁--공식-통계-하루-1편)) | 매일 1편, 브라우저 자동화 |
 
 ```
 [작업 스케줄러, 매일 12:00]  python -m naver_autopost run --profile childhood
@@ -202,6 +203,42 @@ Codex(ChatGPT 구독)에 설치된 `korea-explained-blogger` 스킬로 글을 �
   비영리(NC)·변경금지(ND)·GFDL 단독·인물권 제한 사진은 쓰지 않습니다. 사진 아래에 작가·라이선스·원본 링크를 자동으로 붙이고, 고른 사진 목록은 `post.json`의 `photo_credits`에 남습니다.
 - 글 규칙은 Codex 스킬(`korea-explained-blogger`)을 그대로 따르고, 자동 발행에 필요한 규칙(질문 금지, 확인 못 한 사실 삭제, 경험 지어내기 금지, 출력 형식)만
   `blogger_autopost/writer.py`의 프롬프트로 덧붙입니다.
+
+## 티스토리 '논쟁 × 공식 통계' (하루 1편)
+
+SNS에서 해마다 되풀이되는 논쟁(금수저, 연봉, 결혼, 집값, 키 등)에 **공식 통계로 숫자로 답하는 글**을 씁니다.
+독자가 자기 숫자를 대입해 "상위 몇 %"를 찾는 표가 글의 중심입니다. 티스토리 Open API는 2024년 2월에 종료되어 네이버처럼 브라우저로 발행합니다.
+
+```
+[작업 스케줄러, 매일 08:00]  python -m tistory_autopost run
+  ① 로그인 확인              자동화용 크롬에 저장한 티스토리(카카오) 로그인
+  ② 화제 제보 받기           텔레그램으로 보낸 "화제 ..." 메시지(2주 지나면 버림)
+  ③ 주제 선정                data/tistory_topics.json 30개 큐: 우선순위 + 새 통계가 막 나왔거나 곧 나오는 주제 우선
+  ④ 글쓰기(Claude)           stats-auto-post: 공식 원문 확인 → 내 위치 찾기 표·막대그래프·FAQ·출처 → post.json
+  ⑤ 구조 검증                표·소제목·공식 출처 2개+·검증용 수치 6개+·금지 문구(자리표시자, 집단 비하 표현)
+  ⑥ 팩트체크(Claude)         stats-auto-factcheck: 모든 수치 원문 대조, 가구/개인·평균/중앙값·단위·시점 혼동, 계산값 재계산
+  ⑦ 팩트체크(ChatGPT)        Codex 웹 검색 교차검증 → Claude가 원문으로 재확인해 반영 → 다시 pass여야 통과
+  ⑧ 발행                     글쓰기 화면 HTML 모드에 본문 → 제목·카테고리·태그 → 공개 발행 → RSS로 글 주소 확인
+  ⑨ 기록·알림                data/published_tistory.json, 텔레그램(새 통계가 나와 갱신할 글 목록도 함께)
+```
+
+설치(Windows, 최초 1회):
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_tistory_windows.ps1 -Time 08:00
+notepad .env                                              # TISTORY_BLOG, TISTORY_CATEGORY
+.venv\Scripts\python.exe -m tistory_autopost login        # 열린 창에서 카카오 계정 로그인('로그인 상태 유지')
+.venv\Scripts\python.exe -m tistory_autopost check        # 로그인·Claude·Codex·주제 큐 확인
+.venv\Scripts\python.exe -m tistory_autopost run --dry-run   # 공개 발행 직전에 멈춤 → 창과 스크린샷 확인
+```
+
+운영:
+- `python -m tistory_autopost queue`: 오늘 후보 주제, 대기 중인 화제 제보, 새 통계가 나와 갱신하면 좋은 글
+- 화제 제보: 텔레그램 알림 봇에게 `화제 연봉 1억 논쟁 또 뜸`처럼 보내거나 `python -m tistory_autopost tip "연봉 1억 논쟁"`.
+  제보는 주제 힌트로만 쓰이고, 공식 통계로 답할 수 없는 화제(인물 논란·소문)는 건너뜁니다.
+- 주제 추가: `data/tistory_topics.json`에 같은 형식으로 넣습니다(`release_months`는 통상 발표 달).
+- 결과: `logs/tistory-날짜.log`, `output/tistory/날짜/`(post.json, factcheck.json, gpt_factcheck_*.json, 화면 스크린샷)
+- 발행 화면을 못 찾는다는 오류가 나면 `python -m tistory_autopost diagnose`를 실행하고 `output/tistory/diagnostics/`를 Claude에게 보여 주세요.
+  티스토리 화면 구조는 실제 계정으로 확인하지 못한 상태에서 만들어서, 첫 `--dry-run`에서 셀렉터를 고칠 수 있습니다(`tistory_autopost/publisher.py`의 `SELECTORS`).
 
 ## 블로그 디자인 (SR 기존 글과 동일)
 
