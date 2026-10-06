@@ -30,6 +30,10 @@ class GenerationError(RuntimeError):
     pass
 
 
+class NoPostError(GenerationError):
+    """Claude가 post.json을 만들지 않고 끝났다(원문을 못 열어 질문으로 끝내는 등). 다른 주제로 다시 쓰면 된다."""
+
+
 class ClaudeLimitError(GenerationError):
     """Claude 구독 사용 한도에 걸렸다. reset_at(KST) 이후에 다시 하면 된다."""
 
@@ -151,14 +155,15 @@ def write_post(cfg: Config, out_dir: Path, today: str, feedback: str = "") -> Pa
         f"ILLUSTRATIONS={cfg.illustration_count if cfg.profile.illustrations else 0}\n"
         f"{_persona_lines(cfg)}\n"
         f"스킬 지침대로 오늘의 {cfg.profile.label} 정보성 글 1편을 완성해 OUTPUT_DIR/post.json에 저장하라. "
-        "사람 검토 없이 자동 발행되므로 사실 정확성이 최우선이다. 질문하지 말고 끝까지 진행하라."
+        "사람 검토 없이 자동 발행되므로 사실 정확성이 최우선이다. 질문하지 말고 끝까지 진행하라. "
+        "고른 주제의 원문(보도자료·PDF 등)을 열 수 없으면 사람에게 묻지 말고, 원문을 확인할 수 있는 다른 주제로 바꿔 끝까지 써라."
     )
     if feedback:
         prompt += f"\n\n직전 시도는 아래 이유로 발행이 거부되었다. 다른 주제를 고르거나 문제를 해결하라:\n{feedback}"
     _run_claude(cfg, prompt, out_dir / "claude_write.log")
     post_path = out_dir / "post.json"
     if not post_path.exists():
-        raise GenerationError("post.json이 만들어지지 않았습니다")
+        raise NoPostError("post.json이 만들어지지 않았습니다(Claude가 글을 쓰지 않고 끝남)")
     return post_path
 
 

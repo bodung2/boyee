@@ -32,7 +32,7 @@ def write_post(cfg: TistoryConfig, out_dir: Path, today: str, topic_brief: str, 
     generate._run_claude(cfg, prompt, out_dir / "claude_write.log")
     path = out_dir / "post.json"
     if not path.exists():
-        raise generate.GenerationError("post.json이 만들어지지 않았습니다")
+        raise generate.NoPostError("post.json이 만들어지지 않았습니다(Claude가 글을 쓰지 않고 끝남)")
     return path
 
 
