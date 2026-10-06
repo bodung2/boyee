@@ -19,19 +19,26 @@ TOPICS = [
 
 ROWS = "".join(f"<tr><td>{i}억원 이상</td><td>{70 - i * 10}%</td></tr>" for i in range(1, 6))
 BODY = (
-    "<p>요즘 SNS에서 자산 이야기가 자주 나옵니다. 2025년 가계금융복지조사로 확인합니다.</p>"
-    '<div style="border:1px solid #d0d7de;padding:16px;"><ul><li>가구 평균 순자산: <strong>4억 7,144만원</strong></li></ul></div>'
+    '<div data-block="summary"><ul><li>평균 순자산은 4억 7,144만원</li><li>둘</li><li>셋</li></ul></div>'
+    "<p>SNS에 또 자산 얘기 돌던데, 자 까 보자. 2025년 가계금융복지조사 기준임.</p>"
+    "<p>[[IMAGE:illust_a]]</p>"
+    '<div data-block="highlight"><ul><li>가구 평균 순자산: <strong>4억 7,144만원</strong></li></ul></div>'
     f"<h2>내 위치 찾기</h2><table><thead><tr><th>구간</th><th>비율</th></tr></thead><tbody>{ROWS}</tbody></table>"
-    "<h2>나눠 보기</h2><p>" + "연령대별 순자산은 50대가 가장 많습니다. " * 80 + "</p>"
-    "<h2>주의할 점</h2><p>가구 단위 통계입니다.</p>"
-    '<h2>출처</h2><ul><li><a href="https://mods.go.kr/board.es?x=1">국가데이터처 — 2025년 가계금융복지조사</a></li></ul>'
+    "<h2>나눠 보기</h2><p>" + "연령대별 순자산은 50대가 제일 많음. " * 80 + "</p>"
+    '<table data-chart="bar"><tr><td>40대</td><td>4억 8,389만원</td></tr><tr><td>50대</td><td>5억 5,161만원</td></tr></table>'
+    "<p>[[IMAGE:illust_b]]</p>"
+    "<h2>숫자에 속지 않는 법</h2><p>가구 단위 통계임.</p>"
+    '<div data-block="oneline"><p>평균은 남의 집 얘기.</p></div>'
+    '<div data-block="sources"><ul><li><a href="https://mods.go.kr/board.es?x=1">국가데이터처 — 2025년 가계금융복지조사</a></li></ul></div>'
 )
+ILLUSTRATIONS = [{"name": "illust_a", "prompt": "a person", "desc_ko": "도입", "caption": "현타 옴"},
+                 {"name": "illust_b", "prompt": "a city", "desc_ko": "반전", "caption": "반전"}]
 POINT = {"value": "4억 7,144만원", "label": "평균 순자산", "stat": "가계금융복지조사", "period": "2025년 3월 말",
          "source_url": "https://mods.go.kr/board.es?x=1"}
 POST = {
     "title": "순자산 상위 10% 기준은 얼마? 2025 가계금융복지조사",
     "topic_id": "a", "lane": "queue", "tip_id": "",
-    "body_html": BODY, "tags": ["순자산", "#가계금융복지조사", "순자산"],
+    "body_html": BODY, "tags": ["순자산", "#가계금융복지조사", "순자산"], "illustrations": ILLUSTRATIONS,
     "data_points": [POINT] * 6,
     "sources": [
         {"title": "보도자료", "publisher": "국가데이터처", "url": "https://mods.go.kr/board.es?x=1"},
@@ -130,7 +137,11 @@ def test_validate_ok_and_normalize_tags():
 
 
 @pytest.mark.parametrize("change, expect", [
-    ({"body_html": BODY.replace("<table>", "<div>").replace("</table>", "</div>")}, "표"),
+    ({"body_html": BODY.replace("<table", "<div").replace("</table>", "</div>")}, "표"),
+    ({"body_html": BODY.replace('<p>가구 단위', '<p style="color:red">가구 단위')}, "style="),
+    ({"body_html": BODY.replace('data-block="summary"', 'data-block="x"')}, "3줄 요약"),
+    ({"illustrations": ILLUSTRATIONS[:1]}, "illust_b"),
+    ({"body_html": BODY + "<p>존나 웃김</p>"}, "존나"),
     ({"sources": POST["sources"][2:]}, "출처"),
     ({"body_html": BODY + "<p>흙수저는 원래 그렇다</p>"}, "금지 문구"),
     ({"data_points": [POINT] * 2}, "data_points"),
@@ -163,6 +174,14 @@ class Fakes:
         monkeypatch.setattr(writer, "apply_gpt_review", self.apply)
         monkeypatch.setattr(publisher, "check_session", lambda c: True)
         monkeypatch.setattr(publisher, "publish", self.publish)
+        monkeypatch.setattr(pipeline.codex_image, "generate_image", self.image)
+        monkeypatch.setattr(pipeline.infographic, "generate", lambda c, post, out: self.image(c, "", out))
+        self.images = []
+
+    def image(self, cfg, prompt, out):
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(b"png")
+        return out
 
     def write_post(self, cfg, out_dir, today, brief, feedback=""):
         self.briefs.append(brief)
@@ -177,7 +196,8 @@ class Fakes:
     def apply(self, cfg, out_dir, round_no):
         return {"applied": ["x"], "rejected": []}
 
-    def publish(self, cfg, post, out_dir, dry_run=False):
+    def publish(self, cfg, post, out_dir, dry_run=False, images=None):
+        self.images.append([n for n, _ in images or []])
         if dry_run:
             return ""
         self.published.append(post["title"])
@@ -226,6 +246,9 @@ MOCK_EDITOR = r"""<!doctype html><meta charset="utf-8"><body>
 <button id="editor-mode-layer-btn-open" onclick="document.getElementById('modes').style.display='block'">기본모드</button>
 <div id="modes" style="display:none"><div id="editor-mode-html" onclick="toHtml()">HTML</div></div>
 <div class="CodeMirror" id="hidden-cm" style="display:none">숨은 편집기</div>
+<button id="mceu_0-open" onclick="document.getElementById('attach-menu').style.display='block'">첨부</button>
+<div id="attach-menu" style="display:none"><div id="attach-image" onclick="document.getElementById('f').click()">사진</div></div>
+<input type="file" id="f" accept="image/*" style="display:none">
 <div id="cm-host"></div>
 <button id="category-btn" onclick="document.getElementById('category-list').style.display='block'">카테고리</button>
 <div id="category-list" style="display:none">
@@ -240,7 +263,13 @@ MOCK_EDITOR = r"""<!doctype html><meta charset="utf-8"><body>
   <button id="publish-btn" onclick="publish()">공개 발행</button>
 </div>
 <script>
-window.tags = [];
+window.tags = []; window.uploaded = [];
+window.tinymce = {activeEditor: {getContent: () => window.uploaded.join('')}};
+document.getElementById('f').addEventListener('change', e => {
+  const n = e.target.files[0].name;
+  setTimeout(() => window.uploaded.push('[##_Image|kage@abc/' + n + '|CDM|1.3|{}_##]'), 300);
+  e.target.value = '';
+});
 (() => { let hv = ''; document.getElementById('hidden-cm').CodeMirror =
   {setValue: x => { hv = x; }, getValue: () => hv, save: () => {}, focus: () => {}}; })();
 document.getElementById('tagText').addEventListener('keydown', e => {
@@ -249,7 +278,7 @@ document.getElementById('tagText').addEventListener('keydown', e => {
 function toHtml() {
   if (!confirm('HTML 모드로 전환하시겠습니까?')) return;
   const el = document.createElement('div'); el.className = 'CodeMirror'; el.textContent = 'cm';
-  let v = ''; el.CodeMirror = {setValue: x => { v = x; }, getValue: () => v, save: () => {}, focus: () => {}, refresh: () => {}};
+  let v = window.uploaded.join('\\n'); el.CodeMirror = {setValue: x => { v = x; }, getValue: () => v, save: () => {}, focus: () => {}, refresh: () => {}};
   document.getElementById('cm-host').appendChild(el);
 }
 function publish() {
@@ -298,7 +327,12 @@ def _mock_publish(cfg, monkeypatch, tmp_path, editor=MOCK_EDITOR, empty_page=Fal
     monkeypatch.setattr(publisher, "find_post_url", lambda c, t: None)
     monkeypatch.setattr(publisher, "rss_item", lambda c, t: {"url": "https://myblog.tistory.com/1", "text_length": None})
     post = content.normalize(POST)
-    url = publisher.publish(cfg, post, tmp_path / "shots")
+    images = []
+    for name in ("illust_a", "illust_b"):
+        path = tmp_path / f"{name}.png"
+        path.write_bytes(b"png")
+        images.append((name, path))
+    url = publisher.publish(cfg, post, tmp_path / "shots", images=images)
     return url, post, result
 
 
@@ -307,12 +341,16 @@ def test_publish_on_mock_editor(cfg, monkeypatch, tmp_path):
     url, post, result = _mock_publish(cfg, monkeypatch, tmp_path)
     assert url == "https://myblog.tistory.com/1"
     assert result["title"] == POST["title"]
-    assert result["body"] == post["body_html"]
+    assert result["body"] == post["_final_html"]
+    a, b = result["body"].index("[##_Image|kage@abc/illust_a.png"), result["body"].index("[##_Image|kage@abc/illust_b.png")
+    assert a < b and post["_images_ok"] == 2 and "현타 옴" in result["body"]
+    assert "border:1px solid #bdbdbd" in result["body"] and "[[IMAGE" not in result["body"]
     assert result["cat"] == "통계로 보는 세상" and post["_category_ok"] is True
     assert result["tags"] == ["순자산", "가계금융복지조사"]
     assert result["open"] == "20"
     state = json.loads((tmp_path / "shots" / "editor_state.json").read_text(encoding="utf-8"))
-    assert any(c["visible"] and c["length"] == len(post["body_html"]) for c in state["codemirrors"])
+    js_len = len(post["_final_html"].encode("utf-16-le")) // 2      # 브라우저는 이모지를 2글자로 센다
+    assert any(c["visible"] and c["length"] == js_len for c in state["codemirrors"])
 
 
 def test_publish_reports_empty_body_on_published_page(cfg, monkeypatch, tmp_path):

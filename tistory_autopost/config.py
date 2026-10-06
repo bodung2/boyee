@@ -43,6 +43,11 @@ class TistoryConfig:
     telegram_chat_id: str
     tip_prefix: str                # 텔레그램 화제 메시지 머리말(예: "화제")
     limit_wait_max_min: int
+    illustration_count: int        # 본문 상황 그림(ChatGPT 이미지) 장수
+    infographic: bool              # 핵심 숫자 한 장 인포그래픽(Codex onepage 스킬)
+    infographic_skill: str
+    infographic_timeout: int
+    codex_image_timeout: int
     codex_effort: str = ""
 
     @property
@@ -89,4 +94,9 @@ class TistoryConfig:
             telegram_chat_id=env("TELEGRAM_CHAT_ID", "").strip(),
             tip_prefix=env("TISTORY_TIP_PREFIX", "화제").strip(),
             limit_wait_max_min=int(env("CLAUDE_LIMIT_WAIT_MAX_MIN", "330")),
+            illustration_count=int(env("TISTORY_ILLUSTRATIONS", "2")),
+            infographic=_bool("TISTORY_INFOGRAPHIC", True),
+            infographic_skill=env("INFOGRAPHIC_SKILL", "onepage").strip(),
+            infographic_timeout=int(env("INFOGRAPHIC_TIMEOUT_SEC", "900")),
+            codex_image_timeout=int(env("CODEX_IMAGE_TIMEOUT_SEC", "360")),
         )
