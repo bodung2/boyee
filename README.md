@@ -180,6 +180,9 @@ Codex(ChatGPT 구독)에 설치된 `korea-explained-blogger` 스킬로 글을 �
   실행할 때마다 블로그와 발행 이력을 맞추므로, 지운 글은 이력·내부 링크 후보에서도 빠집니다.
 - **글 모양(검색용)**: 글은 핵심 답 문단으로 시작하고(그림은 그 뒤), 끝에 같은 라벨의 관련 글 3개 링크가 붙습니다.
   이미 발행한 글에도 똑같이 적용하려면 `python -m blogger_autopost fix-posts`(미리보기) → `fix-posts --apply`(적용, 백업 저장).
+  예전 양식(그림 없음)으로 나간 글을 새 양식으로 바꾸려면 `python -m blogger_autopost refresh-post today`(또는 날짜 `2026-10-06`·글 주소)로
+  미리보기(`output/blogger/refresh-<글ID>/preview.html`)를 보고 `refresh-post today --apply`로 적용합니다. 기존 문장은 고치지 않고
+  사진·생성 그림(글에 그림이 없을 때), 경험·'내 생각' 문단, 인포그래픽(대표 이미지), 관련 글만 덧붙입니다. 되돌리기는 `fix-posts --restore <백업 폴더>`.
   블로거 API로는 글별 '검색 설명'을 넣을 수 없고 테마의 글 요약(data:view.description)도 비어 있어서,
   **테마 스크립트가 글 첫 문단으로 검색 설명을 채우게** 합니다(한 번만 설정, 구글은 스크립트 실행 뒤 페이지를 읽음).
   `docs/blogger-meta-description.xml` 안내대로 테마 HTML에 넣고 `python -m blogger_autopost check-meta`로 확인합니다
