@@ -24,7 +24,12 @@ from .config import BloggerConfig
 
 log = logging.getLogger(__name__)
 
-SCOPE = "https://www.googleapis.com/auth/blogger"
+BLOGGER_SCOPE = "https://www.googleapis.com/auth/blogger"
+# 생성 그림을 올릴 드라이브 권한(이 프로그램이 만든 파일만 다룰 수 있는 가장 좁은 권한)
+DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
+# 검색 유입 진단(diagnose)용 서치 콘솔 읽기 권한
+SEARCH_CONSOLE_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly"
+SCOPE = f"{BLOGGER_SCOPE} {DRIVE_SCOPE} {SEARCH_CONSOLE_SCOPE}"
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://www.googleapis.com/blogger/v3"
@@ -72,8 +77,9 @@ def _save_token(cfg: BloggerConfig, token: dict) -> None:
     cfg.token_file.write_text(json.dumps(token, indent=2), encoding="utf-8")
 
 
-def authorize(cfg: BloggerConfig, open_browser: bool = True, timeout: int = 300) -> dict:
-    """로컬 루프백(127.0.0.1) 방식으로 구글 계정 승인을 받고 refresh token을 저장한다."""
+def authorize(cfg: BloggerConfig, open_browser: bool = True, timeout: int = 300, scope: str = SCOPE) -> dict:
+    """로컬 루프백(127.0.0.1) 방식으로 구글 계정 승인을 받고 refresh token을 저장한다.
+    scope를 바꾸면 같은 OAuth 클라이언트로 다른 구글 API(예: 시트) 토큰도 받는다."""
     client = _client(cfg)
     verifier = secrets.token_urlsafe(64)
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
@@ -101,7 +107,7 @@ def authorize(cfg: BloggerConfig, open_browser: bool = True, timeout: int = 300)
     redirect_uri = f"http://127.0.0.1:{server.server_port}"
     url = AUTH_URL + "?" + urllib.parse.urlencode({
         "client_id": client["client_id"], "redirect_uri": redirect_uri, "response_type": "code",
-        "scope": SCOPE, "access_type": "offline", "prompt": "consent", "state": state,
+        "scope": scope, "access_type": "offline", "prompt": "consent", "state": state,
         "code_challenge": challenge, "code_challenge_method": "S256",
     })
     print("브라우저에서 블로그 주인 구글 계정으로 로그인하고 '허용'을 누르세요.\n"
@@ -131,6 +137,14 @@ def _serve_until(server: http.server.HTTPServer, result: dict, timeout: int) -> 
     server.timeout = 1
     while not result and time.time() < deadline:
         server.handle_request()
+
+
+def has_scope(cfg: BloggerConfig, scope: str) -> bool:
+    """저장된 로그인 토큰에 그 권한이 들어 있는지(예전에 블로거 권한만으로 로그인했으면 드라이브 권한이 없다)."""
+    if not cfg.token_file.exists():
+        return False
+    granted = json.loads(cfg.token_file.read_text(encoding="utf-8")).get("scope", "")
+    return scope in granted.split()
 
 
 def access_token(cfg: BloggerConfig) -> str:
@@ -221,6 +235,12 @@ def create_draft(cfg: BloggerConfig, title: str, content: str, labels: list[str]
     blog = resolve_blog_id(cfg)
     return request(cfg, "POST", f"/blogs/{blog}/posts", {"isDraft": "true"},
                    {"kind": "blogger#post", "title": title, "content": content, "labels": labels})
+
+
+def update_content(cfg: BloggerConfig, post_id: str, content: str) -> dict:
+    """이미 발행·예약한 글의 본문만 바꾼다(제목·라벨·발행일은 그대로)."""
+    blog = resolve_blog_id(cfg)
+    return request(cfg, "PATCH", f"/blogs/{blog}/posts/{post_id}", None, {"content": content})
 
 
 def publish(cfg: BloggerConfig, post_id: str, publish_at: str | None = None) -> dict:

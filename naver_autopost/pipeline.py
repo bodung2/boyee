@@ -12,7 +12,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import codex_image, content, gemini_client, generate, history, images, infographic, notify, openai_client
+from . import (codex_image, content, gemini_client, generate, history, images, infographic, notify,
+               openai_client, persona, social)
 from .config import Config
 from .errors import ExternalAccountError
 
@@ -56,6 +57,42 @@ class _Lock:
                 raise RuntimeError(f"이미 실행 중입니다({self.path}). 멈춘 실행이면 이 파일을 지우세요.")
             self.path.unlink()
             fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+        return self
+
+    def __exit__(self, *exc):
+        self.path.unlink(missing_ok=True)
+
+
+class _PublishLock:
+    """교육·유아 작업이 같은 PC에서 동시에 네이버 에디터에 글을 넣지 않게 한다(클립보드는 PC에 하나뿐).
+    다른 쪽이 발행 중이면 끝날 때까지 기다린다. 오래된 잠금(비정상 종료)은 걷어 낸다."""
+
+    def __init__(self, path: Path, wait_sec: int = 1800, stale_sec: int = 1800, poll: float = 10):
+        self.path, self.wait_sec, self.stale_sec, self.poll = path, wait_sec, stale_sec, poll
+
+    def __enter__(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        deadline = time.time() + self.wait_sec
+        told = False
+        while True:
+            try:
+                fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                break
+            except FileExistsError:
+                try:
+                    if time.time() - self.path.stat().st_mtime > self.stale_sec:
+                        self.path.unlink(missing_ok=True)
+                        continue
+                except FileNotFoundError:
+                    continue
+                if time.time() > deadline:
+                    raise RuntimeError(f"다른 블로그 발행이 끝나지 않아 기다리다 멈췄습니다({self.path})")
+                if not told:
+                    log.info("다른 블로그가 발행 중이라 끝날 때까지 기다립니다")
+                    told = True
+                _sleep(self.poll)
         os.write(fd, str(os.getpid()).encode())
         os.close(fd)
         return self
@@ -123,9 +160,11 @@ def _published_issues(post: dict, issues: list[dict]) -> list[dict]:
 
 
 def _gpt_factcheck(cfg: Config, post_path: Path, out_dir: Path) -> dict:
-    """ChatGPT 교차검증. 지적이 있으면 Claude가 원문으로 재확인해 반영한 뒤 ChatGPT가 다시 본다."""
+    """ChatGPT 교차검증. 확실히 틀린 사실만 지적받아 Claude가 원문으로 재확인해 반영한다.
+    확인은 최대 GPT_CHECK_ROUNDS번(기본 2번)이고, 마지막 확인의 지적까지 반영하면 재검사 없이 발행한다
+    (매일 쓰는 글이라 글을 버리고 새로 쓰는 비용이 크다)."""
     post = _load_post(post_path)
-    last_round = cfg.gpt_fix_rounds + 1          # 반영 N번 + 마지막 재검사 1번
+    last_round = cfg.gpt_check_rounds
     for round_no in range(1, last_round + 1):
         review = openai_client.factcheck(cfg, post)
         _save_json(out_dir / f"gpt_factcheck_{round_no}.json", review)
@@ -138,15 +177,22 @@ def _gpt_factcheck(cfg: Config, post_path: Path, out_dir: Path) -> dict:
             review["issues"] = visible
         if review["verdict"] == "pass":
             return post
-        if review["verdict"] == "fail" or round_no == last_round:
-            raise Rejected(f"ChatGPT 팩트체크 불합격({review['verdict']}): {review.get('summary', '')}\n"
-                           + json.dumps(review.get("issues", [])[:8], ensure_ascii=False))
         _save_json(out_dir / "gpt_review.json", review)
         applied = generate.apply_gpt_review(cfg, out_dir, round_no)
         log.info("ChatGPT 지적 반영: 적용 %d건, 반박 %d건",
                  len(applied.get("applied", [])), len(applied.get("rejected", [])))
-        post = _load_post(post_path)
+        before, post = post, _load_post(post_path)
         _save_json(post_path, post)
+        if post == before and applied.get("rejected") and not applied.get("applied"):
+            # Claude가 원문을 열어 지적을 모두 반박하고 글을 한 글자도 안 고쳤다.
+            # 같은 글을 ChatGPT에 다시 물어도 같은 지적만 반복되므로 여기서 끝내고, 반박 내역을 남긴다.
+            _save_json(out_dir / "gpt_disputed.json", {"round": round_no, "issues": review.get("issues", []),
+                                                      "rejected": applied.get("rejected", [])})
+            log.warning("ChatGPT 지적 %d건을 Claude가 원문으로 모두 반박해 글이 바뀌지 않았습니다. "
+                        "재검사를 생략하고 통과로 봅니다(근거: gpt_disputed.json)",
+                        len(applied.get("rejected", [])))
+            return post
+    log.info("ChatGPT 확인 %d회를 마쳐 마지막 지적까지 반영하고 발행합니다", last_round)
     return post
 
 
@@ -200,9 +246,10 @@ def _attempt(cfg: Config, today: str, out_dir: Path, feedback: str, resume: bool
         log.info("Claude 팩트체크 통과: %s", fc.get("summary", ""))
         _mark(out_dir, claude_pass=True)
 
-    if cfg.gpt_factcheck:
+    if cfg.gpt_factcheck and not stage.get("gpt_pass"):
         post = _gpt_factcheck(cfg, post_path, out_dir)
-        log.info("ChatGPT 팩트체크 통과")
+        log.info("ChatGPT 팩트체크 완료")
+        _mark(out_dir, gpt_pass=True)
 
     errors = content.validate(post, cfg.profile)
     if errors:
@@ -299,9 +346,10 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
             "card": images.make_card(post["card"], fname("card", "card"), tone=tone),
         }
     else:
+        tone = images.edu_tone(post.get("lane"))          # 주제 레인마다 다른 색
         imgs = {
-            "thumbnail": images.make_thumbnail(post["thumbnail"], fname("thumbnail", "thumbnail")),
-            "card": images.make_card(post["card"], fname("card", "card")),
+            "thumbnail": images.make_thumbnail(post["thumbnail"], fname("thumbnail", "thumbnail"), tone=tone),
+            "card": images.make_card(post["card"], fname("card", "card"), tone=tone),
         }
     for ill in post.get("illustrations") or []:
         path = out_dir / f"{ill.get('name')}.png"
@@ -323,6 +371,18 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
     return imgs
 
 
+def _social_drafts(cfg: Config, out_dir: Path, url: str) -> str:
+    """블로그 발행 직후 인스타·쓰레드 초안을 만든다(저녁 예약 작업이 발행). 실패해도 블로그 발행 결과에는 영향 없음."""
+    if not cfg.social_draft:
+        return ""
+    try:
+        social.draft(cfg, out_dir, url)
+    except Exception as e:  # noqa: BLE001 - 저녁 발행 때 다시 만들어 본다
+        log.warning("소셜 초안 실패: %s", e)
+        return f"\n⚠️ 소셜 초안을 만들지 못했습니다(저녁 발행 때 다시 시도): {str(e)[:200]}"
+    return f"\n📱 인스타·쓰레드 초안 준비 → 저녁 예약 시각에 발행(고치려면 {out_dir / 'social.json'})"
+
+
 def _preflight(cfg: Config) -> None:
     if not cfg.blog_id:
         raise RuntimeError(".env에 NAVER_BLOG_ID가 없습니다")
@@ -337,6 +397,21 @@ def _preflight(cfg: Config) -> None:
         has_codex = cfg.factcheck_backend == "codex" and shutil.which(cfg.codex_bin)
         if not has_codex and not cfg.openai_api_key:
             raise RuntimeError("ChatGPT 팩트체크에 쓸 Codex CLI(ChatGPT 로그인)도 OPENAI_API_KEY도 없습니다")
+
+
+def retry_note(cfg: Config, now: datetime | None = None) -> str:
+    """아침 실패 알림에 붙이는 안내: 재시도 시각 전이면 그때 자동으로 한 번 더 돈다고 알려 준다.
+    (재시도는 예약 작업이 같은 명령을 다시 실행하는 것. 이미 발행했으면 바로 끝나고, 멈춘 단계부터 이어서 한다)"""
+    if not cfg.retry_time or cfg.retry_time.lower() == "off":
+        return ""
+    now = now or datetime.now(KST)
+    try:
+        hh, mm = (int(x) for x in cfg.retry_time.split(":"))
+    except ValueError:
+        return ""
+    if (now.hour, now.minute) >= (hh, mm):
+        return "\n(오늘 자동 재시도 시각이 지나 더는 시도하지 않습니다. 원인을 해결한 뒤 직접 실행하세요)"
+    return f"\n→ {cfg.retry_time}에 자동으로 한 번 더 시도합니다(멈춘 단계부터 이어서)."
 
 
 def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
@@ -366,6 +441,15 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
                 log.warning("발행 목록 동기화 실패(계속 진행): %s", e)
 
             out_dir = cfg.output_dir / today
+            # 발행 버튼은 눌렀지만 주소를 확인하지 못해 기록이 빠진 경우: 블로그 목록에 같은 제목이 있으면
+            # 다시 발행하지 않고 기록만 바로잡는다(중복 발행 방지).
+            if not force and (out_dir / "ready.json").exists() and (out_dir / "post.json").exists():
+                ready_post = _load_post(out_dir / "post.json")
+                found = history.find_published(cfg.history_file, today, ready_post["title"])
+                if found:
+                    history.upsert(cfg.history_file, history.autopost_entry(today, ready_post, found["url"]))
+                    log.info("오늘 글은 이미 블로그에 있습니다(기록만 바로잡음): %s", found["url"])
+                    return 0
             post = produce(cfg, today, out_dir)
             info_ok = add_infographic(cfg, post, out_dir)
             imgs = render_images(cfg, post, out_dir)
@@ -373,17 +457,18 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
             log.info("카테고리: %s (레인 %s)", post["blog_category"] or "(기본)", post.get("lane", "-"))
 
             last_error: Exception | None = None
-            for attempt in (1, 2):
-                try:
-                    url = publisher.publish(cfg, post, imgs, dry_run=dry_run)
-                    break
-                except (publisher.SessionExpired, publisher.PublishUncertain):
-                    raise
-                except Exception as e:
-                    last_error = e
-                    log.warning("발행 시도 %d 실패: %s", attempt, e)
-            else:
-                raise RuntimeError(f"네이버 발행 실패: {last_error}")
+            with _PublishLock(cfg.log_dir / ".publishing.lock"):     # 교육·유아 공용
+                for attempt in (1, 2):
+                    try:
+                        url = publisher.publish(cfg, post, imgs, dry_run=dry_run)
+                        break
+                    except (publisher.SessionExpired, publisher.PublishUncertain):
+                        raise
+                    except Exception as e:
+                        last_error = e
+                        log.warning("발행 시도 %d 실패: %s", attempt, e)
+                else:
+                    raise RuntimeError(f"네이버 발행 실패: {last_error}")
 
             cat_note = f"카테고리: {post.get('blog_category') or '(기본)'}"
             if post.get("_category_ok") is False:
@@ -398,10 +483,11 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
                 "category": post.get("blog_category", ""),
                 "lane": post.get("lane", ""), "cluster": post.get("cluster", ""), "domain": post.get("domain"),
                 "tags": post.get("tags", []), "source": "autopost",
+                "persona_used": persona.clean_used(post.get("persona_used"), persona.load()),
             })
-            notify.send(cfg, f"[{label} 자동발행 완료] {post['title']}\n{url}\n{cat_note}")
+            notify.send(cfg, f"[{label} 자동발행 완료] {post['title']}\n{url}\n{cat_note}{_social_drafts(cfg, out_dir, url)}")
             return 0
     except Exception as e:
         log.exception("자동 발행 실패")
-        notify.send(cfg, f"[{label} 자동발행 실패] {today}\n{e}")
+        notify.send(cfg, f"[{label} 자동발행 실패] {today}\n{e}{retry_note(cfg)}")
         return 1

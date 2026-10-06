@@ -37,6 +37,51 @@ def append(path: Path, entry: dict) -> None:
     save(path, entries)
 
 
+def _norm_url(url: str) -> str:
+    return (url or "").split("?")[0].rstrip("/")
+
+
+def _norm_title(title: str) -> str:
+    return re.sub(r"\s+", "", html.unescape(title or ""))
+
+
+def autopost_entry(date: str, post: dict, url: str) -> dict:
+    """자동 발행 글 한 편의 이력 항목(글 폴더의 post.json 기준)."""
+    return {
+        "date": date, "title": post.get("title", ""), "url": _norm_url(url), "topic": post.get("topic", ""),
+        "category": post.get("blog_category", ""), "lane": post.get("lane", ""), "cluster": post.get("cluster", ""),
+        "domain": post.get("domain"), "tags": post.get("tags", []), "source": "autopost",
+    }
+
+
+def upsert(path: Path, entry: dict) -> dict:
+    """같은 주소의 항목이 있으면 합치고(새 값 우선, 빈 값은 기존 값 유지), 없으면 추가한다."""
+    entries = load(path)
+    key = _norm_url(entry.get("url", ""))
+    for i, old in enumerate(entries):
+        if key and _norm_url(old.get("url", "")) == key:
+            merged = {**old, **{k: v for k, v in entry.items() if v not in ("", None, [])}}
+            entries[i] = merged
+            save(path, entries)
+            return merged
+    entries.append(entry)
+    save(path, entries)
+    return entry
+
+
+def find_published(path: Path, date: str, title: str) -> dict | None:
+    """그날 자동 발행한 글의 이력. 날짜로 못 찾으면(발행 주소를 확인하지 못해 기록이 빠졌고
+    나중에 블로그 목록 동기화로만 들어온 경우) 제목이 같은 항목을 찾는다."""
+    entry = published_on(path, date)
+    if entry or not title:
+        return entry
+    want = _norm_title(title)
+    for e in reversed(load(path)):
+        if e.get("url") and _norm_title(e.get("title", "")) == want:
+            return e
+    return None
+
+
 def import_csv(path: Path, csv_path: Path) -> int:
     """콘텐츠 마스터 시트를 CSV로 내려받은 파일에서 제목·링크를 가져온다.
 

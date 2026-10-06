@@ -5,7 +5,7 @@ from datetime import datetime
 
 import pytest
 
-from blogger_autopost import api, content, photos, pipeline, writer
+from blogger_autopost import api, content, hosting, illustrations, infographic, photos, pipeline, writer
 from blogger_autopost.config import BloggerConfig
 from naver_autopost import history
 from naver_autopost.pipeline import KST
@@ -52,6 +52,16 @@ elif "PHOTO REVIEW" in prompt:
     import re
     slots = re.findall(r"Slot (s\\d+)", prompt)
     out.write_text(json.dumps({{"choices": {{s: s + "c1" for s in slots}}, "notes": {{}}}}))
+elif "ILLUSTRATION REVIEW" in prompt:
+    import re
+    ids = re.findall(r"= ([ip]\\d+) ", prompt)
+    verdict = {{i: ("ok" if i != "i2" or "REJECT_I2" not in prompt else "text in image") for i in ids}}
+    if "REJECT_ONCE_I1" in prompt and "i1" in verdict and not (state / "rejected_once").exists():
+        (state / "rejected_once").write_text("1")
+        verdict["i1"] = "garbled letters on a sign"
+    out.write_text(json.dumps(verdict))
+elif "REFRESH PLAN" in prompt:
+    out.write_text((state / "plan.json").read_text())
 elif "FINDINGS" in prompt:
     post = json.loads(pathlib.Path("post.json").read_text())
     post["title"] = post["title"] + " (fixed)"
@@ -65,12 +75,12 @@ elif "FINDINGS" in prompt:
 
 class FakeBlogger:
     def __init__(self):
-        self.drafts, self.published, self.live = {}, [], []
+        self.drafts, self.published, self.live, self.scheduled = {}, [], [], []
 
     def install(self, monkeypatch):
         monkeypatch.setattr(api, "resolve_blog_id", lambda cfg: "123")
         monkeypatch.setattr(api, "list_posts", lambda cfg, status="live", limit=2000:
-                            list(self.live) if status == "live" else [])
+                            list(self.live) if status == "live" else list(self.scheduled) if status == "scheduled" else [])
         monkeypatch.setattr(api, "create_draft", self.create_draft)
         monkeypatch.setattr(api, "publish", self.publish)
 
@@ -81,8 +91,14 @@ class FakeBlogger:
 
     def publish(self, cfg, post_id, when=None):
         self.published.append((post_id, when))
-        return {"id": post_id, "status": "SCHEDULED" if when else "LIVE",
+        post = {"id": post_id, "status": "SCHEDULED" if when else "LIVE", "title": self.drafts[post_id]["title"],
                 "url": f"https://myblog.blogspot.com/2026/09/post-{post_id}.html"}
+        (self.scheduled if when else self.live).append(post)
+        return post
+
+    def delete(self, post_id):
+        self.live = [p for p in self.live if p["id"] != post_id]
+        self.scheduled = [p for p in self.scheduled if p["id"] != post_id]
 
 
 @pytest.fixture
@@ -96,6 +112,9 @@ def cfg(tmp_path, monkeypatch):
     c.codex_args = "exec --search"
     c.codex_model = ""
     c.photos = 0
+    c.illustrations = 0
+    c.photo_fallback = False
+    c.infographic = False
     c.telegram_bot_token = c.telegram_chat_id = ""
     return c
 
@@ -271,7 +290,7 @@ def test_license_filter():
 
 def test_insert_positions():
     body = "<p>a</p><h2>One</h2><p>b</p><h2>Two</h2><p>c</p>"
-    assert photos.insert(body, 0, "[F]").startswith("[F]<p>a")
+    assert photos.insert(body, 0, "[F]").startswith("<p>a</p>[F]<h2>One")       # 글은 그림으로 시작하지 않는다
     assert photos.insert(body, 2, "[F]") == "<p>a</p><h2>One</h2><p>b</p><h2>Two</h2>[F]<p>c</p>"
     assert photos.insert(body, 9, "[F]").endswith("<h2>Two</h2>[F]<p>c</p>")
 
@@ -327,3 +346,535 @@ def test_model_and_effort_args_and_fallback(cfg, tmp_path, monkeypatch):
     assert args[args.index("--model") + 1] == "gpt-5.6-terra"
     assert "model_reasoning_effort=low" in args
     assert "gpt-5.6-terra" in cfg.model_note
+
+
+def _with_drive_token(cfg, tmp_path, scope=api.SCOPE):
+    cfg.token_file = tmp_path / "tok.json"
+    cfg.token_file.write_text(json.dumps({"refresh_token": "r", "access_token": "a", "expires_at": 9e12,
+                                          "scope": scope}))
+
+
+def test_photos_and_illustrations_in_one_post(cfg, tmp_path, monkeypatch):
+    script, state = fake_codex(tmp_path)
+    body = BODY.replace("<h2>Sources</h2>", "<h2>Getting there</h2><p>x</p><h2>Sources</h2>")
+    post = dict(POST, body_html=body,
+                photos=[{"section": 2, "subject": "Gyeongbokgung palace", "search": "nothing-here",
+                         "alternatives": ["Gyeongbokgung"], "alt": "Palace", "caption": "Real palace"}],
+                illustrations=[{"section": 0, "prompt": "a traveller tapping a card", "alt": "tap", "caption": "Tap in"},
+                               {"section": 1, "prompt": "a map-free subway scene", "alt": "sub", "caption": "Ride"}])
+    (state / "post.json").write_text(json.dumps(post))
+    cfg.codex_bin = str(script)
+    cfg.photos, cfg.illustrations = 1, 2
+    _with_drive_token(cfg, tmp_path)
+    searched = []
+
+    def fake_get(params, fetch=None):
+        searched.append(params["gsrsearch"])
+        return fake_commons("") if "Gyeongbokgung" in params["gsrsearch"] else {"query": {"pages": []}}
+    monkeypatch.setattr(photos, "_get", fake_get)
+    monkeypatch.setattr(photos, "_download", lambda url, out, fb=None: (out.parent.mkdir(parents=True, exist_ok=True),
+                                                                         out.write_bytes(b"jpg"), out)[2])
+    generated = []
+
+    def fake_generate(img_cfg, prompt, out):
+        generated.append(prompt)
+        from PIL import Image
+        Image.new("RGB", (64, 36)).save(out)
+        return out
+    monkeypatch.setattr(illustrations.codex_image, "generate_image", fake_generate)
+    uploads = []
+    monkeypatch.setattr(illustrations.hosting, "upload",
+                        lambda c, path, name: uploads.append(name) or f"https://lh3.googleusercontent.com/d/{path.stem}")
+    fake = FakeBlogger()
+    fake.install(monkeypatch)
+    assert pipeline.run(cfg) == 0
+
+    html = fake.drafts["1"]["content"]
+    assert searched[:2] == ["filetype:bitmap nothing-here", "filetype:bitmap Gyeongbokgung"]
+    assert html.startswith("<p>Intro paragraph about the topic.</p><figure") and "/d/illust_1" in html.split("<h2>")[0]
+    assert '<h2>How it works</h2><figure' in html and "/d/illust_2" in html
+    assert '<h2>Getting there</h2><figure' in html and "Gyeongbokgung.jpg" in html
+    assert html.count("AI-generated illustration") == 2 and html.count("<figure") == 3
+    assert all("NOT a photorealistic photo" in p for p in generated) and len(uploads) == 2
+    stage = json.loads((cfg.output_dir / pipeline.today_kst() / "stage.json").read_text())
+    assert stage["illustrations_note"] == "생성 그림 2장" and stage["photos_note"] == "실제 사진 1장"
+    write_prompt = (state / "prompt_0.txt").read_text(encoding="utf-8")
+    assert "follow\nits guidance on images" in write_prompt and "exactly 2" in write_prompt
+
+
+def test_rejected_illustration_is_dropped(cfg, tmp_path, monkeypatch):
+    script, state = fake_codex(tmp_path)
+    post = dict(POST, title="REJECT_I2 post", illustrations=[{"section": 0, "prompt": "a"}, {"section": 1, "prompt": "b"}])
+    (state / "post.json").write_text(json.dumps(post))
+    cfg.codex_bin = str(script)
+    cfg.illustrations = 2
+    _with_drive_token(cfg, tmp_path)
+
+    def fake_generate(img_cfg, prompt, out):
+        from PIL import Image
+        Image.new("RGB", (64, 36)).save(out)
+        return out
+    monkeypatch.setattr(illustrations.codex_image, "generate_image", fake_generate)
+    monkeypatch.setattr(illustrations.hosting, "upload", lambda c, path, name: f"https://x/{path.stem}")
+    fake = FakeBlogger()
+    fake.install(monkeypatch)
+    assert pipeline.run(cfg) == 0
+    html = fake.drafts["1"]["content"]
+    assert "https://x/illust_1" in html and "illust_2" not in html
+
+
+def test_illustrations_skipped_without_drive_scope(cfg, tmp_path, monkeypatch):
+    post = dict(POST, illustrations=[{"section": 0, "prompt": "a"}])
+    cfg.illustrations = 2
+    _with_drive_token(cfg, tmp_path, scope=api.BLOGGER_SCOPE)
+    monkeypatch.setattr(illustrations.codex_image, "generate_image",
+                        lambda *a: (_ for _ in ()).throw(AssertionError("should not generate")))
+    n, note = illustrations.add_illustrations(cfg, post, tmp_path)
+    assert n == 0 and "auth" in note
+
+
+def test_drive_upload_returns_working_url(cfg, tmp_path, monkeypatch):
+    _with_drive_token(cfg, tmp_path)
+    from PIL import Image
+    img = tmp_path / "a.png"
+    Image.new("RGB", (2000, 1125)).save(img)
+    calls = []
+
+    def fake_call(c, url, body=None, content_type="application/json", method=None):
+        calls.append((url, content_type))
+        if "folder" in (body or b"").decode("latin-1") and "upload" not in url:
+            return {"id": "FOLDER"}
+        if "upload" in url:
+            assert b'"parents": ["FOLDER"]' in body
+            return {"id": "FILE1"}
+        return {}
+    monkeypatch.setattr(hosting, "_call", fake_call)
+    checked = []
+    url = hosting.upload(cfg, img, "x.jpg", check=lambda u: checked.append(u) or "thumbnail" in u, wait=0)
+    assert url == "https://drive.google.com/thumbnail?id=FILE1&sz=w1600"
+    assert checked[0] == "https://lh3.googleusercontent.com/d/FILE1"
+    assert any(u.endswith("/files/FILE1/permissions") for u, _ in calls)
+    assert json.loads(cfg.token_file.with_name("blogger_drive_folder.json").read_text())["id"] == "FOLDER"
+
+
+def test_missing_photo_is_replaced_by_photorealistic_ai_image(cfg, tmp_path, monkeypatch):
+    script, state = fake_codex(tmp_path)
+    post = dict(POST,
+                photos=[{"section": 1, "subject": "Namsan tower at dusk", "search": "zzz",
+                         "fallback_prompt": "Namsan Seoul Tower at dusk seen from a street", "caption": "Namsan"}],
+                illustrations=[{"section": 0, "prompt": "a traveller with a map-free phone", "caption": "Plan"}])
+    (state / "post.json").write_text(json.dumps(post))
+    cfg.codex_bin = str(script)
+    cfg.photos, cfg.illustrations, cfg.photo_fallback = 1, 1, True
+    _with_drive_token(cfg, tmp_path)
+    monkeypatch.setattr(photos, "_get", lambda params, fetch=None: {"query": {"pages": []}})
+    prompts = {}
+
+    def fake_generate(img_cfg, prompt, out):
+        prompts[out.name] = prompt
+        from PIL import Image
+        Image.new("RGB", (64, 36)).save(out)
+        return out
+    monkeypatch.setattr(illustrations.codex_image, "generate_image", fake_generate)
+    monkeypatch.setattr(illustrations.hosting, "upload", lambda c, path, name: f"https://x/{path.stem}")
+    fake = FakeBlogger()
+    fake.install(monkeypatch)
+    assert pipeline.run(cfg) == 0
+
+    html = fake.drafts["1"]["content"]
+    assert '<h2>How it works</h2><figure' in html and "https://x/photo_ai_1" in html
+    assert "AI-generated image (not an actual photo)" in html and "AI-generated illustration" in html
+    assert "photorealistic" in prompts["photo_ai_1.png"] and "Namsan Seoul Tower" in prompts["photo_ai_1.png"]
+    assert "NOT a photorealistic" in prompts["illust_1.png"]
+    review = [p.read_text(encoding="utf-8") for p in state.glob("prompt_*.txt")
+              if "ILLUSTRATION REVIEW" in p.read_text(encoding="utf-8")][0]
+    assert "p1 (kind=photo)" in review and "i1 (kind=illustration)" in review
+    stage = json.loads((cfg.output_dir / pipeline.today_kst() / "stage.json").read_text())
+    assert "실사풍 생성 이미지 1장" in stage["illustrations_note"]
+
+
+def test_no_fallback_when_disabled(cfg, tmp_path):
+    post = dict(POST, photo_misses=[{"section": 1, "subject": "x"}])
+    cfg.illustrations, cfg.photo_fallback = 0, False
+    assert illustrations._jobs(cfg, post) == []
+
+
+def test_deleted_scheduled_post_is_rewritten_on_rerun(cfg, tmp_path, monkeypatch):
+    script, state = fake_codex(tmp_path)
+    cfg.codex_bin = str(script)
+    fake = FakeBlogger()
+    fake.install(monkeypatch)
+    monkeypatch.setattr(pipeline, "publish_at", lambda c: "2026-10-01T21:00:00+09:00")
+    assert pipeline.run(cfg) == 0
+    assert pipeline.run(cfg) == 0                     # 예약 글이 살아 있으면 다시 쓰지 않는다
+    assert len(fake.published) == 1
+
+    fake.delete("1")                                   # 사용자가 블로거에서 예약 글을 지움
+    assert pipeline.run(cfg) == 0
+    assert [p[0] for p in fake.published] == ["1", "2"]
+    entries = history.load(cfg.history_file)
+    assert [e["post_id"] for e in entries if e["source"] == "autopost"] == ["2"]
+    assert sum("DELIVERABLE" in p.read_text(encoding="utf-8") for p in state.glob("prompt_*.txt")) == 2
+
+
+def test_diagnose_collects_report(cfg, tmp_path, monkeypatch):
+    from blogger_autopost import diagnose
+    _with_drive_token(cfg, tmp_path)
+    post = {"id": "1", "title": "T-money guide", "url": "https://kb.blogspot.com/2026/10/t.html",
+            "published": "2026-10-01T21:00:00+09:00", "labels": ["Transport"],
+            "content": '<p>Hello world text</p><h2>A</h2><img src="x" alt="a"><img src="y">'
+                       '<a href="https://kb.blogspot.com/2026/09/o.html">o</a><a href="https://gov.kr">g</a>'}
+
+    def fake_request(c, method, path, params=None, body=None):
+        if path.endswith("/posts"):
+            return {"items": [post]}
+        return {"name": "Korea Breakdown", "url": "https://kb.blogspot.com/", "posts": {"totalItems": 1}}
+    monkeypatch.setattr(api, "resolve_blog_id", lambda c: "123")
+    monkeypatch.setattr(api, "request", fake_request)
+    monkeypatch.setattr(api, "list_posts", lambda c, status="live", limit=2000: [])
+    page = ('<html><head><title>T-money guide</title><meta name="robots" content="index,follow">'
+            '<link rel="canonical" href="https://kb.blogspot.com/2026/10/t.html"></head></html>')
+    monkeypatch.setattr(diagnose, "_fetch", lambda url: (200, "<loc>a</loc><loc>b</loc>" if "sitemap" in url else page, {}))
+    calls = []
+
+    def fake_google(c, url, body=None):
+        calls.append(url)
+        if url.endswith("/sites"):
+            return {"siteEntry": [{"siteUrl": "https://kb.blogspot.com/"}]}
+        if "searchAnalytics" in url:
+            return {"rows": [{"keys": ["2026-10-02"], "clicks": 0, "impressions": 3}]}
+        if "inspect" in url:
+            return {"inspectionResult": {"indexStatusResult": {"coverageState": "Discovered - currently not indexed"}}}
+        return {}
+    monkeypatch.setattr(diagnose, "_google", fake_google)
+
+    report = json.loads(diagnose.run(cfg, tmp_path / "diag").read_text(encoding="utf-8"))
+    p = report["posts"][0]
+    assert (p["images"], p["images_without_alt"], p["internal_links"], p["external_links"]) == (2, 1, 1, 1)
+    home = report["public_pages"]["home"]
+    assert home["meta_description"] is None and home["meta_robots"] == "index,follow"
+    assert report["public_pages"]["sitemap"]["url_count"] == 2
+    sc = report["search_console"]
+    assert sc["site"] == "https://kb.blogspot.com/"
+    assert sc["inspections"][0]["coverageState"] == "Discovered - currently not indexed"
+    assert "content" not in json.dumps(report["posts"])        # 본문 전체는 담지 않는다
+
+
+def test_diagnose_without_search_console_scope(cfg, tmp_path):
+    from blogger_autopost import diagnose
+    _with_drive_token(cfg, tmp_path, scope=f"{api.BLOGGER_SCOPE} {api.DRIVE_SCOPE}")
+    assert "auth" in diagnose.search_console(cfg, "https://kb.blogspot.com/", [])["_error"]
+
+
+AUTO_BODY = ('<figure style="margin:1.5em 0;text-align:center"><img src="https://x/1" alt="a"><figcaption>'
+             'Editorial illustration: sizes<br>AI-generated illustration</figcaption></figure>'
+             '<p>A Korean apartment can be described as 84 square meters.</p><h2>Why</h2><p>Because.</p>')
+
+
+def test_move_leading_images_for_auto_and_editor_posts():
+    from blogger_autopost import seo
+    new, n = seo.move_leading_images(AUTO_BODY)
+    assert n == 1 and new.startswith("<p>A Korean apartment") and new.index("<figure") < new.index("<h2>")
+    editor = ('<table align="center" class="tr-caption-container"><tbody><tr><td><a href="u"><img src="i"></a></td></tr>'
+              '<tr><td class="tr-caption">Editorial illustration</td></tr></tbody></table><br>'
+              '<p>Quick answer: phones are banned during class.</p><p>More.</p>')
+    new, n = seo.move_leading_images(editor)
+    assert n == 1 and new.startswith("<br><p>Quick answer") and new.index("tr-caption") > new.index("</p>")
+    assert seo.move_leading_images("<p>Text first</p><figure>x</figure>") == ("<p>Text first</p><figure>x</figure>", 0)
+
+
+def test_related_links_are_picked_by_labels_and_replaced_not_duplicated():
+    from blogger_autopost import seo
+    cands = [{"url": "https://b/1", "title": "Trash", "labels": ["Life in Korea"], "published": "2026-10-02"},
+             {"url": "https://b/2", "title": "Jeonse", "labels": ["Housing in Korea", "Renting"], "published": "2026-09-01"},
+             {"url": "https://b/3", "title": "Me", "labels": ["Housing in Korea"], "published": "2026-10-03"},
+             {"url": "https://b/4", "title": "Hagwon", "labels": ["Education"], "published": "2026-08-28"},
+             {"url": "https://b/5", "title": "Teachers", "labels": ["Education"], "published": "2026-08-31"}]
+    body, ch = seo.improve(AUTO_BODY, "https://b/3", "Me", ["Housing in Korea", "Life in Korea"], cands)
+    assert ch["related"] == ["Trash", "Jeonse", "Teachers"]     # 라벨 겹침 1개끼리는 최근 글 먼저
+    assert body.count('class="kb-related"') == 1 and "https://b/3" not in body
+    again, _ = seo.improve(body, "https://b/3", "Me", ["Housing in Korea", "Life in Korea"], cands)
+    assert again == body                                   # 여러 번 고쳐도 같은 결과
+
+
+def test_fix_posts_preview_and_apply(cfg, tmp_path, monkeypatch):
+    from blogger_autopost import fixposts
+    live = [{"id": "3", "title": "Sizes", "url": "https://b/3", "labels": ["Housing"], "published": "2026-10-03",
+             "content": AUTO_BODY},
+            {"id": "2", "title": "Jeonse", "url": "https://b/2", "labels": ["Housing"], "published": "2026-09-01",
+             "content": "<p>Jeonse text</p>"}]
+    monkeypatch.setattr(api, "resolve_blog_id", lambda c: "123")
+    monkeypatch.setattr(api, "request", lambda c, m, path, params=None, body=None:
+                        {"items": live if params["status"] == "live" else []})
+    updates = {}
+    monkeypatch.setattr(api, "update_content", lambda c, pid, content: updates.__setitem__(pid, content))
+
+    preview = fixposts.run(cfg)
+    assert {r["id"] for r in preview} == {"2", "3"} and not updates
+    sizes = next(r for r in preview if r["id"] == "3")
+    assert sizes["moved_images"] == 1 and sizes["opening_after"].startswith("A Korean apartment")
+
+    fixposts.run(cfg, apply=True)
+    assert set(updates) == {"2", "3"} and 'href="https://b/2"' in updates["3"]
+    backup = next((cfg.output_dir / "backup").iterdir())
+    assert (backup / "3.html").read_text(encoding="utf-8") == AUTO_BODY
+    restored = {}
+    monkeypatch.setattr(api, "update_content", lambda c, pid, content: restored.__setitem__(pid, content))
+    assert fixposts.restore(cfg, backup) == 2 and restored["3"] == AUTO_BODY
+
+
+def test_check_meta_counts_description_tags(cfg, monkeypatch):
+    from blogger_autopost import diagnose
+    monkeypatch.setattr(api, "list_posts", lambda c, status="live", limit=2000: [
+        {"title": "A", "url": "https://b/a"}, {"title": "B", "url": "https://b/b"}, {"title": "C", "url": "https://b/c"}])
+    pages = {"https://b/a": '<meta content="Short answer about A." name="description"/>',
+             "https://b/b": '<title>B</title><meta content="og text" property="og:description"/>',
+             "https://b/c": '<meta name="description" content="x"><meta content="y" name="description"/>'}
+    monkeypatch.setattr(diagnose, "_fetch", lambda url: (200, pages[url], {}))
+    rows = {r["title"]: r for r in diagnose.check_meta(cfg, renderer=None)}
+    assert rows["A"]["meta_description"] == "Short answer about A." and rows["A"]["tags"] == 1
+    assert rows["B"]["tags"] == 0 and rows["B"]["og_description"] == "og text" and rows["C"]["tags"] == 2
+
+
+def _fake_images(monkeypatch, prompts):
+    def fake_generate(img_cfg, prompt, out):
+        prompts[out.name] = prompt
+        from PIL import Image
+        Image.new("RGB", (64, 36)).save(out)
+        return out
+    monkeypatch.setattr(illustrations.codex_image, "generate_image", fake_generate)
+    monkeypatch.setattr(illustrations.hosting, "upload", lambda c, path, name: f"https://x/{path.stem}")
+
+
+def test_always_three_images_even_without_plans_or_commons_hits(cfg, tmp_path, monkeypatch):
+    script, state = fake_codex(tmp_path)
+    body = BODY.replace("<h2>Sources</h2>", "<h2>Getting there</h2><p>x</p><h2>Sources</h2>")
+    (state / "post.json").write_text(json.dumps(dict(POST, body_html=body)))     # 그림·사진 계획 없음
+    cfg.codex_bin = str(script)
+    cfg.photos, cfg.illustrations, cfg.photo_fallback = 1, 2, True
+    _with_drive_token(cfg, tmp_path)
+    monkeypatch.setattr(photos, "_get", lambda params, fetch=None: {"query": {"pages": []}})
+    prompts = {}
+    _fake_images(monkeypatch, prompts)
+    fake = FakeBlogger()
+    fake.install(monkeypatch)
+    assert pipeline.run(cfg) == 0
+
+    html = fake.drafts["1"]["content"]
+    assert html.count("<figure") == 3
+    assert html.count("AI-generated illustration") == 2 and html.count("not an actual photo") == 1
+    assert "photorealistic" in prompts["photo_ai_1.png"] and "T-money" in prompts["photo_ai_1.png"]
+    assert "How it works" in prompts["illust_1.png"] or "How it works" in prompts["illust_2.png"]
+
+
+def test_rejected_image_is_redrawn_with_the_reason(cfg, tmp_path, monkeypatch):
+    script, state = fake_codex(tmp_path)
+    post = dict(POST, title="REJECT_ONCE_I1 post", illustrations=[{"section": 1, "prompt": "a subway gate"}])
+    (state / "post.json").write_text(json.dumps(post))
+    cfg.codex_bin = str(script)
+    cfg.illustrations = 1
+    _with_drive_token(cfg, tmp_path)
+    prompts = {}
+    _fake_images(monkeypatch, prompts)
+    fake = FakeBlogger()
+    fake.install(monkeypatch)
+    assert pipeline.run(cfg) == 0
+    html = fake.drafts["1"]["content"]
+    assert "https://x/illust_1_try2" in html and "https://x/illust_1\"" not in html
+    assert "rejected because: garbled letters on a sign" in prompts["illust_1_try2.png"]
+
+
+def test_infographic_placement_cover_first_and_before_sources():
+    body = BODY                                            # ends with <h2>Sources</h2><ul>...</ul>
+    out = infographic.place(body, "https://x/info", "T-money guide")
+    assert out.startswith('<div class="kb-cover" style="display:none"><img src="https://x/info"')
+    assert out.index('class="kb-infographic"') < out.index("<h2>Sources</h2>")
+    assert infographic.place(out, "https://x/info2", "T-money guide").count("kb-infographic") == 1
+    no_sources = infographic.place("<p>a</p><h2>B</h2><p>b</p>", "https://x/i", "T")
+    assert no_sources.endswith("</figure>")
+
+
+def test_leading_image_move_keeps_cover_on_top():
+    from blogger_autopost import seo
+    body = infographic.place(AUTO_BODY, "https://x/info", "Sizes")
+    new, n = seo.move_leading_images(body)
+    assert n == 1 and new.startswith('<div class="kb-cover"')
+    assert new.index("<p>A Korean apartment") < new.index("<figure")
+
+
+def test_infographic_is_reviewed_retried_and_becomes_cover(cfg, tmp_path, monkeypatch):
+    cfg.infographic, cfg.image_tries = True, 3
+    _with_drive_token(cfg, tmp_path)
+    prompts, verdicts = [], iter(["number 63% is not in the post", "ok"])
+
+    def fake_run(img_cfg, prompt, out, convert, timeout, what=""):
+        prompts.append(prompt)
+        from PIL import Image
+        Image.new("RGB", (100, 150)).save(out)
+        return out
+    monkeypatch.setattr(infographic.codex_image, "run_for_image", fake_run)
+    monkeypatch.setattr(infographic, "review", lambda c, post, path: next(verdicts))
+    monkeypatch.setattr(infographic.hosting, "upload", lambda c, path, name: f"https://x/{path.stem}")
+    post = dict(POST)
+    n, note = infographic.add(cfg, post, tmp_path)
+    assert n == 1 and "대표 이미지" in note
+    assert "$onepage" in prompts[0] and "Korea, Explained" in prompts[0]
+    assert "rejected because: number 63% is not in the post" in prompts[1]
+    assert post["body_html"].startswith('<div class="kb-cover" style="display:none"><img src="https://x/infographic_try2"')
+
+
+def test_infographic_gives_up_cleanly(cfg, tmp_path, monkeypatch):
+    cfg.infographic, cfg.image_tries = True, 2
+    _with_drive_token(cfg, tmp_path)
+    monkeypatch.setattr(infographic.codex_image, "run_for_image",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no image")))
+    post = dict(POST)
+    n, note = infographic.add(cfg, post, tmp_path)
+    assert n == 0 and "빼고" in note and post["body_html"] == POST["body_html"]
+
+
+PERSONA_TEXT = """# 페르소나
+- [E01][학교] 다문화 학생이 많은 학교에서 근무했다.
+- [E13][육아] 걱정은 대부분 시간이 해결했다.
+- [E20][문화] 한국 사람은 낯선 사람에게 잘 인사하지 않는다.
+"""
+
+
+def test_persona_helpers(tmp_path, monkeypatch):
+    from naver_autopost import persona
+    f = tmp_path / "persona.md"
+    f.write_text(PERSONA_TEXT, encoding="utf-8")
+    monkeypatch.setenv("PERSONA_FILE", str(f))
+    assert persona.load().startswith("# 페르소나")
+    assert persona.episode_ids(PERSONA_TEXT) == ["E01", "E13", "E20"]
+    assert persona.clean_used(["E13", "E99", "E13", 5], PERSONA_TEXT) == ["E13"]
+    h1, h2 = tmp_path / "published_edu.json", tmp_path / "published_blogger.json"
+    h1.write_text(json.dumps([{"source": "autopost", "persona_used": ["E01"]}, {"source": "rss"}]))
+    h2.write_text(json.dumps([{"source": "autopost", "persona_used": ["E20", "E01"]}]))
+    assert persona.recent_used([h1, h2, tmp_path / "missing.json"]) == ["E01", "E20"]
+    monkeypatch.setenv("PERSONA_FILE", str(tmp_path / "none.md"))
+    assert persona.load() == ""
+
+
+def test_blogger_prompt_carries_persona_and_history_records_episodes(cfg, tmp_path, monkeypatch):
+    f = tmp_path / "persona.md"
+    f.write_text(PERSONA_TEXT, encoding="utf-8")
+    monkeypatch.setenv("PERSONA_FILE", str(f))
+    (tmp_path / "published_childhood.json").write_text(json.dumps([{"source": "autopost", "persona_used": ["E13"]}]))
+    script, state = fake_codex(tmp_path)
+    (state / "post.json").write_text(json.dumps(dict(POST, persona_used=["E20", "E77"])))
+    cfg.codex_bin = str(script)
+    fake = FakeBlogger()
+    fake.install(monkeypatch)
+    assert pipeline.run(cfg) == 0
+    prompt = (state / "prompt_0.txt").read_text(encoding="utf-8")
+    assert "teacher-K" in prompt and "[E20][문화]" in prompt and "Avoid episodes recently used: E13" in prompt
+    assert '"persona_used"' in prompt
+    review = [p.read_text(encoding="utf-8") for p in state.glob("prompt_*.txt")
+              if "independent fact-checker" in p.read_text(encoding="utf-8")][0]
+    assert "First-person statements about the author" in review
+    auto = [e for e in history.load(cfg.history_file) if e["source"] == "autopost"]
+    assert auto[-1]["persona_used"] == ["E20"]
+
+
+def test_blogger_prompt_without_persona(cfg, tmp_path, monkeypatch):
+    monkeypatch.setenv("PERSONA_FILE", str(tmp_path / "none.md"))
+    assert writer.persona_block(cfg) == ""
+
+
+def test_naver_prompts_pass_persona_file(tmp_path, monkeypatch):
+    from naver_autopost import generate
+    from naver_autopost.config import Config
+    f = tmp_path / "persona.md"
+    f.write_text(PERSONA_TEXT, encoding="utf-8")
+    monkeypatch.setenv("PERSONA_FILE", str(f))
+    c = Config.load("edu")
+    c.data_dir = tmp_path
+    (tmp_path / "published_blogger.json").write_text(json.dumps([{"source": "autopost", "persona_used": ["E01"]}]))
+    lines = generate._persona_lines(c)
+    assert f"PERSONA_FILE={f}" in lines and "RECENT_PERSONA_EPISODES=E01" in lines
+    assert "RECENT" not in generate._persona_lines(c, recent=False)
+    monkeypatch.setenv("PERSONA_FILE", str(tmp_path / "none.md"))
+    assert generate._persona_lines(c) == "PERSONA_FILE=(없음)\n"
+
+
+OLD_POST = ("<p>Chuseok is Korea's autumn harvest holiday, when families gather, visit hometowns and share food.</p>"
+            "<h2>When it happens</h2><p>Chuseok falls on the 15th day of the eighth lunar month every year.</p>"
+            "<h2>What families do</h2><p>Many families hold ancestral rites and eat songpyeon together.</p>"
+            "<h2>Sources</h2><ul><li><a href=\"https://korea.net\">Korea.net</a></li></ul>")
+PLAN = {"topic": "Chuseok",
+        "illustrations": [{"section": 1, "prompt": "calendar moon", "alt": "moon"},
+                          {"section": 2, "prompt": "family table", "alt": "table"}],
+        "photos": [{"section": 2, "subject": "songpyeon", "search": "songpyeon", "alt": "songpyeon"}],
+        "insertions": [{"after": "Many families hold ancestral rites and eat", "html": "<p>At home we <a href='x'>make</a> it.</p>"},
+                       {"after": "words that are not in the post at all", "html": "<p>Lost.</p>"}],
+        "closing": "<p>In my view, Chuseok is about time together.</p>",
+        "persona_used": ["E05", "E99"]}
+
+
+def test_refresh_post_preview_then_apply(cfg, tmp_path, monkeypatch):
+    from blogger_autopost import refresh
+    script, state = fake_codex(tmp_path)
+    (state / "plan.json").write_text(json.dumps(PLAN))
+    cfg.codex_bin = str(script)
+    cfg.photos, cfg.illustrations, cfg.photo_fallback, cfg.infographic = 1, 2, True, True
+    _with_drive_token(cfg, tmp_path)
+    pfile = tmp_path / "persona.md"
+    pfile.write_text("[E05] We make songpyeon at home every Chuseok.", encoding="utf-8")
+    monkeypatch.setenv("PERSONA_FILE", str(pfile))
+    monkeypatch.setattr(photos, "_get", lambda params, fetch=None: {"query": {"pages": []}})
+    _fake_images(monkeypatch, {})
+    monkeypatch.setattr(infographic, "make", lambda c, post, out: _png(out / "infographic.png"))
+    monkeypatch.setattr(infographic.hosting, "upload", lambda c, path, name: "https://x/info")
+    history.save(cfg.history_file, [{"date": "2026-10-06", "title": "Chuseok", "post_id": "7", "source": "autopost"}])
+    live = [{"id": "7", "title": "Chuseok", "url": "https://b/7", "labels": ["Holidays"],
+             "published": "2026-10-06T05:00:00-07:00", "content": OLD_POST},
+            {"id": "6", "title": "Seollal", "url": "https://b/6", "labels": ["Holidays"],
+             "published": "2026-10-05T21:00:00+09:00", "content": "<p>x</p>"}]
+    monkeypatch.setattr(api, "resolve_blog_id", lambda c: "123")
+    monkeypatch.setattr(api, "request", lambda c, m, path, params=None, body=None:
+                        {"items": live if params["status"] == "live" else []})
+    updates = {}
+    monkeypatch.setattr(api, "update_content", lambda c, pid, content: updates.__setitem__(pid, content))
+
+    r = refresh.run(cfg, "2026-10-06")
+    assert not updates and r["persona_paragraphs"] == 2 and r["persona_used"] == ["E05"]
+    new = (tmp_path / "out" / "refresh-7" / "refreshed.html").read_text(encoding="utf-8")
+    assert new.startswith('<div class="kb-cover"') and new.count("<figure") == 4
+    assert "<p>At home we make it.</p>" in new and "Lost." not in new and "href='x'" not in new
+    assert new.index("In my view") < new.index("<h2>Sources") and 'href="https://b/6"' in new
+    for sentence in ("Chuseok falls on the 15th day", "Many families hold ancestral rites"):
+        assert sentence in new
+    plans = len(list(state.glob("prompt_*.txt")))
+
+    r = refresh.run(cfg, "https://b/7", apply=True)                 # 미리보기 때 만든 것을 그대로 쓴다
+    assert r["saved"] and updates["7"] == new and len(list(state.glob("prompt_*.txt"))) == plans
+    assert (next((cfg.output_dir / "backup").iterdir()) / "7.html").read_text(encoding="utf-8") == OLD_POST
+    assert history.load(cfg.history_file)[0]["persona_used"] == ["E05"]
+
+    live[0]["content"] = new
+    with pytest.raises(RuntimeError, match="이미 새 양식"):
+        refresh.run(cfg, "7")
+
+
+def test_refresh_post_skips_images_when_post_has_them(cfg, tmp_path, monkeypatch):
+    from blogger_autopost import refresh
+    script, state = fake_codex(tmp_path)
+    (state / "plan.json").write_text(json.dumps(dict(PLAN, insertions=[], closing="")))
+    cfg.codex_bin = str(script)
+    cfg.photos, cfg.illustrations, cfg.photo_fallback = 1, 2, True
+    monkeypatch.setenv("PERSONA_FILE", str(tmp_path / "none.md"))
+    body = OLD_POST.replace("</p><h2>When", '</p><figure><img src="https://a/b.jpg"></figure><h2>When')
+    monkeypatch.setattr(refresh, "find_post", lambda c, t: ({"id": "9", "title": "C", "url": "https://b/9",
+                                                             "labels": [], "content": body}, []))
+    monkeypatch.setattr(photos, "add_photos", lambda *a: pytest.fail("photos should be skipped"))
+    r = refresh.run(cfg, "9")
+    assert r["images"] == 1 and r["persona_paragraphs"] == 0
+    assert "PERSONA" not in (state / "prompt_0.txt").read_text(encoding="utf-8")
+
+
+def _png(path):
+    from PIL import Image
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (64, 36)).save(path)
+    return path
