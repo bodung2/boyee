@@ -446,3 +446,37 @@ def test_publish_refuses_when_body_did_not_stick(cfg, monkeypatch, tmp_path):
     monkeypatch.setattr(publisher, "_set_body", lambda page, html: None)   # 넣었다고 믿었지만 실제로는 빈 편집기
     with pytest.raises(publisher.PublishError, match="본문이 편집기에 들어가지 않아"):
         publisher.publish(cfg, content.normalize(POST), tmp_path / "shots")
+
+
+@pytest.mark.parametrize("html", [
+    # 목록이 category가 붙지 않은 곳에 그려지는 경우(글자로 찾기)
+    "<button id='category-btn' onclick=\"document.getElementById('m').style.display='block'\">카테고리</button>"
+    "<div id='m' class='layer' style='display:none'><div><span>일상</span></div>"
+    "<div><span onclick=\"document.getElementById('category-btn').textContent='숫자로 보는 한국';window.cat=1\">"
+    "- 숫자로 보는 한국 (2)</span></div></div>",
+    # 일반 select 목록
+    "<select id='c' onchange='window.cat=1'><option>카테고리 없음</option><option>숫자로 보는 한국</option></select>",
+])
+def test_category_found_in_other_structures(html):
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        page = b.new_page()
+        page.set_content(html)
+        assert publisher._select_category(page, "숫자로 보는 한국") is True
+        assert page.evaluate("window.cat") == 1
+        b.close()
+
+
+def test_category_debug_saved_when_missing(tmp_path):
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        page = b.new_page()
+        page.set_content("<button id='category-btn'>카테고리</button><p>숫자로 보는 한국 소개글입니다</p>")
+        assert publisher._select_category(page, "숫자로 보는 한국", {}, tmp_path) is False
+        debug = json.loads((tmp_path / "category_debug.json").read_text(encoding="utf-8"))
+        assert any(d["tag"] == "P" for d in debug)
+        b.close()

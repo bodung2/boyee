@@ -266,42 +266,89 @@ def _category_label(text: str) -> str:
     return re.sub(r"\s*\(\d+\)$", "", text).strip()
 
 
+_CATEGORY_DEBUG = """(want) => [...document.querySelectorAll('body *')]
+    .filter(e => e.children.length <= 3 && (e.innerText || '').trim().replace(/\\s+/g, ' ').includes(want))
+    .slice(0, 15).map(e => ({tag: e.tagName, id: e.id, cls: String(e.className).slice(0, 80), role: e.getAttribute('role'),
+        visible: e.offsetParent !== null, html: e.outerHTML.slice(0, 400)}))"""
+
+
+def _pick_category(page: Page, want: str, seen: list[str]) -> bool:
+    """열린 화면에서 카테고리 항목을 찾아 누른다. 화면 구조가 달라도 되도록 세 가지 방법을 차례로 쓴다."""
+    # 1) 일반 <select> 목록
+    selects = page.locator("select")
+    for i in range(selects.count()):
+        sel = selects.nth(i)
+        try:
+            if not sel.is_visible():
+                continue
+            for label in sel.locator("option").all_inner_texts():
+                if _category_label(label) == want:
+                    sel.select_option(label=label)
+                    return True
+        except Exception:  # noqa: BLE001
+            continue
+    # 2) 알려진 목록 구조
+    for css in SELECTORS["category_item"]:
+        items = page.locator(css)
+        for i in range(min(items.count(), 200)):
+            item = items.nth(i)
+            try:
+                if not item.is_visible():
+                    continue
+                label = _category_label(item.inner_text())
+            except Exception:  # noqa: BLE001
+                continue
+            if label and label not in seen:
+                seen.append(label)
+            if label == want:
+                item.click()
+                return True
+    # 3) 구조와 상관없이 화면에 보이는 글자로(가장 안쪽 요소를 누른다)
+    pattern = re.compile(r"^[-·ㄴ└\s]*" + re.escape(want) + r"(\s*\(\d+\))?\s*$")
+    matches = page.get_by_text(pattern)
+    for i in reversed(range(min(matches.count(), 20))):
+        m = matches.nth(i)
+        try:
+            if m.is_visible() and m.evaluate("e => !e.closest('#category-btn') && e.tagName !== 'BUTTON'"):
+                m.click()
+                return True
+        except Exception:  # noqa: BLE001
+            continue
+    return False
+
+
 def _select_category(page: Page, name: str, post: dict | None = None, out_dir: Path | None = None) -> bool:
-    """카테고리를 고른다. 못 찾으면 화면에 보인 카테고리 이름을 post['_category_seen']에 남긴다."""
+    """카테고리를 고른다. 못 찾으면 화면에 보인 카테고리 이름을 post['_category_seen']에 남기고,
+    그 이름이 들어 있는 화면 요소를 category_debug.json에 저장한다(화면 구조 확인용)."""
     if not name:
         return True
-    opener = _maybe(page, "category_open")
-    if not opener:
-        log.warning("카테고리 버튼을 찾지 못했습니다")
-        return False
-    opener.click()
     want = _category_label(name)
+    opener = _maybe(page, "category_open")
+    if opener:
+        opener.click()
     seen: list[str] = []
-    deadline = time.time() + 4
+    deadline = time.time() + 5
     while time.time() < deadline:           # 목록이 늦게 뜨는 경우를 기다린다
         page.wait_for_timeout(400)
-        for sel in SELECTORS["category_item"]:
-            items = page.locator(sel)
-            for i in range(min(items.count(), 200)):
-                item = items.nth(i)
-                try:
-                    if not item.is_visible():
-                        continue
-                    label = _category_label(item.inner_text())
-                except Exception:  # noqa: BLE001
-                    continue
-                if label and label not in seen:
-                    seen.append(label)
-                if label == want:
-                    item.click()
-                    log.info("카테고리 선택: %s", name)
-                    return True
-        if seen:
-            break
+        if _pick_category(page, want, seen):
+            page.wait_for_timeout(500)
+            shown = ""
+            try:
+                shown = _category_label(opener.inner_text()) if opener and opener.is_visible() else ""
+            except Exception:  # noqa: BLE001
+                pass
+            log.info("카테고리 선택: %s%s", name, f" (버튼 표시: {shown})" if shown else "")
+            return True
     if out_dir is not None:
         _shot(page, out_dir, "category_not_found")
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            (out_dir / "category_debug.json").write_text(
+                json.dumps(page.evaluate(_CATEGORY_DEBUG, want), ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception as e:  # noqa: BLE001
+            log.warning("카테고리 화면 구조 저장 실패: %s", e)
     page.keyboard.press("Escape")
-    log.warning("카테고리 '%s'를 찾지 못해 카테고리 없이 올립니다. 화면에 보인 카테고리: %s",
+    log.warning("카테고리 '%s'를 찾지 못했습니다. 화면에 보인 카테고리: %s",
                 name, ", ".join(seen[:30]) or "(목록을 읽지 못함)")
     if post is not None:
         post["_category_seen"] = seen[:30]
@@ -379,6 +426,9 @@ def _fill_editor(cfg: TistoryConfig, page: Page, post: dict, out_dir: Path) -> L
         log.info("발행 전 본문 확인: %s 모드, %d자", filled["mode"], filled["length"])
         _find(page, "publish_open").click()
         page.wait_for_timeout(1200)
+        if cfg.category and not post.get("_category_ok"):
+            # 일부 화면은 카테고리를 발행 창에서 고른다
+            post["_category_ok"] = _select_category(page, cfg.category, post, out_dir)
         public = _maybe(page, "visibility_public", timeout=5_000)
         if public:
             public.click()
