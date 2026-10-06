@@ -9,6 +9,8 @@
   python -m blogger_autopost check-meta     글 페이지에 검색 설명(meta description)이 실제로 나오는지 확인
   python -m blogger_autopost fix-posts      이미 발행한 글 다듬기 미리보기(그림을 첫 문단 뒤로, 관련 글 링크)
   python -m blogger_autopost fix-posts --apply   실제로 고치기(바꾸기 전 본문은 output/blogger/backup/에 저장)
+  python -m blogger_autopost refresh-post today   오늘 글을 새 양식(그림 3장·인포그래픽·경험 문단)으로 바꾼 미리보기
+  python -m blogger_autopost refresh-post today --apply   실제로 고치기(날짜 YYYY-MM-DD나 글 주소도 됨)
 """
 from __future__ import annotations
 
@@ -36,6 +38,12 @@ def main(argv: list[str] | None = None) -> int:
     fix = sub.add_parser("fix-posts")
     fix.add_argument("--apply", action="store_true", help="미리보기가 아니라 실제로 블로그 글을 고친다")
     fix.add_argument("--restore", type=Path, help="이 백업 폴더의 본문으로 글을 되돌린다")
+    ref = sub.add_parser("refresh-post")
+    ref.add_argument("target", nargs="?", default="today", help="today / 2026-10-06 / 글 주소 / 글 ID")
+    ref.add_argument("--apply", action="store_true", help="미리보기가 아니라 실제로 블로그 글을 고친다")
+    ref.add_argument("--again", action="store_true", help="만들어 둔 미리보기를 버리고 처음부터 다시 만든다")
+    ref.add_argument("--no-persona", action="store_true", help="경험·'내 생각' 문단은 넣지 않는다")
+    ref.add_argument("--images", action="store_true", help="글에 그림이 이미 있어도 사진·생성 그림을 넣는다")
     diag = sub.add_parser("diagnose")
     diag.add_argument("--no-push", action="store_true", help="GitHub에 올리지 않고 파일만 만든다")
     args = parser.parse_args(argv)
@@ -62,6 +70,8 @@ def main(argv: list[str] | None = None) -> int:
         return _check_meta(cfg)
     if args.cmd == "fix-posts":
         return _fix_posts(cfg, args.apply, args.restore)
+    if args.cmd == "refresh-post":
+        return _refresh_post(cfg, args)
     if args.cmd == "diagnose":
         return _diagnose(cfg, push=not args.no_push)
     if args.cmd == "sync-history":
@@ -118,6 +128,29 @@ def _fix_posts(cfg: BloggerConfig, apply: bool, restore: Path | None) -> int:
               f"{cfg.output_dir / 'backup'}\\<날짜폴더>")
     else:
         print("\n(미리보기입니다. 실제로 고치려면: python -m blogger_autopost fix-posts --apply)")
+    return 0
+
+
+def _refresh_post(cfg: BloggerConfig, args) -> int:
+    from . import refresh
+    from .pipeline import setup_logging
+    setup_logging(cfg, "blogger-refresh")
+    try:
+        r = refresh.run(cfg, args.target, apply=args.apply, again=args.again, use_persona=not args.no_persona,
+                        images=args.images)
+    except RuntimeError as e:
+        print(f"❌ {e}")
+        return 1
+    print(f"\n■ {r['title']}\n  {r['url'] or '(예약 글)'}")
+    print(f"  그림: 모두 {r['images']}장 ({r['images_note'] or '추가 없음'})")
+    print(f"  경험·내 생각 문단: {r['persona_paragraphs']}개 {', '.join(r['persona_used'])}")
+    print(f"  관련 글: {', '.join(r['related']) or '(없음)'}")
+    print(f"  미리보기: {r['preview']}  (더블클릭하면 브라우저로 열립니다)")
+    if r["saved"]:
+        print(f"\n✅ 블로그 글을 고쳤습니다. 되돌리려면: python -m blogger_autopost fix-posts --restore {r['backup']}")
+    else:
+        print(f"\n(미리보기입니다. 괜찮으면: python -m blogger_autopost refresh-post {args.target} --apply\n"
+              f" 다시 만들려면: python -m blogger_autopost refresh-post {args.target} --again)")
     return 0
 
 

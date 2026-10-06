@@ -60,6 +60,8 @@ elif "ILLUSTRATION REVIEW" in prompt:
         (state / "rejected_once").write_text("1")
         verdict["i1"] = "garbled letters on a sign"
     out.write_text(json.dumps(verdict))
+elif "REFRESH PLAN" in prompt:
+    out.write_text((state / "plan.json").read_text())
 elif "FINDINGS" in prompt:
     post = json.loads(pathlib.Path("post.json").read_text())
     post["title"] = post["title"] + " (fixed)"
@@ -794,3 +796,85 @@ def test_naver_prompts_pass_persona_file(tmp_path, monkeypatch):
     assert "RECENT" not in generate._persona_lines(c, recent=False)
     monkeypatch.setenv("PERSONA_FILE", str(tmp_path / "none.md"))
     assert generate._persona_lines(c) == "PERSONA_FILE=(없음)\n"
+
+
+OLD_POST = ("<p>Chuseok is Korea's autumn harvest holiday, when families gather, visit hometowns and share food.</p>"
+            "<h2>When it happens</h2><p>Chuseok falls on the 15th day of the eighth lunar month every year.</p>"
+            "<h2>What families do</h2><p>Many families hold ancestral rites and eat songpyeon together.</p>"
+            "<h2>Sources</h2><ul><li><a href=\"https://korea.net\">Korea.net</a></li></ul>")
+PLAN = {"topic": "Chuseok",
+        "illustrations": [{"section": 1, "prompt": "calendar moon", "alt": "moon"},
+                          {"section": 2, "prompt": "family table", "alt": "table"}],
+        "photos": [{"section": 2, "subject": "songpyeon", "search": "songpyeon", "alt": "songpyeon"}],
+        "insertions": [{"after": "Many families hold ancestral rites and eat", "html": "<p>At home we <a href='x'>make</a> it.</p>"},
+                       {"after": "words that are not in the post at all", "html": "<p>Lost.</p>"}],
+        "closing": "<p>In my view, Chuseok is about time together.</p>",
+        "persona_used": ["E05", "E99"]}
+
+
+def test_refresh_post_preview_then_apply(cfg, tmp_path, monkeypatch):
+    from blogger_autopost import refresh
+    script, state = fake_codex(tmp_path)
+    (state / "plan.json").write_text(json.dumps(PLAN))
+    cfg.codex_bin = str(script)
+    cfg.photos, cfg.illustrations, cfg.photo_fallback, cfg.infographic = 1, 2, True, True
+    _with_drive_token(cfg, tmp_path)
+    pfile = tmp_path / "persona.md"
+    pfile.write_text("[E05] We make songpyeon at home every Chuseok.", encoding="utf-8")
+    monkeypatch.setenv("PERSONA_FILE", str(pfile))
+    monkeypatch.setattr(photos, "_get", lambda params, fetch=None: {"query": {"pages": []}})
+    _fake_images(monkeypatch, {})
+    monkeypatch.setattr(infographic, "make", lambda c, post, out: _png(out / "infographic.png"))
+    monkeypatch.setattr(infographic.hosting, "upload", lambda c, path, name: "https://x/info")
+    history.save(cfg.history_file, [{"date": "2026-10-06", "title": "Chuseok", "post_id": "7", "source": "autopost"}])
+    live = [{"id": "7", "title": "Chuseok", "url": "https://b/7", "labels": ["Holidays"],
+             "published": "2026-10-06T05:00:00-07:00", "content": OLD_POST},
+            {"id": "6", "title": "Seollal", "url": "https://b/6", "labels": ["Holidays"],
+             "published": "2026-10-05T21:00:00+09:00", "content": "<p>x</p>"}]
+    monkeypatch.setattr(api, "resolve_blog_id", lambda c: "123")
+    monkeypatch.setattr(api, "request", lambda c, m, path, params=None, body=None:
+                        {"items": live if params["status"] == "live" else []})
+    updates = {}
+    monkeypatch.setattr(api, "update_content", lambda c, pid, content: updates.__setitem__(pid, content))
+
+    r = refresh.run(cfg, "2026-10-06")
+    assert not updates and r["persona_paragraphs"] == 2 and r["persona_used"] == ["E05"]
+    new = (tmp_path / "out" / "refresh-7" / "refreshed.html").read_text(encoding="utf-8")
+    assert new.startswith('<div class="kb-cover"') and new.count("<figure") == 4
+    assert "<p>At home we make it.</p>" in new and "Lost." not in new and "href='x'" not in new
+    assert new.index("In my view") < new.index("<h2>Sources") and 'href="https://b/6"' in new
+    for sentence in ("Chuseok falls on the 15th day", "Many families hold ancestral rites"):
+        assert sentence in new
+    plans = len(list(state.glob("prompt_*.txt")))
+
+    r = refresh.run(cfg, "https://b/7", apply=True)                 # 미리보기 때 만든 것을 그대로 쓴다
+    assert r["saved"] and updates["7"] == new and len(list(state.glob("prompt_*.txt"))) == plans
+    assert (next((cfg.output_dir / "backup").iterdir()) / "7.html").read_text(encoding="utf-8") == OLD_POST
+    assert history.load(cfg.history_file)[0]["persona_used"] == ["E05"]
+
+    live[0]["content"] = new
+    with pytest.raises(RuntimeError, match="이미 새 양식"):
+        refresh.run(cfg, "7")
+
+
+def test_refresh_post_skips_images_when_post_has_them(cfg, tmp_path, monkeypatch):
+    from blogger_autopost import refresh
+    script, state = fake_codex(tmp_path)
+    (state / "plan.json").write_text(json.dumps(dict(PLAN, insertions=[], closing="")))
+    cfg.codex_bin = str(script)
+    cfg.photos, cfg.illustrations, cfg.photo_fallback = 1, 2, True
+    monkeypatch.setenv("PERSONA_FILE", str(tmp_path / "none.md"))
+    body = OLD_POST.replace("</p><h2>When", '</p><figure><img src="https://a/b.jpg"></figure><h2>When')
+    monkeypatch.setattr(refresh, "find_post", lambda c, t: ({"id": "9", "title": "C", "url": "https://b/9",
+                                                             "labels": [], "content": body}, []))
+    monkeypatch.setattr(photos, "add_photos", lambda *a: pytest.fail("photos should be skipped"))
+    r = refresh.run(cfg, "9")
+    assert r["images"] == 1 and r["persona_paragraphs"] == 0
+    assert "PERSONA" not in (state / "prompt_0.txt").read_text(encoding="utf-8")
+
+
+def _png(path):
+    from PIL import Image
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (64, 36)).save(path)
+    return path
