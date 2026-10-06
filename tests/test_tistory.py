@@ -262,8 +262,14 @@ function publish() {
 </script>"""
 
 
-def test_publish_on_mock_editor(cfg, monkeypatch, tmp_path):
-    pytest.importorskip("playwright")
+PUBLISHED_PAGE = """<!doctype html><meta charset="utf-8"><body><script>
+const r = JSON.parse(localStorage.getItem('result') || '{}');
+document.title = JSON.stringify(r);
+document.body.insertAdjacentHTML('beforeend', '<h1>' + (r.title || '') + '</h1>' + (window.EMPTY ? '' : (r.body || '')));
+</script></body>"""
+
+
+def _mock_publish(cfg, monkeypatch, tmp_path, editor=MOCK_EDITOR, empty_page=False):
     from naver_autopost.publisher import _launch as real_launch
     result = {}
 
@@ -273,17 +279,16 @@ def test_publish_on_mock_editor(cfg, monkeypatch, tmp_path):
         def serve(route):
             url = route.request.url
             if "/manage/newpost" in url:
-                route.fulfill(status=200, content_type="text/html", body=MOCK_EDITOR)
+                route.fulfill(status=200, content_type="text/html", body=editor)
             else:
-                route.fulfill(status=200, content_type="text/html",
-                              body="<script>document.title=localStorage.getItem('result')</script>")
+                page = PUBLISHED_PAGE.replace("<script>", "<script>window.EMPTY=true;" if empty_page else "<script>", 1)
+                route.fulfill(status=200, content_type="text/html", body=page)
         ctx.route("https://myblog.tistory.com/**", serve)
         original_close = ctx.close
 
         def close():
             for page in ctx.pages:
-                if "/manage/posts" in page.url:
-                    page.wait_for_timeout(300)
+                if "/manage/newpost" not in page.url and page.url.startswith("https://myblog"):
                     result.update(json.loads(page.title() or "{}"))
             original_close()
         ctx.close = close
@@ -291,20 +296,30 @@ def test_publish_on_mock_editor(cfg, monkeypatch, tmp_path):
 
     monkeypatch.setattr(publisher, "_launch", launch)
     monkeypatch.setattr(publisher, "find_post_url", lambda c, t: None)
-    monkeypatch.setattr(publisher.time, "sleep", lambda s: None)
+    monkeypatch.setattr(publisher, "rss_item", lambda c, t: {"url": "https://myblog.tistory.com/1", "text_length": None})
     post = content.normalize(POST)
-    try:
-        url = publisher.publish(cfg, post, tmp_path / "shots")
-    except publisher.PublishError as e:
-        if "Executable doesn't exist" in str(e) or "browser" in str(e).lower():
-            pytest.skip(f"브라우저 없음: {e}")
-        raise
-    assert url == "https://myblog.tistory.com/manage/posts/"
+    url = publisher.publish(cfg, post, tmp_path / "shots")
+    return url, post, result
+
+
+def test_publish_on_mock_editor(cfg, monkeypatch, tmp_path):
+    pytest.importorskip("playwright")
+    url, post, result = _mock_publish(cfg, monkeypatch, tmp_path)
+    assert url == "https://myblog.tistory.com/1"
     assert result["title"] == POST["title"]
     assert result["body"] == post["body_html"]
     assert result["cat"] == "통계로 보는 세상" and post["_category_ok"] is True
     assert result["tags"] == ["순자산", "가계금융복지조사"]
     assert result["open"] == "20"
+    state = json.loads((tmp_path / "shots" / "editor_state.json").read_text(encoding="utf-8"))
+    assert any(c["visible"] and c["length"] == len(post["body_html"]) for c in state["codemirrors"])
+
+
+def test_publish_reports_empty_body_on_published_page(cfg, monkeypatch, tmp_path):
+    pytest.importorskip("playwright")
+    with pytest.raises(publisher.PublishUncertain, match="본문이 비어 있습니다"):
+        _mock_publish(cfg, monkeypatch, tmp_path, empty_page=True)
+    assert (tmp_path / "shots" / "published_page.png").exists()
 
 
 def test_find_post_url_from_rss(cfg, monkeypatch):
