@@ -223,3 +223,50 @@ def run(cfg: TistoryConfig, dry_run: bool = False, force: bool = False) -> int:
 
 
 _sleep = time.sleep
+
+
+def republish(cfg: TistoryConfig, day: str | None = None, dry_run: bool = False) -> int:
+    """이미 검수를 통과한 날의 글(output/tistory/<날짜>/post.json)을 다시 올린다. 글을 새로 쓰지 않는다.
+    잘못 올라간 글(예: 본문이 빈 글)은 먼저 블로그에서 지워야 한다(같은 제목이 있으면 멈춘다)."""
+    from . import publisher
+
+    day = day or today_kst()
+    setup_logging(cfg, f"tistory-{today_kst()}")
+    out_dir = cfg.output_dir / day
+    try:
+        with _Lock(cfg.log_dir / ".run-tistory.lock"):
+            if not (out_dir / "post.json").exists():
+                raise RuntimeError(f"{out_dir}에 post.json이 없습니다")
+            stage = _load(out_dir / "stage.json")
+            if not (stage.get("claude_pass") and (stage.get("gpt_pass") or not cfg.gpt_factcheck)):
+                raise RuntimeError(f"{day} 글은 팩트체크를 통과하지 않아 다시 올리지 않습니다")
+            post = _load_post(out_dir)
+            errors = _validate(cfg, post)
+            if errors:
+                raise RuntimeError("구조 검증 실패:\n- " + "\n- ".join(errors))
+            same = publisher.find_post_url(cfg, post["title"])
+            if same and not dry_run:
+                raise RuntimeError(f"블로그에 같은 제목의 글이 아직 있습니다. 티스토리에서 먼저 삭제하세요: {same}")
+            url = publisher.publish(cfg, post, out_dir, dry_run=dry_run)
+            if dry_run:
+                notify(cfg, f"[{LABEL} 다시 올리기 테스트] 공개 발행 직전까지 확인했습니다: {post['title']}")
+                return 0
+            _mark(out_dir, published=True, url=url)
+            entries = history.load(cfg.history_file)
+            for e in entries:
+                if e.get("source") == "autopost" and e.get("date") == day:
+                    e["url"] = url
+                    break
+            else:
+                entries.append({"date": day, "title": post["title"], "url": url, "topic_id": post.get("topic_id", ""),
+                                "lane": post.get("lane", "queue"), "tip_id": post.get("tip_id", ""),
+                                "tags": post.get("tags", []), "source": "autopost"})
+            history.save(cfg.history_file, entries)
+            note = "" if post.get("_category_ok") is not False else (
+                "\n⚠️ 카테고리를 찾지 못했습니다. 화면에 보인 카테고리: " + (", ".join(post.get("_category_seen") or []) or "(읽지 못함)"))
+            notify(cfg, f"[{LABEL} 다시 올리기 완료] {post['title']}\n{url}{note}")
+            return 0
+    except Exception as e:
+        log.exception("티스토리 다시 올리기 실패")
+        notify(cfg, f"[{LABEL} 다시 올리기 실패] {day}\n{e}")
+        return 1
