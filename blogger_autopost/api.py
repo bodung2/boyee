@@ -77,8 +77,9 @@ def _save_token(cfg: BloggerConfig, token: dict) -> None:
     cfg.token_file.write_text(json.dumps(token, indent=2), encoding="utf-8")
 
 
-def authorize(cfg: BloggerConfig, open_browser: bool = True, timeout: int = 300) -> dict:
-    """로컬 루프백(127.0.0.1) 방식으로 구글 계정 승인을 받고 refresh token을 저장한다."""
+def authorize(cfg: BloggerConfig, open_browser: bool = True, timeout: int = 300, scope: str = SCOPE) -> dict:
+    """로컬 루프백(127.0.0.1) 방식으로 구글 계정 승인을 받고 refresh token을 저장한다.
+    scope를 바꾸면 같은 OAuth 클라이언트로 다른 구글 API(예: 시트) 토큰도 받는다."""
     client = _client(cfg)
     verifier = secrets.token_urlsafe(64)
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
@@ -106,7 +107,7 @@ def authorize(cfg: BloggerConfig, open_browser: bool = True, timeout: int = 300)
     redirect_uri = f"http://127.0.0.1:{server.server_port}"
     url = AUTH_URL + "?" + urllib.parse.urlencode({
         "client_id": client["client_id"], "redirect_uri": redirect_uri, "response_type": "code",
-        "scope": SCOPE, "access_type": "offline", "prompt": "consent", "state": state,
+        "scope": scope, "access_type": "offline", "prompt": "consent", "state": state,
         "code_challenge": challenge, "code_challenge_method": "S256",
     })
     print("브라우저에서 블로그 주인 구글 계정으로 로그인하고 '허용'을 누르세요.\n"

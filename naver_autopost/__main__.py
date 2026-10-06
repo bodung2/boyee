@@ -8,6 +8,8 @@
   python -m naver_autopost social-draft --profile edu        오늘 발행한 글로 인스타·쓰레드 초안 만들기
   python -m naver_autopost social-publish --profile edu      초안을 인스타·쓰레드에 발행(저녁 예약 작업)
   python -m naver_autopost social-check --profile edu        인스타·쓰레드 토큰·계정 확인
+  python -m naver_autopost sheets-auth                       최초 1회 구글 시트 쓰기 승인(이웃 후보 추천용)
+  python -m naver_autopost neighbors --profile childhood     이웃 후보 5곳을 콘텐츠 관리 시트에 추가
 """
 from __future__ import annotations
 
@@ -70,6 +72,9 @@ def main(argv: list[str] | None = None) -> int:
     spub.add_argument("--date", help="블로그 글 날짜 YYYY-MM-DD(기본: 오늘)")
     spub.add_argument("--dry-run", action="store_true", help="검사·이미지 준비까지만 하고 올리지 않는다")
     with_profile(sub.add_parser("social-check"))
+    nb = with_profile(sub.add_parser("neighbors"))
+    nb.add_argument("--force", action="store_true", help="오늘 이미 추천했어도 한 번 더")
+    sub.add_parser("sheets-auth")
     args = parser.parse_args(argv)
     cfg = Config.load(getattr(args, "profile", profiles.DEFAULT_PROFILE))
 
@@ -139,6 +144,14 @@ def main(argv: list[str] | None = None) -> int:
         return _social(cfg, args)
     if args.cmd == "check-ai":
         return _check_ai(cfg)
+    if args.cmd == "neighbors":
+        from .neighbors import run as run_neighbors
+        return run_neighbors(cfg, force=args.force)
+    if args.cmd == "sheets-auth":
+        from . import sheets
+        sheets.authorize(sheets.SheetsAuth.load())
+        print("구글 시트 승인 완료. 이제 neighbors 명령이 콘텐츠 관리 시트에 쓸 수 있습니다.")
+        return 0
     if args.cmd == "record":
         from . import history
         from .pipeline import today_kst

@@ -15,6 +15,9 @@ class Profile:
     extra_forbidden: tuple[str, ...] = ()
     # 레인별 블로그 카테고리(없으면 NAVER_CATEGORY_<프로필> 하나를 쓴다). 마지막 "*"는 나머지 레인.
     lane_categories: tuple[tuple[str, str], ...] = ()
+    # 이웃 후보 추천(neighbors): 콘텐츠 관리 시트의 탭 이름, 비슷한 블로그를 찾는 기본 검색어
+    neighbor_tab: str = ""
+    neighbor_keywords: tuple[str, ...] = ()
 
 
 PROFILES: dict[str, Profile] = {
@@ -23,6 +26,9 @@ PROFILES: dict[str, Profile] = {
         write_skill="edu-auto-post", factcheck_skill="edu-auto-factcheck",
         thumbnail_style="edu", illustrations=True,
         lane_categories=(("B", "교직 꿀팁"), ("*", "교육 정책 인사이트")),
+        neighbor_tab="교육 이웃 후보",
+        neighbor_keywords=("교육정책", "고교학점제", "초등 교사", "교직 생활", "학부모 교육정보",
+                           "경기도교육청", "수업 나눔", "교사 연수", "초등 학부모", "2022 개정 교육과정"),
     ),
     "childhood": Profile(
         name="childhood", label="유아교육",
@@ -33,6 +39,9 @@ PROFILES: dict[str, Profile] = {
             "정상/지연", "통과해야", "못하면 발달", "smartstore.naver.com", "coupang.com",
             "구매 링크", "구매하기", "K-DST 문항", "ASQ 문항",
         ),
+        neighbor_tab="유아 이웃 후보",
+        neighbor_keywords=("누리과정", "유아 발달", "유치원 놀이", "초등 입학 준비", "한글 떼기",
+                           "유아 수학 놀이", "엄마표 놀이", "유아 독서", "유아 활동지", "어린이집 생활"),
     ),
 }
 
