@@ -199,30 +199,64 @@ def _on_dialog(dialog) -> None:
         dialog.accept()
 
 
+# 글쓰기 화면에는 숨겨진 HTML 편집기(.CodeMirror)가 처음부터 있을 수 있다. 반드시 '보이는' 편집기만 쓴다.
+_VISIBLE_CM = """() => [...document.querySelectorAll('.CodeMirror')]
+    .find(e => e.CodeMirror && e.offsetParent !== null && e.getBoundingClientRect().height > 0) || null"""
+
+_BODY_LENGTH = """() => {
+    const cm = (%s)();
+    if (cm) return {mode: 'html', length: cm.CodeMirror.getValue().length};
+    const ed = window.tinymce && window.tinymce.activeEditor;
+    if (ed) return {mode: 'basic', length: ed.getContent().length};
+    return {mode: 'none', length: 0};
+}""" % _VISIBLE_CM
+
+
+def _visible_cm(page: Page) -> bool:
+    return bool(page.evaluate(f"() => !!({_VISIBLE_CM})()"))
+
+
 def _switch_to_html(page: Page) -> None:
-    if page.locator(".CodeMirror").count():
+    if _visible_cm(page):
         return
     _find(page, "mode_open").click()
     page.wait_for_timeout(500)
     _find(page, "mode_html").click()
-    page.wait_for_timeout(1500)
-    _find(page, "codemirror", timeout=10_000)
+    page.wait_for_timeout(800)
+    # 브라우저 확인창이 아니라 화면 속 확인 창으로 묻는 경우
+    confirm = page.locator("button:visible", has_text=re.compile(r"^\s*확인\s*$"))
+    if confirm.count():
+        confirm.first.click()
+    deadline = time.time() + 10
+    while not _visible_cm(page):
+        if time.time() > deadline:
+            raise PublishError("HTML 모드로 바꾸지 못했습니다(보이는 HTML 편집기가 없음)")
+        page.wait_for_timeout(300)
+    log.info("HTML 모드로 전환")
 
 
 def _set_body(page: Page, body_html: str) -> None:
-    ok = page.evaluate(
-        """(html) => {
-            const el = document.querySelector('.CodeMirror');
-            if (!el || !el.CodeMirror) return false;
-            el.CodeMirror.setValue(html);
-            if (el.CodeMirror.save) el.CodeMirror.save();
-            return el.CodeMirror.getValue().length;
+    n = page.evaluate(
+        """([html, findCm]) => {
+            const el = (eval(findCm))();
+            if (!el) return 0;
+            const cm = el.CodeMirror;
+            cm.focus();
+            cm.setValue(html);
+            if (cm.save) cm.save();
+            if (cm.refresh) cm.refresh();
+            return cm.getValue().length;
         }""",
-        body_html,
+        [body_html, _VISIBLE_CM],
     )
-    if not ok:
-        raise PublishError("HTML 편집기(CodeMirror)에 본문을 넣지 못했습니다")
-    log.info("본문 입력(HTML %d자)", ok)
+    if not n:
+        raise PublishError("HTML 편집기에 본문을 넣지 못했습니다")
+    log.info("본문 입력(HTML %d자)", n)
+
+
+def body_length(page: Page) -> dict:
+    """지금 화면 편집기에 들어 있는 본문 길이(발행 전 확인용)."""
+    return page.evaluate(_BODY_LENGTH)
 
 
 def _category_label(text: str) -> str:
@@ -298,8 +332,8 @@ def _norm_title(text: str) -> str:
     return re.sub(r"\s+", "", html.unescape(text or ""))
 
 
-def find_post_url(cfg: TistoryConfig, title: str) -> str | None:
-    """블로그 RSS에서 같은 제목의 글 주소를 찾는다(발행 확인·중복 발행 방지)."""
+def rss_item(cfg: TistoryConfig, title: str) -> dict | None:
+    """블로그 RSS에서 같은 제목의 글을 찾는다. {"url", "text_length"}(발행 확인·중복 발행 방지)."""
     try:
         req = urllib.request.Request(f"{cfg.blog_url}/rss", headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=20) as resp:
@@ -312,8 +346,15 @@ def find_post_url(cfg: TistoryConfig, title: str) -> str | None:
         t = re.search(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>", item, flags=re.S)
         link = re.search(r"<link>(.*?)</link>", item, flags=re.S)
         if t and link and _norm_title(t.group(1)) == want:
-            return link.group(1).strip()
+            desc = re.search(r"<description>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</description>", item, flags=re.S)
+            text = re.sub(r"<[^>]+>", "", html.unescape(desc.group(1))) if desc else ""
+            return {"url": link.group(1).strip(), "text_length": len(text.strip()) if desc else None}
     return None
+
+
+def find_post_url(cfg: TistoryConfig, title: str) -> str | None:
+    item = rss_item(cfg, title)
+    return item["url"] if item else None
 
 
 def _fill_editor(cfg: TistoryConfig, page: Page, post: dict, out_dir: Path) -> Locator:
@@ -332,6 +373,10 @@ def _fill_editor(cfg: TistoryConfig, page: Page, post: dict, out_dir: Path) -> L
         _add_tags(page, post.get("tags", []))
         _shot(page, out_dir, "editor_filled")
 
+        filled = body_length(page)
+        if filled["length"] < min(200, len(post["body_html"]) // 2):
+            raise PublishError(f"본문이 편집기에 들어가지 않아 발행하지 않습니다({filled})")
+        log.info("발행 전 본문 확인: %s 모드, %d자", filled["mode"], filled["length"])
         _find(page, "publish_open").click()
         page.wait_for_timeout(1200)
         public = _maybe(page, "visibility_public", timeout=5_000)
@@ -376,9 +421,11 @@ def publish(cfg: TistoryConfig, post: dict, out_dir: Path, dry_run: bool = False
         finally:
             ctx.close()
     for _ in range(6):                      # RSS 반영까지 잠깐 걸릴 수 있다
-        url = find_post_url(cfg, post["title"])
-        if url:
-            return url
+        item = rss_item(cfg, post["title"])
+        if item:
+            if item["text_length"] is not None and item["text_length"] < 50:
+                raise PublishUncertain(f"글은 올라갔지만 본문이 비어 있는 것 같습니다. 블로그에서 확인하세요: {item['url']}")
+            return item["url"]
         time.sleep(10)
     log.warning("발행은 했지만 RSS에서 글 주소를 찾지 못했습니다")
     return f"{cfg.blog_url}/manage/posts/"

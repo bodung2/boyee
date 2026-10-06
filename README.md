@@ -233,6 +233,7 @@ notepad .env                                              # TISTORY_BLOG, TISTOR
 
 운영:
 - `python -m tistory_autopost queue`: 오늘 후보 주제, 대기 중인 화제 제보, 새 통계가 나와 갱신하면 좋은 글
+- `python -m tistory_autopost republish`: 검수를 통과한 오늘 글을 다시 올리기(잘못 올라간 글은 티스토리에서 먼저 삭제). 글을 새로 쓰지 않습니다.
 - 화제 제보: 텔레그램 알림 봇에게 `화제 연봉 1억 논쟁 또 뜸`처럼 보내거나 `python -m tistory_autopost tip "연봉 1억 논쟁"`.
   제보는 주제 힌트로만 쓰이고, 공식 통계로 답할 수 없는 화제(인물 논란·소문)는 건너뜁니다.
 - 주제 추가: `data/tistory_topics.json`에 같은 형식으로 넣습니다(`release_months`는 통상 발표 달).

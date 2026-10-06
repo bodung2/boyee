@@ -225,6 +225,7 @@ MOCK_EDITOR = r"""<!doctype html><meta charset="utf-8"><body>
 <textarea id="post-title-inp" placeholder="제목을 입력하세요"></textarea>
 <button id="editor-mode-layer-btn-open" onclick="document.getElementById('modes').style.display='block'">기본모드</button>
 <div id="modes" style="display:none"><div id="editor-mode-html" onclick="toHtml()">HTML</div></div>
+<div class="CodeMirror" id="hidden-cm" style="display:none">숨은 편집기</div>
 <div id="cm-host"></div>
 <button id="category-btn" onclick="document.getElementById('category-list').style.display='block'">카테고리</button>
 <div id="category-list" style="display:none">
@@ -240,17 +241,19 @@ MOCK_EDITOR = r"""<!doctype html><meta charset="utf-8"><body>
 </div>
 <script>
 window.tags = [];
+(() => { let hv = ''; document.getElementById('hidden-cm').CodeMirror =
+  {setValue: x => { hv = x; }, getValue: () => hv, save: () => {}, focus: () => {}}; })();
 document.getElementById('tagText').addEventListener('keydown', e => {
   if (e.key === 'Enter') { window.tags.push(e.target.value); e.target.value = ''; }
 });
 function toHtml() {
   if (!confirm('HTML 모드로 전환하시겠습니까?')) return;
   const el = document.createElement('div'); el.className = 'CodeMirror'; el.textContent = 'cm';
-  let v = ''; el.CodeMirror = {setValue: x => { v = x; }, getValue: () => v, save: () => {}};
+  let v = ''; el.CodeMirror = {setValue: x => { v = x; }, getValue: () => v, save: () => {}, focus: () => {}, refresh: () => {}};
   document.getElementById('cm-host').appendChild(el);
 }
 function publish() {
-  const cm = document.querySelector('.CodeMirror').CodeMirror;
+  const cm = document.querySelector('#cm-host .CodeMirror').CodeMirror;
   localStorage.setItem('result', JSON.stringify({
     title: document.getElementById('post-title-inp').value, body: cm.getValue(), cat: window.cat,
     tags: window.tags, open: document.querySelector('input[name=basicSet]:checked').value}));
@@ -398,3 +401,48 @@ def test_category_not_found_reports_seen_names(cfg, monkeypatch, tmp_path):
         assert post["_category_seen"] == ["일상", "코인"]
         assert publisher._select_category(page, "코인") is True
         b.close()
+
+
+def test_republish_reuses_checked_post_and_fixes_history(cfg, monkeypatch):
+    fakes = Fakes(cfg, monkeypatch)
+    day = pipeline.today_kst()
+    out = cfg.output_dir / day
+    out.mkdir(parents=True)
+    (out / "post.json").write_text(json.dumps(POST, ensure_ascii=False), encoding="utf-8")
+    (out / "stage.json").write_text(json.dumps({"written": True, "claude_pass": True, "gpt_pass": True,
+                                                "published": True, "url": "https://myblog.tistory.com/0"}))
+    history.append(cfg.history_file, {"date": day, "title": POST["title"], "url": "https://myblog.tistory.com/0",
+                                       "topic_id": "a", "source": "autopost"})
+    monkeypatch.setattr(publisher, "find_post_url", lambda c, t: "https://myblog.tistory.com/0")
+    assert pipeline.republish(cfg) == 1 and fakes.published == []          # 빈 글을 지우기 전에는 멈춘다
+    monkeypatch.setattr(publisher, "find_post_url", lambda c, t: None)
+    assert pipeline.republish(cfg) == 0
+    assert fakes.published == [POST["title"]] and fakes.briefs == []        # 새로 쓰지 않는다
+    entries = history.load(cfg.history_file)
+    assert len(entries) == 1 and entries[0]["url"] == "https://myblog.tistory.com/1"
+
+
+def test_republish_refuses_unchecked_post(cfg, monkeypatch):
+    fakes = Fakes(cfg, monkeypatch)
+    out = cfg.output_dir / pipeline.today_kst()
+    out.mkdir(parents=True)
+    (out / "post.json").write_text(json.dumps(POST, ensure_ascii=False), encoding="utf-8")
+    (out / "stage.json").write_text(json.dumps({"written": True}))
+    assert pipeline.republish(cfg) == 1 and fakes.published == []
+
+
+def test_publish_refuses_when_body_did_not_stick(cfg, monkeypatch, tmp_path):
+    pytest.importorskip("playwright")
+    from naver_autopost.publisher import _launch as real_launch
+    broken = MOCK_EDITOR.replace("setValue: x => { v = x; }", "setValue: x => {}")
+
+    def launch(p, c, headless):
+        ctx = real_launch(p, c, headless=True)
+        ctx.route("https://myblog.tistory.com/**", lambda r: r.fulfill(status=200, content_type="text/html", body=broken))
+        return ctx
+
+    monkeypatch.setattr(publisher, "_launch", launch)
+    monkeypatch.setattr(publisher, "find_post_url", lambda c, t: None)
+    monkeypatch.setattr(publisher, "_set_body", lambda page, html: None)   # 넣었다고 믿었지만 실제로는 빈 편집기
+    with pytest.raises(publisher.PublishError, match="본문이 편집기에 들어가지 않아"):
+        publisher.publish(cfg, content.normalize(POST), tmp_path / "shots")
