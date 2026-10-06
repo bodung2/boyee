@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from . import persona
 from .config import ROOT, Config
 
 log = logging.getLogger(__name__)
@@ -128,6 +129,18 @@ def _rel(path: Path) -> Path:
     return path.relative_to(ROOT) if path.is_relative_to(ROOT) else path
 
 
+def _persona_lines(cfg: Config, recent: bool = True) -> str:
+    """페르소나 파일 위치(없으면 '(없음)')와 최근 자동 글에서 쓴 에피소드 번호."""
+    p = persona.path()
+    if not p.exists():
+        return "PERSONA_FILE=(없음)\n"
+    lines = f"PERSONA_FILE={_rel(p)}\n"
+    if recent:
+        used = persona.recent_used(sorted(cfg.data_dir.glob("published_*.json")))
+        lines += f"RECENT_PERSONA_EPISODES={','.join(used) or '(없음)'}\n"
+    return lines
+
+
 def write_post(cfg: Config, out_dir: Path, today: str, feedback: str = "") -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     related = [p for p in sorted(cfg.data_dir.glob("published_*.json")) if p != cfg.history_file]
@@ -135,7 +148,8 @@ def write_post(cfg: Config, out_dir: Path, today: str, feedback: str = "") -> Pa
         f"/{cfg.profile.write_skill}\n\n"
         f"TODAY={today}\nOUTPUT_DIR={_rel(out_dir)}\nHISTORY_FILE={_rel(cfg.history_file)}\n"
         f"RELATED_HISTORY_FILES={','.join(str(_rel(p)) for p in related) or '(없음)'}\n"
-        f"ILLUSTRATIONS={cfg.illustration_count if cfg.profile.illustrations else 0}\n\n"
+        f"ILLUSTRATIONS={cfg.illustration_count if cfg.profile.illustrations else 0}\n"
+        f"{_persona_lines(cfg)}\n"
         f"스킬 지침대로 오늘의 {cfg.profile.label} 정보성 글 1편을 완성해 OUTPUT_DIR/post.json에 저장하라. "
         "사람 검토 없이 자동 발행되므로 사실 정확성이 최우선이다. 질문하지 말고 끝까지 진행하라."
     )
@@ -151,7 +165,7 @@ def write_post(cfg: Config, out_dir: Path, today: str, feedback: str = "") -> Pa
 def factcheck(cfg: Config, out_dir: Path) -> dict:
     prompt = (
         f"/{cfg.profile.factcheck_skill}\n\n"
-        f"OUTPUT_DIR={_rel(out_dir)}\nMODE=check\n\n"
+        f"OUTPUT_DIR={_rel(out_dir)}\nMODE=check\n{_persona_lines(cfg, recent=False)}\n"
         "스킬 지침대로 post.json(과 일러스트가 있으면 그 이미지)을 검수하고 factcheck.json을 저장하라. "
         "질문하지 말고 끝까지 진행하라."
     )
@@ -166,7 +180,7 @@ def apply_gpt_review(cfg: Config, out_dir: Path, round_no: int) -> dict:
     """ChatGPT 지적을 Claude가 원문으로 재확인해 맞는 것만 반영한다(한쪽 모델의 오판 방지)."""
     prompt = (
         f"/{cfg.profile.factcheck_skill}\n\n"
-        f"OUTPUT_DIR={_rel(out_dir)}\nMODE=apply_gpt_review\n\n"
+        f"OUTPUT_DIR={_rel(out_dir)}\nMODE=apply_gpt_review\n{_persona_lines(cfg, recent=False)}\n"
         "스킬 지침의 MODE=apply_gpt_review 절차대로 gpt_review.json의 지적을 원문과 대조해 반영하고 "
         "gpt_applied.json을 저장하라. 질문하지 말고 끝까지 진행하라."
     )

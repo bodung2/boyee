@@ -5,7 +5,7 @@ from datetime import datetime
 
 import pytest
 
-from blogger_autopost import api, content, hosting, illustrations, photos, pipeline, writer
+from blogger_autopost import api, content, hosting, illustrations, infographic, photos, pipeline, writer
 from blogger_autopost.config import BloggerConfig
 from naver_autopost import history
 from naver_autopost.pipeline import KST
@@ -112,6 +112,7 @@ def cfg(tmp_path, monkeypatch):
     c.photos = 0
     c.illustrations = 0
     c.photo_fallback = False
+    c.infographic = False
     c.telegram_bot_token = c.telegram_chat_id = ""
     return c
 
@@ -679,3 +680,117 @@ def test_rejected_image_is_redrawn_with_the_reason(cfg, tmp_path, monkeypatch):
     html = fake.drafts["1"]["content"]
     assert "https://x/illust_1_try2" in html and "https://x/illust_1\"" not in html
     assert "rejected because: garbled letters on a sign" in prompts["illust_1_try2.png"]
+
+
+def test_infographic_placement_cover_first_and_before_sources():
+    body = BODY                                            # ends with <h2>Sources</h2><ul>...</ul>
+    out = infographic.place(body, "https://x/info", "T-money guide")
+    assert out.startswith('<div class="kb-cover" style="display:none"><img src="https://x/info"')
+    assert out.index('class="kb-infographic"') < out.index("<h2>Sources</h2>")
+    assert infographic.place(out, "https://x/info2", "T-money guide").count("kb-infographic") == 1
+    no_sources = infographic.place("<p>a</p><h2>B</h2><p>b</p>", "https://x/i", "T")
+    assert no_sources.endswith("</figure>")
+
+
+def test_leading_image_move_keeps_cover_on_top():
+    from blogger_autopost import seo
+    body = infographic.place(AUTO_BODY, "https://x/info", "Sizes")
+    new, n = seo.move_leading_images(body)
+    assert n == 1 and new.startswith('<div class="kb-cover"')
+    assert new.index("<p>A Korean apartment") < new.index("<figure")
+
+
+def test_infographic_is_reviewed_retried_and_becomes_cover(cfg, tmp_path, monkeypatch):
+    cfg.infographic, cfg.image_tries = True, 3
+    _with_drive_token(cfg, tmp_path)
+    prompts, verdicts = [], iter(["number 63% is not in the post", "ok"])
+
+    def fake_run(img_cfg, prompt, out, convert, timeout, what=""):
+        prompts.append(prompt)
+        from PIL import Image
+        Image.new("RGB", (100, 150)).save(out)
+        return out
+    monkeypatch.setattr(infographic.codex_image, "run_for_image", fake_run)
+    monkeypatch.setattr(infographic, "review", lambda c, post, path: next(verdicts))
+    monkeypatch.setattr(infographic.hosting, "upload", lambda c, path, name: f"https://x/{path.stem}")
+    post = dict(POST)
+    n, note = infographic.add(cfg, post, tmp_path)
+    assert n == 1 and "대표 이미지" in note
+    assert "$onepage" in prompts[0] and "Korea, Explained" in prompts[0]
+    assert "rejected because: number 63% is not in the post" in prompts[1]
+    assert post["body_html"].startswith('<div class="kb-cover" style="display:none"><img src="https://x/infographic_try2"')
+
+
+def test_infographic_gives_up_cleanly(cfg, tmp_path, monkeypatch):
+    cfg.infographic, cfg.image_tries = True, 2
+    _with_drive_token(cfg, tmp_path)
+    monkeypatch.setattr(infographic.codex_image, "run_for_image",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no image")))
+    post = dict(POST)
+    n, note = infographic.add(cfg, post, tmp_path)
+    assert n == 0 and "빼고" in note and post["body_html"] == POST["body_html"]
+
+
+PERSONA_TEXT = """# 페르소나
+- [E01][학교] 다문화 학생이 많은 학교에서 근무했다.
+- [E13][육아] 걱정은 대부분 시간이 해결했다.
+- [E20][문화] 한국 사람은 낯선 사람에게 잘 인사하지 않는다.
+"""
+
+
+def test_persona_helpers(tmp_path, monkeypatch):
+    from naver_autopost import persona
+    f = tmp_path / "persona.md"
+    f.write_text(PERSONA_TEXT, encoding="utf-8")
+    monkeypatch.setenv("PERSONA_FILE", str(f))
+    assert persona.load().startswith("# 페르소나")
+    assert persona.episode_ids(PERSONA_TEXT) == ["E01", "E13", "E20"]
+    assert persona.clean_used(["E13", "E99", "E13", 5], PERSONA_TEXT) == ["E13"]
+    h1, h2 = tmp_path / "published_edu.json", tmp_path / "published_blogger.json"
+    h1.write_text(json.dumps([{"source": "autopost", "persona_used": ["E01"]}, {"source": "rss"}]))
+    h2.write_text(json.dumps([{"source": "autopost", "persona_used": ["E20", "E01"]}]))
+    assert persona.recent_used([h1, h2, tmp_path / "missing.json"]) == ["E01", "E20"]
+    monkeypatch.setenv("PERSONA_FILE", str(tmp_path / "none.md"))
+    assert persona.load() == ""
+
+
+def test_blogger_prompt_carries_persona_and_history_records_episodes(cfg, tmp_path, monkeypatch):
+    f = tmp_path / "persona.md"
+    f.write_text(PERSONA_TEXT, encoding="utf-8")
+    monkeypatch.setenv("PERSONA_FILE", str(f))
+    (tmp_path / "published_childhood.json").write_text(json.dumps([{"source": "autopost", "persona_used": ["E13"]}]))
+    script, state = fake_codex(tmp_path)
+    (state / "post.json").write_text(json.dumps(dict(POST, persona_used=["E20", "E77"])))
+    cfg.codex_bin = str(script)
+    fake = FakeBlogger()
+    fake.install(monkeypatch)
+    assert pipeline.run(cfg) == 0
+    prompt = (state / "prompt_0.txt").read_text(encoding="utf-8")
+    assert "teacher-K" in prompt and "[E20][문화]" in prompt and "Avoid episodes recently used: E13" in prompt
+    assert '"persona_used"' in prompt
+    review = [p.read_text(encoding="utf-8") for p in state.glob("prompt_*.txt")
+              if "independent fact-checker" in p.read_text(encoding="utf-8")][0]
+    assert "First-person statements about the author" in review
+    auto = [e for e in history.load(cfg.history_file) if e["source"] == "autopost"]
+    assert auto[-1]["persona_used"] == ["E20"]
+
+
+def test_blogger_prompt_without_persona(cfg, tmp_path, monkeypatch):
+    monkeypatch.setenv("PERSONA_FILE", str(tmp_path / "none.md"))
+    assert writer.persona_block(cfg) == ""
+
+
+def test_naver_prompts_pass_persona_file(tmp_path, monkeypatch):
+    from naver_autopost import generate
+    from naver_autopost.config import Config
+    f = tmp_path / "persona.md"
+    f.write_text(PERSONA_TEXT, encoding="utf-8")
+    monkeypatch.setenv("PERSONA_FILE", str(f))
+    c = Config.load("edu")
+    c.data_dir = tmp_path
+    (tmp_path / "published_blogger.json").write_text(json.dumps([{"source": "autopost", "persona_used": ["E01"]}]))
+    lines = generate._persona_lines(c)
+    assert f"PERSONA_FILE={f}" in lines and "RECENT_PERSONA_EPISODES=E01" in lines
+    assert "RECENT" not in generate._persona_lines(c, recent=False)
+    monkeypatch.setenv("PERSONA_FILE", str(tmp_path / "none.md"))
+    assert generate._persona_lines(c) == "PERSONA_FILE=(없음)\n"

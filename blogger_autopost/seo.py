@@ -25,8 +25,16 @@ _SPACE = re.compile(r"^(?:\s|&nbsp;|<br\s*/?>|<p>\s*</p>|<div>\s*</div>)+", re.I
 _FIRST_PARA = re.compile(r"<p\b[^>]*>(?:(?!</p>).)*?\w(?:(?!</p>).)*?</p\s*>", re.I | re.S)
 
 
+_COVER = re.compile(r'^\s*<div\b[^>]*class=["\']kb-cover["\'][^>]*>.*?</div\s*>', re.I | re.S)
+
+
 def move_leading_images(body: str) -> tuple[str, int]:
-    """본문 맨 앞의 그림 블록들을 첫 글 문단 바로 뒤로 옮긴다. (새 본문, 옮긴 개수)"""
+    """본문 맨 앞의 그림 블록들을 첫 글 문단 바로 뒤로 옮긴다. (새 본문, 옮긴 개수)
+    대표 이미지용 숨은 인포그래픽 사본(kb-cover)은 맨 앞에 그대로 둔다."""
+    cover = _COVER.match(body)
+    if cover:
+        new, n = move_leading_images(body[cover.end():])
+        return body[:cover.end()] + new, n
     rest, moved = body, []
     while True:
         lead = _SPACE.match(rest)
