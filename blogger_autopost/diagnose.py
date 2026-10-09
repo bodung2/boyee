@@ -24,6 +24,59 @@ log = logging.getLogger(__name__)
 WEBMASTERS = "https://www.googleapis.com/webmasters/v3"
 INSPECT = "https://searchconsole.googleapis.com/v1/urlInspection/index:inspect"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"
+# 서치 콘솔의 '리디렉션 오류'는 구글이 휴대폰용 로봇(Googlebot Smartphone)으로 읽을 때 난다 → 같은 신분으로 따라가 본다.
+AGENTS = {
+    "googlebot_mobile": ("Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) "
+                         "Chrome/126.0.0.0 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"),
+    "mobile": ("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) "
+               "Chrome/126.0.0.0 Mobile Safari/537.36"),
+    "desktop": UA,
+}
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _hop(url: str, ua: str) -> tuple[int, str, str]:
+    """리디렉션을 따라가지 않고 한 번만 요청한다. (상태 코드, Location, 본문 앞부분)"""
+    opener = urllib.request.build_opener(_NoRedirect)
+    try:
+        with opener.open(urllib.request.Request(url, headers={"User-Agent": ua}), timeout=30) as resp:
+            return resp.status, "", resp.read(200_000).decode("utf-8", "replace")
+    except urllib.error.HTTPError as e:
+        return e.code, e.headers.get("Location", "") if e.headers else "", ""
+    except Exception as e:  # noqa: BLE001
+        return 0, "", str(e)[:200]
+
+
+def redirect_chain(url: str, ua: str, max_hops: int = 10, hop=None) -> dict:
+    """주소를 한 단계씩 따라간 기록과 판정(ok / loop / too_many / broken / error)."""
+    hop = hop or _hop
+    hops, seen, current = [], set(), url
+    for _ in range(max_hops):
+        status, location, body = hop(current, ua)
+        item = {"url": current, "status": status}
+        if location:
+            item["location"] = location
+        hops.append(item)
+        if status in (301, 302, 303, 307, 308):
+            if not location:
+                return {"verdict": "broken", "hops": hops}
+            nxt = urllib.parse.urljoin(current, location)
+            if nxt in seen or nxt == current:
+                return {"verdict": "loop", "hops": hops}
+            seen.add(current)
+            current = nxt
+            continue
+        verdict = "ok" if status == 200 else "error"
+        result = {"verdict": verdict, "hops": hops}
+        if status == 200:
+            seo = page_seo(body)
+            result.update({k: seo[k] for k in ("canonical", "og_url", "meta_robots", "meta_refresh", "js_redirect")})
+        return result
+    return {"verdict": "too_many", "hops": hops}
 
 
 def _fetch(url: str) -> tuple[int, str, dict]:
@@ -56,7 +109,13 @@ def page_seo(html_text: str) -> dict:
             or re.search(rf'<meta[^>]+content=["\']([^"\']*)["\'][^>]*(?:name|property)=["\']{re.escape(name)}["\']', html_text, re.I)
         return html.unescape(m.group(1)) if m else None
     title = re.search(r"<title[^>]*>(.*?)</title>", html_text, re.I | re.S)
-    canon = re.search(r'<link[^>]+rel=["\']canonical["\'][^>]*href=["\']([^"\']+)', html_text, re.I)
+    # 블로거는 <link href='...' rel='canonical'/>처럼 href를 먼저 쓴다 → 순서 상관없이 찾는다.
+    canon = (re.search(r'<link[^>]+rel=["\']canonical["\'][^>]*href=["\']([^"\']+)', html_text, re.I)
+             or re.search(r'<link[^>]+href=["\']([^"\']+)["\'][^>]*rel=["\']canonical["\']', html_text, re.I))
+    refresh = re.search(r'<meta[^>]+http-equiv=["\']refresh["\'][^>]*>', html_text, re.I)
+    head = html_text[:html_text.lower().find("</head>")] if "</head>" in html_text.lower() else html_text
+    js_redirect = re.search(r"(?:window\.|document\.)?location(?:\.href)?\s*=(?!=)|location\.(?:replace|assign)\s*\(",
+                            head)
     return {
         "title_tag": html.unescape(title.group(1).strip()) if title else None,
         "meta_description": meta("description"),
@@ -64,7 +123,10 @@ def page_seo(html_text: str) -> dict:
         "meta_robots": meta("robots"),
         "og_image": meta("og:image"),
         "og_description": meta("og:description"),
-        "canonical": canon.group(1) if canon else None,
+        "canonical": html.unescape(canon.group(1)) if canon else None,
+        "og_url": meta("og:url"),
+        "meta_refresh": refresh.group(0) if refresh else None,
+        "js_redirect": head[max(js_redirect.start() - 80, 0):js_redirect.end() + 80] if js_redirect else None,
         "h1_count": len(re.findall(r"<h1\b", html_text, re.I)),
         "has_adsense": "adsbygoogle" in html_text,
         "has_search_console_verification": bool(meta("google-site-verification")),
@@ -121,6 +183,20 @@ def search_console(cfg: BloggerConfig, blog_url: str, post_urls: list[str]) -> d
     return out
 
 
+def redirects(blog_url: str, post_urls: list[str], hop=None) -> list[dict]:
+    """글 주소마다 구글 휴대폰 로봇·휴대폰·PC로, 그리고 http:// 주소와 ?m=1 주소도 따라가 본다."""
+    rows = []
+    for url in [blog_url, *post_urls]:
+        row = {"url": url}
+        for name, ua in AGENTS.items():
+            row[name] = redirect_chain(url, ua, hop=hop)
+        row["http_googlebot_mobile"] = redirect_chain(url.replace("https://", "http://", 1), AGENTS["googlebot_mobile"], hop=hop)
+        row["m1_googlebot_mobile"] = redirect_chain(url + ("&" if "?" in url else "?") + "m=1", AGENTS["googlebot_mobile"],
+                                                    hop=hop)
+        rows.append(row)
+    return rows
+
+
 def run(cfg: BloggerConfig, out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     blog_id = api.resolve_blog_id(cfg)
@@ -163,6 +239,7 @@ def run(cfg: BloggerConfig, out_dir: Path) -> Path:
         public["posts"].append({"url": p["url"], "status": status, "x_robots_tag": headers.get("X-Robots-Tag"),
                                 **page_seo(text)})
     report["public_pages"] = public
+    report["redirects"] = redirects(blog_url, [p["url"] for p in posts[:8]])
     report["search_console"] = search_console(cfg, blog_url, [p["url"] for p in posts])
 
     path = out_dir / "report.json"

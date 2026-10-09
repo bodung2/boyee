@@ -535,6 +535,7 @@ def test_diagnose_collects_report(cfg, tmp_path, monkeypatch):
     page = ('<html><head><title>T-money guide</title><meta name="robots" content="index,follow">'
             '<link rel="canonical" href="https://kb.blogspot.com/2026/10/t.html"></head></html>')
     monkeypatch.setattr(diagnose, "_fetch", lambda url: (200, "<loc>a</loc><loc>b</loc>" if "sitemap" in url else page, {}))
+    monkeypatch.setattr(diagnose, "_hop", lambda url, ua: (200, "", page))
     calls = []
 
     def fake_google(c, url, body=None):
@@ -878,3 +879,17 @@ def _png(path):
     path.parent.mkdir(parents=True, exist_ok=True)
     Image.new("RGB", (64, 36)).save(path)
     return path
+
+
+def test_redirect_chain_follows_and_flags_loops():
+    from blogger_autopost import diagnose
+    page = "<head><link href='https://b/p.html' rel='canonical'/></head>"
+    hops = {"http://b/p.html": (301, "https://b/p.html", ""), "https://b/p.html": (302, "https://b/p.html?m=1", ""),
+            "https://b/p.html?m=1": (200, "", page)}
+    ok = diagnose.redirect_chain("http://b/p.html", "ua", hop=lambda u, ua: hops[u])
+    assert ok["verdict"] == "ok" and len(ok["hops"]) == 3 and ok["canonical"] == "https://b/p.html"
+    loop = {"https://b/x": (302, "https://b/x?m=1", ""), "https://b/x?m=1": (302, "/x", "")}
+    assert diagnose.redirect_chain("https://b/x", "ua", hop=lambda u, ua: loop[u])["verdict"] == "loop"
+    rows = diagnose.redirects("https://b/", ["https://b/p.html"], hop=lambda u, ua: (200, "", "<p>x</p>"))
+    assert set(rows[1]) >= {"googlebot_mobile", "desktop", "http_googlebot_mobile", "m1_googlebot_mobile"}
+    assert rows[1]["m1_googlebot_mobile"]["hops"][0]["url"] == "https://b/p.html?m=1"
