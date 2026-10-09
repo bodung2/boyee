@@ -45,6 +45,7 @@ class TistoryConfig:
     limit_wait_max_min: int
     illustration_count: int        # 본문 상황 그림(ChatGPT 이미지) 장수
     infographic: bool              # 핵심 숫자 한 장 인포그래픽(Codex onepage 스킬)
+    image_mode: str                # drive: 구글 드라이브에 올려 주소로 넣기(기본) / upload: 티스토리 편집기 첨부(예전 방식)
     infographic_skill: str
     infographic_timeout: int
     codex_image_timeout: int
@@ -96,6 +97,7 @@ class TistoryConfig:
             limit_wait_max_min=int(env("CLAUDE_LIMIT_WAIT_MAX_MIN", "330")),
             illustration_count=int(env("TISTORY_ILLUSTRATIONS", "2")),
             infographic=_bool("TISTORY_INFOGRAPHIC", True),
+            image_mode=env("TISTORY_IMAGE_MODE", "drive").strip().lower() or "drive",
             infographic_skill=env("INFOGRAPHIC_SKILL", "onepage").strip(),
             infographic_timeout=int(env("INFOGRAPHIC_TIMEOUT_SEC", "900")),
             codex_image_timeout=int(env("CODEX_IMAGE_TIMEOUT_SEC", "360")),

@@ -332,6 +332,7 @@ def _mock_publish(cfg, monkeypatch, tmp_path, editor=MOCK_EDITOR, empty_page=Fal
         path = tmp_path / f"{name}.png"
         path.write_bytes(b"png")
         images.append((name, path))
+    cfg.image_mode = "upload"            # 모의 편집기는 첨부 방식(예전 방식)을 흉내 낸다
     url = publisher.publish(cfg, post, tmp_path / "shots", images=images)
     return url, post, result
 
@@ -533,3 +534,32 @@ def test_category_debug_saved_when_missing(tmp_path):
         debug = json.loads((tmp_path / "category_debug.json").read_text(encoding="utf-8"))
         assert any(d["tag"] == "P" for d in debug)
         b.close()
+
+
+def test_images_are_hosted_not_attached(cfg, monkeypatch, tmp_path):
+    """기본은 드라이브 주소로 넣는다(편집기 첨부 후 HTML 모드로 바꾸면 티스토리가 본문을 버렸다)."""
+    from tistory_autopost import style
+    hosted = []
+    monkeypatch.setattr(publisher, "_host", lambda path, name: hosted.append(name) or f"https://lh3/{path.stem}")
+    a, b = tmp_path / "illust_a.png", tmp_path / "illust_b.png"
+    a.write_bytes(b"x"), b.write_bytes(b"x")
+    post = {"title": "T", "illustrations": [{"name": "illust_a", "alt": "그림 A", "caption": "설명"}]}
+    codes = publisher._host_images([("illust_a", a), ("illust_b", b)], post, tmp_path / "2026-10-10")
+    assert hosted == ["tistory-2026-10-10-illust_a.jpg", "tistory-2026-10-10-illust_b.jpg"]
+    assert 'src="https://lh3/illust_a"' in codes["illust_a"] and 'alt="그림 A"' in codes["illust_a"]
+    body = style.stylize("<p>본문</p><p>[[IMAGE:illust_a]]</p>", codes, {"illust_a": "설명"})
+    assert "본문" in body and 'src="https://lh3/illust_a"' in body and "설명" in body
+
+
+def test_image_hosting_failure_keeps_the_text(cfg, monkeypatch, tmp_path):
+    def boom(path, name):
+        raise RuntimeError("no drive scope")
+    monkeypatch.setattr(publisher, "_host", boom)
+    p = tmp_path / "x.png"
+    p.write_bytes(b"x")
+    assert publisher._host_images([("x", p)], {"title": "T"}, tmp_path) == {}
+
+
+def test_image_mode_default_is_drive():
+    from tistory_autopost.config import TistoryConfig
+    assert TistoryConfig.load().image_mode == "drive"

@@ -504,6 +504,31 @@ def _upload_images(page: Page, images: list[tuple[str, Path]], out_dir: Path) ->
     return dict(zip(uploaded, codes))
 
 
+def _host(path: Path, name: str) -> str:
+    """그림을 구글 드라이브(구글 블로거와 같은 계정·폴더)에 올리고 바로 보이는 주소를 돌려준다."""
+    from blogger_autopost import hosting
+    from blogger_autopost.config import BloggerConfig
+    return hosting.upload(BloggerConfig.load(), path, name)
+
+
+def _host_images(images: list[tuple[str, Path]], post: dict, out_dir: Path) -> dict[str, str]:
+    """그림을 편집기에 첨부하지 않고 드라이브 주소의 <img>로 만든다.
+    (기본 모드에서 첨부한 뒤 HTML 모드로 바꿔 본문을 넣으면 티스토리가 그림만 저장하고 글은 버린다)"""
+    alts = {i.get("name", ""): i.get("alt") or i.get("caption") or post.get("title", "")
+            for i in post.get("illustrations") or []}
+    codes: dict[str, str] = {}
+    for name, path in images:
+        try:
+            url = _host(path, f"tistory-{out_dir.name}-{name}.jpg")
+        except Exception as e:  # noqa: BLE001 - 그림 하나 때문에 글을 버리지 않는다
+            log.warning("그림 %s 올리기 실패(빼고 발행): %s", name, e)
+            continue
+        codes[name] = (f'<p style="text-align:center"><img src="{html.escape(url)}" '
+                       f'alt="{html.escape(alts.get(name, ""))}" style="max-width:100%;height:auto"></p>')
+        log.info("그림 올림(드라이브): %s", name)
+    return codes
+
+
 def _fill_editor(cfg: TistoryConfig, page: Page, post: dict, out_dir: Path,
                  images: list[tuple[str, Path]] | None = None) -> Locator:
     """제목·본문·카테고리·태그를 넣고 발행 창에서 '공개'를 고른 뒤, 마지막 발행 버튼을 돌려준다."""
@@ -512,7 +537,10 @@ def _fill_editor(cfg: TistoryConfig, page: Page, post: dict, out_dir: Path,
             raise SessionExpired("티스토리 로그인이 풀려 있습니다. `python -m tistory_autopost login`으로 다시 로그인하세요.")
         page.wait_for_timeout(1500)
         _find(page, "title", timeout=20_000)
-        codes = _upload_images(page, images or [], out_dir)
+        if getattr(cfg, "image_mode", "drive") == "upload":
+            codes = _upload_images(page, images or [], out_dir)
+        else:
+            codes = _host_images(images or [], post, out_dir)
         post["_images_ok"] = len(codes)
         _switch_to_html(page)
         captions = {i.get("name", ""): i.get("caption") or "" for i in post.get("illustrations") or []}
