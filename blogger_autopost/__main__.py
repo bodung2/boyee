@@ -177,6 +177,10 @@ def _diagnose(cfg: BloggerConfig, push: bool) -> int:
         print(f"  서치 콘솔(90일): 노출 {sum(x['impressions'] for x in rows):.0f}회, 클릭 {sum(x['clicks'] for x in rows):.0f}회")
         states = [i.get("coverageState") or i.get("error") for i in sc.get("inspections", [])]
         print(f"  색인 상태(최근 글): {states[:5]}")
+    for row in r.get("redirects", [])[:3]:
+        g = row["googlebot_mobile"]
+        chain = " → ".join(str(h["status"]) for h in g["hops"])
+        print(f"  구글 휴대폰 로봇으로 열기: {g['verdict']} ({chain}) {row['url']}")
     print(f"  저장: {path}")
     return 0 if not push else _push_diagnostics("Blogger search traffic diagnostics")
 
