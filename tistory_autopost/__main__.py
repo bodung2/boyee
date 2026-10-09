@@ -5,6 +5,7 @@
   python -m tistory_autopost tip "금수저 논쟁"   화제 제보를 직접 넣기(텔레그램으로 "화제 ..."를 보내도 된다)
   python -m tistory_autopost run                오늘 글 1편 생성·검수·발행(작업 스케줄러가 매일 실행)
   python -m tistory_autopost run --dry-run      공개 발행 직전까지만(설치 확인용)
+  python -m tistory_autopost run --slot 2       하루 2편째(오후 예약 작업이 실행)
   python -m tistory_autopost republish          오늘 검수 통과한 글을 다시 올리기(잘못 올라간 글을 지운 뒤)
   python -m tistory_autopost republish --date 2026-10-07 --dry-run
   python -m tistory_autopost diagnose           글쓰기 화면 구조 저장(발행이 화면을 못 찾을 때)
@@ -29,9 +30,11 @@ def main(argv: list[str] | None = None) -> int:
     run_p = sub.add_parser("run")
     run_p.add_argument("--dry-run", action="store_true", help="공개 발행 직전에 멈춘다")
     run_p.add_argument("--force", action="store_true", help="오늘 이미 발행했어도 한 편 더")
+    run_p.add_argument("--slot", type=int, default=1, help="하루 몇 번째 글인지(1: 오전, 2: 오후)")
     rep = sub.add_parser("republish")
     rep.add_argument("--date", help="YYYY-MM-DD(기본: 오늘)")
     rep.add_argument("--dry-run", action="store_true", help="공개 발행 직전에 멈춘다")
+    rep.add_argument("--slot", type=int, default=1, help="그날 몇 번째 글인지(2편째는 2)")
     sub.add_parser("diagnose")
     args = parser.parse_args(argv)
     cfg = TistoryConfig.load()
@@ -51,10 +54,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "run":
         from .pipeline import run
-        return run(cfg, dry_run=args.dry_run, force=args.force)
+        return run(cfg, dry_run=args.dry_run, force=args.force, slot=max(args.slot, 1))
     if args.cmd == "republish":
         from .pipeline import republish
-        return republish(cfg, args.date, dry_run=args.dry_run)
+        return republish(cfg, args.date, dry_run=args.dry_run, slot=max(args.slot, 1))
     if args.cmd == "diagnose":
         from . import publisher
         path = publisher.diagnose(cfg, cfg.output_dir / "diagnostics")

@@ -216,23 +216,67 @@ def _refresh_note(cfg: TistoryConfig, today: date) -> str:
     return "🔄 새 통계가 나와 갱신하면 좋은 글:\n" + "\n".join(lines)
 
 
-def run(cfg: TistoryConfig, dry_run: bool = False, force: bool = False) -> int:
+def _slot_dir(day: str, slot: int) -> str:
+    """하루 여러 편: 1편째는 output/tistory/<날짜>, 2편째부터는 <날짜>-2, <날짜>-3 ..."""
+    return day if slot <= 1 else f"{day}-{slot}"
+
+
+def published_slot(cfg: TistoryConfig, day: str, slot: int = 1) -> dict | None:
+    """그날 slot번째 자동 발행 기록(예전 기록은 slot이 없으면 1편째로 본다)."""
+    for e in history.load(cfg.history_file):
+        if (e.get("source") == "autopost" and e.get("date") == day and e.get("url")
+                and int(e.get("slot") or 1) == slot):
+            return e
+    return None
+
+
+class _Held:
+    """이미 잡은 잠금을 with 문으로 풀어 주는 껍데기."""
+
+    def __init__(self, lock: _Lock):
+        self.lock = lock
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.lock.__exit__(*exc)
+
+
+def _wait_lock(cfg: TistoryConfig, minutes: int = 180) -> _Held:
+    """다른 편이 아직 쓰는 중이면(예: Claude 한도로 늦어짐) 끝날 때까지 기다렸다가 잡는다."""
+    deadline = time.time() + minutes * 60
+    while True:
+        lock = _Lock(cfg.log_dir / ".run-tistory.lock")
+        try:
+            lock.__enter__()
+            return _Held(lock)
+        except RuntimeError:
+            if time.time() > deadline:
+                raise
+            log.info("다른 티스토리 글을 쓰는 중이라 기다립니다")
+            _sleep(300)
+
+
+def run(cfg: TistoryConfig, dry_run: bool = False, force: bool = False, slot: int = 1) -> int:
     from . import publisher
 
     today = today_kst()
+    label = "" if slot <= 1 else f" {slot}편째"
     setup_logging(cfg, f"tistory-{today}")
     try:
-        with _Lock(cfg.log_dir / ".run-tistory.lock"):
-            done = history.published_on(cfg.history_file, today)
+        lock = _wait_lock(cfg)
+        with lock:
+            done = published_slot(cfg, today, slot)
             if done and not force:
-                log.info("오늘(%s)은 이미 발행했습니다: %s", today, done["url"])
+                log.info("오늘(%s)%s은 이미 발행했습니다: %s", today, label, done["url"])
                 return 0
             if not cfg.blog_name:
                 raise RuntimeError(".env에 TISTORY_BLOG(블로그 주소 이름)가 없습니다")
-            out_dir = cfg.output_dir / today
+            out_dir = cfg.output_dir / _slot_dir(today, slot)
             if _load(out_dir / "stage.json").get("published"):
                 if not force:
-                    log.info("오늘(%s) 글은 이미 발행했습니다", today)
+                    log.info("오늘(%s)%s 글은 이미 발행했습니다", today, label)
                     return 0
                 stamp = datetime.now(KST).strftime("%H%M%S")
                 shutil.move(str(out_dir), str(out_dir.with_name(f"{out_dir.name}-published-{stamp}")))
@@ -272,33 +316,33 @@ def run(cfg: TistoryConfig, dry_run: bool = False, force: bool = False) -> int:
                 return 0
             _mark(out_dir, published=True, url=url)
             history.append(cfg.history_file, {
-                "date": today, "title": post["title"], "url": url, "topic_id": post.get("topic_id", ""),
+                "date": today, "slot": slot, "title": post["title"], "url": url, "topic_id": post.get("topic_id", ""),
                 "lane": post.get("lane", "queue"), "tip_id": post.get("tip_id", ""),
                 "tags": post.get("tags", []), "source": "autopost",
             })
             if post.get("tip_id"):
                 inbox.mark_used(cfg, post["tip_id"], url)
             refresh = _refresh_note(cfg, date.fromisoformat(today))
-            notify(cfg, f"[{LABEL} 자동발행 완료] {post['title']}\n{url}\n{cat_note}"
+            notify(cfg, f"[{LABEL} 자동발행 완료{label}] {post['title']}\n{url}\n{cat_note}"
                         + (f"\n{refresh}" if refresh else ""))
             return 0
     except Exception as e:
         log.exception("티스토리 자동 발행 실패")
-        notify(cfg, f"[{LABEL} 자동발행 실패] {today}\n{e}")
+        notify(cfg, f"[{LABEL} 자동발행 실패{label}] {today}\n{e}")
         return 1
 
 
 _sleep = time.sleep
 
 
-def republish(cfg: TistoryConfig, day: str | None = None, dry_run: bool = False) -> int:
+def republish(cfg: TistoryConfig, day: str | None = None, dry_run: bool = False, slot: int = 1) -> int:
     """이미 검수를 통과한 날의 글(output/tistory/<날짜>/post.json)을 다시 올린다. 글을 새로 쓰지 않는다.
     잘못 올라간 글(예: 본문이 빈 글)은 먼저 블로그에서 지워야 한다(같은 제목이 있으면 멈춘다)."""
     from . import publisher
 
     day = day or today_kst()
     setup_logging(cfg, f"tistory-{today_kst()}")
-    out_dir = cfg.output_dir / day
+    out_dir = cfg.output_dir / _slot_dir(day, slot)
     try:
         with _Lock(cfg.log_dir / ".run-tistory.lock"):
             if not (out_dir / "post.json").exists():
@@ -322,11 +366,11 @@ def republish(cfg: TistoryConfig, day: str | None = None, dry_run: bool = False)
             _mark(out_dir, published=True, url=url)
             entries = history.load(cfg.history_file)
             for e in entries:
-                if e.get("source") == "autopost" and e.get("date") == day:
+                if e.get("source") == "autopost" and e.get("date") == day and int(e.get("slot") or 1) == slot:
                     e["url"] = url
                     break
             else:
-                entries.append({"date": day, "title": post["title"], "url": url, "topic_id": post.get("topic_id", ""),
+                entries.append({"date": day, "slot": slot, "title": post["title"], "url": url, "topic_id": post.get("topic_id", ""),
                                 "lane": post.get("lane", "queue"), "tip_id": post.get("tip_id", ""),
                                 "tags": post.get("tags", []), "source": "autopost"})
             history.save(cfg.history_file, entries)
