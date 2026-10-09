@@ -4,16 +4,121 @@
     "description": "Clear explainers on Korea — society, education, and daily life, from a Korean teacher.",
     "url": "https://koreabreakdown.blogspot.com/",
     "published": "2026-08-28T00:05:23+09:00",
-    "updated": "2026-10-05T03:15:43+09:00",
-    "total_posts": 7
+    "updated": "2026-10-09T21:00:00+09:00",
+    "total_posts": 12
   },
-  "scheduled": [
+  "scheduled": [],
+  "posts": [
+    {
+      "title": "Emergency Numbers in Korea: When to Call 112, 119, 110, and 1330",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
+      "published": "2026-10-09T21:00:00+09:00",
+      "labels": [
+        "Emergency Numbers",
+        "Everyday Korea",
+        "Foreign Residents",
+        "Life in Korea",
+        "Safety in Korea"
+      ],
+      "words": 1469,
+      "chars": 9418,
+      "h2": 9,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 4,
+      "external_links": 11,
+      "first_200_chars": "Emergency numbers in Korea are simple: call 112 for police and 119 for fire or an ambulance; foreign-language help is also available.\nIn Korea, urgent calls are divided simply between police and fire,"
+    },
+    {
+      "title": "Korean Public Holidays Explained: Red Days, Substitute Holidays, and Paid Leave",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
+      "published": "2026-10-08T21:00:00+09:00",
+      "labels": [
+        "Everyday Korea",
+        "Foreign Residents",
+        "Korean Public Holidays",
+        "Life in Korea",
+        "Working in Korea"
+      ],
+      "words": 1388,
+      "chars": 8939,
+      "h2": 8,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 2,
+      "internal_links": 5,
+      "external_links": 9,
+      "first_200_chars": "Korean public holidays are official ‘red days,’ but they do not guarantee every worker a day off or every business a closed door.\nA red date marks an official holiday, but work and opening-hour rules "
+    },
+    {
+      "title": "Korean Ondol Heating Explained: How to Use the Boiler Controls",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
+      "published": "2026-10-07T21:00:00+09:00",
+      "labels": [
+        "Everyday Korea",
+        "Foreign Residents",
+        "Korean Housing",
+        "Life in Korea",
+        "Ondol"
+      ],
+      "words": 1627,
+      "chars": 10170,
+      "h2": 8,
+      "h3": 4,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 5,
+      "external_links": 10,
+      "first_200_chars": "Korean ondol heating warms the floor with hot-water pipes. Learn what the boiler buttons mean, how each mode works, and key safety steps.\nIf your first winter in Korea begins with a wall controller fu"
+    },
+    {
+      "title": "Korean School Lunch Explained: Menus, Allergy Numbers, and Who Pays",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
+      "published": "2026-10-06T21:00:00+09:00",
+      "labels": [
+        "Education in Korea",
+        "Foreign Parents",
+        "Korean Schools",
+        "School Lunch",
+        "Student Life in Korea"
+      ],
+      "words": 1442,
+      "chars": 9080,
+      "h2": 9,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 3,
+      "external_links": 8,
+      "first_200_chars": "Korean school lunch is not simply a cafeteria meal chosen from a daily menu. At most schools, it is a planned set meal served at lunchtime, with nutrition targets, ingredient controls and mandatory al"
+    },
     {
       "title": "How Korean Addresses Work: Road Names, Lot Numbers, and the Building-Number Trick",
-      "published": "2026-10-05T21:00:00+09:00"
-    }
-  ],
-  "posts": [
+      "url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
+      "published": "2026-10-05T21:00:00+09:00",
+      "labels": [
+        "Everyday Korea",
+        "Foreign Residents",
+        "Korean Addresses",
+        "Life in Korea",
+        "Living in Korea"
+      ],
+      "words": 1515,
+      "chars": 9110,
+      "h2": 8,
+      "h3": 3,
+      "images": 3,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 4,
+      "external_links": 1,
+      "first_200_chars": "Quick answer: For forms, deliveries, and everyday searches in Korea, start with the road-name address (doro-myeong juso). A lot-number address (jibeon juso) may still appear because it identifies a pa"
+    },
     {
       "title": "Korean Age in 2026: What Changed, What Didn’t, and Which Age to Use",
       "url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
@@ -25,14 +130,14 @@
         "Korean Culture",
         "Life in Korea"
       ],
-      "words": 1347,
-      "chars": 8547,
+      "words": 1387,
+      "chars": 8778,
       "h2": 8,
-      "h3": 4,
+      "h3": 5,
       "images": 2,
       "images_without_alt": 0,
       "ai_labelled_images": 2,
-      "internal_links": 1,
+      "internal_links": 4,
       "external_links": 8,
       "first_200_chars": "Quick answer: South Korea uses international age—the age that rises on your birthday—as the default in civil and administrative matters. That rule took effect on June 28, 2023. But birth-year rules st"
     },
@@ -47,16 +152,16 @@
         "Pyeong",
         "Renting in Korea"
       ],
-      "words": 1453,
-      "chars": 9030,
+      "words": 1495,
+      "chars": 9261,
       "h2": 8,
-      "h3": 6,
+      "h3": 7,
       "images": 2,
       "images_without_alt": 0,
       "ai_labelled_images": 2,
-      "internal_links": 1,
+      "internal_links": 4,
       "external_links": 3,
-      "first_200_chars": "Editorial illustration: Korean size labels can include both private floor area and allocated common space.\nAI-generated illustrationA Korean apartment can be described as 84 square meters in one docum"
+      "first_200_chars": "A Korean apartment can be described as 84 square meters in one document and roughly 34 pyeong in conversation without anyone changing the floor plan. The numbers usually measure different layers of th"
     },
     {
       "title": "How to Sort Trash in Korea: A Practical Guide for Foreign Residents",
@@ -69,14 +174,14 @@
         "Recycling in Korea",
         "Trash Sorting"
       ],
-      "words": 1640,
-      "chars": 10494,
+      "words": 1682,
+      "chars": 10725,
       "h2": 7,
-      "h3": 3,
+      "h3": 4,
       "images": 2,
       "images_without_alt": 0,
       "ai_labelled_images": 2,
-      "internal_links": 1,
+      "internal_links": 4,
       "external_links": 3,
       "first_200_chars": "Korea’s household waste system becomes much easier once you stop thinking of trash as one stream. Most homes separate it into general waste, food waste, recyclables, and special or bulky items. Genera"
     },
@@ -91,16 +196,16 @@
         "Renting in Korea",
         "Wolse"
       ],
-      "words": 2243,
-      "chars": 14025,
+      "words": 2286,
+      "chars": 14264,
       "h2": 8,
-      "h3": 7,
+      "h3": 8,
       "images": 4,
       "images_without_alt": 4,
       "ai_labelled_images": 0,
-      "internal_links": 0,
+      "internal_links": 3,
       "external_links": 11,
-      "first_200_chars": "Choosing a Korean lease is a decision about cash, monthly cost and how much refundable deposit you are willing to place at risk. Editorial illustration.\n\n Quick answer: Jeonse (전세) replaces monthly re"
+      "first_200_chars": "Quick answer: Jeonse (전세) replaces monthly rent with a very large refundable deposit. Wolse (월세) uses a smaller deposit plus monthly rent. Jeonse can have a lower ongoing cost, but it ties up far more"
     },
     {
       "title": "How Much Do Korean Public School Teachers Make in 2026? The Pay Scale Foreigners Often Misread",
@@ -113,14 +218,14 @@
         "Public Schools",
         "Salaries in Korea"
       ],
-      "words": 1819,
-      "chars": 11088,
+      "words": 1864,
+      "chars": 11346,
       "h2": 9,
-      "h3": 6,
+      "h3": 7,
       "images": 2,
       "images_without_alt": 2,
       "ai_labelled_images": 0,
-      "internal_links": 0,
+      "internal_links": 3,
       "external_links": 2,
       "first_200_chars": "If you search for a teacher's salary in South Korea, you'll turn up several numbers that seem to contradict each other. One page may be describing an EPIK English assistant, another an international-s"
     },
@@ -135,14 +240,14 @@
         "Smartphone Ban",
         "Student Llife in Korea"
       ],
-      "words": 1895,
-      "chars": 11993,
+      "words": 1942,
+      "chars": 12259,
       "h2": 7,
-      "h3": 1,
+      "h3": 2,
       "images": 2,
       "images_without_alt": 2,
       "ai_labelled_images": 0,
-      "internal_links": 0,
+      "internal_links": 3,
       "external_links": 13,
       "first_200_chars": "Editorial illustration: smartphones are stored during a break in a generic Korean classroom.\n\nQuick answer: South Korea did not make every school completely phone-free. Since March 1, 2026, students a"
     },
@@ -157,14 +262,14 @@
         "Korean Society",
         "Private Education"
       ],
-      "words": 1729,
-      "chars": 10216,
+      "words": 1776,
+      "chars": 10489,
       "h2": 6,
-      "h3": 7,
+      "h3": 8,
       "images": 2,
       "images_without_alt": 2,
       "ai_labelled_images": 0,
-      "internal_links": 0,
+      "internal_links": 3,
       "external_links": 2,
       "first_200_chars": "The headline said Korea's private-education spending finally fell. From inside a classroom, that's not what happened.\n\nEditorial illustration generated for Korea, Explained.\n\nIn my fourth-grade classr"
     }
@@ -175,14 +280,16 @@
       "status": 200,
       "x_robots_tag": null,
       "title_tag": "Korea, Explained",
-      "meta_description": null,
+      "meta_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
+      "meta_description_tags": 1,
       "meta_robots": null,
-      "og_image": "https://lh3.googleusercontent.com/d/1zjHZbOdiTEueGr4V6Iye0AmNmFMO7IJi=w1200-h630-p-k-no-nu",
+      "og_image": "https://lh3.googleusercontent.com/d/1TpGsnmKIObuaKMluHg7RiFMLuJlE2pV9=w1200-h630-p-k-no-nu",
+      "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
       "canonical": null,
       "h1_count": 1,
       "has_adsense": true,
       "has_search_console_verification": false,
-      "html_bytes": 151302
+      "html_bytes": 162737
     },
     "robots": {
       "url": "https://koreabreakdown.blogspot.com/robots.txt",
@@ -194,8 +301,8 @@
       "url": "https://koreabreakdown.blogspot.com/sitemap.xml",
       "status": 200,
       "x_robots_tag": "noindex",
-      "url_count": 7,
-      "head": "<?xml version='1.0' encoding='UTF-8'?><urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\"><url><loc>https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html</loc><lastmod>2026-10-04T12:00:00Z</lastmod></url><url><loc>https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html</loc><lastmod>2026-10-03T12:00:00Z</lastmod></url><url><loc>https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html</loc><lastmod>2026-10-02T12:00:00Z</lastmod></url><url><loc>https://koreabreakdown.blogspot.com/2026/09/jeonse-"
+      "url_count": 12,
+      "head": "<?xml version='1.0' encoding='UTF-8'?><urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\"><url><loc>https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html</loc><lastmod>2026-10-09T12:00:00Z</lastmod></url><url><loc>https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html</loc><lastmod>2026-10-08T12:00:00Z</lastmod></url><url><loc>https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html</loc><lastmod>2026-10-07T12:00:00Z</lastmod></url><url><loc>https://koreabreakdown.blogspot.com/2026/10/korean"
     },
     "feed": {
       "url": "https://koreabreakdown.blogspot.com/feeds/posts/default",
@@ -204,18 +311,100 @@
     },
     "posts": [
       {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
+        "status": 200,
+        "x_robots_tag": null,
+        "title_tag": "Emergency Numbers in Korea: When to Call 112, 119, 110, and 1330",
+        "meta_description": null,
+        "meta_description_tags": 0,
+        "meta_robots": null,
+        "og_image": "https://lh3.googleusercontent.com/d/1TpGsnmKIObuaKMluHg7RiFMLuJlE2pV9=w1200-h630-p-k-no-nu",
+        "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
+        "canonical": null,
+        "h1_count": 1,
+        "has_adsense": true,
+        "has_search_console_verification": false,
+        "html_bytes": 134873
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
+        "status": 200,
+        "x_robots_tag": null,
+        "title_tag": "Korean Public Holidays Explained: Red Days, Substitute Holidays, and Paid Leave",
+        "meta_description": null,
+        "meta_description_tags": 0,
+        "meta_robots": null,
+        "og_image": "https://lh3.googleusercontent.com/d/1ryxLDISuA5AB407bCpztO47xdzH89Pz2=w1200-h630-p-k-no-nu",
+        "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
+        "canonical": null,
+        "h1_count": 1,
+        "has_adsense": true,
+        "has_search_console_verification": false,
+        "html_bytes": 134253
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
+        "status": 200,
+        "x_robots_tag": null,
+        "title_tag": "Korean Ondol Heating Explained: How to Use the Boiler Controls",
+        "meta_description": null,
+        "meta_description_tags": 0,
+        "meta_robots": null,
+        "og_image": "https://lh3.googleusercontent.com/d/11zdEC-yTNHIBACUel7UDZZAt8SUMyrTO=w1200-h630-p-k-no-nu",
+        "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
+        "canonical": null,
+        "h1_count": 1,
+        "has_adsense": true,
+        "has_search_console_verification": false,
+        "html_bytes": 135509
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
+        "status": 200,
+        "x_robots_tag": null,
+        "title_tag": "Korean School Lunch Explained: Menus, Allergy Numbers, and Who Pays",
+        "meta_description": null,
+        "meta_description_tags": 0,
+        "meta_robots": null,
+        "og_image": "https://lh3.googleusercontent.com/d/1ixUqj1rdOS9EFSDkkt8928BAHZDZpy6p=w1200-h630-p-k-no-nu",
+        "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
+        "canonical": null,
+        "h1_count": 1,
+        "has_adsense": true,
+        "has_search_console_verification": false,
+        "html_bytes": 133993
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
+        "status": 200,
+        "x_robots_tag": null,
+        "title_tag": "How Korean Addresses Work: Road Names, Lot Numbers, and the Building-Number Trick",
+        "meta_description": null,
+        "meta_description_tags": 0,
+        "meta_robots": null,
+        "og_image": "https://lh3.googleusercontent.com/d/1rYPHQljcKMItCO5SyU7XKNiucc2BGoZb=w1200-h630-p-k-no-nu",
+        "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
+        "canonical": null,
+        "h1_count": 1,
+        "has_adsense": true,
+        "has_search_console_verification": false,
+        "html_bytes": 132838
+      },
+      {
         "url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
         "status": 200,
         "x_robots_tag": null,
         "title_tag": "Korean Age in 2026: What Changed, What Didn’t, and Which Age to Use",
         "meta_description": null,
+        "meta_description_tags": 0,
         "meta_robots": null,
         "og_image": "https://lh3.googleusercontent.com/d/1zjHZbOdiTEueGr4V6Iye0AmNmFMO7IJi=w1200-h630-p-k-no-nu",
+        "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
         "canonical": null,
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 122594
+        "html_bytes": 132998
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
@@ -223,13 +412,15 @@
         "x_robots_tag": null,
         "title_tag": "Korean Apartment Sizes Explained: Why 84 m² Can Be Called 34 Pyeong",
         "meta_description": null,
+        "meta_description_tags": 0,
         "meta_robots": null,
         "og_image": "https://lh3.googleusercontent.com/d/1Hq5yx9pgJV6HTmGn6rLArQakXuUnSSJ6=w1200-h630-p-k-no-nu",
+        "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
         "canonical": null,
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 127035
+        "html_bytes": 128623
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
@@ -237,13 +428,15 @@
         "x_robots_tag": null,
         "title_tag": "How to Sort Trash in Korea: A Practical Guide for Foreign Residents",
         "meta_description": null,
+        "meta_description_tags": 0,
         "meta_robots": null,
         "og_image": "https://lh3.googleusercontent.com/d/1OSo4HFXE4SwFKY1PDDOi8sieNTAhaXTn=w1200-h630-p-k-no-nu",
+        "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
         "canonical": null,
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 128673
+        "html_bytes": 134538
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/09/jeonse-vs-wolse-in-korea-2026-guide-for.html",
@@ -251,13 +444,15 @@
         "x_robots_tag": null,
         "title_tag": "Jeonse vs. Wolse in Korea: A 2026 Guide for Foreign Renters",
         "meta_description": "Compare jeonse and wolse by real cost, deposit risk and the checks foreign renters should complete before signing in Korea in 2026.",
+        "meta_description_tags": 1,
         "meta_robots": null,
         "og_image": "https://blogger.googleusercontent.com/img/a/AVvXsEgtKLow8WTbR-roD0efpeLbiR4CmwijYHz4ljXEArS7DupSOeAjdvGRqiTVG6-L44fh58x_kdUX8ouQnXnjzRr18XTya7o9QrcdG_E2a403HMoYqLNcQBwuveP6GFBm4DYhfVfKLPJlM5TOutufroeEMmTDvfz35vZZBlzXsrh68Wh2pIElfWxWOLbTP4rk=w1200-h630-p-k-no-nu",
+        "og_description": "Compare jeonse and wolse by real cost, deposit risk and the checks foreign renters should complete before signing in Korea in 2026.",
         "canonical": null,
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 147201
+        "html_bytes": 151860
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/08/how-much-do-korean-public-school.html",
@@ -265,13 +460,15 @@
         "x_robots_tag": null,
         "title_tag": "How Much Do Korean Public School Teachers Make in 2026? The Pay Scale Foreigners Often Misread",
         "meta_description": "How much do Korean public-school teachers make in 2026? Learn the official pay scale, why Step 9 is not nine years, allowances, and net pay.",
+        "meta_description_tags": 1,
         "meta_robots": null,
         "og_image": "https://blogger.googleusercontent.com/img/a/AVvXsEiCMKM_kWojOUaf1RBHXP_iEEk6cJmn_SWz4yXxfSeC1n8ZFO3NJP-q8UM_BVruBmU7yNW0UElnnaxldxIofZIXHaGH7SsuGAl5gpF5hKGGWYO7MX92gvG_wuHERvT3xtrfgyP6C58UoM-kBRlwpba8HmhYtVbwqlmhgaRKR8FM7NFNd0PSl2hhZhM_N6Hz=w1200-h630-p-k-no-nu",
+        "og_description": "How much do Korean public-school teachers make in 2026? Learn the official pay scale, why Step 9 is not nine years, allowances, and net pay.",
         "canonical": null,
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 147096
+        "html_bytes": 151753
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/08/is-south-korea-really-banning.html",
@@ -279,13 +476,15 @@
         "x_robots_tag": null,
         "title_tag": "Is South Korea Really Banning Smartphones at School? What Changed in 2026",
         "meta_description": "South Korea bans smartphones during class, not all day. Learn the 2026 school rules and exceptions for educational, emergency and assistive use.",
+        "meta_description_tags": 1,
         "meta_robots": null,
         "og_image": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiD2nVXBzNIYm3NphwcBPRXx6gl3Cg5gYbXanMZvNbZOTx_eB6H4F8G6_2CsriQ2t4A0lhc9GQk_f_h-fyWNVAmwbm7mai5KqHiVsclZbmqD3uT92Vscqd2jZN8AVI6HWoxmneN4frSAcroFE-cH1_av9XlZK4silBjXhcGClSYR_b8ehL3Ekj9g7EqfUKo/w1200-h630-p-k-no-nu/featured-korean-school-phone-free-classroom.png",
+        "og_description": "South Korea bans smartphones during class, not all day. Learn the 2026 school rules and exceptions for educational, emergency and assistive use.",
         "canonical": null,
         "h1_count": 2,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 138083
+        "html_bytes": 142796
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/08/why-korean-parents-spend-so-much-on.html",
@@ -293,13 +492,15 @@
         "x_robots_tag": null,
         "title_tag": "Why Korean Parents Spend So Much on Hagwons: A Teacher Explains the 2025 Numbers",
         "meta_description": "Why do Korean parents spend so much on hagwons? A Korean teacher breaks down the 2025 numbers — and the widening gap the headline total hides.",
+        "meta_description_tags": 1,
         "meta_robots": null,
         "og_image": "https://blogger.googleusercontent.com/img/a/AVvXsEjxGE-S4GYLALVOTgC8qhdkssp5E0mulVcAEvKqkqQCJ-nM-fRTqUtkg879lKR4CseJoSaFEQufhEyjJcpnwqxk36_WLbCRWkCXV714ii--AfIFxMAVy-h9lp2p1rozMeQxnS5V9CoJmsU9Y1kX0Lrk8Ufn9IDz22278NZOgGZv8e4ObefVsBht2Lzy8ZJH=w1200-h630-p-k-no-nu",
+        "og_description": "Why do Korean parents spend so much on hagwons? A Korean teacher breaks down the 2025 numbers — and the widening gap the headline total hides.",
         "canonical": null,
         "h1_count": 19,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 140542
+        "html_bytes": 145254
       }
     ]
   },
@@ -633,6 +834,42 @@
           "impressions": 0,
           "ctr": 0,
           "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-03"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-04"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-05"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-06"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
         }
       ],
       "responseAggregationType": "byProperty"
@@ -651,16 +888,25 @@
         {
           "path": "https://koreabreakdown.blogspot.com/sitemap.xml",
           "lastSubmitted": "2026-10-05T07:21:35.296Z",
-          "isPending": true,
+          "isPending": false,
           "isSitemapsIndex": false,
+          "type": "sitemap",
+          "lastDownloaded": "2026-10-09T02:42:25.802Z",
           "warnings": "0",
-          "errors": "0"
+          "errors": "0",
+          "contents": [
+            {
+              "type": "web",
+              "submitted": "11",
+              "indexed": "0"
+            }
+          ]
         }
       ]
     },
     "inspections": [
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
         "error": null,
         "verdict": "NEUTRAL",
         "coverageState": "URL is unknown to Google",
@@ -671,71 +917,136 @@
         "googleCanonical": null,
         "userCanonical": null,
         "crawledAs": null
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "Discovered - currently not indexed",
+        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
+        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
+        "lastCrawlTime": null,
+        "googleCanonical": null,
+        "userCanonical": null,
+        "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED"
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "Redirect error",
+        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "robotsTxtState": "ALLOWED",
+        "pageFetchState": "REDIRECT_ERROR",
+        "lastCrawlTime": "2026-10-07T23:19:10Z",
+        "googleCanonical": null,
+        "userCanonical": null,
+        "crawledAs": "MOBILE"
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "Redirect error",
+        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "robotsTxtState": "ALLOWED",
+        "pageFetchState": "REDIRECT_ERROR",
+        "lastCrawlTime": "2026-10-06T23:26:55Z",
+        "googleCanonical": null,
+        "userCanonical": null,
+        "crawledAs": "MOBILE"
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "Redirect error",
+        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "robotsTxtState": "ALLOWED",
+        "pageFetchState": "REDIRECT_ERROR",
+        "lastCrawlTime": "2026-10-06T00:14:05Z",
+        "googleCanonical": null,
+        "userCanonical": null,
+        "crawledAs": "MOBILE"
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "Redirect error",
+        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "robotsTxtState": "ALLOWED",
+        "pageFetchState": "REDIRECT_ERROR",
+        "lastCrawlTime": "2026-10-05T08:24:33Z",
+        "googleCanonical": null,
+        "userCanonical": null,
+        "crawledAs": "MOBILE"
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
         "error": null,
         "verdict": "NEUTRAL",
-        "coverageState": "URL is unknown to Google",
+        "coverageState": "Redirect error",
         "indexingState": "INDEXING_STATE_UNSPECIFIED",
-        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
-        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
-        "lastCrawlTime": null,
+        "robotsTxtState": "ALLOWED",
+        "pageFetchState": "REDIRECT_ERROR",
+        "lastCrawlTime": "2026-10-05T08:32:32Z",
         "googleCanonical": null,
         "userCanonical": null,
-        "crawledAs": null
+        "crawledAs": "MOBILE"
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
         "error": null,
         "verdict": "NEUTRAL",
-        "coverageState": "URL is unknown to Google",
+        "coverageState": "Redirect error",
         "indexingState": "INDEXING_STATE_UNSPECIFIED",
-        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
-        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
-        "lastCrawlTime": null,
+        "robotsTxtState": "ALLOWED",
+        "pageFetchState": "REDIRECT_ERROR",
+        "lastCrawlTime": "2026-10-05T08:32:32Z",
         "googleCanonical": null,
         "userCanonical": null,
-        "crawledAs": null
+        "crawledAs": "MOBILE"
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/09/jeonse-vs-wolse-in-korea-2026-guide-for.html",
         "error": null,
         "verdict": "NEUTRAL",
-        "coverageState": "URL is unknown to Google",
+        "coverageState": "Discovered - currently not indexed",
         "indexingState": "INDEXING_STATE_UNSPECIFIED",
         "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
         "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
         "lastCrawlTime": null,
         "googleCanonical": null,
         "userCanonical": null,
-        "crawledAs": null
+        "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED"
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/08/how-much-do-korean-public-school.html",
         "error": null,
         "verdict": "NEUTRAL",
-        "coverageState": "URL is unknown to Google",
+        "coverageState": "Redirect error",
         "indexingState": "INDEXING_STATE_UNSPECIFIED",
-        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
-        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
-        "lastCrawlTime": null,
+        "robotsTxtState": "ALLOWED",
+        "pageFetchState": "REDIRECT_ERROR",
+        "lastCrawlTime": "2026-10-05T08:34:37Z",
         "googleCanonical": null,
         "userCanonical": null,
-        "crawledAs": null
+        "crawledAs": "MOBILE"
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/08/is-south-korea-really-banning.html",
         "error": null,
         "verdict": "NEUTRAL",
-        "coverageState": "URL is unknown to Google",
+        "coverageState": "Redirect error",
         "indexingState": "INDEXING_STATE_UNSPECIFIED",
-        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
-        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
-        "lastCrawlTime": null,
+        "robotsTxtState": "ALLOWED",
+        "pageFetchState": "REDIRECT_ERROR",
+        "lastCrawlTime": "2026-10-05T08:36:34Z",
         "googleCanonical": null,
         "userCanonical": null,
-        "crawledAs": null
+        "crawledAs": "MOBILE"
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/08/why-korean-parents-spend-so-much-on.html",
