@@ -563,3 +563,43 @@ def test_image_hosting_failure_keeps_the_text(cfg, monkeypatch, tmp_path):
 def test_image_mode_default_is_drive():
     from tistory_autopost.config import TistoryConfig
     assert TistoryConfig.load().image_mode == "drive"
+
+
+def test_two_posts_a_day_use_separate_slots(cfg, monkeypatch):
+    fakes = Fakes(cfg, monkeypatch)
+    assert pipeline.run(cfg) == 0
+    assert pipeline.run(cfg) == 0 and len(fakes.published) == 1          # 오전 편은 하루 한 번
+    assert pipeline.run(cfg, slot=2) == 0 and len(fakes.published) == 2  # 오후 편은 따로
+    assert pipeline.run(cfg, slot=2) == 0 and len(fakes.published) == 2
+    day = pipeline.today_kst()
+    entries = history.load(cfg.history_file)
+    assert [e.get("slot") for e in entries] == [1, 2]
+    assert (cfg.output_dir / day / "post.json").exists() and (cfg.output_dir / f"{day}-2" / "post.json").exists()
+
+
+def test_old_history_without_slot_counts_as_morning(cfg, monkeypatch):
+    day = pipeline.today_kst()
+    history.append(cfg.history_file, {"date": day, "title": "t", "url": "u", "source": "autopost"})
+    assert pipeline.published_slot(cfg, day, 1) and pipeline.published_slot(cfg, day, 2) is None
+
+
+def test_second_slot_waits_for_the_first(cfg, monkeypatch):
+    fakes = Fakes(cfg, monkeypatch)
+    lock = cfg.log_dir / ".run-tistory.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    lock.write_text("1")
+    waited = []
+    monkeypatch.setattr(pipeline, "_sleep", lambda s: waited.append(s) or lock.unlink())
+    assert pipeline.run(cfg, slot=2) == 0 and waited and len(fakes.published) == 1
+
+
+def test_republish_second_slot(cfg, monkeypatch):
+    fakes = Fakes(cfg, monkeypatch)
+    day = pipeline.today_kst()
+    out = cfg.output_dir / f"{day}-2"
+    out.mkdir(parents=True)
+    (out / "post.json").write_text(json.dumps(POST, ensure_ascii=False), encoding="utf-8")
+    (out / "stage.json").write_text(json.dumps({"written": True, "claude_pass": True, "gpt_pass": True}))
+    monkeypatch.setattr(publisher, "find_post_url", lambda c, t: None)
+    assert pipeline.republish(cfg, slot=2) == 0 and fakes.published == [POST["title"]]
+    assert history.load(cfg.history_file)[0]["slot"] == 2

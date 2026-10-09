@@ -1,7 +1,8 @@
 ﻿# 티스토리 '논쟁 × 공식 통계' 자동 발행 설치 스크립트 (PowerShell에서 한 번 실행)
-#   powershell -ExecutionPolicy Bypass -File scripts\setup_tistory_windows.ps1 -Time 08:00
-#   네이버 자동 발행과 같은 Claude 구독을 쓰므로 다른 블로그 실행 시각과 2시간 이상 떨어뜨리는 것을 권장한다.
-param([string]$Time = "08:00")
+#   powershell -ExecutionPolicy Bypass -File scripts\setup_tistory_windows.ps1 -Time 08:30 -Time2 17:00
+#   하루 2편: -Time 에 1편째(오전), -Time2 에 2편째(오후)를 쓰기 시작한다(쓰고 검수하는 데 1시간 안팎 걸린 뒤 바로 발행).
+#   하루 1편만 하려면 -Time2 off. 네이버 자동 발행과 같은 Claude 구독을 쓰므로 다른 블로그 실행 시각과 떨어뜨린다.
+param([string]$Time = "08:30", [string]$Time2 = "17:00")
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
@@ -25,6 +26,17 @@ $Trigger = New-ScheduledTaskTrigger -Daily -At $Time
 $Settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -ExecutionTimeLimit (New-TimeSpan -Hours 8) -MultipleInstances IgnoreNew
 $Principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
 Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal -Force | Out-Null
+
+$TaskName2 = "TistoryAutoPost2"
+if ($Time2 -ne "off") {
+    Write-Host "   + 매일 $Time2 하루 2편째 작업 등록 (작업 이름: $TaskName2)"
+    $Action2 = New-ScheduledTaskAction -Execute "$Root\scripts\run_tistory_daily.bat" -Argument "--slot 2" -WorkingDirectory $Root
+    $Trigger2 = New-ScheduledTaskTrigger -Daily -At $Time2
+    Register-ScheduledTask -TaskName $TaskName2 -Action $Action2 -Trigger $Trigger2 -Settings $Settings -Principal $Principal -Force | Out-Null
+} elseif (Get-ScheduledTask -TaskName $TaskName2 -ErrorAction SilentlyContinue) {
+    Unregister-ScheduledTask -TaskName $TaskName2 -Confirm:$false
+    Write-Host "   하루 2편째 작업($TaskName2)을 지웠습니다"
+}
 
 Write-Host ""
 Write-Host "설치 완료. 남은 일(최초 1회):"

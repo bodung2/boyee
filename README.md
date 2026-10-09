@@ -211,7 +211,7 @@ SNS에서 해마다 되풀이되는 논쟁(금수저, 연봉, 결혼, 집값, �
 독자가 자기 숫자를 대입해 "상위 몇 %"를 찾는 표가 글의 중심입니다. 티스토리 Open API는 2024년 2월에 종료되어 네이버처럼 브라우저로 발행합니다.
 
 ```
-[작업 스케줄러, 매일 08:00]  python -m tistory_autopost run
+[작업 스케줄러, 매일 08:30·17:00]  python -m tistory_autopost run (오후는 --slot 2, 하루 2편)
   ① 로그인 확인              자동화용 크롬에 저장한 티스토리(카카오) 로그인
   ② 화제 제보 받기           텔레그램으로 보낸 "화제 ..." 메시지(2주 지나면 버림)
   ③ 주제 선정                data/tistory_topics.json 30개 큐: 우선순위 + 새 통계가 막 나왔거나 곧 나오는 주제 우선
@@ -227,7 +227,7 @@ SNS에서 해마다 되풀이되는 논쟁(금수저, 연봉, 결혼, 집값, �
 
 설치(Windows, 최초 1회):
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\setup_tistory_windows.ps1 -Time 08:00
+powershell -ExecutionPolicy Bypass -File scripts\setup_tistory_windows.ps1 -Time 08:30 -Time2 17:00   # 하루 1편이면 -Time2 off
 notepad .env                                              # TISTORY_BLOG, TISTORY_CATEGORY
 .venv\Scripts\python.exe -m tistory_autopost login        # 열린 창에서 카카오 계정 로그인('로그인 상태 유지')
 .venv\Scripts\python.exe -m tistory_autopost check        # 로그인·Claude·Codex·주제 큐 확인
