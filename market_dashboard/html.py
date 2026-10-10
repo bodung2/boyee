@@ -17,40 +17,23 @@ TEMPLATE = r"""<!doctype html>
 <title>자산군 모멘텀 대시보드</title>
 <style>
 :root{
-  color-scheme:light;
-  --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
-  --grid:#e1e0d9; --axis:#c3c2b7; --ring:rgba(11,11,11,.10);
-  --g-equity:#2a78d6; --g-bond:#1baf7a; --g-real:#eda100; --g-fx:#008300; --g-alt:#e87ba4;
-  --pos:#eb6834; --neg:#6250d6;
-  --q-lead:rgba(12,163,12,.07); --q-weak:rgba(250,178,25,.07); --q-lag:rgba(208,59,59,.06); --q-imp:rgba(42,120,214,.06);
-  --good:#006300; --bad:#d03b3b; --warn:#b37400;
-  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#6250d6;
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    color-scheme:dark;
-    --page:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
-    --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,.10);
-    --g-equity:#3987e5; --g-bond:#199e70; --g-real:#c98500; --g-fx:#0ca30c; --g-alt:#d55181;
-    --pos:#d95926; --neg:#9085e9;
-    --good:#0ca30c; --bad:#e66767; --warn:#fab219;
-    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#9085e9;
-  }
-}
-:root[data-theme="dark"]{
+  /* 검은 바탕 + 흰 글씨. 강조는 노랑(편입·주목), 빨강(상승·+), 파랑(하락·−) — 한국 시세 관례 */
   color-scheme:dark;
-  --page:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
-  --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,.10);
-  --g-equity:#3987e5; --g-bond:#199e70; --g-real:#c98500; --g-fx:#0ca30c; --g-alt:#d55181;
-  --pos:#d95926; --neg:#9085e9;
-  --good:#0ca30c; --bad:#e66767; --warn:#fab219;
-  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#9085e9;
+  --page:#000000; --surface:#0b0b0b; --ink:#ffffff; --ink2:#e6e6e6; --muted:#a3a3a3;
+  --grid:#262626; --axis:#5c5c5c; --ring:rgba(255,255,255,.14);
+  --yellow:#ffd60a; --red:#ff5c5c; --blue:#4da3ff;
+  --g-equity:#7cc4ff; --g-bond:#34d399; --g-real:#f59e0b; --g-fx:#c084fc; --g-alt:#f472b6;
+  --pos:#ff8a3d; --neg:#22d3ee;
+  --q-lead:rgba(255,92,92,.10); --q-weak:rgba(255,214,10,.05); --q-lag:rgba(77,163,255,.09); --q-imp:rgba(255,255,255,.04);
+  --good:var(--red); --bad:var(--blue); --warn:var(--yellow);
+  --s1:var(--yellow); --s2:var(--blue); --s3:#bdbdbd; --s4:#34d399;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--page);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif}
 main{max-width:1120px;margin:0 auto;padding:20px 16px 60px}
 h1{font-size:22px;margin:0 0 4px}
-h2{font-size:17px;margin:0 0 4px}
+h2{font-size:17px;margin:0 0 4px;color:var(--ink)}
+h1 em,h2 em{font-style:normal;color:var(--yellow)}
 .sub{color:var(--ink2);font-size:13px}
 .card{background:var(--surface);border:1px solid var(--ring);border-radius:12px;padding:16px;margin-top:16px}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
@@ -61,20 +44,21 @@ h2{font-size:17px;margin:0 0 4px}
 .filters button[aria-pressed="false"]{opacity:.45}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
 svg{display:block;width:100%;height:auto;overflow:visible}
-svg text{fill:var(--ink2);font-size:12px}
+svg{fill:var(--ink2)} svg text{font-size:12px}
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
 .tbl th,.tbl td{padding:6px 8px;border-bottom:1px solid var(--grid);text-align:right;white-space:nowrap}
 .tbl th:first-child,.tbl td:first-child,.tbl td.l,.tbl th.l{text-align:left}
 .tbl th{color:var(--ink2);font-weight:600}
 .tbl td{font-variant-numeric:tabular-nums}
-.tbl tr.pick td{background:color-mix(in srgb,var(--good) 8%,transparent)}
+.tbl tr.pick td{background:rgba(255,214,10,.10)}
+.tbl tr.pick td:nth-child(2){color:var(--yellow);font-weight:700}
 .scroll{overflow-x:auto}
 .up{color:var(--good)} .down{color:var(--bad)}
 .tag{font-size:12px;border-radius:6px;padding:1px 6px;border:1px solid var(--ring)}
-.tag.buy{border-color:var(--good);color:var(--good)} .tag.hot{border-color:var(--warn);color:var(--warn)}
+.tag.buy{border-color:var(--yellow);color:var(--yellow)} .tag.hot{border-color:var(--warn);color:var(--warn)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media (max-width:760px){.grid2{grid-template-columns:1fr}}
-#tip{position:fixed;pointer-events:none;background:var(--surface);color:var(--ink);border:1px solid var(--ring);border-radius:8px;padding:8px 10px;font-size:12px;box-shadow:0 4px 16px rgba(0,0,0,.15);display:none;max-width:260px;z-index:9}
+#tip{position:fixed;pointer-events:none;background:#141414;color:var(--ink);border:1px solid var(--ring);border-radius:8px;padding:8px 10px;font-size:12px;box-shadow:0 4px 16px rgba(0,0,0,.15);display:none;max-width:260px;z-index:9}
 .note{color:var(--ink2);font-size:13px}
 .note li{margin:3px 0}
 .bar{height:8px;border-radius:4px;background:var(--grid);position:relative}
@@ -82,6 +66,15 @@ svg text{fill:var(--ink2);font-size:12px}
 .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--ink2);margin:6px 0}
 .legend span{display:inline-flex;align-items:center;gap:5px}
 .legend i{display:inline-block;width:14px;height:2px}
+.timebar{display:flex;align-items:center;gap:10px;margin:8px 0 4px;flex-wrap:wrap}
+.timebar button{font:inherit;font-size:14px;min-width:40px;height:36px;border-radius:8px;border:1px solid var(--ring);background:#141414;color:var(--ink);cursor:pointer}
+.timebar button.play{color:var(--yellow);border-color:var(--yellow)}
+.timebar input[type=range]{flex:1;min-width:160px;accent-color:var(--yellow);height:28px}
+.timebar .date{font-variant-numeric:tabular-nums;color:var(--yellow);font-weight:700;min-width:96px}
+.timebar .ago{color:var(--muted);font-size:12px}
+.moves{display:flex;flex-wrap:wrap;gap:6px;min-height:26px;margin:4px 0}
+.moves span{font-size:12px;border:1px solid var(--ring);border-radius:999px;padding:2px 10px}
+.moves .to-lead{border-color:var(--red);color:var(--red)} .moves .to-lag{border-color:var(--blue);color:var(--blue)} .moves .other{color:var(--ink2)}
 .warnbox{border-left:3px solid var(--warn);padding:8px 12px;background:color-mix(in srgb,var(--warn) 7%,transparent);border-radius:4px;font-size:13px;margin-top:12px}
 </style>
 </head>
@@ -93,8 +86,16 @@ svg text{fill:var(--ink2);font-size:12px}
 
   <section class="card">
     <h2>추세 강도 × 가속도</h2>
-    <div class="sub">오른쪽일수록 현금보다 강한 추세, 위쪽일수록 그 추세가 강해지는 중. 꼬리는 최근 8주 경로, 점 크기는 오늘 규칙상 목표 비중. 점을 누르면 다른 자산과의 상관(52주)이 선으로 나옵니다.</div>
+    <div class="sub">오른쪽일수록 현금보다 강한 추세, 위쪽일수록 그 추세가 강해지는 중. 꼬리는 그 시점까지 8주 경로, 점 크기는 그 시점 규칙상 비중. 아래 시간 막대를 앞뒤로 움직이면 지난 1년의 흐름을 볼 수 있습니다. 점을 누르면 다른 자산과의 상관(최근 52주)이 선으로 나옵니다.</div>
     <div class="filters" id="groupFilters"></div>
+    <div class="timebar">
+      <button id="tbPlay" class="play" aria-label="재생">▶</button>
+      <button id="tbPrev" aria-label="1주 전">◀</button>
+      <input id="tbRange" type="range" aria-label="날짜 선택">
+      <button id="tbNext" aria-label="1주 후">▶︎</button>
+      <span class="date" id="tbDate"></span><span class="ago" id="tbAgo"></span>
+    </div>
+    <div class="moves" id="moves"></div>
     <svg id="quad" viewBox="0 0 800 530" role="img" aria-label="자산별 추세 강도와 가속도 사분면"></svg>
     <div class="legend"><span><i style="background:var(--pos);height:3px"></i>같이 움직임(+)</span><span><i style="background:var(--neg);height:3px"></i>반대로 움직임(−)</span><span>선 굵기 = 상관의 크기</span><span>🔥 과열(50일선에서 크게 이탈)</span><span>○ 현금보다 약함</span></div>
   </section>
@@ -169,64 +170,94 @@ $("asof").textContent = `기준일 ${D.asof} · ${D.base==="KRW"?"원화":"달�
 /* 사분면 */
 const active = new Set(Object.keys(D.groups));
 let selected = null;
-const tipHtml = a => `<b>${esc(a.name)}</b> · ${esc(a.quadrant)}<br>추세 강도 ${num(a.x)} · 가속 ${num(a.accel)}<br>1·3·12개월 ${pct(a.r1m)} · ${pct(a.r3m)} · ${pct(a.r12m)}<br>상태: ${esc(a.status)}${a.weight>0?` · 목표 ${pct(a.weight,0)}`:""}`;
+const F = D.frames.length-1, FMIN = Math.min(D.trail_weeks, F);
+let fi = F;  // 지금 보고 있는 프레임(마지막 = 오늘)
+const quadOf = (x,a) => x==null||a==null ? null : x>=0 ? (a>=0?"주도":"둔화") : (a>=0?"회복":"회피");
+const at = (a,i) => { const h=a.hist[i]||[null,null,0]; return {x:h[0], accel:h[1], hot:!!h[2], q:quadOf(h[0],h[1]),
+  w: i===F ? a.weight : ((D.frame_weights[i]||{})[a.key]||0)}; };
+const tipHtml = a => { const s=at(a,fi); return `<b>${esc(a.name)}</b> · ${esc(s.q||"–")} · ${D.frames[fi]}<br>추세 강도 ${num(s.x)} · 가속 ${num(s.accel)}`
+  + (fi===F ? `<br>1·3·12개월 ${pct(a.r1m)} · ${pct(a.r3m)} · ${pct(a.r12m)}<br>상태: ${esc(a.status)}${a.weight>0?` · 목표 ${pct(a.weight,0)}`:""}` : (s.w>0?`<br>규칙상 보유 ${pct(s.w,0)}`:"")); };
+// 축 눈금은 1년 전체에서 고정(움직임이 보이도록)
+const ALL = D.assets.flatMap(a=>a.hist.filter(h=>h[0]!=null&&h[1]!=null));
+const MX = Math.max(1, ...ALL.map(h=>Math.abs(h[0])))*1.08, MY = Math.max(0.5, ...ALL.map(h=>Math.abs(h[1])))*1.1;
 function drawQuad(){
   const svg=$("quad"); svg.innerHTML="";
   const W=Math.max(320, Math.round(svg.parentNode.clientWidth-32)), H=Math.round(W<600?W*1.2:W*0.66);
   svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
   const P={l:24,r:12,t:12,b:40};
-  const pts = D.assets.filter(a=>a.x!=null && a.accel!=null);
-  const all = pts.flatMap(a=>a.trail.filter(t=>t[0]!=null&&t[1]!=null)).concat(pts.map(a=>[a.x,a.accel]));
-  const mx = Math.max(1, ...all.map(t=>Math.abs(t[0])))*1.08, my = Math.max(0.5, ...all.map(t=>Math.abs(t[1])))*1.1;
-  const sx = v => P.l + (v+mx)/(2*mx)*(W-P.l-P.r), sy = v => P.t + (my-v)/(2*my)*(H-P.t-P.b);
+  const sx = v => P.l + (v+MX)/(2*MX)*(W-P.l-P.r), sy = v => P.t + (MY-v)/(2*MY)*(H-P.t-P.b);
   const cx=sx(0), cy=sy(0);
-  // 사분면 배경
   [[cx,P.t,W-P.r-cx,cy-P.t,"--q-lead"],[cx,cy,W-P.r-cx,H-P.b-cy,"--q-weak"],[P.l,cy,cx-P.l,H-P.b-cy,"--q-lag"],[P.l,P.t,cx-P.l,cy-P.t,"--q-imp"]]
     .forEach(([x,y,w,h,v])=>el("rect",{x,y,width:w,height:h,fill:`var(${v})`},svg));
   el("line",{x1:P.l,x2:W-P.r,y1:cy,y2:cy,stroke:"var(--axis)","stroke-width":1},svg);
   el("line",{x1:cx,x2:cx,y1:P.t,y2:H-P.b,stroke:"var(--axis)","stroke-width":1},svg);
-  const lab=(x,y,t,anchor,bold,extra={})=>{const e=el("text",{x,y,"text-anchor":anchor,"font-weight":bold?600:400,...extra},svg); e.textContent=t; return e;};
-  lab(W-P.r-6,P.t+16,"주도 · 매수 후보","end",1); lab(W-P.r-6,H-P.b-8,"둔화 · 신규 X","end",1);
-  lab(P.l+6,H-P.b-8,"회피 · 보유 X","start",1); lab(P.l+6,P.t+16,"회복 · 관심","start",1);
-  lab(P.l,H-P.b+18,"← 현금보다 약함","start"); lab(W-P.r,H-P.b+18,"현금보다 강함 →","end"); lab(cx,H-P.b+34,"추세 강도(0 = 현금과 같음)","middle",1);
-  lab(14,(P.t+H-P.b)/2,"가속도 (위 = 강해지는 중)","middle",1,{transform:`rotate(-90 14 ${(P.t+H-P.b)/2})`});
-  const vis = pts.filter(a=>active.has(a.group));
-  const pos = Object.fromEntries(vis.map(a=>[a.key,[sx(a.x),sy(a.accel)]]));
-  // 상관 선
+  const lab=(x,y,t,anchor,bold,extra={})=>{const e=el("text",{x,y,"text-anchor":anchor,"font-weight":bold?700:400,...extra},svg); e.textContent=t; return e;};
+  lab(W-P.r-6,P.t+16,"주도 · 매수 후보","end",1,{fill:"var(--red)"}); lab(W-P.r-6,H-P.b-8,"둔화 · 신규 X","end",1,{fill:"var(--yellow)"});
+  lab(P.l+6,H-P.b-8,"회피 · 보유 X","start",1,{fill:"var(--blue)"}); lab(P.l+6,P.t+16,"회복 · 관심","start",1,{fill:"var(--ink)"});
+  lab(P.l,H-P.b+18,"← 현금보다 약함","start"); lab(W-P.r,H-P.b+18,"현금보다 강함 →","end"); lab(cx,H-P.b+34,"추세 강도(0 = 현금과 같음)","middle",1,{fill:"var(--ink)"});
+  lab(14,(P.t+H-P.b)/2,"가속도 (위 = 강해지는 중)","middle",1,{fill:"var(--ink)",transform:`rotate(-90 14 ${(P.t+H-P.b)/2})`});
+  // 큰 날짜 워터마크
+  lab(W/2,P.t+(H-P.b)*0.55,D.frames[fi],"middle",1,{fill:"rgba(255,255,255,.07)","font-size":Math.round(W/9)});
+  const vis = D.assets.filter(a=>active.has(a.group)).map(a=>({a,s:at(a,fi)})).filter(o=>o.s.x!=null&&o.s.accel!=null);
+  const pos = Object.fromEntries(vis.map(o=>[o.a.key,[sx(o.s.x),sy(o.s.accel)]]));
   if (selected && pos[selected]){
     D.corr.edges.filter(e=>(e.a===selected||e.b===selected) && Math.abs(e.r)>=0.3).forEach(e=>{
       const o = e.a===selected?e.b:e.a; if(!pos[o]) return;
-      el("line",{x1:pos[selected][0],y1:pos[selected][1],x2:pos[o][0],y2:pos[o][1],stroke:e.r>0?"var(--pos)":"var(--neg)","stroke-width":(Math.abs(e.r)*7).toFixed(1),"stroke-opacity":.55,"stroke-dasharray":e.shift?"6 4":"","stroke-linecap":"round"},svg);
+      el("line",{x1:pos[selected][0],y1:pos[selected][1],x2:pos[o][0],y2:pos[o][1],stroke:e.r>0?"var(--pos)":"var(--neg)","stroke-width":(Math.abs(e.r)*7).toFixed(1),"stroke-opacity":.6,"stroke-dasharray":e.shift?"6 4":"","stroke-linecap":"round"},svg);
     });
   }
-  // 꼬리: 편입 자산과 선택한 자산만 진하게
-  vis.forEach(a=>{
-    const tr=a.trail.filter(t=>t[0]!=null&&t[1]!=null); if(tr.length<2) return;
-    const strong = selected ? selected===a.key : a.weight>0;
-    el("polyline",{points:tr.map(t=>`${sx(t[0])},${sy(t[1])}`).join(" "),fill:"none",stroke:gColor(a.group),"stroke-width":2,"stroke-opacity":strong?.55:.1,"stroke-linejoin":"round"},svg);
+  // 꼬리: 그 시점까지 8주
+  vis.forEach(({a,s})=>{
+    const tr=a.hist.slice(Math.max(0,fi-D.trail_weeks),fi+1).filter(h=>h[0]!=null&&h[1]!=null); if(tr.length<2) return;
+    const strong = selected ? selected===a.key : s.w>0;
+    el("polyline",{points:tr.map(h=>`${sx(h[0])},${sy(h[1])}`).join(" "),fill:"none",stroke:gColor(a.group),"stroke-width":2,"stroke-opacity":strong?.7:.16,"stroke-linejoin":"round"},svg);
   });
-  // 점과 이름(이름끼리 겹치면 위아래로 비켜 놓는다)
   const boxes=[];
   const free=(x,y,w)=>!boxes.some(b=>x<b[0]+b[2]&&x+w>b[0]&&Math.abs(y-b[1])<13);
-  vis.slice().sort((a,b)=>b.weight-a.weight).forEach(a=>{
-    const [x,y]=pos[a.key]; const r=5+Math.sqrt(a.weight)*16; const dim = selected && selected!==a.key;
-    const g=el("g",{style:"cursor:pointer",opacity:dim?.55:1},svg);
+  vis.slice().sort((p,q)=>q.s.w-p.s.w).forEach(({a,s})=>{
+    const [x,y]=pos[a.key]; const r=5+Math.sqrt(s.w)*16; const dim = selected && selected!==a.key;
+    const g=el("g",{style:"cursor:pointer",opacity:dim?.5:1},svg);
     el("circle",{cx:x,cy:y,r:Math.max(r,14),fill:"transparent"},g);
-    el("circle",{cx:x,cy:y,r,fill:a.x<0?"var(--surface)":gColor(a.group),stroke:a.x<0?gColor(a.group):"var(--surface)","stroke-width":2},g);
-    // 좁은 화면에서는 편입·선택 자산만 이름을 쓴다(나머지는 눌러서 확인)
-    const showName = W>=600 || a.weight>0 || selected===a.key;
-    const name=showName?(a.overheat?"🔥":"")+a.name:(a.overheat?"🔥":""), w=name.length*11;
-    let lx=x+r+4, ly=y+4, anchor="start";
-    if (lx+w>W-P.r){ lx=x-r-4; anchor="end"; }
+    if (s.w>0) el("circle",{cx:x,cy:y,r:r+3,fill:"none",stroke:"var(--yellow)","stroke-width":1.5},g);
+    el("circle",{cx:x,cy:y,r,fill:s.x<0?"var(--page)":gColor(a.group),stroke:s.x<0?gColor(a.group):"var(--page)","stroke-width":2},g);
+    const showName = W>=600 || s.w>0 || selected===a.key;
+    const name=showName?(s.hot?"🔥":"")+a.name:(s.hot?"🔥":""), w=name.length*11;
+    let lx=x+r+5, ly=y+4, anchor="start";
+    if (lx+w>W-P.r){ lx=x-r-5; anchor="end"; }
     const left = anchor==="end"? lx-w : lx;
     for (const dy of [0,-13,13,-26,26]){ if(free(left,y+4+dy,w)){ ly=y+4+dy; break; } }
     boxes.push([left,ly,w]);
-    const t=el("text",{x:lx,y:ly,"text-anchor":anchor,"font-weight":a.weight>0?700:400,fill:"var(--ink)"},g); t.textContent=name;
+    const t=el("text",{x:lx,y:ly,"text-anchor":anchor,"font-weight":s.w>0?700:400,fill:s.w>0?"var(--yellow)":"var(--ink)"},g); t.textContent=name;
     g.addEventListener("mousemove",ev=>showTip(tipHtml(a),ev));
     g.addEventListener("mouseleave",hideTip);
     g.addEventListener("click",ev=>{ selected = selected===a.key?null:a.key; drawQuad(); if(selected) showTip(tipHtml(a),ev); else hideTip(); });
   });
+  drawMoves();
 }
+// 이번 주(직전 프레임 대비) 사분면이 바뀐 자산
+function drawMoves(){
+  const m=$("moves"); if(fi<1){ m.innerHTML=""; return; }
+  const items=D.assets.map(a=>({a,from:at(a,fi-1).q,to:at(a,fi).q})).filter(o=>o.from&&o.to&&o.from!==o.to);
+  m.innerHTML = items.length ? items.map(o=>`<span class="${o.to==="주도"?"to-lead":o.to==="회피"?"to-lag":"other"}">${esc(o.a.name)} ${o.from}→${o.to}</span>`).join("")
+    : `<span class="other">이 주에 사분면이 바뀐 자산 없음</span>`;
+}
+/* 시간 막대 */
+const range=$("tbRange"); range.min=FMIN; range.max=F; range.step=1; range.value=F;
+let timer=null;
+function setFrame(i){ fi=Math.max(FMIN,Math.min(F,i)); range.value=fi; $("tbDate").textContent=D.frames[fi];
+  const wk=F-fi; $("tbAgo").textContent = wk===0 ? "오늘" : `${wk}주 전`; drawQuad(); }
+range.addEventListener("input",()=>{ stop(); setFrame(+range.value); });
+$("tbPrev").onclick=()=>{ stop(); setFrame(fi-1); };
+$("tbNext").onclick=()=>{ stop(); setFrame(fi+1); };
+function stop(){ if(timer){ clearInterval(timer); timer=null; $("tbPlay").textContent="▶"; } }
+$("tbPlay").onclick=()=>{
+  if(timer){ stop(); return; }
+  if(fi>=F) setFrame(FMIN);
+  $("tbPlay").textContent="❚❚";
+  timer=setInterval(()=>{ if(fi>=F){ stop(); return; } setFrame(fi+1); }, 450);
+};
+addEventListener("keydown",ev=>{ if(ev.target.tagName==="INPUT"&&ev.target!==range) return;
+  if(ev.key==="ArrowLeft"){ stop(); setFrame(fi-1); } else if(ev.key==="ArrowRight"){ stop(); setFrame(fi+1); } });
 let rz; addEventListener("resize",()=>{clearTimeout(rz); rz=setTimeout(drawQuad,150);});
 (function filters(){
   const f=$("groupFilters");
@@ -237,7 +268,7 @@ let rz; addEventListener("resize",()=>{clearTimeout(rz); rz=setTimeout(drawQuad,
     f.appendChild(b);
   });
 })();
-drawQuad();
+setFrame(F);
 
 /* 오늘의 답 */
 (function answer(){
