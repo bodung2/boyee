@@ -72,6 +72,25 @@ KAKAO_LOGIN_BUTTONS = ["a.link_kakao_id", "a:has-text('카카오계정으로 로
                        "a:has-text('카카오 계정으로 로그인')"]
 
 
+# 카카오 '간편 로그인' 화면(accounts.kakao.com/login/simple, 티스토리가 prompt=select_account로 보낸다):
+# 저장된 계정을 한 번 누르면 비밀번호 없이 들어간다(카카오 '로그인 상태 유지'가 살아 있을 때).
+KAKAO_ACCOUNT_BUTTONS = ["#simpleLogin a", "#simpleLogin button", ".list_easy a", ".list_easy button",
+                         "[class*='item_account'] a", "[class*='item_account'] button", "a.link_profile",
+                         "button.btn_g.highlight", "button:has-text('계속하기')", "button:has-text('로그인')"]
+
+
+def _click_first(page: Page, selectors: list[str]) -> str:
+    for sel in selectors:
+        loc = page.locator(sel)
+        try:
+            if loc.count() and loc.first.is_visible():
+                loc.first.click()
+                return sel
+        except Exception:  # noqa: BLE001 - 화면 전환 중
+            pass
+    return ""
+
+
 def _state_file(cfg: TistoryConfig) -> Path:
     return cfg.profile_dir / "tistory_cookies.json"
 
@@ -101,7 +120,7 @@ def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bo
     """글쓰기 화면을 연다. 로그인 화면으로 가면 카카오 자동 로그인 버튼을 눌러 기다린다."""
     page.goto(_newpost_url(cfg), wait_until="domcontentloaded")
     deadline = time.time() + timeout
-    clicked = 0
+    clicked = picked = 0
     while time.time() < deadline:
         page.wait_for_timeout(1500)
         url = page.url
@@ -118,10 +137,33 @@ def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bo
                         break
                 except Exception:  # noqa: BLE001 - 화면 전환 중
                     pass
-        elif "accounts.kakao.com" in url and page.locator("input[type='password']").count():
-            log.warning("카카오 비밀번호 입력 화면입니다(자동 로그인이 풀림)")
-            return False
+        elif "accounts.kakao.com" in url:
+            if page.locator("input[type='password']:visible").count():
+                log.warning("카카오 비밀번호 입력 화면입니다(카카오 로그인 상태 유지가 풀림)")
+                _login_debug(page, cfg)
+                return False
+            if picked < 3:
+                sel = _click_first(page, KAKAO_ACCOUNT_BUTTONS)
+                if sel:
+                    picked += 1
+                    log.info("카카오 간편 로그인: 저장된 계정 선택(%s)", sel)
+    _login_debug(page, cfg)
     return False
+
+
+def _login_debug(page: Page, cfg: TistoryConfig) -> None:
+    """로그인이 막힌 화면을 남긴다(다음에 버튼 위치를 고칠 때 쓴다). 비밀번호 같은 입력값은 담기지 않는다."""
+    out = cfg.output_dir / "diagnostics"
+    try:
+        out.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(out / "login_blocked.png"), full_page=True)
+        buttons = page.evaluate("""() => [...document.querySelectorAll('a,button')].filter(e => e.offsetParent)
+            .slice(0, 40).map(e => ({tag: e.tagName, id: e.id, cls: e.className, text: (e.innerText || '').slice(0, 40)}))""")
+        (out / "login_blocked.json").write_text(json.dumps({"url": page.url, "buttons": buttons}, ensure_ascii=False,
+                                                           indent=2), encoding="utf-8")
+        log.info("로그인 화면을 저장했습니다: %s", out / "login_blocked.png")
+    except Exception as e:  # noqa: BLE001
+        log.warning("로그인 화면 저장 실패: %s", e)
 
 
 def login(cfg: TistoryConfig, wait_minutes: int = 5) -> None:
