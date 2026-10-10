@@ -12,6 +12,7 @@ from .signals import Params
 from .universe import ASSETS, BENCHMARKS, CASH_KEY, GROUPS, by_key
 
 TRAIL_WEEKS = 8
+FRAME_WEEKS = 52  # 시간 막대로 되돌려 볼 수 있는 기간(주)
 
 
 def _f(v, nd: int = 4):
@@ -41,7 +42,7 @@ def status_of(row: dict) -> str:
     return {"주도": "대기", "둔화": "보유 유지·신규 X", "회복": "관심", "회피": "보유 X"}.get(q, q)
 
 
-def assets_block(prices_sig, prices_val, bt, p: Params) -> tuple[list[dict], str]:
+def assets_block(prices_sig, prices_val, bt, p: Params):
     sig = bt["signals"]
     weekly = bt["weekly"]
     t = prices_sig.index[-1]
@@ -53,7 +54,8 @@ def assets_block(prices_sig, prices_val, bt, p: Params) -> tuple[list[dict], str
     picks, why = backtest.select(t, sig, weekly, held, p, risky)
     target = {pk.key: pk.weight for pk in picks}
     meta = by_key()
-    trail_idx = prices_sig.index[::-5][: TRAIL_WEEKS + 1][::-1]
+    # 주 단위 프레임(최근 1년 + 꼬리용 8주). 마지막 프레임 = 오늘
+    frame_idx = prices_sig.index[::-5][: FRAME_WEEKS + TRAIL_WEEKS + 1][::-1]
     out = []
     for k in risky:
         x = sig["x"].loc[t, k]
@@ -74,12 +76,26 @@ def assets_block(prices_sig, prices_val, bt, p: Params) -> tuple[list[dict], str
             "held": k in held,
             "why": why.get(k, ""),
             "r1m": ret(21), "r3m": ret(63), "r12m": ret(252),
-            "trail": [[_f(sig["x"].loc[d, k], 3), _f(sig["accel"].loc[d, k], 3)] for d in trail_idx],
+            # [추세, 가속, 과열] 주별 기록(시간 막대용)
+            "hist": [[_f(sig["x"].loc[d, k], 3), _f(sig["accel"].loc[d, k], 3), int(bool(sig["overheat"].loc[d, k]))]
+                     for d in frame_idx],
         }
         row["status"] = status_of(row)
         out.append(row)
     out.sort(key=lambda r: (r["x"] is None, -(r["x"] or 0)))
-    return out, t.strftime("%Y-%m-%d")
+    return out, t.strftime("%Y-%m-%d"), frame_idx
+
+
+def frame_weights(bt: dict, frame_idx) -> list[dict]:
+    """각 프레임 날짜에 규칙대로 들고 있던 비중(그 날짜 이전 마지막 체결 기준)."""
+    execs = sorted(bt["weights"])
+    out, j, cur = [], 0, {}
+    for d in frame_idx:
+        while j < len(execs) and execs[j] <= d:
+            cur = bt["weights"][execs[j]]
+            j += 1
+        out.append({k: round(v, 3) for k, v in cur.items() if k != CASH_KEY and v > 0.001})
+    return out
 
 
 def correlation_block(weekly: pd.DataFrame) -> dict:
@@ -223,7 +239,7 @@ def build(close: pd.DataFrame, fred: pd.DataFrame, p: Params, base: str = "KRW")
     bench_assets = {k for mix in BENCHMARKS.values() for k in mix}
     bench_start = max(prices_val[k].first_valid_index() for k in bench_assets)
     bt = backtest.run(prices_sig, prices_val, p, start=str(bench_start.date()))
-    assets, asof = assets_block(prices_sig, prices_val, bt, p)
+    assets, asof, frame_idx = assets_block(prices_sig, prices_val, bt, p)
     return {
         "asof": asof,
         "base": base,
@@ -231,6 +247,9 @@ def build(close: pd.DataFrame, fred: pd.DataFrame, p: Params, base: str = "KRW")
         "params": {"horizons": list(p.horizons), "skip": p.skip, "top_n": p.top_n, "corr_max": p.corr_max,
                    "max_weight": p.max_weight, "overheat_z": p.overheat_z, "cost": p.cost},
         "assets": assets,
+        "frames": [d.strftime("%Y-%m-%d") for d in frame_idx],
+        "trail_weeks": TRAIL_WEEKS,
+        "frame_weights": frame_weights(bt, frame_idx),
         "next_rebalance": _next_month_end(prices_sig.index[-1]),
         "corr": correlation_block(bt["weekly"]),
         "liquidity": liquidity_block(fred, prices_sig),
