@@ -101,3 +101,22 @@ def test_cash_yield_becomes_index_on_us_trading_days():
     assert usd["CASH"].iloc[1] / usd["CASH"].iloc[0] == pytest.approx(1 + 0.0252 / 252)
     krw = data.to_base(close, "KRW")
     assert krw["SPY"].iloc[0] == pytest.approx(100_000) and krw["KTB10"].iloc[0] == pytest.approx(100)
+
+
+def test_cli_writes_index_for_pages(tmp_path, monkeypatch):
+    from market_dashboard import __main__ as cli
+
+    px = _prices(drifts={"SPY": 0.0008})
+    close = pd.DataFrame({a.ticker: px[a.key] for a in universe.ASSETS})
+    close["^IRX"] = 2.0
+    close[universe.FX_TICKER] = 1200.0
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    close.to_csv(cache / "prices.csv")
+    monkeypatch.setattr(cli, "CACHE", cache)
+    monkeypatch.setenv("DASHBOARD_URL", "https://example.test/")
+    sent = []
+    monkeypatch.setattr(cli, "send_text", lambda token, chat, text: sent.append(text))
+    assert cli.main(["run", "--offline", "--out", str(tmp_path / "site"), "--notify"]) == 0
+    page = (tmp_path / "site" / "index.html").read_text(encoding="utf-8")
+    assert "갱신" in page and sent and sent[0].endswith("https://example.test/")

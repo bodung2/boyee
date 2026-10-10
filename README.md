@@ -285,7 +285,7 @@ notepad .env                                              # TISTORY_BLOG, TISTOR
 powershell -ExecutionPolicy Bypass -File scripts\setup_market_windows.ps1 -Time 07:40   # 화~토 07:40 예약 + 지금 한 번 실행
 ```
 
-결과는 `output\market\dashboard.html`입니다. 규칙과 화면 설명은 [docs/MARKET_DASHBOARD.md](docs/MARKET_DASHBOARD.md)에 있습니다.
+웹 주소 **https://bodung2.github.io/boyee/** 에 화~토 아침마다 자동으로 갱신됩니다(GitHub Actions, PC 불필요). PC에서 직접 돌리면 결과는 `output\market\dashboard.html`입니다. 규칙과 화면 설명은 [docs/MARKET_DASHBOARD.md](docs/MARKET_DASHBOARD.md)에 있습니다.
 
 ## 블로그 디자인 (SR 기존 글과 동일)
 
