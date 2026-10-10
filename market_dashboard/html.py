@@ -86,13 +86,14 @@ svg{fill:var(--ink2)} svg text{font-size:12px}
 
   <section class="card">
     <h2>추세 강도 × 가속도</h2>
-    <div class="sub">오른쪽일수록 현금보다 강한 추세, 위쪽일수록 그 추세가 강해지는 중. 꼬리는 그 시점까지 8주 경로, 점 크기는 그 시점 규칙상 비중. 아래 시간 막대를 앞뒤로 움직이면 지난 1년의 흐름을 볼 수 있습니다. 점을 누르면 다른 자산과의 상관(최근 52주)이 선으로 나옵니다.</div>
+    <div class="sub">오른쪽일수록 현금보다 강한 추세, 위쪽일수록 그 추세가 강해지는 중. 꼬리는 그 시점까지 8주 경로(오래될수록 흐림), 점 크기는 그 시점 규칙상 비중. 아래 시간 막대를 끌거나 ▶로 재생하면 지난 1년이 거래일 단위로 부드럽게 움직입니다. 점을 누르면 다른 자산과의 상관(최근 52주)이 선으로 나옵니다.</div>
     <div class="filters" id="groupFilters"></div>
     <div class="timebar">
       <button id="tbPlay" class="play" aria-label="재생">▶</button>
       <button id="tbPrev" aria-label="1주 전">◀</button>
       <input id="tbRange" type="range" aria-label="날짜 선택">
       <button id="tbNext" aria-label="1주 후">▶︎</button>
+      <button id="tbSpeed" aria-label="재생 속도">1×</button>
       <span class="date" id="tbDate"></span><span class="ago" id="tbAgo"></span>
     </div>
     <div class="moves" id="moves"></div>
@@ -170,16 +171,30 @@ $("asof").textContent = `기준일 ${D.asof} · ${D.base==="KRW"?"원화":"달�
 /* 사분면 */
 const active = new Set(Object.keys(D.groups));
 let selected = null;
-const F = D.frames.length-1, FMIN = Math.min(D.trail_weeks, F);
-let fi = F;  // 지금 보고 있는 프레임(마지막 = 오늘)
+const F = D.frames.length-1, FMIN = Math.min(D.trail_days, F);
+let fi = F;  // 지금 보고 있는 위치(거래일 번호, 소수 = 두 날 사이). 마지막 = 오늘
 const quadOf = (x,a) => x==null||a==null ? null : x>=0 ? (a>=0?"주도":"둔화") : (a>=0?"회복":"회피");
-const at = (a,i) => { const h=a.hist[i]||[null,null,0]; return {x:h[0], accel:h[1], hot:!!h[2], q:quadOf(h[0],h[1]),
-  w: i===F ? a.weight : ((D.frame_weights[i]||{})[a.key]||0)}; };
-const tipHtml = a => { const s=at(a,fi); return `<b>${esc(a.name)}</b> · ${esc(s.q||"–")} · ${D.frames[fi]}<br>추세 강도 ${num(s.x)} · 가속 ${num(s.accel)}`
-  + (fi===F ? `<br>1·3·12개월 ${pct(a.r1m)} · ${pct(a.r3m)} · ${pct(a.r12m)}<br>상태: ${esc(a.status)}${a.weight>0?` · 목표 ${pct(a.weight,0)}`:""}` : (s.w>0?`<br>규칙상 보유 ${pct(s.w,0)}`:"")); };
+const lerp = (p,q,f) => p==null ? q : q==null ? p : p+(q-p)*f;
+// 두 거래일 사이를 직선 보간한 위치
+function at(a,t){
+  const i=Math.max(0,Math.min(F,Math.floor(t))), j=Math.min(F,i+1), f=t-i;
+  const h0=a.hist[i]||[null,null,0], h1=a.hist[j]||h0;
+  const x=lerp(h0[0],h1[0],f), y=lerp(h0[1],h1[1],f), d=Math.round(t);
+  return {x, accel:y, hot:!!(a.hist[d]||[])[2], q:quadOf(x,y), w:weightAt(a,t)};
+}
+function weightAt(a,t){
+  const d=Math.round(t); if(d>=F) return a.weight;
+  let w={}; for(const [i,ws] of D.frame_weights){ if(i<=d) w=ws; else break; }
+  return w[a.key]||0;
+}
+const tipHtml = a => { const s=at(a,fi), d=D.frames[Math.round(fi)];
+  return `<b>${esc(a.name)}</b> · ${esc(s.q||"–")} · ${d}<br>추세 강도 ${num(s.x)} · 가속 ${num(s.accel)}`
+  + (Math.round(fi)>=F ? `<br>1·3·12개월 ${pct(a.r1m)} · ${pct(a.r3m)} · ${pct(a.r12m)}<br>상태: ${esc(a.status)}${a.weight>0?` · 목표 ${pct(a.weight,0)}`:""}` : (s.w>0?`<br>규칙상 보유 ${pct(s.w,0)}`:"")); };
 // 축 눈금은 1년 전체에서 고정(움직임이 보이도록)
 const ALL = D.assets.flatMap(a=>a.hist.filter(h=>h[0]!=null&&h[1]!=null));
 const MX = Math.max(1, ...ALL.map(h=>Math.abs(h[0])))*1.08, MY = Math.max(0.5, ...ALL.map(h=>Math.abs(h[1])))*1.1;
+let G = null;  // 현재 화면 크기·눈금
+const labelDy = {};  // 이름표 위치를 프레임마다 바꾸지 않도록 기억(떨림 방지)
 function drawQuad(){
   const svg=$("quad"); svg.innerHTML="";
   const W=Math.max(320, Math.round(svg.parentNode.clientWidth-32)), H=Math.round(W<600?W*1.2:W*0.66);
@@ -187,77 +202,106 @@ function drawQuad(){
   const P={l:24,r:12,t:12,b:40};
   const sx = v => P.l + (v+MX)/(2*MX)*(W-P.l-P.r), sy = v => P.t + (MY-v)/(2*MY)*(H-P.t-P.b);
   const cx=sx(0), cy=sy(0);
+  const bg=el("g",{},svg);
   [[cx,P.t,W-P.r-cx,cy-P.t,"--q-lead"],[cx,cy,W-P.r-cx,H-P.b-cy,"--q-weak"],[P.l,cy,cx-P.l,H-P.b-cy,"--q-lag"],[P.l,P.t,cx-P.l,cy-P.t,"--q-imp"]]
-    .forEach(([x,y,w,h,v])=>el("rect",{x,y,width:w,height:h,fill:`var(${v})`},svg));
-  el("line",{x1:P.l,x2:W-P.r,y1:cy,y2:cy,stroke:"var(--axis)","stroke-width":1},svg);
-  el("line",{x1:cx,x2:cx,y1:P.t,y2:H-P.b,stroke:"var(--axis)","stroke-width":1},svg);
-  const lab=(x,y,t,anchor,bold,extra={})=>{const e=el("text",{x,y,"text-anchor":anchor,"font-weight":bold?700:400,...extra},svg); e.textContent=t; return e;};
+    .forEach(([x,y,w,h,v])=>el("rect",{x,y,width:w,height:h,fill:`var(${v})`},bg));
+  el("line",{x1:P.l,x2:W-P.r,y1:cy,y2:cy,stroke:"var(--axis)","stroke-width":1},bg);
+  el("line",{x1:cx,x2:cx,y1:P.t,y2:H-P.b,stroke:"var(--axis)","stroke-width":1},bg);
+  const lab=(x,y,t,anchor,bold,extra={},parent=bg)=>{const e=el("text",{x,y,"text-anchor":anchor,"font-weight":bold?700:400,...extra},parent); e.textContent=t; return e;};
   lab(W-P.r-6,P.t+16,"주도 · 매수 후보","end",1,{fill:"var(--red)"}); lab(W-P.r-6,H-P.b-8,"둔화 · 신규 X","end",1,{fill:"var(--yellow)"});
   lab(P.l+6,H-P.b-8,"회피 · 보유 X","start",1,{fill:"var(--blue)"}); lab(P.l+6,P.t+16,"회복 · 관심","start",1,{fill:"var(--ink)"});
   lab(P.l,H-P.b+18,"← 현금보다 약함","start"); lab(W-P.r,H-P.b+18,"현금보다 강함 →","end"); lab(cx,H-P.b+34,"추세 강도(0 = 현금과 같음)","middle",1,{fill:"var(--ink)"});
   lab(14,(P.t+H-P.b)/2,"가속도 (위 = 강해지는 중)","middle",1,{fill:"var(--ink)",transform:`rotate(-90 14 ${(P.t+H-P.b)/2})`});
-  // 큰 날짜 워터마크
-  lab(W/2,P.t+(H-P.b)*0.55,D.frames[fi],"middle",1,{fill:"rgba(255,255,255,.07)","font-size":Math.round(W/9)});
+  const mark=lab(W/2,P.t+(H-P.b)*0.55,"","middle",1,{fill:"rgba(255,255,255,.07)","font-size":Math.round(W/9)});
+  G={W,H,P,sx,sy,mark,dyn:el("g",{},svg)};
+  drawDyn();
+}
+// 움직이는 부분(점·꼬리·이름·상관 선)만 다시 그린다
+function drawDyn(){
+  if(!G) return;
+  const {W,P,sx,sy,mark,dyn}=G; dyn.innerHTML="";
+  mark.textContent=D.frames[Math.round(fi)];
   const vis = D.assets.filter(a=>active.has(a.group)).map(a=>({a,s:at(a,fi)})).filter(o=>o.s.x!=null&&o.s.accel!=null);
   const pos = Object.fromEntries(vis.map(o=>[o.a.key,[sx(o.s.x),sy(o.s.accel)]]));
   if (selected && pos[selected]){
     D.corr.edges.filter(e=>(e.a===selected||e.b===selected) && Math.abs(e.r)>=0.3).forEach(e=>{
       const o = e.a===selected?e.b:e.a; if(!pos[o]) return;
-      el("line",{x1:pos[selected][0],y1:pos[selected][1],x2:pos[o][0],y2:pos[o][1],stroke:e.r>0?"var(--pos)":"var(--neg)","stroke-width":(Math.abs(e.r)*7).toFixed(1),"stroke-opacity":.6,"stroke-dasharray":e.shift?"6 4":"","stroke-linecap":"round"},svg);
+      el("line",{x1:pos[selected][0],y1:pos[selected][1],x2:pos[o][0],y2:pos[o][1],stroke:e.r>0?"var(--pos)":"var(--neg)","stroke-width":(Math.abs(e.r)*7).toFixed(1),"stroke-opacity":.6,"stroke-dasharray":e.shift?"6 4":"","stroke-linecap":"round"},dyn);
     });
   }
-  // 꼬리: 그 시점까지 8주
+  // 꼬리: 지금 위치에서 거꾸로 8주. 오래된 쪽일수록 흐리게(4토막)
+  const T=D.trail_days, d0=Math.floor(fi);
   vis.forEach(({a,s})=>{
-    const tr=a.hist.slice(Math.max(0,fi-D.trail_weeks),fi+1).filter(h=>h[0]!=null&&h[1]!=null); if(tr.length<2) return;
-    const strong = selected ? selected===a.key : s.w>0;
-    el("polyline",{points:tr.map(h=>`${sx(h[0])},${sy(h[1])}`).join(" "),fill:"none",stroke:gColor(a.group),"stroke-width":2,"stroke-opacity":strong?.7:.16,"stroke-linejoin":"round"},svg);
+    const pts=[[sx(s.x),sy(s.accel)]];
+    // 꼬리 마디는 5거래일 간격(오늘 기준으로 고정)이라 재생 중에도 모양이 흔들리지 않는다
+    for(let i=d0-(((F-d0)%5)?5-((F-d0)%5):0); i>=Math.max(0,d0-T); i-=5){ const h=a.hist[i]; if(!h||h[0]==null||h[1]==null) break; pts.push([sx(h[0]),sy(h[1])]); }
+    if(pts.length<2) return;
+    const strong = selected ? selected===a.key : s.w>0, base = strong?.8:.2, n=4, seg=Math.ceil((pts.length-1)/n);
+    for(let k=0;k<n;k++){
+      const part=pts.slice(k*seg,(k+1)*seg+1); if(part.length<2) break;
+      el("polyline",{points:part.map(q=>`${q[0].toFixed(1)},${q[1].toFixed(1)}`).join(" "),fill:"none",stroke:gColor(a.group),"stroke-width":2,"stroke-opacity":(base*(1-k/n)).toFixed(2),"stroke-linejoin":"round","stroke-linecap":"round"},dyn);
+    }
   });
   const boxes=[];
   const free=(x,y,w)=>!boxes.some(b=>x<b[0]+b[2]&&x+w>b[0]&&Math.abs(y-b[1])<13);
   vis.slice().sort((p,q)=>q.s.w-p.s.w).forEach(({a,s})=>{
     const [x,y]=pos[a.key]; const r=5+Math.sqrt(s.w)*16; const dim = selected && selected!==a.key;
-    const g=el("g",{style:"cursor:pointer",opacity:dim?.5:1},svg);
+    const g=el("g",{style:"cursor:pointer",opacity:dim?.5:1},dyn);
     el("circle",{cx:x,cy:y,r:Math.max(r,14),fill:"transparent"},g);
     if (s.w>0) el("circle",{cx:x,cy:y,r:r+3,fill:"none",stroke:"var(--yellow)","stroke-width":1.5},g);
     el("circle",{cx:x,cy:y,r,fill:s.x<0?"var(--page)":gColor(a.group),stroke:s.x<0?gColor(a.group):"var(--page)","stroke-width":2},g);
     const showName = W>=600 || s.w>0 || selected===a.key;
     const name=showName?(s.hot?"🔥":"")+a.name:(s.hot?"🔥":""), w=name.length*11;
-    let lx=x+r+5, ly=y+4, anchor="start";
+    let lx=x+r+5, anchor="start";
     if (lx+w>W-P.r){ lx=x-r-5; anchor="end"; }
     const left = anchor==="end"? lx-w : lx;
-    for (const dy of [0,-13,13,-26,26]){ if(free(left,y+4+dy,w)){ ly=y+4+dy; break; } }
-    boxes.push([left,ly,w]);
-    const t=el("text",{x:lx,y:ly,"text-anchor":anchor,"font-weight":s.w>0?700:400,fill:s.w>0?"var(--yellow)":"var(--ink)"},g); t.textContent=name;
+    const tries=[labelDy[a.key]??0,0,-13,13,-26,26];
+    let dy=tries[0]; for (const t of tries){ if(free(left,y+4+t,w)){ dy=t; break; } }
+    labelDy[a.key]=dy; boxes.push([left,y+4+dy,w]);
+    const t=el("text",{x:lx,y:y+4+dy,"text-anchor":anchor,"font-weight":s.w>0?700:400,fill:s.w>0?"var(--yellow)":"var(--ink)"},g); t.textContent=name;
     g.addEventListener("mousemove",ev=>showTip(tipHtml(a),ev));
     g.addEventListener("mouseleave",hideTip);
-    g.addEventListener("click",ev=>{ selected = selected===a.key?null:a.key; drawQuad(); if(selected) showTip(tipHtml(a),ev); else hideTip(); });
+    g.addEventListener("click",ev=>{ selected = selected===a.key?null:a.key; drawDyn(); if(selected) showTip(tipHtml(a),ev); else hideTip(); });
   });
-  drawMoves();
 }
-// 이번 주(직전 프레임 대비) 사분면이 바뀐 자산
+// 최근 5거래일 사이 사분면이 바뀐 자산
+let movesDay=-1;
 function drawMoves(){
-  const m=$("moves"); if(fi<1){ m.innerHTML=""; return; }
-  const items=D.assets.map(a=>({a,from:at(a,fi-1).q,to:at(a,fi).q})).filter(o=>o.from&&o.to&&o.from!==o.to);
+  const d=Math.round(fi); if(d===movesDay) return; movesDay=d;
+  const m=$("moves"), from=Math.max(0,d-5);
+  const items=D.assets.map(a=>({a,from:quadOf(...(a.hist[from]||[]).slice(0,2)),to:quadOf(...(a.hist[d]||[]).slice(0,2))})).filter(o=>o.from&&o.to&&o.from!==o.to);
   m.innerHTML = items.length ? items.map(o=>`<span class="${o.to==="주도"?"to-lead":o.to==="회피"?"to-lag":"other"}">${esc(o.a.name)} ${o.from}→${o.to}</span>`).join("")
-    : `<span class="other">이 주에 사분면이 바뀐 자산 없음</span>`;
+    : `<span class="other">최근 1주 사이 사분면이 바뀐 자산 없음</span>`;
 }
-/* 시간 막대 */
-const range=$("tbRange"); range.min=FMIN; range.max=F; range.step=1; range.value=F;
-let timer=null;
-function setFrame(i){ fi=Math.max(FMIN,Math.min(F,i)); range.value=fi; $("tbDate").textContent=D.frames[fi];
-  const wk=F-fi; $("tbAgo").textContent = wk===0 ? "오늘" : `${wk}주 전`; drawQuad(); }
-range.addEventListener("input",()=>{ stop(); setFrame(+range.value); });
-$("tbPrev").onclick=()=>{ stop(); setFrame(fi-1); };
-$("tbNext").onclick=()=>{ stop(); setFrame(fi+1); };
-function stop(){ if(timer){ clearInterval(timer); timer=null; $("tbPlay").textContent="▶"; } }
-$("tbPlay").onclick=()=>{
-  if(timer){ stop(); return; }
-  if(fi>=F) setFrame(FMIN);
-  $("tbPlay").textContent="❚❚";
-  timer=setInterval(()=>{ if(fi>=F){ stop(); return; } setFrame(fi+1); }, 450);
-};
+/* 시간 막대: 재생은 화면 주사율에 맞춰 연속으로, 버튼은 1주를 부드럽게 넘어간다 */
+const range=$("tbRange"); range.min=FMIN; range.max=F; range.step="any"; range.value=F;
+const SPEEDS=[10,20,40]; let speedIx=0;  // 초당 거래일
+let raf=null, tween=null;
+function setFrame(t){ fi=Math.max(FMIN,Math.min(F,t)); range.value=fi;
+  const d=Math.round(fi); $("tbDate").textContent=D.frames[d];
+  const wk=Math.round((F-fi)/5); $("tbAgo").textContent = F-fi<0.5 ? "오늘" : `${wk}주 전`;
+  drawDyn(); drawMoves(); }
+function stop(){ if(raf){ cancelAnimationFrame(raf); raf=null; } tween=null; $("tbPlay").textContent="▶"; }
+function play(){
+  if(fi>=F-0.01) setFrame(FMIN);
+  $("tbPlay").textContent="❚❚"; let last=performance.now();
+  const step=now=>{ const dt=(now-last)/1000; last=now;
+    setFrame(fi+dt*SPEEDS[speedIx]); if(fi>=F){ stop(); return; } raf=requestAnimationFrame(step); };
+  raf=requestAnimationFrame(step);
+}
+function glide(target){  // 버튼: 0.35초 동안 부드럽게 이동
+  stop(); const from=fi, to=Math.max(FMIN,Math.min(F,target)), t0=performance.now(), dur=350;
+  const step=now=>{ const k=Math.min(1,(now-t0)/dur), e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
+    setFrame(from+(to-from)*e); if(k<1) raf=requestAnimationFrame(step); else raf=null; };
+  raf=requestAnimationFrame(step);
+}
+range.addEventListener("input",()=>{ if(raf) stop(); setFrame(+range.value); });
+$("tbPrev").onclick=()=>glide(Math.round(fi)-5);
+$("tbNext").onclick=()=>glide(Math.round(fi)+5);
+$("tbPlay").onclick=()=>{ raf&&$("tbPlay").textContent!=="▶" ? stop() : play(); };
+$("tbSpeed").onclick=()=>{ speedIx=(speedIx+1)%SPEEDS.length; $("tbSpeed").textContent=`${2**speedIx}×`; };
 addEventListener("keydown",ev=>{ if(ev.target.tagName==="INPUT"&&ev.target!==range) return;
-  if(ev.key==="ArrowLeft"){ stop(); setFrame(fi-1); } else if(ev.key==="ArrowRight"){ stop(); setFrame(fi+1); } });
+  if(ev.key==="ArrowLeft"){ ev.preventDefault(); glide(Math.round(fi)-5); } else if(ev.key==="ArrowRight"){ ev.preventDefault(); glide(Math.round(fi)+5); } });
 let rz; addEventListener("resize",()=>{clearTimeout(rz); rz=setTimeout(drawQuad,150);});
 (function filters(){
   const f=$("groupFilters");
@@ -268,7 +312,7 @@ let rz; addEventListener("resize",()=>{clearTimeout(rz); rz=setTimeout(drawQuad,
     f.appendChild(b);
   });
 })();
-setFrame(F);
+drawQuad(); setFrame(F);
 
 /* 오늘의 답 */
 (function answer(){

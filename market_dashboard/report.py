@@ -11,8 +11,8 @@ from . import backtest, signals
 from .signals import Params
 from .universe import ASSETS, BENCHMARKS, CASH_KEY, GROUPS, by_key
 
-TRAIL_WEEKS = 8
-FRAME_WEEKS = 52  # 시간 막대로 되돌려 볼 수 있는 기간(주)
+TRAIL_DAYS = 40   # 꼬리 길이(거래일, 약 8주)
+FRAME_DAYS = 252  # 시간 막대로 되돌려 볼 수 있는 기간(거래일, 약 1년)
 
 
 def _f(v, nd: int = 4):
@@ -54,8 +54,8 @@ def assets_block(prices_sig, prices_val, bt, p: Params):
     picks, why = backtest.select(t, sig, weekly, held, p, risky)
     target = {pk.key: pk.weight for pk in picks}
     meta = by_key()
-    # 주 단위 프레임(최근 1년 + 꼬리용 8주). 마지막 프레임 = 오늘
-    frame_idx = prices_sig.index[::-5][: FRAME_WEEKS + TRAIL_WEEKS + 1][::-1]
+    # 거래일 단위 프레임(최근 1년 + 꼬리용 8주). 마지막 프레임 = 오늘. 화면은 프레임 사이를 보간해 부드럽게 움직인다
+    frame_idx = prices_sig.index[-(FRAME_DAYS + TRAIL_DAYS + 1):]
     out = []
     for k in risky:
         x = sig["x"].loc[t, k]
@@ -76,7 +76,7 @@ def assets_block(prices_sig, prices_val, bt, p: Params):
             "held": k in held,
             "why": why.get(k, ""),
             "r1m": ret(21), "r3m": ret(63), "r12m": ret(252),
-            # [추세, 가속, 과열] 주별 기록(시간 막대용)
+            # [추세, 가속, 과열] 거래일별 기록(시간 막대용)
             "hist": [[_f(sig["x"].loc[d, k], 3), _f(sig["accel"].loc[d, k], 3), int(bool(sig["overheat"].loc[d, k]))]
                      for d in frame_idx],
         }
@@ -86,16 +86,16 @@ def assets_block(prices_sig, prices_val, bt, p: Params):
     return out, t.strftime("%Y-%m-%d"), frame_idx
 
 
-def frame_weights(bt: dict, frame_idx) -> list[dict]:
-    """각 프레임 날짜에 규칙대로 들고 있던 비중(그 날짜 이전 마지막 체결 기준)."""
-    execs = sorted(bt["weights"])
-    out, j, cur = [], 0, {}
-    for d in frame_idx:
-        while j < len(execs) and execs[j] <= d:
-            cur = bt["weights"][execs[j]]
-            j += 1
-        out.append({k: round(v, 3) for k, v in cur.items() if k != CASH_KEY and v > 0.001})
-    return out
+def frame_weights(bt: dict, frame_idx) -> list[list]:
+    """프레임 기간에 걸친 체결 기록 [[프레임 번호, {자산: 비중}], ...]. 첫 항목은 기간 시작 때 들고 있던 비중."""
+    out, cur = [], {}
+    for d in sorted(bt["weights"]):
+        w = {k: round(v, 3) for k, v in bt["weights"][d].items() if k != CASH_KEY and v > 0.001}
+        if d <= frame_idx[0]:
+            cur = w
+        else:
+            out.append([int(frame_idx.searchsorted(d)), w])
+    return [[0, cur]] + out
 
 
 def correlation_block(weekly: pd.DataFrame) -> dict:
@@ -248,7 +248,7 @@ def build(close: pd.DataFrame, fred: pd.DataFrame, p: Params, base: str = "KRW")
                    "max_weight": p.max_weight, "overheat_z": p.overheat_z, "cost": p.cost},
         "assets": assets,
         "frames": [d.strftime("%Y-%m-%d") for d in frame_idx],
-        "trail_weeks": TRAIL_WEEKS,
+        "trail_days": TRAIL_DAYS,
         "frame_weights": frame_weights(bt, frame_idx),
         "next_rebalance": _next_month_end(prices_sig.index[-1]),
         "corr": correlation_block(bt["weekly"]),
