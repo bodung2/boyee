@@ -102,6 +102,32 @@ def remove_markers(body_html: str, names: set[str]) -> str:
     return IMAGE_MARKER.sub(lambda m: "" if m.group(1) in names else m.group(0), body_html)
 
 
+_H2 = re.compile(r"<h2\b", re.I)
+
+
+def fix_card_marker(body_html: str) -> tuple[str, bool]:
+    """요약 카드 자리([[IMAGE:card]])가 없으면 1번 챕터 끝(2번 챕터 제목 바로 앞)에 넣고, 여러 개면 첫 번째만 남긴다.
+    (카드는 post["card"]로 프로그램이 그리므로 자리만 맞으면 된다) (고친 본문, 바뀌었는지)"""
+    count = [0]
+
+    def keep_first(m: re.Match) -> str:
+        if m.group(1) != "card":
+            return m.group(0)
+        count[0] += 1
+        return m.group(0) if count[0] == 1 else ""
+    body = IMAGE_MARKER.sub(keep_first, body_html)
+    if count[0] >= 1:
+        return body, count[0] > 1
+    marker = "<p>[[IMAGE:card]]</p>"
+    heads = list(_H2.finditer(body))
+    if len(heads) >= 2:
+        at = heads[1].start()
+    else:
+        tail = re.search(r'<div\b[^>]*data-block=["\'](?:oneline|related)', body, re.I)
+        at = tail.start() if tail else len(body)
+    return body[:at] + marker + body[at:], True
+
+
 def validate(post: dict, profile: Profile | None = None) -> list[str]:
     """발행을 막아야 하는 문제 목록. 비어 있으면 통과."""
     errors: list[str] = []

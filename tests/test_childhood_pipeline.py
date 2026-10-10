@@ -735,3 +735,47 @@ def test_no_post_written_retries_with_another_topic(cfg, monkeypatch):
     post = pipeline.produce(cfg, "2026-10-07", out)
     assert post["title"] and len(feedbacks) == 2
     assert "다른 주제" in feedbacks[1]
+
+
+def test_missing_card_marker_is_placed_not_rejected(cfg, monkeypatch):
+    post = child_post()
+    post["body_html"] = post["body_html"].replace("<p>[[IMAGE:card]]</p>", "")
+    out = cfg.output_dir / "d"
+    monkeypatch.setattr(generate, "write_post", _fake_write(post))
+    monkeypatch.setattr(generate, "repair_post", lambda *a: pytest.fail("no repair needed"))
+    monkeypatch.setattr(gemini_client, "generate_image", lambda c, p, path: path.write_bytes(b"png") or path)
+    monkeypatch.setattr(generate, "factcheck", lambda c, d: {"verdict": "pass", "images": {}})
+    monkeypatch.setattr(openai_client, "factcheck", lambda c, p: {"verdict": "pass", "issues": []})
+    result = pipeline._attempt(cfg, "2026-10-10", out, "")
+    assert result["body_html"].count("[[IMAGE:card]]") == 1
+
+
+def test_too_few_sources_are_repaired_in_place(cfg, monkeypatch):
+    post = child_post()
+    full = post["sources"]
+    post["sources"] = full[:5]
+    out = cfg.output_dir / "d"
+    writes, repairs = [], []
+    monkeypatch.setattr(generate, "write_post", lambda c, o, t, f="": writes.append(1) or _fake_write(post)(c, o, t, f))
+
+    def repair(c, out_dir, errors):
+        repairs.append(errors)
+        fixed = json.loads((out_dir / "post.json").read_text(encoding="utf-8"))
+        fixed["sources"] = full
+        (out_dir / "post.json").write_text(json.dumps(fixed, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(generate, "repair_post", repair)
+    monkeypatch.setattr(gemini_client, "generate_image", lambda c, p, path: path.write_bytes(b"png") or path)
+    monkeypatch.setattr(generate, "factcheck", lambda c, d: {"verdict": "pass", "images": {}})
+    monkeypatch.setattr(openai_client, "factcheck", lambda c, p: {"verdict": "pass", "issues": []})
+    result = pipeline._attempt(cfg, "2026-10-10", out, "")
+    assert writes == [1] and len(repairs) == 1 and any("출처" in e for e in repairs[0])
+    assert len(result["sources"]) == len(full)
+
+
+def test_unrepairable_post_is_still_rejected(cfg, monkeypatch):
+    post = child_post()
+    post["sources"] = post["sources"][:3]
+    monkeypatch.setattr(generate, "write_post", _fake_write(post))
+    monkeypatch.setattr(generate, "repair_post", lambda *a: None)
+    with pytest.raises(pipeline.Rejected):
+        pipeline._attempt(cfg, "2026-10-10", cfg.output_dir / "d", "")

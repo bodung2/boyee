@@ -208,6 +208,31 @@ def _mark(out_dir: Path, **flags) -> None:
     _save_json(out_dir / "stage.json", {**_stage(out_dir), **flags})
 
 
+def _load_fixed(post_path: Path) -> dict:
+    post = _load_post(post_path)
+    post["body_html"], moved = content.fix_card_marker(post["body_html"])
+    if moved:
+        log.info("요약 카드 자리([[IMAGE:card]])를 맞췄습니다")
+    _save_json(post_path, post)
+    return post
+
+
+def _fix_structure(cfg: Config, out_dir: Path, post_path: Path) -> dict:
+    """구조 검사. 떨어지면 글을 버리기 전에 같은 글을 한 번 고치게 한다(출처 부족 같은 형식 문제로 주제를 날리지 않게)."""
+    post = _load_fixed(post_path)
+    errors = content.validate(post, cfg.profile)
+    if not errors:
+        return post
+    log.warning("구조 검증 실패 → 같은 글을 고칩니다:\n- %s", "\n- ".join(errors))
+    generate.repair_post(cfg, out_dir, errors)
+    post = _load_fixed(post_path)
+    errors = content.validate(post, cfg.profile)
+    if errors:
+        raise Rejected("구조 검증 실패:\n- " + "\n- ".join(errors))
+    log.info("고친 글이 구조 검증을 통과했습니다")
+    return post
+
+
 def _attempt(cfg: Config, today: str, out_dir: Path, feedback: str, resume: bool = False) -> dict:
     """글 1편을 발행 가능한 상태로 만든다. resume이면 지난 실행이 멈춘 단계부터 이어서 한다
     (예: OpenAI 잔액 부족으로 멈췄을 때 이미 쓴 글·통과한 검수를 다시 하지 않음)."""
@@ -219,11 +244,7 @@ def _attempt(cfg: Config, today: str, out_dir: Path, feedback: str, resume: bool
         except generate.NoPostError as e:
             raise Rejected(f"{e}. 직전 주제는 원문을 확인하지 못했을 수 있으니 원문을 열 수 있는 다른 주제를 골라 "
                            "질문하지 말고 끝까지 써라.") from e
-        post = _load_post(post_path)
-        _save_json(post_path, post)
-        errors = content.validate(post, cfg.profile)
-        if errors:
-            raise Rejected("구조 검증 실패:\n- " + "\n- ".join(errors))
+        post = _fix_structure(cfg, out_dir, post_path)
         _mark(out_dir, written=True)
     else:
         log.info("이미 쓴 글을 이어서 처리합니다: %s", _load_post(post_path)["title"])
