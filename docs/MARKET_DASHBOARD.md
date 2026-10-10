@@ -4,7 +4,20 @@
 
 > 참고 자료이며 매매 신호가 아닙니다. 과거 성과가 미래 수익을 보장하지 않습니다.
 
-## 실행
+## 웹 주소 (매일 자동 갱신)
+
+**https://bodung2.github.io/boyee/**
+
+GitHub Actions(`.github/workflows/market-dashboard.yml`)가 한국 시간 화~토 07:30(전날 미국장 마감 반영)에 새로 계산해 GitHub Pages에 올립니다. PC가 꺼져 있어도 됩니다. 주소를 아는 사람은 누구나 볼 수 있습니다(시장 데이터와 규칙만 있고 개인 정보는 없음).
+
+최초 1회 설정:
+1. 저장소 **Settings → Pages → Build and deployment → Source**를 **GitHub Actions**로 바꿉니다.
+2. (선택) 텔레그램 요약: **Settings → Secrets and variables → Actions → New repository secret**에 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`를 넣습니다(.env와 같은 값).
+3. **Actions → market-dashboard → Run workflow**로 한 번 실행하면 몇 분 뒤 주소가 열립니다.
+
+Yahoo 접속이 막힌 날은 지난번에 받아 둔 시세(Actions 캐시)로 화면을 만들고, 그것도 없으면 그날 실행만 실패하고 어제 화면이 그대로 남습니다.
+
+## PC에서 실행 (선택)
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\setup_market_windows.ps1 -Time 07:40   # 최초 1회: 패키지 설치 + 화~토 07:40 예약 + 지금 한 번 실행

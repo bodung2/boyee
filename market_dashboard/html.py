@@ -135,7 +135,7 @@ svg text{fill:var(--ink2);font-size:12px}
   <section class="card note">
     <h2>규칙</h2>
     <ul id="rules"></ul>
-    <div class="warnbox">참고 자료이며 매매 신호가 아닙니다. 과거 성과가 미래 수익을 보장하지 않습니다. 백테스트에는 세금이 빠져 있습니다(해외 직투 양도차익 22%, 국내 상장 해외 ETF 15.4% 등). 투자 원금은 부채 상환 계획과 비상금을 뺀 여유 자금으로만.</div>
+    <div class="warnbox">참고 자료이며 매매 신호가 아닙니다. 과거 성과가 미래 수익을 보장하지 않습니다. 백테스트에는 세금이 빠져 있습니다(해외 직투 양도차익 22%, 국내 상장 해외 ETF 15.4% 등). 투자는 비상금을 뺀 여유 자금으로만.</div>
   </section>
 </main>
 <div id="tip"></div>
@@ -154,7 +154,7 @@ function showTip(html, ev){ tip.innerHTML=html; tip.style.display="block"; const
 function hideTip(){ tip.style.display="none"; }
 
 /* 머리말 */
-$("asof").textContent = `기준일 ${D.asof} · ${D.base==="KRW"?"원화":"달러"} 기준 수익 · 다음 리밸런싱 ${D.next_rebalance}`;
+$("asof").textContent = `기준일 ${D.asof} · ${D.base==="KRW"?"원화":"달러"} 기준 수익 · 다음 리밸런싱 ${D.next_rebalance}` + (D.generated?` · 갱신 ${D.generated}`:"");
 (function chips(){
   const c = $("chips"); const L = D.liquidity, R = D.regime, C = D.corr;
   const items = [];

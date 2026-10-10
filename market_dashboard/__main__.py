@@ -3,6 +3,7 @@
   python -m market_dashboard run --notify     위 작업 + 오늘의 답을 텔레그램으로(TELEGRAM_BOT_TOKEN·CHAT_ID)
   python -m market_dashboard run --offline    받아 둔 데이터(data/market/)로만 다시 계산
   python -m market_dashboard run --base USD   달러 기준 수익으로 평가(기본 원화)
+  python -m market_dashboard run --out site   결과를 site/index.html로(GitHub Pages 배포용)
 """
 from __future__ import annotations
 
@@ -11,6 +12,8 @@ import json
 import logging
 import os
 import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pandas as pd
 
@@ -22,6 +25,8 @@ from .signals import Params
 
 CACHE = ROOT / "data" / "market"
 OUT = ROOT / "output" / "market"
+
+KST = timezone(timedelta(hours=9))
 
 log = logging.getLogger("market_dashboard")
 
@@ -53,6 +58,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--offline", action="store_true")
     r.add_argument("--notify", action="store_true")
     r.add_argument("--base", choices=["KRW", "USD"], default="KRW")
+    r.add_argument("--out", help="이 폴더에 index.html로 저장(기본: output/market/dashboard.html)")
     args = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -67,11 +73,15 @@ def main(argv: list[str] | None = None) -> int:
         fred = data.fetch_fred(CACHE)
 
     d = report.build(close, fred, Params(), base=args.base)
-    OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "dashboard.json").write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
-    page = OUT / "dashboard.html"
+    d["generated"] = datetime.now(KST).strftime("%Y-%m-%d %H:%M KST")
+    out = Path(args.out) if args.out else OUT
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "dashboard.json").write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
+    page = out / ("index.html" if args.out else "dashboard.html")
     page.write_text(html.render(d), encoding="utf-8")
     text = summary(d)
+    if os.environ.get("DASHBOARD_URL"):
+        text += "\n" + os.environ["DASHBOARD_URL"]
     print(text)
     print(f"대시보드: {page}")
     if args.notify:
