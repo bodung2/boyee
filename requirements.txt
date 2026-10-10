@@ -1,3 +1,7 @@
 playwright>=1.45
 pillow>=10.0
 tzdata>=2024.1
+# 자산군 모멘텀 대시보드(market_dashboard)
+pandas>=2.0
+numpy>=1.24
+yfinance>=0.2.40
