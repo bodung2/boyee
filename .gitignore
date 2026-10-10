@@ -15,3 +15,6 @@ secrets/
 persona/
 docs/persona_answers*
 data/neighbors*.json
+
+# 자산군 모멘텀 대시보드: 받아 둔 시세·거시 데이터
+data/market/

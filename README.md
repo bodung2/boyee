@@ -277,6 +277,16 @@ notepad .env                                              # TISTORY_BLOG, TISTOR
 
 검색어는 `naver_autopost/profiles.py`의 `neighbor_keywords` 또는 `.env`의 `NEIGHBOR_KEYWORDS_CHILDHOOD`/`_EDU`로 바꿉니다.
 
+## 자산군 모멘텀 대시보드 (투자 참고용)
+
+주식·채권·실물·통화·비트코인 19개 자산군을 "추세 강도 × 가속도" 사분면에 놓고, 미리 정한 규칙으로 오늘의 목표 비중과 원화 기준 백테스트를 보여 줍니다. 블로그 발행과는 별개입니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_market_windows.ps1 -Time 07:40   # 화~토 07:40 예약 + 지금 한 번 실행
+```
+
+결과는 `output\market\dashboard.html`입니다. 규칙과 화면 설명은 [docs/MARKET_DASHBOARD.md](docs/MARKET_DASHBOARD.md)에 있습니다.
+
 ## 블로그 디자인 (SR 기존 글과 동일)
 
 `STYLE_MODE=native`(기본): 기존 글(https://blog.naver.com/kkus_i/224403935438)의 서식을 그대로 재현합니다.
