@@ -167,6 +167,19 @@ def write_post(cfg: Config, out_dir: Path, today: str, feedback: str = "") -> Pa
     return post_path
 
 
+def repair_post(cfg: Config, out_dir: Path, errors: list[str]) -> None:
+    """구조 검사에서 떨어진 글을 버리지 않고, 같은 주제·내용으로 그 문제만 고치게 한다."""
+    prompt = (
+        f"/{cfg.profile.write_skill}\n\n"
+        f"OUTPUT_DIR={_rel(out_dir)}\nMODE=repair\n{_persona_lines(cfg, recent=False)}\n"
+        "OUTPUT_DIR/post.json은 이미 다 쓴 글인데 발행 전 구조 검사에서 아래 문제로 떨어졌다. "
+        "새 글을 쓰지 말고 주제·제목·본문 내용은 그대로 둔 채 아래 문제만 고쳐 같은 post.json에 저장하라. "
+        "출처가 부족하면 글을 쓰며 실제로 확인한 자료와, 지금 웹에서 새로 열어 본문을 확인한 공식 자료로 sources를 채워라. "
+        "열어 보지 않은 출처나 주소를 지어내지 마라. 질문하지 말고 끝까지 진행하라.\n- " + "\n- ".join(errors)
+    )
+    _run_claude(cfg, prompt, out_dir / "claude_repair.log")
+
+
 def factcheck(cfg: Config, out_dir: Path) -> dict:
     prompt = (
         f"/{cfg.profile.factcheck_skill}\n\n"
