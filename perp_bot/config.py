@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 # 사용자와 정한 한도(이보다 느슨하게는 못 바꾼다)
 HARD_MAX_LEVERAGE = 10.0
@@ -44,6 +44,5 @@ class BotConfig:
         lev = min(float(env("PERP_MAX_LEVERAGE", c.max_leverage)), HARD_MAX_LEVERAGE)
         risk = min(float(env("PERP_RISK_PER_TRADE", c.risk_per_trade)), 0.02)
         stop_eq = max(float(env("PERP_STOP_EQUITY", c.stop_equity)), HARD_STOP_EQUITY)
-        from dataclasses import replace
         return replace(c, max_leverage=lev, risk_per_trade=risk, stop_equity=stop_eq,
                        max_coin_leverage=min(c.max_coin_leverage, lev))
