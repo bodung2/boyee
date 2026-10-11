@@ -230,7 +230,8 @@ def variants(p: Params) -> list[tuple[str, Params]]:
     ]
 
 
-def build(close: pd.DataFrame, fred: pd.DataFrame, p: Params, base: str = "KRW") -> dict:
+def build(close: pd.DataFrame, fred: pd.DataFrame, p: Params, base: str = "KRW",
+          products_live: dict | None = None) -> dict:
     from .data import to_base
 
     prices_sig = to_base(close, "USD")
@@ -247,7 +248,7 @@ def build(close: pd.DataFrame, fred: pd.DataFrame, p: Params, base: str = "KRW")
         "params": {"horizons": list(p.horizons), "skip": p.skip, "top_n": p.top_n, "corr_max": p.corr_max,
                    "max_weight": p.max_weight, "overheat_z": p.overheat_z, "cost": p.cost},
         "assets": assets,
-        "products": products.for_dashboard(),
+        "products": products.for_dashboard(products_live),
         "frames": [d.strftime("%Y-%m-%d") for d in frame_idx],
         "trail_days": TRAIL_DAYS,
         "frame_weights": frame_weights(bt, frame_idx),
