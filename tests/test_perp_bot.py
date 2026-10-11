@@ -170,10 +170,20 @@ def test_xsmom_no_lookahead():
     assert np.allclose(r1[before], r2[before])
 
 
-def test_bithumb_candle_columns():
+def test_bithumb_pages_back_through_history(monkeypatch):
     from perp_bot import bithumb
-    rows = [[1609459200000, "100", "110", "120", "90", "2.5"], [1609545600000, "110", "105", "115", "100", "1"]]
-    df = bithumb.parse_candles(rows)
-    assert list(df.columns) == ["open", "close", "high", "low", "volume"]
-    assert df["close"].tolist() == [110.0, 105.0] and df["high"].iloc[0] == 120.0
-    assert df.index[0] == pd.Timestamp("2021-01-01")
+    days = pd.date_range("2018-01-01", periods=450, freq="D")[::-1]
+    rows = [{"candle_date_time_kst": f"{d:%Y-%m-%d}T00:00:00", "opening_price": 1, "high_price": 2, "low_price": 0.5,
+             "trade_price": float(i), "candle_acc_trade_price": 10.0} for i, d in enumerate(days)]
+    calls = []
+
+    def fake(path, params=None, tries=5):
+        calls.append(params.get("to"))
+        to = params.get("to")
+        start = 0 if to is None else next(i for i, r in enumerate(rows) if r["candle_date_time_kst"].replace("T", " ") == to) + 1
+        return rows[start:start + params["count"]]
+
+    monkeypatch.setattr(bithumb, "_get", fake)
+    df = bithumb.daily("BTC", pause=0)
+    assert len(df) == 450 and df.index[0] == pd.Timestamp("2018-01-01") and df.index.is_monotonic_increasing
+    assert len(calls) == 3 and df["close"].iloc[-1] == 0.0  # 가장 최근 봉이 맨 끝

@@ -17,6 +17,8 @@ import sys
 import time
 from dataclasses import replace
 
+import pandas as pd
+
 from naver_autopost.config import ROOT, _load_dotenv
 from naver_autopost.notify import send_text
 
@@ -99,6 +101,8 @@ def cmd_bithumb() -> int:
     close, dvol, missing = bithumb.load()
     print(f"빗썸 원화 마켓 {close.shape[1]}개 코인, {close.index[0]:%Y-%m-%d} ~ {close.index[-1]:%Y-%m-%d}")
     first = close.apply(lambda s: s.first_valid_index())
+    if close["BTC"].first_valid_index() > pd.Timestamp("2019-01-01"):
+        print("경고: BTC 기록이 2019년 이후부터라 IS(~2020) 검증이 불가능하다. 아래 결과는 믿지 말 것.")
     print("상장 시점별 코인 수: " + ", ".join(f"{y}년 {n}개" for y, n in first.dt.year.value_counts().sort_index().items()))
     rows = xsmom.run_all(close, dvol)
     print(xsmom.report(rows, list(close.columns), missing, xsmom.ended_early(close),
