@@ -33,7 +33,8 @@ def select(t: pd.Timestamp, sig: dict, weekly: pd.DataFrame, held: set[str], p: 
            risky: list[str]) -> tuple[list[Pick], dict[str, str]]:
     """t 시점 목표 비중과, 탈락 사유(대시보드 표시용)."""
     x = sig["x"].loc[t, risky]
-    elig = sig["eligible"].loc[t, risky]
+    # 새 편입은 추세 강도 min_x 이상, 이미 보유한 자산은 hold_x 아래로 떨어질 때까지 후보에 남긴다
+    elig = sig["eligible"].loc[t, risky] | (sig["holdable"].loc[t, risky] & pd.Series({k: k in held for k in risky}))
     ranked = x[elig].sort_values(ascending=False)
     rank = {k: i + 1 for i, k in enumerate(ranked.index)}
     keep = [k for k in ranked.index if k in held and rank[k] <= p.top_n + p.hold_buffer]

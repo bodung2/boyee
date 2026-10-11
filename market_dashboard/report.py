@@ -7,7 +7,7 @@ from dataclasses import replace
 import numpy as np
 import pandas as pd
 
-from . import backtest, products, signals
+from . import analysis, backtest, products, signals
 from .signals import Params
 from .universe import ASSETS, BENCHMARKS, CASH_KEY, GROUPS, by_key
 
@@ -38,6 +38,8 @@ def status_of(row: dict) -> str:
         return row["why"]
     q = row["quadrant"]
     if row["x"] is not None and row["x"] > 0 and not row["eligible"]:
+        if row["x"] <= row["min_x"]:
+            return f"추세 약함({row['min_x']} 미만·대기)"
         return "확인 부족(200일선·기간 수)"
     return {"주도": "대기", "둔화": "보유 유지·신규 X", "회복": "관심", "회피": "보유 X"}.get(q, q)
 
@@ -68,6 +70,7 @@ def assets_block(prices_sig, prices_val, bt, p: Params):
             "x": _f(x, 3), "accel": _f(a, 3),
             "quadrant": signals.quadrant(x, a),
             "eligible": bool(sig["eligible"].loc[t, k]),
+            "min_x": p.min_x,
             "overheat": bool(sig["overheat"].loc[t, k]),
             "stretch": _f(sig["stretch"].loc[t, k], 2),
             "positive": int(sig["positive"].loc[t, k]),
@@ -220,6 +223,7 @@ def backtest_block(prices_sig, prices_val, p: Params, bt: dict, variants: list[t
 def variants(p: Params) -> list[tuple[str, Params]]:
     return [
         ("기본(3·6·12개월, 상위 5)", p),
+        ("편입 기준 0(이전 규칙)", replace(p, min_x=0.0)),
         ("기간 2·5·10개월", replace(p, horizons=(42, 105, 210))),
         ("기간 4·8·12개월", replace(p, horizons=(84, 168, 252))),
         ("상위 3", replace(p, top_n=3)),
@@ -245,7 +249,7 @@ def build(close: pd.DataFrame, fred: pd.DataFrame, p: Params, base: str = "KRW",
         "asof": asof,
         "base": base,
         "groups": GROUPS,
-        "params": {"horizons": list(p.horizons), "skip": p.skip, "top_n": p.top_n, "corr_max": p.corr_max,
+        "params": {"min_x": p.min_x, "hold_x": p.hold_x, "horizons": list(p.horizons), "skip": p.skip, "top_n": p.top_n, "corr_max": p.corr_max,
                    "max_weight": p.max_weight, "overheat_z": p.overheat_z, "cost": p.cost},
         "assets": assets,
         "products": products.for_dashboard(products_live),
@@ -256,6 +260,7 @@ def build(close: pd.DataFrame, fred: pd.DataFrame, p: Params, base: str = "KRW",
         "corr": correlation_block(bt["weekly"]),
         "liquidity": liquidity_block(fred, prices_sig),
         "regime": regime_block(fred, prices_sig),
+        "analysis": analysis.run(prices_sig, prices_val, p),
         "backtest": backtest_block(prices_sig, prices_val, p, bt, variants(p)[1:]),
     }
 

@@ -158,3 +158,34 @@ def test_rank_prefers_cheapest_among_liquid():
     tie = rank([K("333333", "a", fee=0.004), K("444444", "b", fee=0.0068)],
                {"333333.KS": {"turnover": 2e9}, "444444.KS": {"turnover": 1e10}})
     assert tie[0]["code"] == "444444" and tie[0]["best"]
+
+
+def test_analysis_tables_and_text():
+    from market_dashboard import analysis
+
+    px = _prices(drifts={"GLD": 0.001, "USO": -0.001})
+    a = analysis.run(px, px, Params())
+    quads = {r["bucket"] for r in a["by_quadrant"]}
+    assert quads <= {"주도", "둔화", "회복", "회피"} and quads
+    gld = next(r for r in a["profiles"] if r["key"] == "GLD")
+    assert gld["share_pos"] > 0.5 and gld["mean_pos"] > 0
+    # 미래 수익은 관찰 시점 이후 값만 쓴다: 마지막 63거래일은 3개월 수익이 없다
+    pan = analysis.panel(px, Params())
+    last = pan[pan["date"] > px.index[-63]]
+    assert last["f_3개월"].isna().all()
+    text = analysis.as_text(a, {"GLD": "금"})
+    assert "사분면별" in text and "금" in text
+
+
+def test_entry_needs_strong_trend_but_holdings_stay_until_zero():
+    idx = pd.bdate_range("2020-01-01", periods=3)
+    keys = ["A", "B"]
+    t = idx[-1]
+    frame = lambda a, b: pd.DataFrame({"A": [a] * 3, "B": [b] * 3}, index=idx)
+    p = Params()
+    x = frame(0.3, 0.3)  # 둘 다 0 < x < 0.5
+    sig = {"x": x, "eligible": x > p.min_x, "holdable": x > p.hold_x, "wvol": frame(0.01, 0.01)}
+    weekly = pd.DataFrame(np.random.default_rng(0).normal(0, 0.01, (60, 2)), columns=keys,
+                          index=pd.date_range(end=t, periods=60, freq="W-FRI"))
+    picks, _ = backtest.select(t, sig, weekly, {"A"}, p, keys)
+    assert [pk.key for pk in picks] == ["A"]  # 보유 중인 A만 유지, B는 새로 편입하지 않음

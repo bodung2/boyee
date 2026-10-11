@@ -4,6 +4,7 @@
   python -m market_dashboard run --offline    받아 둔 데이터(data/market/)로만 다시 계산
   python -m market_dashboard run --base USD   달러 기준 수익으로 평가(기본 원화)
   python -m market_dashboard run --out site   결과를 site/index.html로(GitHub Pages 배포용)
+  python -m market_dashboard analyze          자산군별 경향·'어느 구간에서 사면 좋았나' 표를 출력
 """
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ import pandas as pd
 from naver_autopost.config import ROOT, _load_dotenv
 from naver_autopost.notify import send_text
 
-from . import data, html, products, report
+from . import backtest, data, html, products, report
 from .signals import Params
 
 CACHE = ROOT / "data" / "market"
@@ -59,10 +60,31 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--notify", action="store_true")
     r.add_argument("--base", choices=["KRW", "USD"], default="KRW")
     r.add_argument("--out", help="이 폴더에 index.html로 저장(기본: output/market/dashboard.html)")
+    an = sub.add_parser("analyze")
+    an.add_argument("--offline", action="store_true")
     args = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     _load_dotenv(ROOT / ".env")
+
+    if args.cmd == "analyze":
+        from . import analysis
+        from .universe import by_key
+
+        close = (pd.read_csv(CACHE / "prices.csv", index_col=0, parse_dates=True) if args.offline
+                 else data.fetch_prices(CACHE))
+        usd, krw = data.to_base(close, "USD"), data.to_base(close, "KRW")
+        a = analysis.run(usd, krw, Params())
+        print(analysis.as_text(a, {k: v.name for k, v in by_key().items()}))
+        print()
+        print("== 백테스트(원화) 규칙 비교 ==")
+        bench_start = max(krw[k].first_valid_index() for mix in report.BENCHMARKS.values() for k in mix)
+        for name, vp in report.variants(Params())[:2]:
+            r = backtest.run(usd, krw, vp, start=str(bench_start.date()))
+            m = backtest.metrics(r["nav"], krw[report.CASH_KEY])
+            print(f"  {name:<22} " + " ".join(f"{k} {v * 100:+.1f}%" if k != "샤프" else f"샤프 {v:.2f}" for k, v in m.items())
+                  + f" 회전율 {r['turnover_per_year']:.1f}배/년")
+        return 0
 
     if args.offline:
         close = pd.read_csv(CACHE / "prices.csv", index_col=0, parse_dates=True)

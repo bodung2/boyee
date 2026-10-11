@@ -57,6 +57,7 @@ svg{fill:var(--ink2)} svg text{font-size:12px}
 .tag{font-size:12px;border-radius:6px;padding:1px 6px;border:1px solid var(--ring)}
 .tag.buy{border-color:var(--yellow);color:var(--yellow)} .tag.hot{border-color:var(--warn);color:var(--warn)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid2>*{min-width:0}
 @media (max-width:760px){.grid2{grid-template-columns:1fr}}
 #tip{position:fixed;pointer-events:none;background:#141414;color:var(--ink);border:1px solid var(--ring);border-radius:8px;padding:8px 10px;font-size:12px;box-shadow:0 4px 16px rgba(0,0,0,.15);display:none;max-width:260px;z-index:9}
 .note{color:var(--ink2);font-size:13px}
@@ -98,6 +99,7 @@ svg{fill:var(--ink2)} svg text{font-size:12px}
 .chipbtns button{font:inherit;font-size:12px;border:1px solid var(--ring);background:#111;color:var(--ink);border-radius:999px;padding:3px 10px;cursor:pointer}
 .chipbtns button.on{border-color:var(--yellow);color:var(--yellow)}
 #answer tbody tr{cursor:pointer}
+.h3{font-size:14px;margin:14px 0 6px;color:var(--ink2);font-weight:600}
 .warnbox{border-left:3px solid var(--warn);padding:8px 12px;background:color-mix(in srgb,var(--warn) 7%,transparent);border-radius:4px;font-size:13px;margin-top:12px}
 </style>
 </head>
@@ -148,6 +150,21 @@ svg{fill:var(--ink2)} svg text{font-size:12px}
       <svg id="corrHist" viewBox="0 0 520 200"></svg>
     </section>
   </div>
+
+  <section class="card" id="anaCard">
+    <h2>경향 분석 — 어느 구간에서 사면 좋았나</h2>
+    <div class="sub" id="anaSub"></div>
+    <div class="grid2" style="margin-top:8px">
+      <div><h3 class="h3">사분면별</h3><div class="scroll"><table class="tbl" id="anaQuad"></table></div></div>
+      <div><h3 class="h3">추세 강도 구간별</h3><div class="scroll"><table class="tbl" id="anaX"></table></div></div>
+    </div>
+    <h3 class="h3">상승 추세(추세 강도 &gt; 0) 안에서 세부 조건</h3>
+    <div class="scroll"><table class="tbl" id="anaCond"></table></div>
+    <h3 class="h3">자산별: 사분면에 따른 3개월 뒤 초과수익(평균 · 적중률)</h3>
+    <div class="scroll"><table class="tbl" id="anaAsset"></table></div>
+    <h3 class="h3">자산별 성격</h3>
+    <div class="scroll"><table class="tbl" id="anaProf"></table></div>
+  </section>
 
   <section class="card">
     <h2>백테스트(원화 기준)</h2>
@@ -237,6 +254,9 @@ function drawQuad(){
     .forEach(([x,y,w,h,v])=>el("rect",{x,y,width:w,height:h,fill:`var(${v})`},bg));
   el("line",{x1:P.l,x2:W-P.r,y1:cy,y2:cy,stroke:"var(--axis)","stroke-width":1},bg);
   el("line",{x1:cx,x2:cx,y1:P.t,y2:H-P.b,stroke:"var(--axis)","stroke-width":1},bg);
+  // 새 편입 기준선(추세 강도 min_x)
+  const ex=sx(D.params.min_x||0);
+  if (D.params.min_x>0){ el("line",{x1:ex,x2:ex,y1:P.t,y2:H-P.b,stroke:"var(--yellow)","stroke-width":1,"stroke-dasharray":"4 4","stroke-opacity":.6},bg); }
   const lab=(x,y,t,anchor,bold,extra={},parent=bg)=>{const e=el("text",{x,y,"text-anchor":anchor,"font-weight":bold?700:400,...extra},parent); e.textContent=t; return e;};
   lab(W-P.r-6,P.t+16,"주도 · 매수 후보","end",1,{fill:"var(--red)"}); lab(W-P.r-6,H-P.b-8,"둔화 · 신규 X","end",1,{fill:"var(--yellow)"});
   lab(P.l+6,H-P.b-8,"회피 · 보유 X","start",1,{fill:"var(--blue)"}); lab(P.l+6,P.t+16,"회복 · 관심","start",1,{fill:"var(--ink)"});
@@ -383,7 +403,7 @@ function showBuy(key, scroll){
 /* 오늘의 답 */
 (function answer(){
   const p=D.params;
-  $("answerSub").textContent = `규칙: 추세 강도>0 · ${p.horizons.length}개 기간 중 2개 이상 현금보다 우위 · 200일선 위 → 강한 순으로 최대 ${p.top_n}개, 이미 담은 자산과 상관 ${p.corr_max}↑면 건너뜀, 변동성 역가중(한 자산 최대 ${pct(p.max_weight,0)}), 남는 비중은 현금. 매매는 월 1회.`;
+  $("answerSub").textContent = `규칙: 새 편입은 추세 강도>${p.min_x}(보유 중이면 ${p.hold_x} 아래로 내려갈 때까지 유지) · ${p.horizons.length}개 기간 중 2개 이상 현금보다 우위 · 200일선 위 → 강한 순으로 최대 ${p.top_n}개, 이미 담은 자산과 상관 ${p.corr_max}↑면 건너뜀, 변동성 역가중(한 자산 최대 ${pct(p.max_weight,0)}), 남는 비중은 현금. 매매는 월 1회.`;
   const rows = D.assets.map((a,i)=>{
     const tag = a.weight>0 ? `<span class="tag ${a.overheat?"hot":"buy"}">${esc(a.status)}</span>` : esc(a.status);
     return `<tr class="${a.weight>0?"pick":""}" data-k="${a.key}"><td>${i+1}</td><td class="l"><span class="dot" style="background:${gColor(a.group)}"></span>${esc(a.name)}</td><td class="l">${esc(a.quadrant)}</td><td class="${signCls(a.x)}">${num(a.x)}</td><td class="${signCls(a.accel)}">${num(a.accel)}</td><td class="${signCls(a.r1m)}">${pct(a.r1m)}</td><td class="${signCls(a.r3m)}">${pct(a.r3m)}</td><td class="${signCls(a.r12m)}">${pct(a.r12m)}</td><td class="l">${tag}</td><td>${a.weight>0?pct(a.weight,0):""}</td></tr>`;
@@ -442,6 +462,24 @@ function lineChart(svg, series, opt){
 }
 lineChart($("corrHist"), {"평균 상관": D.corr.avg_hist}, {colors:["var(--s1)"], fmt:v=>num(v)});
 
+/* 경향 분석 */
+(function ana(){
+  const A=D.analysis; if(!A) return;
+  $("anaSub").textContent=`${A.start} ~ ${A.end} · ${A.note} 적중 = 3개월 뒤 현금보다 나았던 비율.`;
+  const cell=s=> !s||s.mean==null ? `<td>–</td><td>–</td><td>–</td>` :
+    `<td class="${signCls(s.mean)}">${pct(s.mean,2)}</td><td>${pct(s.hit,0)}</td><td class="${s.t!=null&&Math.abs(s.t)>=3?"up":""}" style="${s.t!=null&&Math.abs(s.t)>=3?"font-weight:700;color:var(--yellow)":""}">${s.t==null?"–":num(s.t,1)}</td>`;
+  const head=`<thead><tr><th class="l">구간</th><th>표본</th><th>1개월 평균</th><th>적중</th><th>t</th><th>3개월 평균</th><th>적중</th><th>t</th></tr></thead>`;
+  const tbl=(rows)=>head+"<tbody>"+rows.map(r=>`<tr><td class="l">${esc(r.bucket)}</td><td>${r["3개월"].n}</td>${cell(r["1개월"])}${cell(r["3개월"])}</tr>`).join("")+"</tbody>";
+  $("anaQuad").innerHTML=tbl(A.by_quadrant); $("anaX").innerHTML=tbl(A.by_x);
+  $("anaCond").innerHTML=tbl([...A.accel_in_uptrend,...A.overheat_in_uptrend,...A.fresh_cross,...A.eligible]);
+  const nm=Object.fromEntries(D.assets.map(a=>[a.key,a.name])), Q=["주도","둔화","회복","회피"];
+  $("anaAsset").innerHTML=`<thead><tr><th class="l">자산</th>${Q.map(q=>`<th>${q}</th>`).join("")}</tr></thead><tbody>`+
+    Object.entries(A.per_asset_quadrant).map(([k,q])=>`<tr><td class="l">${esc(nm[k]||k)}</td>${Q.map(x=>{const s=q[x];return s&&s.mean!=null?`<td class="${signCls(s.mean)}">${pct(s.mean,1)} · ${pct(s.hit,0)}</td>`:"<td>–</td>";}).join("")}</tr>`).join("")+"</tbody>";
+  const P=A.profiles;
+  $("anaProf").innerHTML=`<thead><tr><th class="l">자산</th><th>시작</th><th>변동성</th><th>최대낙폭</th><th>2008</th><th>2020</th><th>2022</th><th>S&amp;P 상관</th><th>추세 지속성</th><th>추세&gt;0 적중</th><th>추세≤0 적중</th></tr></thead><tbody>`+
+    P.map(r=>`<tr><td class="l">${esc(r.name)}</td><td>${r.since}</td><td>${pct(r.vol,0)}</td><td class="down">${pct(r.mdd,0)}</td><td class="${signCls(r.y2008)}">${pct(r.y2008,0)}</td><td class="${signCls(r.y2020)}">${pct(r.y2020,0)}</td><td class="${signCls(r.y2022)}">${pct(r.y2022,0)}</td><td>${num(r.corr_spy)}</td><td class="${signCls(r.persist)}">${num(r.persist)}</td><td>${pct(r.hit_pos,0)}</td><td>${pct(r.hit_neg,0)}</td></tr>`).join("")+"</tbody>";
+})();
+
 /* 백테스트 */
 (function bt(){
   const B=D.backtest; const colors=["var(--s1)","var(--s2)","var(--s3)","var(--s4)"];
@@ -468,7 +506,7 @@ lineChart($("corrHist"), {"평균 상관": D.corr.avg_hist}, {colors:["var(--s1)
   const r=[
     `추세 강도 = ${p.horizons.map(h=>Math.round(h/21)).join("·")}개월 '현금(미 3개월 국채) 대비 초과수익 ÷ 변동성'의 평균. 최근 ${p.skip}거래일은 뺀다(단기 반전 회피). 신호는 달러 기준 가격으로 계산.`,
     `가속도 = 지금 추세 강도 − 4주 전 추세 강도.`,
-    `편입 조건: 추세 강도 > 0, 기간 중 2개 이상 현금보다 우위, 200일 이동평균선 위.`,
+    `편입 조건: 추세 강도 > ${p.min_x}, 기간 중 2개 이상 현금보다 우위, 200일 이동평균선 위. 이미 보유한 자산은 추세 강도가 ${p.hold_x} 아래로 내려가기 전까지 유지(경향 분석에서 0~${p.min_x} 구간의 새 진입은 성과가 약했음).`,
     `강한 순으로 최대 ${p.top_n}개. 이미 보유한 자산은 순위가 ${p.top_n}+2위까지 밀려도 유지(잦은 매매 방지). 이미 담은 자산과 52주 상관이 ${p.corr_max}를 넘으면 건너뜀.`,
     `비중은 변동성 역가중(변동성 큰 자산은 적게), 한 자산 최대 ${pct(p.max_weight,0)}, 남는 비중은 현금.`,
     `🔥 과열: 50일선에서 변동성 대비 ${p.overheat_z}배 이상 벗어남 → 한 번에 사지 말고 2~3회 분할.`,
