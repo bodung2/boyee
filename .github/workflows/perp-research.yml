@@ -6,6 +6,7 @@ on:
     paths:
       - "perp_bot/research.py"
       - "perp_bot/xsmom.py"
+      - "perp_bot/bithumb.py"
       - ".github/workflows/perp-research.yml"
   workflow_dispatch:
 
@@ -15,7 +16,7 @@ permissions:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,3 +30,5 @@ jobs:
         run: python -m perp_bot research
       - name: 종목 선정형 모멘텀(실제 시세)
         run: python -m perp_bot xsmom
+      - name: 빗썸 원화 마켓 종목 선정형 모멘텀(실제 시세)
+        run: python -m perp_bot bithumb

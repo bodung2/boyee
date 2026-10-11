@@ -78,16 +78,19 @@ def ended_early(close: pd.DataFrame, days: int = 30) -> list[str]:
 
 
 def backtest(close: pd.DataFrame, dvol: pd.DataFrame, top: int, look: int, filt: str = "none",
-             weighting: str = "equal", fixed: dict[str, float] | None = None) -> tuple[pd.Series, dict]:
+             weighting: str = "equal", fixed: dict[str, float] | None = None,
+             majors: set[str] = MAJORS) -> tuple[pd.Series, dict]:
     """일간 수익률과 부가 정보(연 회전율, 현금 비율, 평균 보유 종목 수)."""
     px = close.ffill()
     real = close.notna()
     hist = real.cumsum()
     dv30 = dvol.rolling(30, min_periods=20).mean()
+    ok = real & (hist >= MIN_HISTORY) & dv30.notna()
+    cols = close.columns
     mom = px / px.shift(look) - 1
     vol30 = px.pct_change(fill_method=None).rolling(30, min_periods=20).std()
     btc_ok = close["BTC"].ffill() > sma(close["BTC"].ffill(), 100)
-    cost = pd.Series({k: COST_MAJOR if k in MAJORS else COST_ALT for k in close.columns})
+    cost = pd.Series({k: COST_MAJOR if k in majors else COST_ALT for k in close.columns})
 
     sundays = [t for t in close.index if t.weekday() == 6]
     ends = sundays[1:] + [close.index[-1]]
@@ -98,17 +101,16 @@ def backtest(close: pd.DataFrame, dvol: pd.DataFrame, top: int, look: int, filt:
     for a, b in zip(sundays, ends):
         if b <= a:
             continue
-        elig = [k for k in close.columns
-                if real.at[a, k] and hist.at[a, k] >= MIN_HISTORY and not math.isnan(dv30.at[a, k])]
+        elig = list(cols[ok.loc[a].to_numpy()])
         if not started and len(elig) < 8:
             continue
         started = True
         if fixed is not None:
             w = {k: v for k, v in fixed.items() if k in elig}
         else:
-            uni = sorted(elig, key=lambda k: dv30.at[a, k], reverse=True)[:UNIVERSE_N]
-            uni = [k for k in uni if not math.isnan(mom.at[a, k])]
-            picks = sorted(uni, key=lambda k: mom.at[a, k], reverse=True)[:top]
+            uni = dv30.loc[a, elig].nlargest(UNIVERSE_N).index
+            m = mom.loc[a, uni].dropna()
+            picks = list(m.nlargest(top).index)
             if filt == "btc100" and not bool(btc_ok.at[a]):
                 picks = []
             elif filt == "abs":
@@ -168,24 +170,25 @@ def grid() -> list[tuple[str, dict]]:
     return g
 
 
-def run_all(close: pd.DataFrame, dvol: pd.DataFrame) -> list[dict]:
+def run_all(close: pd.DataFrame, dvol: pd.DataFrame, majors: set[str] = MAJORS) -> list[dict]:
     rows = []
     for name, kw in grid():
-        r, info = backtest(close, dvol, **kw)
+        r, info = backtest(close, dvol, majors=majors, **kw)
         isr, oos = r[r.index < SPLIT], r[r.index >= SPLIT]
         rows.append({"strategy": name, "IS": stats(isr), "OOS": stats(oos), "info": info,
                      "OOS 대박5주 제외": no_best_weeks(oos), "bench": "fixed" in kw or kw["look"] == 1})
     return rows
 
 
-def report(rows: list[dict], loaded: list[str], missing: list[str], ended: list[str]) -> str:
+def report(rows: list[dict], loaded: list[str], missing: list[str], ended: list[str],
+           title: str = "[종목 선정형 모멘텀] 현물·레버리지 없음. IS = ~2020년, OOS = 2021년~") -> str:
     def f(v, pct=True):
         if v is None or (isinstance(v, float) and math.isnan(v)):
             return "   –  "
         return f"{v * 100:+6.1f}%" if pct else f"{v:5.2f}"
 
-    lines = ["[종목 선정형 모멘텀] 현물·레버리지 없음. IS = ~2020년, OOS = 2021년~",
-             f"받은 코인 {len(loaded)}개: {', '.join(loaded)}",
+    shown = ", ".join(loaded) if len(loaded) <= 60 else ", ".join(loaded[:60]) + " …"
+    lines = [title, f"받은 코인 {len(loaded)}개: {shown}",
              f"못 받은 코인: {', '.join(missing) or '없음'} / 기록이 중간에 끊긴 코인: {', '.join(ended) or '없음'}",
              "", "  {:<34} | {:>7} {:>5} {:>7} | {:>7} {:>5} {:>7} {:>8} | {:>5} {:>5} {:>4} {:>5}".format(
                  "전략", "IS연", "IS샤프", "IS낙폭", "OOS연", "샤프", "낙폭", "대박5주X", "회전", "현금", "보유", "레버")]

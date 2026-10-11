@@ -168,3 +168,12 @@ def test_xsmom_no_lookahead():
     r2, _ = xsmom.backtest(fut, fut * 1e6, top=3, look=14, filt="btc100")
     before = r1.index < cut - pd.Timedelta(days=1)
     assert np.allclose(r1[before], r2[before])
+
+
+def test_bithumb_candle_columns():
+    from perp_bot import bithumb
+    rows = [[1609459200000, "100", "110", "120", "90", "2.5"], [1609545600000, "110", "105", "115", "100", "1"]]
+    df = bithumb.parse_candles(rows)
+    assert list(df.columns) == ["open", "close", "high", "low", "volume"]
+    assert df["close"].tolist() == [110.0, 105.0] and df["high"].iloc[0] == 120.0
+    assert df.index[0] == pd.Timestamp("2021-01-01")

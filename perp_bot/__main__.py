@@ -4,6 +4,7 @@
   python -m perp_bot status              모의 운용 상태
   python -m perp_bot research            Yahoo 일봉(2014~)으로 여러 매매 방법론 비교(IS ~2020 / OOS 2021~)
   python -m perp_bot xsmom               여러 코인 중 강한 코인을 고르는 종목 선정형 모멘텀 검증(현물)
+  python -m perp_bot bithumb             같은 검증을 빗썸 원화 마켓 코인 전체로
 
 1단계(지금): 실제 주문 기능 없음. 실제 주문은 모의 운용 결과를 본 뒤 별도 단계에서 만든다.
 """
@@ -92,6 +93,20 @@ def cmd_xsmom() -> int:
     return 0
 
 
+def cmd_bithumb() -> int:
+    from . import bithumb, xsmom
+
+    close, dvol, missing = bithumb.load()
+    print(f"빗썸 원화 마켓 {close.shape[1]}개 코인, {close.index[0]:%Y-%m-%d} ~ {close.index[-1]:%Y-%m-%d}")
+    first = close.apply(lambda s: s.first_valid_index())
+    print("상장 시점별 코인 수: " + ", ".join(f"{y}년 {n}개" for y, n in first.dt.year.value_counts().sort_index().items()))
+    rows = xsmom.run_all(close, dvol)
+    print(xsmom.report(rows, list(close.columns), missing, xsmom.ended_early(close),
+                       title="[빗썸 원화 마켓 · 종목 선정형 모멘텀] 현물·레버리지 없음. IS = ~2020년, OOS = 2021년~\n"
+                             "주의: 지금 상장된 코인만 있음(상장폐지 코인 빠짐) → 실제보다 좋게 나온다"))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="perp_bot")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -101,6 +116,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("status")
     sub.add_parser("research")
     sub.add_parser("xsmom")
+    sub.add_parser("bithumb")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     _load_dotenv(ROOT / ".env")
@@ -112,6 +128,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_research(c)
     if args.cmd == "xsmom":
         return cmd_xsmom()
+    if args.cmd == "bithumb":
+        return cmd_bithumb()
     if args.cmd == "status":
         sim = paper.load(STATE, c)
         try:
