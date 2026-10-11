@@ -120,3 +120,18 @@ def test_cli_writes_index_for_pages(tmp_path, monkeypatch):
     assert cli.main(["run", "--offline", "--out", str(tmp_path / "site"), "--notify"]) == 0
     page = (tmp_path / "site" / "index.html").read_text(encoding="utf-8")
     assert "갱신" in page and sent and sent[0].endswith("https://example.test/")
+
+
+def test_every_asset_has_buyable_products():
+    from market_dashboard import products
+
+    cat = products.for_dashboard()
+    for key in universe.risky_keys():
+        e = cat["by_asset"][key]
+        assert e["us"] or e["kr"], key
+        for it in e["kr"]:
+            assert len(it["code"]) == 6 and it["code"].isdigit(), it
+            assert it["url"].endswith(it["code"])
+        for it in e["us"]:
+            assert it["code"].isupper() and it["url"].endswith(it["code"])
+    assert cat["cash"]["kr"] and cat["cash"]["us"]

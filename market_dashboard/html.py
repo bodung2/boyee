@@ -75,6 +75,24 @@ svg{fill:var(--ink2)} svg text{font-size:12px}
 .moves{display:flex;flex-wrap:wrap;gap:6px;min-height:26px;margin:4px 0}
 .moves span{font-size:12px;border:1px solid var(--ring);border-radius:999px;padding:2px 10px}
 .moves .to-lead{border-color:var(--red);color:var(--red)} .moves .to-lag{border-color:var(--blue);color:var(--blue)} .moves .other{color:var(--ink2)}
+.buy-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 14px}
+.buy-head .big{font-size:20px;font-weight:700}
+.buy-state{font-size:13px;border:1px solid var(--ring);border-radius:999px;padding:2px 10px}
+.buy-state.pick{border-color:var(--yellow);color:var(--yellow)}
+.buy-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px}
+@media (max-width:760px){.buy-grid{grid-template-columns:1fr}}
+.buy-col h3{font-size:14px;margin:0 0 6px;color:var(--ink2);font-weight:600}
+.prod{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 10px;border:1px solid var(--ring);border-radius:8px;margin-bottom:6px;text-decoration:none;color:var(--ink);background:#111}
+.prod:hover{border-color:var(--yellow)}
+.prod .nm{font-weight:600}
+.prod .cd{font-variant-numeric:tabular-nums;color:var(--yellow);font-weight:700;white-space:nowrap}
+.prod .ds{display:block;font-size:12px;color:var(--muted);font-weight:400}
+.prod.first{border-color:rgba(255,214,10,.5)}
+.empty{font-size:13px;color:var(--muted);padding:6px 0}
+.chipbtns{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chipbtns button{font:inherit;font-size:12px;border:1px solid var(--ring);background:#111;color:var(--ink);border-radius:999px;padding:3px 10px;cursor:pointer}
+.chipbtns button.on{border-color:var(--yellow);color:var(--yellow)}
+#answer tbody tr{cursor:pointer}
 .warnbox{border-left:3px solid var(--warn);padding:8px 12px;background:color-mix(in srgb,var(--warn) 7%,transparent);border-radius:4px;font-size:13px;margin-top:12px}
 </style>
 </head>
@@ -99,6 +117,13 @@ svg{fill:var(--ink2)} svg text{font-size:12px}
     <div class="moves" id="moves"></div>
     <svg id="quad" viewBox="0 0 800 530" role="img" aria-label="자산별 추세 강도와 가속도 사분면"></svg>
     <div class="legend"><span><i style="background:var(--pos);height:3px"></i>같이 움직임(+)</span><span><i style="background:var(--neg);height:3px"></i>반대로 움직임(−)</span><span>선 굵기 = 상관의 크기</span><span>🔥 과열(50일선에서 크게 이탈)</span><span>○ 현금보다 약함</span></div>
+  </section>
+
+  <section class="card" id="buyCard">
+    <h2>이 자산군 사려면</h2>
+    <div class="sub">지도의 점이나 아래 표의 줄을 누르면 그 자산군을 실제로 살 수 있는 대표 상품이 나옵니다. 상품 이름을 누르면 시세 페이지가 열립니다.</div>
+    <div class="chipbtns" id="buyPicks"></div>
+    <div id="buy"></div>
   </section>
 
   <section class="card">
@@ -261,7 +286,7 @@ function drawDyn(){
     const t=el("text",{x:lx,y:y+4+dy,"text-anchor":anchor,"font-weight":s.w>0?700:400,fill:s.w>0?"var(--yellow)":"var(--ink)"},g); t.textContent=name;
     g.addEventListener("mousemove",ev=>showTip(tipHtml(a),ev));
     g.addEventListener("mouseleave",hideTip);
-    g.addEventListener("click",ev=>{ selected = selected===a.key?null:a.key; drawDyn(); if(selected) showTip(tipHtml(a),ev); else hideTip(); });
+    g.addEventListener("click",ev=>{ selected = selected===a.key?null:a.key; drawDyn(); if(selected){ showTip(tipHtml(a),ev); showBuy(a.key,false); } else hideTip(); });
   });
 }
 // 최근 5거래일 사이 사분면이 바뀐 자산
@@ -314,15 +339,47 @@ let rz; addEventListener("resize",()=>{clearTimeout(rz); rz=setTimeout(drawQuad,
 })();
 drawQuad(); setFrame(F);
 
+/* 이 자산군 사려면 */
+let buyKey=null;
+function showBuy(key, scroll){
+  buyKey=key; const P=D.products, isCash=key==="CASH";
+  const a=D.assets.find(x=>x.key===key), e=isCash?P.cash:P.by_asset[key];
+  if(!e) return;
+  const prod=(it,i,kr)=>`<a class="prod${i===0?" first":""}" href="${it.url}" target="_blank" rel="noopener"><span><span class="nm">${esc(kr?it.name:it.code)}</span><span class="ds">${esc(it.desc)}</span></span><span class="cd">${esc(it.code)}</span></a>`;
+  const col=(title,list,kr,empty)=>`<div class="buy-col"><h3>${title}</h3>${list.length?list.map((it,i)=>prod(it,i,kr)).join(""):`<div class="empty">${empty}</div>`}</div>`;
+  const cash=1-D.assets.reduce((s,x)=>s+x.weight,0);
+  const state = isCash ? `<span class="buy-state pick">규칙상 현금 ${pct(cash,0)}</span>`
+    : a.weight>0 ? `<span class="buy-state pick">규칙상 편입 · 목표 ${pct(a.weight,0)}${a.overheat?" · 🔥 분할 매수":""}</span>`
+    : `<span class="buy-state">${esc(a.quadrant)} · ${esc(a.status)}</span>`;
+  const head = isCash ? "현금(남는 비중)" : esc(a.name);
+  const stats = isCash ? "" : `<span class="sub">추세 ${num(a.x)} · 가속 ${num(a.accel)} · 3개월 <span class="${signCls(a.r3m)}">${pct(a.r3m)}</span> · 12개월 <span class="${signCls(a.r12m)}">${pct(a.r12m)}</span></span>`;
+  const warn = (!isCash && a.weight===0) ? `<div class="warnbox" style="margin-top:10px">지금 규칙상으로는 편입 대상이 아닙니다(${esc(a.status)}). 상품 정보만 참고하세요.</div>` : "";
+  $("buy").innerHTML = `<div class="buy-head" style="margin-top:12px"><span class="big">${head}</span>${state}${stats}</div>${warn}
+    <div class="buy-grid">${col("국내 상장 ETF · 일반/ISA/연금 계좌",e.kr,true,"확인된 대표 국내 상장 상품 없음")}${col("미국 상장 ETF · 해외주식 계좌",e.us,false,"해당 없음")}</div>
+    ${e.note?`<div class="sub" style="margin-top:8px">${esc(e.note)}</div>`:""}
+    <ul class="note" style="margin:10px 0 0;padding-left:18px">${P.guide.map(g=>`<li>${esc(g)}</li>`).join("")}</ul>
+    <div class="sub" style="margin-top:6px">상품 목록 확인 ${esc(P.checked)} · 특정 상품의 매수 권유가 아니며, 보수·상장 상태는 매수 전에 증권사에서 다시 확인하세요.</div>`;
+  document.querySelectorAll("#buyPicks button").forEach(b=>b.classList.toggle("on",b.dataset.k===key));
+  if(scroll) $("buyCard").scrollIntoView({behavior:"smooth",block:"start"});
+}
+(function buyPicks(){
+  const picks=D.assets.filter(a=>a.weight>0);
+  const btns=picks.map(a=>`<button data-k="${a.key}">${esc(a.name)} ${pct(a.weight,0)}</button>`).join("")+`<button data-k="CASH">현금</button>`;
+  $("buyPicks").innerHTML=`<span class="sub" style="align-self:center">오늘 규칙상 담을 것:</span>`+btns;
+  $("buyPicks").querySelectorAll("button").forEach(b=>b.onclick=()=>showBuy(b.dataset.k,false));
+  showBuy(picks.length?picks[0].key:"CASH",false);
+})();
+
 /* 오늘의 답 */
 (function answer(){
   const p=D.params;
   $("answerSub").textContent = `규칙: 추세 강도>0 · ${p.horizons.length}개 기간 중 2개 이상 현금보다 우위 · 200일선 위 → 강한 순으로 최대 ${p.top_n}개, 이미 담은 자산과 상관 ${p.corr_max}↑면 건너뜀, 변동성 역가중(한 자산 최대 ${pct(p.max_weight,0)}), 남는 비중은 현금. 매매는 월 1회.`;
   const rows = D.assets.map((a,i)=>{
     const tag = a.weight>0 ? `<span class="tag ${a.overheat?"hot":"buy"}">${esc(a.status)}</span>` : esc(a.status);
-    return `<tr class="${a.weight>0?"pick":""}"><td>${i+1}</td><td class="l"><span class="dot" style="background:${gColor(a.group)}"></span>${esc(a.name)}</td><td class="l">${esc(a.quadrant)}</td><td class="${signCls(a.x)}">${num(a.x)}</td><td class="${signCls(a.accel)}">${num(a.accel)}</td><td class="${signCls(a.r1m)}">${pct(a.r1m)}</td><td class="${signCls(a.r3m)}">${pct(a.r3m)}</td><td class="${signCls(a.r12m)}">${pct(a.r12m)}</td><td class="l">${tag}</td><td>${a.weight>0?pct(a.weight,0):""}</td></tr>`;
+    return `<tr class="${a.weight>0?"pick":""}" data-k="${a.key}"><td>${i+1}</td><td class="l"><span class="dot" style="background:${gColor(a.group)}"></span>${esc(a.name)}</td><td class="l">${esc(a.quadrant)}</td><td class="${signCls(a.x)}">${num(a.x)}</td><td class="${signCls(a.accel)}">${num(a.accel)}</td><td class="${signCls(a.r1m)}">${pct(a.r1m)}</td><td class="${signCls(a.r3m)}">${pct(a.r3m)}</td><td class="${signCls(a.r12m)}">${pct(a.r12m)}</td><td class="l">${tag}</td><td>${a.weight>0?pct(a.weight,0):""}</td></tr>`;
   }).join("");
   $("answer").innerHTML = `<thead><tr><th>#</th><th class="l">자산</th><th class="l">사분면</th><th>추세</th><th>가속</th><th>1개월</th><th>3개월</th><th>12개월</th><th class="l">상태</th><th>목표 비중</th></tr></thead><tbody>${rows}</tbody>`;
+  $("answer").querySelectorAll("tbody tr").forEach(tr=>tr.onclick=()=>showBuy(tr.dataset.k,true));
 })();
 
 /* 유동성·국면 */

@@ -7,7 +7,7 @@ from dataclasses import replace
 import numpy as np
 import pandas as pd
 
-from . import backtest, signals
+from . import backtest, products, signals
 from .signals import Params
 from .universe import ASSETS, BENCHMARKS, CASH_KEY, GROUPS, by_key
 
@@ -247,6 +247,7 @@ def build(close: pd.DataFrame, fred: pd.DataFrame, p: Params, base: str = "KRW")
         "params": {"horizons": list(p.horizons), "skip": p.skip, "top_n": p.top_n, "corr_max": p.corr_max,
                    "max_weight": p.max_weight, "overheat_z": p.overheat_z, "cost": p.cost},
         "assets": assets,
+        "products": products.for_dashboard(),
         "frames": [d.strftime("%Y-%m-%d") for d in frame_idx],
         "trail_days": TRAIL_DAYS,
         "frame_weights": frame_weights(bt, frame_idx),
