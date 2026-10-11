@@ -2,6 +2,7 @@
   python -m perp_bot backtest            Hyperliquid 4시간 봉(약 2.5년)으로 백테스트, 위험 설정별 비교
   python -m perp_bot paper [--notify]    모의 운용 한 번(새로 확정된 봉 처리). 예약 작업이 4시간마다 실행
   python -m perp_bot status              모의 운용 상태
+  python -m perp_bot research            Yahoo 일봉(2014~)으로 여러 매매 방법론 비교(IS ~2020 / OOS 2021~)
 
 1단계(지금): 실제 주문 기능 없음. 실제 주문은 모의 운용 결과를 본 뒤 별도 단계에서 만든다.
 """
@@ -62,6 +63,22 @@ def cmd_backtest(c: BotConfig) -> int:
     return 0
 
 
+def cmd_research(c: BotConfig) -> int:
+    from . import research
+
+    data = research.load_daily()
+    for k, df in data.items():
+        print(f"{k}: 일봉 {len(df)}개 {df.index[0]:%Y-%m-%d} ~ {df.index[-1]:%Y-%m-%d}")
+    fund = {}
+    for k in c.coins:
+        try:
+            fund[k] = hl.funding(k, days=900)
+        except Exception as e:
+            logging.warning("%s 펀딩비 못 받음: %s", k, e)
+    print(research.report(research.run_all(data), research.funding_carry(fund)))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="perp_bot")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -69,6 +86,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("paper")
     p.add_argument("--notify", action="store_true")
     sub.add_parser("status")
+    sub.add_parser("research")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     _load_dotenv(ROOT / ".env")
@@ -76,6 +94,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "backtest":
         return cmd_backtest(c)
+    if args.cmd == "research":
+        return cmd_research(c)
     if args.cmd == "status":
         sim = paper.load(STATE, c)
         try:

@@ -84,3 +84,50 @@ def test_paper_tick_resumes_from_saved_state(tmp_path):
     assert sim.last_bar == str(IDX[-1]) and path.exists()
     again, msgs2 = paper.tick(path, c, data, {})
     assert msgs2 == []  # 같은 봉을 두 번 처리하지 않는다
+
+
+def _daily(rows):
+    idx = pd.date_range("2022-01-01", periods=len(rows), freq="D")
+    return pd.DataFrame(rows, columns=["open", "high", "low", "close"], index=idx)
+
+
+def test_bracket_stop_first_when_both_hit_same_day():
+    from perp_bot import research
+    flat = [(100, 101, 99, 100)] * 20                 # ATR(14) = 2
+    df = _daily(flat + [(100, 120, 80, 100)] + [(100, 101, 99, 100)] * 5)
+    ent = pd.Series(False, index=df.index)
+    ent.iloc[19] = True                               # 다음 날(20번째) 시가 100에 진입
+    tr = research.run_bracket(df, ent, sl_atr=1.0, rr=3)
+    assert len(tr) == 1 and tr[0].reason == "손절" and tr[0].r < -1
+
+
+def test_bracket_target_pays_rr_minus_costs_and_no_lookahead():
+    from perp_bot import research
+    flat = [(100, 101, 99, 100)] * 20
+    df = _daily(flat + [(100, 101, 99.5, 100)] + [(100, 107, 99.5, 106)] + [(106, 107, 105, 106)] * 3)
+    ent = pd.Series(False, index=df.index)
+    ent.iloc[19] = True
+    tr = research.run_bracket(df, ent, sl_atr=1.0, rr=3)
+    t = tr[0]
+    assert t.reason == "익절" and t.entry_date == df.index[20]   # 신호 다음 날 진입
+    assert 2.7 < t.r < 3.0                             # +3R에서 비용·펀딩만 빠짐
+    # 신호 날 이후의 가격을 바꿔도 진입·손절폭은 그대로(미래 정보 안 씀)
+    df2 = df.copy()
+    df2.iloc[21:, :] = 50
+    t2 = research.run_bracket(df2, ent, sl_atr=1.0, rr=3)[0]
+    assert t2.entry_date == t.entry_date and t2.reason.startswith("손절")
+
+
+def test_research_positions_and_split():
+    from perp_bot import research
+    rng = np.random.default_rng(0)
+    idx = pd.date_range("2018-01-01", "2023-12-31", freq="D")
+    close = pd.Series(100 * np.exp(np.cumsum(rng.normal(0.001, 0.03, len(idx)))), index=idx)
+    df = pd.DataFrame({"open": close.shift(1).fillna(100), "high": close * 1.01, "low": close * 0.99, "close": close})
+    r = research.run_positions(df, research.pos_hold(df))
+    assert abs(r.iloc[5] - (close.iloc[5] / close.iloc[4] - 1 - research.FUND_LONG / 365)) < 1e-12
+    isr, oos = research.split(r)
+    assert isr["CAGR"] != oos["CAGR"] and "허용 레버리지(−33%)" in oos
+    rows = research.run_all({"BTC": df, "ETH": df, "SOL": df})
+    assert len(rows) == 3 * len(research.strategies(df)) + 1
+    assert "IS" in research.report(rows)
