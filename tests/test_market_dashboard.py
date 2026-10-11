@@ -175,3 +175,17 @@ def test_analysis_tables_and_text():
     assert last["f_3개월"].isna().all()
     text = analysis.as_text(a, {"GLD": "금"})
     assert "사분면별" in text and "금" in text
+
+
+def test_entry_needs_strong_trend_but_holdings_stay_until_zero():
+    idx = pd.bdate_range("2020-01-01", periods=3)
+    keys = ["A", "B"]
+    t = idx[-1]
+    frame = lambda a, b: pd.DataFrame({"A": [a] * 3, "B": [b] * 3}, index=idx)
+    p = Params()
+    x = frame(0.3, 0.3)  # 둘 다 0 < x < 0.5
+    sig = {"x": x, "eligible": x > p.min_x, "holdable": x > p.hold_x, "wvol": frame(0.01, 0.01)}
+    weekly = pd.DataFrame(np.random.default_rng(0).normal(0, 0.01, (60, 2)), columns=keys,
+                          index=pd.date_range(end=t, periods=60, freq="W-FRI"))
+    picks, _ = backtest.select(t, sig, weekly, {"A"}, p, keys)
+    assert [pk.key for pk in picks] == ["A"]  # 보유 중인 A만 유지, B는 새로 편입하지 않음

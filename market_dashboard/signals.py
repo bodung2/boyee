@@ -20,6 +20,8 @@ class Params:
     sma_long: int = 200
     sma_short: int = 50
     min_positive: int = 2                        # 3개 기간 중 몇 개가 현금보다 나아야 하나
+    min_x: float = 0.5                           # 새로 편입하려면 추세 강도가 이 이상(경향 분석: 0~0.5는 성과가 약했다)
+    hold_x: float = 0.0                          # 이미 보유한 자산은 추세 강도가 이 아래로 내려갈 때까지 유지
     overheat_z: float = 2.5                      # 50일선 이탈이 변동성 대비 이 이상이면 과열
     top_n: int = 5
     hold_buffer: int = 2                         # 보유 자산은 top_n+buffer 위까지 밀려도 유지
@@ -60,7 +62,9 @@ def compute(prices: pd.DataFrame, cash: pd.Series, p: Params) -> dict[str, pd.Da
     sma_s = prices.rolling(p.sma_short, min_periods=p.sma_short).mean()
     # 랜덤워크에서 '가격 − n일 평균'의 표준편차 ≈ σ·√(n/3)
     stretch = (np.log(prices) - np.log(sma_s)) / (vol * np.sqrt(p.sma_short / 3))
-    eligible = (x > 0) & (positive >= p.min_positive) & above
+    confirmed = (positive >= p.min_positive) & above
+    eligible = (x > p.min_x) & confirmed          # 새로 편입 가능
+    holdable = (x > p.hold_x) & confirmed         # 이미 보유 중이면 계속 보유 가능
     return {
         "x": x,
         "accel": accel,
@@ -69,6 +73,7 @@ def compute(prices: pd.DataFrame, cash: pd.Series, p: Params) -> dict[str, pd.Da
         "stretch": stretch,
         "overheat": stretch > p.overheat_z,
         "eligible": eligible.fillna(False).astype(bool),
+        "holdable": holdable.fillna(False).astype(bool),
         "wvol": daily_vol(prices, p.weight_vol_window),
     }
 

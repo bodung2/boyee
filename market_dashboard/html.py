@@ -254,6 +254,9 @@ function drawQuad(){
     .forEach(([x,y,w,h,v])=>el("rect",{x,y,width:w,height:h,fill:`var(${v})`},bg));
   el("line",{x1:P.l,x2:W-P.r,y1:cy,y2:cy,stroke:"var(--axis)","stroke-width":1},bg);
   el("line",{x1:cx,x2:cx,y1:P.t,y2:H-P.b,stroke:"var(--axis)","stroke-width":1},bg);
+  // 새 편입 기준선(추세 강도 min_x)
+  const ex=sx(D.params.min_x||0);
+  if (D.params.min_x>0){ el("line",{x1:ex,x2:ex,y1:P.t,y2:H-P.b,stroke:"var(--yellow)","stroke-width":1,"stroke-dasharray":"4 4","stroke-opacity":.6},bg); }
   const lab=(x,y,t,anchor,bold,extra={},parent=bg)=>{const e=el("text",{x,y,"text-anchor":anchor,"font-weight":bold?700:400,...extra},parent); e.textContent=t; return e;};
   lab(W-P.r-6,P.t+16,"주도 · 매수 후보","end",1,{fill:"var(--red)"}); lab(W-P.r-6,H-P.b-8,"둔화 · 신규 X","end",1,{fill:"var(--yellow)"});
   lab(P.l+6,H-P.b-8,"회피 · 보유 X","start",1,{fill:"var(--blue)"}); lab(P.l+6,P.t+16,"회복 · 관심","start",1,{fill:"var(--ink)"});
@@ -400,7 +403,7 @@ function showBuy(key, scroll){
 /* 오늘의 답 */
 (function answer(){
   const p=D.params;
-  $("answerSub").textContent = `규칙: 추세 강도>0 · ${p.horizons.length}개 기간 중 2개 이상 현금보다 우위 · 200일선 위 → 강한 순으로 최대 ${p.top_n}개, 이미 담은 자산과 상관 ${p.corr_max}↑면 건너뜀, 변동성 역가중(한 자산 최대 ${pct(p.max_weight,0)}), 남는 비중은 현금. 매매는 월 1회.`;
+  $("answerSub").textContent = `규칙: 새 편입은 추세 강도>${p.min_x}(보유 중이면 ${p.hold_x} 아래로 내려갈 때까지 유지) · ${p.horizons.length}개 기간 중 2개 이상 현금보다 우위 · 200일선 위 → 강한 순으로 최대 ${p.top_n}개, 이미 담은 자산과 상관 ${p.corr_max}↑면 건너뜀, 변동성 역가중(한 자산 최대 ${pct(p.max_weight,0)}), 남는 비중은 현금. 매매는 월 1회.`;
   const rows = D.assets.map((a,i)=>{
     const tag = a.weight>0 ? `<span class="tag ${a.overheat?"hot":"buy"}">${esc(a.status)}</span>` : esc(a.status);
     return `<tr class="${a.weight>0?"pick":""}" data-k="${a.key}"><td>${i+1}</td><td class="l"><span class="dot" style="background:${gColor(a.group)}"></span>${esc(a.name)}</td><td class="l">${esc(a.quadrant)}</td><td class="${signCls(a.x)}">${num(a.x)}</td><td class="${signCls(a.accel)}">${num(a.accel)}</td><td class="${signCls(a.r1m)}">${pct(a.r1m)}</td><td class="${signCls(a.r3m)}">${pct(a.r3m)}</td><td class="${signCls(a.r12m)}">${pct(a.r12m)}</td><td class="l">${tag}</td><td>${a.weight>0?pct(a.weight,0):""}</td></tr>`;
@@ -503,7 +506,7 @@ lineChart($("corrHist"), {"평균 상관": D.corr.avg_hist}, {colors:["var(--s1)
   const r=[
     `추세 강도 = ${p.horizons.map(h=>Math.round(h/21)).join("·")}개월 '현금(미 3개월 국채) 대비 초과수익 ÷ 변동성'의 평균. 최근 ${p.skip}거래일은 뺀다(단기 반전 회피). 신호는 달러 기준 가격으로 계산.`,
     `가속도 = 지금 추세 강도 − 4주 전 추세 강도.`,
-    `편입 조건: 추세 강도 > 0, 기간 중 2개 이상 현금보다 우위, 200일 이동평균선 위.`,
+    `편입 조건: 추세 강도 > ${p.min_x}, 기간 중 2개 이상 현금보다 우위, 200일 이동평균선 위. 이미 보유한 자산은 추세 강도가 ${p.hold_x} 아래로 내려가기 전까지 유지(경향 분석에서 0~${p.min_x} 구간의 새 진입은 성과가 약했음).`,
     `강한 순으로 최대 ${p.top_n}개. 이미 보유한 자산은 순위가 ${p.top_n}+2위까지 밀려도 유지(잦은 매매 방지). 이미 담은 자산과 52주 상관이 ${p.corr_max}를 넘으면 건너뜀.`,
     `비중은 변동성 역가중(변동성 큰 자산은 적게), 한 자산 최대 ${pct(p.max_weight,0)}, 남는 비중은 현금.`,
     `🔥 과열: 50일선에서 변동성 대비 ${p.overheat_z}배 이상 벗어남 → 한 번에 사지 말고 2~3회 분할.`,

@@ -21,7 +21,7 @@ import pandas as pd
 from naver_autopost.config import ROOT, _load_dotenv
 from naver_autopost.notify import send_text
 
-from . import data, html, products, report
+from . import backtest, data, html, products, report
 from .signals import Params
 
 CACHE = ROOT / "data" / "market"
@@ -73,8 +73,17 @@ def main(argv: list[str] | None = None) -> int:
 
         close = (pd.read_csv(CACHE / "prices.csv", index_col=0, parse_dates=True) if args.offline
                  else data.fetch_prices(CACHE))
-        a = analysis.run(data.to_base(close, "USD"), data.to_base(close, "KRW"), Params())
+        usd, krw = data.to_base(close, "USD"), data.to_base(close, "KRW")
+        a = analysis.run(usd, krw, Params())
         print(analysis.as_text(a, {k: v.name for k, v in by_key().items()}))
+        print()
+        print("== 백테스트(원화) 규칙 비교 ==")
+        bench_start = max(krw[k].first_valid_index() for mix in report.BENCHMARKS.values() for k in mix)
+        for name, vp in report.variants(Params())[:2]:
+            r = backtest.run(usd, krw, vp, start=str(bench_start.date()))
+            m = backtest.metrics(r["nav"], krw[report.CASH_KEY])
+            print(f"  {name:<22} " + " ".join(f"{k} {v * 100:+.1f}%" if k != "샤프" else f"샤프 {v:.2f}" for k, v in m.items())
+                  + f" 회전율 {r['turnover_per_year']:.1f}배/년")
         return 0
 
     if args.offline:
