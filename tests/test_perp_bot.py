@@ -116,6 +116,9 @@ def test_bracket_target_pays_rr_minus_costs_and_no_lookahead():
     df2.iloc[21:, :] = 50
     t2 = research.run_bracket(df2, ent, sl_atr=1.0, rr=3)[0]
     assert t2.entry_date == t.entry_date and t2.reason.startswith("손절")
+    # 매일 평가한 수익을 더하면 거래 R × 1%와 같다(보유 중 되돌림도 낙폭에 잡힘)
+    r = research.trades_to_returns(tr, df)
+    assert r.sum() == pytest.approx(research.RISK * t.r) and r.loc[df.index[20]] != 0
 
 
 def test_research_positions_and_split():
@@ -129,5 +132,5 @@ def test_research_positions_and_split():
     isr, oos = research.split(r)
     assert isr["CAGR"] != oos["CAGR"] and "허용 레버리지(−33%)" in oos
     rows = research.run_all({"BTC": df, "ETH": df, "SOL": df})
-    assert len(rows) == 3 * len(research.strategies(df)) + 1
+    assert len(rows) == 3 * len(research.strategies(df)) + 2
     assert "IS" in research.report(rows)

@@ -114,6 +114,9 @@ class Trade:
     r: float
     days: int
     reason: str
+    entry_px: float = 0.0
+    risk: float = 0.0
+    exit_px: float = 0.0
 
 
 def run_bracket(df: pd.DataFrame, entry: pd.Series, sl_atr: float, rr: float | None,
@@ -160,16 +163,24 @@ def run_bracket(df: pd.DataFrame, entry: pd.Series, sl_atr: float, rr: float | N
         days = k - j + 1
         cost_r = (COST * (e + exit_px)) / risk
         fund_r = e * FUND_LONG / 365 * days / risk
-        trades.append(Trade(idx[j], idx[k], (exit_px - e) / risk - cost_r - fund_r, days, reason))
+        trades.append(Trade(idx[j], idx[k], (exit_px - e) / risk - cost_r - fund_r, days, reason, e, risk, exit_px))
         i = k + 1
     return trades
 
 
-def trades_to_returns(trades: list[Trade], index: pd.DatetimeIndex) -> pd.Series:
-    """거래마다 잔고의 RISK를 걸었다고 보고, 청산일에 손익을 반영한 일간 수익률."""
-    r = pd.Series(0.0, index=index)
+def trades_to_returns(trades: list[Trade], df: pd.DataFrame) -> pd.Series:
+    """거래마다 잔고의 RISK를 걸었다고 보고, 보유 중에도 매일 종가로 평가한 일간 수익률
+    (청산일에만 반영하면 보유 중 되돌림이 낙폭에서 빠져 지나치게 좋아 보인다)."""
+    r = pd.Series(0.0, index=df.index)
+    close = df["close"]
     for t in trades:
-        r.loc[t.exit_date] += RISK * t.r
+        path = close.loc[t.entry_date:t.exit_date].to_numpy().copy()
+        path[-1] = t.exit_px
+        prev = np.concatenate([[t.entry_px], path[:-1]])
+        daily = RISK * (path - prev) / t.risk
+        dates = close.loc[t.entry_date:t.exit_date].index
+        r.loc[dates] += daily
+        r.loc[t.exit_date] += RISK * (t.r - (t.exit_px - t.entry_px) / t.risk)  # 비용·펀딩
     return r
 
 
@@ -219,6 +230,9 @@ def stats(r: pd.Series, trades: list[Trade] | None = None) -> dict:
             out["손익비"] = payoff
             out["손익분기 승률"] = 1 / (1 + payoff) if payoff == payoff else float("nan")
             out["기대값R"] = float(rs.mean())
+            out["중앙R"] = float(np.median(rs))
+            tot = rs.sum()
+            out["상위3비중"] = float(np.sort(rs)[-3:].sum() / tot) if tot > 0 else float("nan")
     # 600$→400$(−33%)에 닿지 않으려면 견딜 수 있는 대략의 최대 레버리지
     out["허용 레버리지(−33%)"] = min(0.33 / -out["MDD"], 10.0) if out["MDD"] < 0 else 10.0
     return out
@@ -269,9 +283,18 @@ def run_all(data: dict[str, pd.DataFrame]) -> list[dict]:
                 r = run_positions(df, val)
                 isr, oos = split(r)
             else:
-                r = trades_to_returns(val, df.index)
+                r = trades_to_returns(val, df)
                 isr, oos = split(r, val)
             rows.append({"coin": coin, "strategy": name, "IS": isr, "OOS": oos})
+    # 손익비형 대표(짧은 손절 + 추세 이탈까지 보유)를 세 코인에 동시에(각 1% 위험) 운용
+    combo = None
+    for coin, df in data.items():
+        c = df["close"]
+        brk = (c > df["high"].rolling(20).max().shift(1)) & (c > sma(c, 200))
+        rr = trades_to_returns(run_bracket(df, brk, 1.0, None, exit_low=10), df)
+        combo = rr if combo is None else combo.add(rr, fill_value=0.0)
+    isr, oos = split(combo)
+    rows.append({"coin": "3종 합", "strategy": "터틀 짧은 손절(1ATR) 세 코인 동시", "IS": isr, "OOS": oos})
     rot = rotation(data)
     isr, oos = split(rot)
     rows.append({"coin": "3종 순환", "strategy": "30일 최강 코인 순환(주 1회)", "IS": isr, "OOS": oos})
@@ -314,12 +337,14 @@ def report(rows: list[dict], fund_lines: list[str] | None = None) -> str:
     lines.append(head)
     for r in rows:
         i, o = r["IS"], r["OOS"]
-        lines.append("  {:<40} {:>4} | {} {} {} | {} {} {} {:>5} {} {} {} {}".format(
+        lines.append("  {:<40} {:>4} | {} {} {} | {} {} {} {:>5} {} {} {} {} {} {}".format(
             r["strategy"][:40], r["coin"][:4], f(i, "CAGR"), f(i, "샤프", False), f(i, "MDD"),
             f(o, "CAGR"), f(o, "샤프", False), f(o, "MDD"), o.get("거래", "–"), f(o, "승률"),
-            f(o, "손익비", False), f(o, "기대값R", False), f(o, "허용 레버리지(−33%)", False)))
+            f(o, "손익비", False), f(o, "기대값R", False), f(o, "중앙R", False), f(o, "상위3비중"),
+            f(o, "허용 레버리지(−33%)", False)))
     n = len(rows)
-    lines += ["", f"시험한 전략×코인 {n}개. 실력 없이도 우연히 나올 만한 최고 OOS 샤프 ≈ {luck_sharpe(n, 5.8):.2f} "
+    lines += ["", "손익비형은 한 거래에 잔고 1%를 걸고 보유 중에도 매일 평가. 상위3 = 전체 R 중 가장 좋은 3건이 차지한 비율.",
+              f"시험한 전략×코인 {n}개. 실력 없이도 우연히 나올 만한 최고 OOS 샤프 ≈ {luck_sharpe(n, 5.8):.2f} "
                   "(이보다 낮으면 '운일 수 있음')."]
     # 코인 3개 모두에서 IS·OOS 둘 다 보유보다 나은 전략
     by = {}

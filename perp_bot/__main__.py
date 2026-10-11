@@ -12,6 +12,7 @@ import argparse
 import logging
 import os
 import sys
+import time
 from dataclasses import replace
 
 from naver_autopost.config import ROOT, _load_dotenv
@@ -71,6 +72,7 @@ def cmd_research(c: BotConfig) -> int:
         print(f"{k}: 일봉 {len(df)}개 {df.index[0]:%Y-%m-%d} ~ {df.index[-1]:%Y-%m-%d}")
     fund = {}
     for k in c.coins:
+        time.sleep(3)  # 연달아 요청하면 429(요청 과다)가 난다
         try:
             fund[k] = hl.funding(k, days=900)
         except Exception as e:
