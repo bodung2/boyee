@@ -85,9 +85,14 @@ svg{fill:var(--ink2)} svg text{font-size:12px}
 .prod{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 10px;border:1px solid var(--ring);border-radius:8px;margin-bottom:6px;text-decoration:none;color:var(--ink);background:#111}
 .prod:hover{border-color:var(--yellow)}
 .prod .nm{font-weight:600}
-.prod .cd{font-variant-numeric:tabular-nums;color:var(--yellow);font-weight:700;white-space:nowrap}
+.prod .cd{font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px;white-space:nowrap}
+.prod .meta{text-align:right;font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.prod.thin{opacity:.6}
+.badge{font-size:11px;border:1px solid var(--ring);border-radius:6px;padding:0 5px;color:var(--ink2);white-space:nowrap}
+.badge.best{border-color:var(--yellow);color:#000;background:var(--yellow);font-weight:700}
+.badge.thin{color:var(--muted)}
 .prod .ds{display:block;font-size:12px;color:var(--muted);font-weight:400}
-.prod.first{border-color:rgba(255,214,10,.5)}
+.prod.first{border-color:var(--yellow)}
 .empty{font-size:13px;color:var(--muted);padding:6px 0}
 .chipbtns{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .chipbtns button{font:inherit;font-size:12px;border:1px solid var(--ring);background:#111;color:var(--ink);border-radius:999px;padding:3px 10px;cursor:pointer}
@@ -345,8 +350,13 @@ function showBuy(key, scroll){
   buyKey=key; const P=D.products, isCash=key==="CASH";
   const a=D.assets.find(x=>x.key===key), e=isCash?P.cash:P.by_asset[key];
   if(!e) return;
-  const prod=(it,i,kr)=>`<a class="prod${i===0?" first":""}" href="${it.url}" target="_blank" rel="noopener"><span><span class="nm">${esc(kr?it.name:it.code)}</span><span class="ds">${esc(it.desc)}</span></span><span class="cd">${esc(it.code)}</span></a>`;
-  const col=(title,list,kr,empty)=>`<div class="buy-col"><h3>${title}</h3>${list.length?list.map((it,i)=>prod(it,i,kr)).join(""):`<div class="empty">${empty}</div>`}</div>`;
+  const money=(v,kr)=> v==null ? "거래대금 확인 안 됨" : kr ? `일평균 ${v>=1e12?(v/1e12).toFixed(1)+"조":Math.round(v/1e8).toLocaleString()+"억"}원` : `일평균 $${v>=1e9?(v/1e9).toFixed(1)+"B":Math.round(v/1e6).toLocaleString()+"M"}`;
+  const fee=it=> it.fee==null ? "보수 확인 필요" : `보수 ${(+it.fee).toFixed(it.fee<0.1?4:2).replace(/0+$/,"").replace(/\.$/,"")}%${it.fee_src?` <span class="ds" style="display:inline">(${esc(it.fee_src)})</span>`:""}`;
+  const prod=(it,kr)=>`<a class="prod${it.best?" first":""}${it.liquid?"":" thin"}" href="${it.url}" target="_blank" rel="noopener">
+    <span><span class="nm">${esc(it.name)}</span> <span class="cd">${esc(it.code)}</span>${it.best?` <span class="badge best">추천</span>`:""}${it.signal?` <span class="badge">신호 기준</span>`:""}${it.liquid?"":` <span class="badge thin">거래 적음</span>`}
+      <span class="ds">${esc(it.desc)}</span></span>
+    <span class="meta">${fee(it)}<br><span class="ds">${money(it.turnover,kr)}</span></span></a>`;
+  const col=(title,list,kr,empty)=>`<div class="buy-col"><h3>${title}</h3>${list.length?list.map(it=>prod(it,kr)).join(""):`<div class="empty">${empty}</div>`}</div>`;
   const cash=1-D.assets.reduce((s,x)=>s+x.weight,0);
   const state = isCash ? `<span class="buy-state pick">규칙상 현금 ${pct(cash,0)}</span>`
     : a.weight>0 ? `<span class="buy-state pick">규칙상 편입 · 목표 ${pct(a.weight,0)}${a.overheat?" · 🔥 분할 매수":""}</span>`
@@ -358,7 +368,7 @@ function showBuy(key, scroll){
     <div class="buy-grid">${col("국내 상장 ETF · 일반/ISA/연금 계좌",e.kr,true,"확인된 대표 국내 상장 상품 없음")}${col("미국 상장 ETF · 해외주식 계좌",e.us,false,"해당 없음")}</div>
     ${e.note?`<div class="sub" style="margin-top:8px">${esc(e.note)}</div>`:""}
     <ul class="note" style="margin:10px 0 0;padding-left:18px">${P.guide.map(g=>`<li>${esc(g)}</li>`).join("")}</ul>
-    <div class="sub" style="margin-top:6px">상품 목록 확인 ${esc(P.checked)} · 특정 상품의 매수 권유가 아니며, 보수·상장 상태는 매수 전에 증권사에서 다시 확인하세요.</div>`;
+    <div class="sub" style="margin-top:6px">거래대금은 매일 자동 갱신${P.live?"":"(오늘은 받지 못함 — 추천 표시 없음)"} · 국내 보수는 ${esc(P.checked)} 운용사·거래소 자료 기준이라 그 뒤 인하·인상은 반영되지 않았을 수 있습니다 · 특정 상품의 매수 권유가 아닙니다.</div>`;
   document.querySelectorAll("#buyPicks button").forEach(b=>b.classList.toggle("on",b.dataset.k===key));
   if(scroll) $("buyCard").scrollIntoView({behavior:"smooth",block:"start"});
 }

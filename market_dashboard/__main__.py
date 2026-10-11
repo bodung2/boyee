@@ -20,7 +20,7 @@ import pandas as pd
 from naver_autopost.config import ROOT, _load_dotenv
 from naver_autopost.notify import send_text
 
-from . import data, html, report
+from . import data, html, products, report
 from .signals import Params
 
 CACHE = ROOT / "data" / "market"
@@ -68,11 +68,14 @@ def main(argv: list[str] | None = None) -> int:
         close = pd.read_csv(CACHE / "prices.csv", index_col=0, parse_dates=True)
         fred_path = CACHE / "fred.csv"
         fred = pd.read_csv(fred_path, index_col=0, parse_dates=True) if fred_path.exists() else pd.DataFrame()
+        prod_path = CACHE / "products.json"
+        live = json.loads(prod_path.read_text(encoding="utf-8")) if prod_path.exists() else {}
     else:
         close = data.fetch_prices(CACHE)
         fred = data.fetch_fred(CACHE)
+        live = products.fetch_live(CACHE)
 
-    d = report.build(close, fred, Params(), base=args.base)
+    d = report.build(close, fred, Params(), base=args.base, products_live=live)
     d["generated"] = datetime.now(KST).strftime("%Y-%m-%d %H:%M KST")
     out = Path(args.out) if args.out else OUT
     out.mkdir(parents=True, exist_ok=True)

@@ -130,8 +130,31 @@ def test_every_asset_has_buyable_products():
         e = cat["by_asset"][key]
         assert e["us"] or e["kr"], key
         for it in e["kr"]:
-            assert len(it["code"]) == 6 and it["code"].isdigit(), it
+            assert len(it["code"]) == 6 and it["code"].isalnum(), it
             assert it["url"].endswith(it["code"])
         for it in e["us"]:
             assert it["code"].isupper() and it["url"].endswith(it["code"])
+        # 신호 기준 상품은 자산마다 최대 하나
+        assert sum(it["signal"] for it in e["us"] + e["kr"]) <= 1
     assert cat["cash"]["kr"] and cat["cash"]["us"]
+    # 거래대금을 모르면 아무것도 추천하지 않는다
+    assert not any(it["best"] for e in cat["by_asset"].values() for it in e["us"] + e["kr"])
+
+
+def test_rank_prefers_cheapest_among_liquid():
+    from market_dashboard.products import K, U, rank
+
+    items = [U("AAA", "a", fee=0.20, signal=True), U("BBB", "b", fee=0.03), U("CCC", "c", fee=0.01)]
+    live = {"AAA": {"turnover": 5e9}, "BBB": {"turnover": 2e8, "fee": 0.04}, "CCC": {"turnover": 1e6}}
+    rows = rank(items, live)
+    assert [r["code"] for r in rows] == ["BBB", "AAA", "CCC"]  # CCC는 싸지만 거래가 적어 맨 뒤
+    assert rows[0]["best"] and rows[0]["fee"] == 0.04 and rows[0]["fee_src"] == "자동"
+    assert not rows[2]["liquid"]
+
+    kr = rank([K("111111", "x"), K("222222", "y", fee=0.5)], {"111111.KS": {"turnover": 5e10}, "222222.KS": {"turnover": 5e10}})
+    assert kr[0]["code"] == "222222"  # 보수를 아는 상품이 먼저
+
+    # 보수가 사실상 같으면(0.01%p 이내) 거래대금이 많은 쪽
+    tie = rank([K("333333", "a", fee=0.004), K("444444", "b", fee=0.0068)],
+               {"333333.KS": {"turnover": 2e9}, "444444.KS": {"turnover": 1e10}})
+    assert tie[0]["code"] == "444444" and tie[0]["best"]
