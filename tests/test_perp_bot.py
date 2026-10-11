@@ -134,3 +134,37 @@ def test_research_positions_and_split():
     rows = research.run_all({"BTC": df, "ETH": df, "SOL": df})
     assert len(rows) == 3 * len(research.strategies(df)) + 2
     assert "IS" in research.report(rows)
+
+
+def _coins(n=10, days=900, seed=0):
+    rng = np.random.default_rng(seed)
+    idx = pd.date_range("2019-01-06", periods=days, freq="D")
+    close = {}
+    for i in range(n):
+        drift = 0.004 if i == 3 else 0.0
+        close[f"C{i}"] = 100 * np.exp(np.cumsum(rng.normal(drift, 0.02, days)))
+    close["BTC"] = 100 * np.exp(np.cumsum(rng.normal(0.001, 0.02, days)))
+    close = pd.DataFrame(close, index=idx)
+    return close, close * 1e6
+
+
+def test_xsmom_picks_strong_coin_and_charges_costs():
+    from perp_bot import xsmom
+    close, dvol = _coins()
+    r, info = xsmom.backtest(close, dvol, top=1, look=30)
+    hold, _ = xsmom.backtest(close, dvol, top=1, look=1, fixed={"C3": 1.0})
+    assert (1 + r).prod() > 1 and info["평균 보유 수"] == pytest.approx(1.0)
+    # 같은 코인을 계속 들고 있으면 거의 보유와 같고, 갈아탈 때만 비용이 빠진다
+    assert (1 + r).prod() <= (1 + hold).prod() * 1.05
+
+
+def test_xsmom_no_lookahead():
+    from perp_bot import xsmom
+    close, dvol = _coins()
+    cut = close.index[600]
+    r1, _ = xsmom.backtest(close, dvol, top=3, look=14, filt="btc100")
+    fut = close.copy()
+    fut.loc[cut:] = fut.loc[cut:] * np.linspace(1, 5, len(fut.loc[cut:]))[:, None]
+    r2, _ = xsmom.backtest(fut, fut * 1e6, top=3, look=14, filt="btc100")
+    before = r1.index < cut - pd.Timedelta(days=1)
+    assert np.allclose(r1[before], r2[before])
