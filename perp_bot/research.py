@@ -120,7 +120,8 @@ class Trade:
 
 
 def run_bracket(df: pd.DataFrame, entry: pd.Series, sl_atr: float, rr: float | None,
-                exit_low: int | None = None, time_stop: int | None = None) -> list[Trade]:
+                exit_low: int | None = None, time_stop: int | None = None,
+                cost: float = COST, fund_per_bar: float = FUND_LONG / 365) -> list[Trade]:
     """롱만. entry[t]가 참이면 t+1 시가에 진입. 손절 = 진입가 − sl_atr×ATR(t).
     rr가 있으면 익절 = 진입가 + rr×손절폭. exit_low가 있으면 최근 N일 최저가 이탈 시 종가 청산(추세 추종형)."""
     o, h, l, c = (df[k].to_numpy() for k in ("open", "high", "low", "close"))
@@ -161,8 +162,8 @@ def run_bracket(df: pd.DataFrame, entry: pd.Series, sl_atr: float, rr: float | N
         if exit_px is None:
             exit_px, reason, k = c[n - 1], "기간 끝", n - 1
         days = k - j + 1
-        cost_r = (COST * (e + exit_px)) / risk
-        fund_r = e * FUND_LONG / 365 * days / risk
+        cost_r = (cost * (e + exit_px)) / risk
+        fund_r = e * fund_per_bar * days / risk
         trades.append(Trade(idx[j], idx[k], (exit_px - e) / risk - cost_r - fund_r, days, reason, e, risk, exit_px))
         i = k + 1
     return trades

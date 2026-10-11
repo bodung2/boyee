@@ -39,34 +39,50 @@ def markets() -> list[str]:
                   if m.get("market", "").startswith("KRW-"))
 
 
-def parse_candles(rows: list[dict]) -> pd.DataFrame:
+def parse_candles(rows: list[dict], normalize: bool = True) -> pd.DataFrame:
+    idx = pd.to_datetime([r["candle_date_time_kst"] for r in rows])
     df = pd.DataFrame({
         "open": [r["opening_price"] for r in rows], "high": [r["high_price"] for r in rows],
         "low": [r["low_price"] for r in rows], "close": [r["trade_price"] for r in rows],
         "value": [r.get("candle_acc_trade_price", 0) for r in rows],
-    }, index=pd.to_datetime([r["candle_date_time_kst"] for r in rows]).normalize())
+        "volume": [r.get("candle_acc_trade_volume", 0) for r in rows],
+    }, index=idx.normalize() if normalize else idx)
     df = df.astype(float)
     return df[~df.index.duplicated(keep="first")].sort_index()
 
 
-def daily(coin: str, pause: float = 0.05, max_pages: int = 40) -> pd.DataFrame:
-    """가장 최근부터 200개씩 과거로. 더 이상 과거가 없으면 멈춘다."""
+def _pages(path: str, coin: str, pause: float, max_pages: int, since: str | None = None) -> list[dict]:
+    """가장 최근부터 200개씩 과거로. 더 이상 과거가 없거나 since보다 오래되면 멈춘다."""
     pages, to = [], None
     for _ in range(max_pages):
         params = {"market": f"KRW-{coin}", "count": 200}
         if to:
             params["to"] = to
-        rows = _get("/candles/days", params)
+        rows = _get(path, params)
         time.sleep(pause)
         if not rows:
             break
         pages.extend(rows)
         oldest = min(r["candle_date_time_kst"] for r in rows)
         nxt = oldest.replace("T", " ")
-        if nxt == to or len(rows) < 200:
+        if nxt == to or len(rows) < 200 or (since and oldest < since):
             break
         to = nxt
+    return pages
+
+
+def daily(coin: str, pause: float = 0.05, max_pages: int = 40) -> pd.DataFrame:
+    pages = _pages("/candles/days", coin, pause, max_pages)
     return parse_candles(pages) if pages else pd.DataFrame()
+
+
+def hourly(coin: str, since: str = "2021-01-01", pause: float = 0.05, max_pages: int = 400) -> pd.DataFrame:
+    """1시간 봉(한국 시간 기준 시각). since 이후만."""
+    pages = _pages("/candles/minutes/60", coin, pause, max_pages, since=since)
+    if not pages:
+        return pd.DataFrame()
+    df = parse_candles(pages, normalize=False)
+    return df[df.index >= pd.Timestamp(since)]
 
 
 def load(min_days: int = 90, workers: int = 4):

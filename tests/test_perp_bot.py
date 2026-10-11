@@ -187,3 +187,33 @@ def test_bithumb_pages_back_through_history(monkeypatch):
     df = bithumb.daily("BTC", pause=0)
     assert len(df) == 450 and df.index[0] == pd.Timestamp("2018-01-01") and df.index.is_monotonic_increasing
     assert len(calls) == 3 and df["close"].iloc[-1] == 0.0  # 가장 최근 봉이 맨 끝
+
+
+def _hourly(n=3000, seed=0):
+    rng = np.random.default_rng(seed)
+    idx = pd.date_range("2021-01-01", periods=n, freq="h")
+    c = 100 * np.exp(np.cumsum(rng.normal(0, 0.01, n)))
+    o = np.r_[100, c[:-1]]
+    return pd.DataFrame({"open": o, "high": np.maximum(o, c) * 1.002, "low": np.minimum(o, c) * 0.998,
+                         "close": c, "value": c, "volume": rng.lognormal(0, 1, n)}, index=idx)
+
+
+def test_intraday_signals_use_only_past():
+    from perp_bot import intraday
+    df = _hourly()
+    fut = df.copy()
+    fut.iloc[2000:] = fut.iloc[2000:] * 3
+    a, b = intraday.signals(df), intraday.signals(fut)
+    for k in a:
+        assert a[k].iloc[:2000].equals(b[k].iloc[:2000]), k
+    hours = intraday.best_hours(df, df.index[1500])
+    assert intraday.best_hours(fut, df.index[1500]) == hours  # 시간대 선택도 IS 기간만 본다
+
+
+def test_intraday_position_costs():
+    from perp_bot import intraday
+    df = _hourly(500)
+    flip = pd.Series(np.arange(500) % 2, index=df.index, dtype=float)  # 매시간 사고팔기
+    r0 = intraday.run_positions(df, flip, 0.0)
+    r1 = intraday.run_positions(df, flip, 0.001)
+    assert (r0 - r1).sum() == pytest.approx(0.001 * flip.diff().abs().fillna(0).sum(), rel=0.01)
