@@ -158,3 +158,20 @@ def test_rank_prefers_cheapest_among_liquid():
     tie = rank([K("333333", "a", fee=0.004), K("444444", "b", fee=0.0068)],
                {"333333.KS": {"turnover": 2e9}, "444444.KS": {"turnover": 1e10}})
     assert tie[0]["code"] == "444444" and tie[0]["best"]
+
+
+def test_analysis_tables_and_text():
+    from market_dashboard import analysis
+
+    px = _prices(drifts={"GLD": 0.001, "USO": -0.001})
+    a = analysis.run(px, px, Params())
+    quads = {r["bucket"] for r in a["by_quadrant"]}
+    assert quads <= {"주도", "둔화", "회복", "회피"} and quads
+    gld = next(r for r in a["profiles"] if r["key"] == "GLD")
+    assert gld["share_pos"] > 0.5 and gld["mean_pos"] > 0
+    # 미래 수익은 관찰 시점 이후 값만 쓴다: 마지막 63거래일은 3개월 수익이 없다
+    pan = analysis.panel(px, Params())
+    last = pan[pan["date"] > px.index[-63]]
+    assert last["f_3개월"].isna().all()
+    text = analysis.as_text(a, {"GLD": "금"})
+    assert "사분면별" in text and "금" in text

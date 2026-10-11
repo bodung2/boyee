@@ -4,6 +4,7 @@
   python -m market_dashboard run --offline    받아 둔 데이터(data/market/)로만 다시 계산
   python -m market_dashboard run --base USD   달러 기준 수익으로 평가(기본 원화)
   python -m market_dashboard run --out site   결과를 site/index.html로(GitHub Pages 배포용)
+  python -m market_dashboard analyze          자산군별 경향·'어느 구간에서 사면 좋았나' 표를 출력
 """
 from __future__ import annotations
 
@@ -59,10 +60,22 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--notify", action="store_true")
     r.add_argument("--base", choices=["KRW", "USD"], default="KRW")
     r.add_argument("--out", help="이 폴더에 index.html로 저장(기본: output/market/dashboard.html)")
+    an = sub.add_parser("analyze")
+    an.add_argument("--offline", action="store_true")
     args = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     _load_dotenv(ROOT / ".env")
+
+    if args.cmd == "analyze":
+        from . import analysis
+        from .universe import by_key
+
+        close = (pd.read_csv(CACHE / "prices.csv", index_col=0, parse_dates=True) if args.offline
+                 else data.fetch_prices(CACHE))
+        a = analysis.run(data.to_base(close, "USD"), data.to_base(close, "KRW"), Params())
+        print(analysis.as_text(a, {k: v.name for k, v in by_key().items()}))
+        return 0
 
     if args.offline:
         close = pd.read_csv(CACHE / "prices.csv", index_col=0, parse_dates=True)

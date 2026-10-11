@@ -7,7 +7,7 @@ from dataclasses import replace
 import numpy as np
 import pandas as pd
 
-from . import backtest, products, signals
+from . import analysis, backtest, products, signals
 from .signals import Params
 from .universe import ASSETS, BENCHMARKS, CASH_KEY, GROUPS, by_key
 
@@ -256,6 +256,7 @@ def build(close: pd.DataFrame, fred: pd.DataFrame, p: Params, base: str = "KRW",
         "corr": correlation_block(bt["weekly"]),
         "liquidity": liquidity_block(fred, prices_sig),
         "regime": regime_block(fred, prices_sig),
+        "analysis": analysis.run(prices_sig, prices_val, p),
         "backtest": backtest_block(prices_sig, prices_val, p, bt, variants(p)[1:]),
     }
 
