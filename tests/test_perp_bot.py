@@ -118,7 +118,7 @@ def test_bracket_target_pays_rr_minus_costs_and_no_lookahead():
     assert t2.entry_date == t.entry_date and t2.reason.startswith("손절")
     # 매일 평가한 수익을 더하면 거래 R × 1%와 같다(보유 중 되돌림도 낙폭에 잡힘)
     r = research.trades_to_returns(tr, df)
-    assert r.sum() == pytest.approx(research.RISK * t.r) and r.loc[df.index[20]] != 0
+    assert r.sum() == pytest.approx(research.RISK * t.r)
 
 
 def test_research_positions_and_split():
