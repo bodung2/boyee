@@ -287,6 +287,10 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_market_windows.ps1 -Time 
 
 웹 주소 **https://bodung2.github.io/boyee/** 에 화~토 아침마다 자동으로 갱신됩니다(GitHub Actions, PC 불필요). PC에서 직접 돌리면 결과는 `output\market\dashboard.html`입니다. 규칙과 화면 설명은 [docs/MARKET_DASHBOARD.md](docs/MARKET_DASHBOARD.md)에 있습니다.
 
+## 코인 선물 추세 추종 봇 (1단계: 백테스트·모의 운용)
+
+Hyperliquid(Defi App 선물의 기반) 4시간 봉으로 BTC·ETH·SOL 추세 추종을 백테스트하고 모의 운용합니다. **실제 주문 기능은 아직 없습니다.** 잔고 600달러 기준, 400달러 이하면 정지, 레버리지 상한 10배. 자세한 내용은 [docs/PERP_BOT.md](docs/PERP_BOT.md).
+
 ## 블로그 디자인 (SR 기존 글과 동일)
 
 `STYLE_MODE=native`(기본): 기존 글(https://blog.naver.com/kkus_i/224403935438)의 서식을 그대로 재현합니다.

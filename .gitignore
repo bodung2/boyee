@@ -18,3 +18,6 @@ data/neighbors*.json
 
 # 자산군 모멘텀 대시보드: 받아 둔 시세·거시 데이터
 data/market/
+
+# 코인 선물 봇 모의 운용 상태
+data/perp/
