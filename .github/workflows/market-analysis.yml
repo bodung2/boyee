@@ -29,6 +29,9 @@ jobs:
         run: python -m market_dashboard analyze
       - name: 주식 섹터 지도(실제 시세, 게시하지 않음)
         run: python -m market_dashboard sectors --out site
+      - name: 섹터 티커 이름 확인(한국 코드가 맞는 종목인지)
+        continue-on-error: true
+        run: python -m market_dashboard sectors --check-names
       - name: 섹터 지도 화면 내려받기용으로 보관
         uses: actions/upload-artifact@v4
         with:

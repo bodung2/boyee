@@ -133,6 +133,7 @@ function widget(C){
   <section class="card">
     <h2>섹터 순환 백테스트</h2><div class="sub btSub"></div>
     <div class="scroll"><table class="tbl bt"></table></div>
+    <div class="warnbox btWarn" style="display:none"></div>
   </section>`;
   const q = s => root.querySelector(s);
   const svg=q("svg"), range=q("input[type=range]");
@@ -234,6 +235,13 @@ function widget(C){
   const row=(r,b)=>`<tr${b?' class="sel"':""}><td>${esc(r.name)}</td><td class="${sgn(r.CAGR)}">${pct(r.CAGR)}</td><td>${pct(r["변동성"])}</td><td>${num(r["샤프"])}</td><td class="down">${pct(r["최대낙폭"])}</td><td class="${sgn(r["최악의 해"])}">${pct(r["최악의 해"])}</td><td>${r["회전율"]!=null?num(r["회전율"],1)+"배":"–"}</td></tr>`;
   q("table.bt").innerHTML=`<thead><tr><th class="l">방식</th><th>연 수익</th><th>변동성</th><th>샤프</th><th>최대낙폭</th><th>최악의 해</th><th>회전율/년</th></tr></thead><tbody>`
     + B.table.map((r,i)=>row(r,i===0)).join("") + B.robust.map(r=>row({...r,name:"└ "+r.name})).join("") + "</tbody>";
+  const rule=B.table[0], idx=B.table[1];
+  if(rule&&idx&&(rule["샤프"]??0)<(idx["샤프"]??0)){
+    const w=q(".btWarn"); w.style.display="";
+    w.textContent=`이 기간 섹터 순환 규칙은 ${idx.name}보다 위험 대비 수익(샤프 ${num(rule["샤프"])} vs ${num(idx["샤프"])})이 낮았다`
+      + ((rule["최대낙폭"]??-1)>(idx["최대낙폭"]??-1)?" — 낙폭은 줄었지만 수익도 줄었다":"")
+      + ". 그래서 '규칙상 편입' 표시는 매수 신호가 아니라, 지금 어느 섹터가 강한지 보는 참고로만 쓰는 게 맞다.";
+  }
 
   drawStatic(); setFrame(F); if(selected) select(selected,false);
   views[C.key]={root, redraw:drawStatic};

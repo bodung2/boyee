@@ -66,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     se = sub.add_parser("sectors")
     se.add_argument("--offline", action="store_true")
     se.add_argument("--out", help="이 폴더에 sectors.html로 저장(기본: output/market/)")
+    se.add_argument("--check-names", action="store_true", help="티커가 맞는 종목인지 Yahoo 이름과 나란히 출력")
     args = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -74,6 +75,22 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "sectors":
         from . import sector_html, sectors
         from .sector_universe import COUNTRIES
+
+        if args.check_names:
+            import yfinance as yf
+
+            for c in COUNTRIES:
+                pairs = [(s.etf, s.etf_name) for s in c.sectors] + [(c.benchmark, c.benchmark_name), (c.cash, "현금 기준")]
+                if c.key == "KR":
+                    pairs += [(t, n) for s in c.sectors for t, n in s.stocks.items()]
+                for t, n in dict(pairs).items():
+                    try:
+                        info = yf.Ticker(t).info or {}
+                        yname = info.get("longName") or info.get("shortName") or "?"
+                    except Exception as e:
+                        yname = f"실패: {e}"
+                    print(f"  {t:<12} 우리 이름 {n:<28} Yahoo 이름 {yname}")
+            return 0
 
         got = {}
         for c in COUNTRIES:
