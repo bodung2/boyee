@@ -217,3 +217,36 @@ def test_intraday_position_costs():
     r0 = intraday.run_positions(df, flip, 0.0)
     r1 = intraday.run_positions(df, flip, 0.001)
     assert (r0 - r1).sum() == pytest.approx(0.001 * flip.diff().abs().fillna(0).sum(), rel=0.01)
+
+
+def _daily_panel(n_coins=30, days=900, seed=0):
+    rng = np.random.default_rng(seed)
+    idx = pd.date_range("2022-01-01", periods=days, freq="D")
+    data = {}
+    for i in range(n_coins):
+        c = 1000 * np.exp(np.cumsum(rng.normal(0, 0.04, days)))
+        o = np.r_[1000, c[:-1]]
+        v = 3e8 * rng.lognormal(0, 0.5, days)
+        v[rng.random(days) < 0.03] *= 6  # 가끔 거래대금 폭발
+        data[f"C{i}"] = pd.DataFrame({"open": o, "high": np.maximum(o, c) * 1.01, "low": np.minimum(o, c) * 0.99,
+                                      "close": c, "value": v, "volume": v / c}, index=idx)
+    return data
+
+
+def test_volume_events_no_lookahead_and_report():
+    from perp_bot import volume
+    data = _daily_panel()
+    p = volume.panel(data)
+    ev, ok = volume.events(p)
+    fut = {k: d.copy() for k, d in data.items()}
+    for d in fut.values():
+        d.iloc[600:] = d.iloc[600:] * 2
+    ev2, ok2 = volume.events(volume.panel(fut))
+    for k in ev:
+        assert ev[k].iloc[:600].equals(ev2[k].iloc[:600]), k
+    assert ev["E1 거래대금 3배 + 가격 ±2% 이내(아이디어 그대로)"].values.sum() > 0
+    fwd, abn = volume.forward(p, ok, 3)
+    assert abs(abn.where(ok).mean(axis=1).dropna()).max() < 1e-12  # 시장 평균 대비라 날짜별 평균은 0
+    rows = volume.run_all(data)
+    assert len(rows) == len(volume.HORIZONS) * (len(ev) + 1)
+    assert "사건" in volume.report(rows, data)

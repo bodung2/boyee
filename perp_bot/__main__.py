@@ -6,6 +6,7 @@
   python -m perp_bot xsmom               여러 코인 중 강한 코인을 고르는 종목 선정형 모멘텀 검증(현물)
   python -m perp_bot bithumb             같은 검증을 빗썸 원화 마켓 코인 전체로
   python -m perp_bot intraday            빗썸 1시간 봉 차트 매매 검증(돌파·과매도·볼린저·급락 반등·시간대)
+  python -m perp_bot volume              빗썸 전체 코인 거래량 신호 사건 분석(거래량↑ 가격 그대로 → 이후 수익?)
 
 1단계(지금): 실제 주문 기능 없음. 실제 주문은 모의 운용 결과를 본 뒤 별도 단계에서 만든다.
 """
@@ -127,6 +128,14 @@ def cmd_intraday() -> int:
     return 0
 
 
+def cmd_volume() -> int:
+    from . import volume
+
+    data = volume.load()
+    print(volume.report(volume.run_all(data), data))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="perp_bot")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -138,6 +147,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("xsmom")
     sub.add_parser("bithumb")
     sub.add_parser("intraday")
+    sub.add_parser("volume")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     _load_dotenv(ROOT / ".env")
@@ -153,6 +163,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_bithumb()
     if args.cmd == "intraday":
         return cmd_intraday()
+    if args.cmd == "volume":
+        return cmd_volume()
     if args.cmd == "status":
         sim = paper.load(STATE, c)
         try:

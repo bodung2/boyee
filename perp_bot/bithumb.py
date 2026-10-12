@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import pandas as pd
 
@@ -72,8 +74,17 @@ def _pages(path: str, coin: str, pause: float, max_pages: int, since: str | None
 
 
 def daily(coin: str, pause: float = 0.05, max_pages: int = 40) -> pd.DataFrame:
+    """환경변수 BITHUMB_CACHE에 폴더를 주면 한 번 받은 일봉을 저장해 두고 다시 쓴다(같은 실행 안 여러 분석용)."""
+    cache = os.environ.get("BITHUMB_CACHE")
+    path = Path(cache) / f"{coin}_daily.pkl" if cache else None
+    if path and path.exists():
+        return pd.read_pickle(path)
     pages = _pages("/candles/days", coin, pause, max_pages)
-    return parse_candles(pages) if pages else pd.DataFrame()
+    df = parse_candles(pages) if pages else pd.DataFrame()
+    if path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        df.to_pickle(path)
+    return df
 
 
 def hourly(coin: str, since: str = "2021-01-01", pause: float = 0.05, max_pages: int = 400) -> pd.DataFrame:

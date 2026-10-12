@@ -6,7 +6,6 @@ on:
     paths:
       - "perp_bot/research.py"
       - "perp_bot/xsmom.py"
-      - "perp_bot/bithumb.py"
       - "perp_bot/intraday.py"
       - ".github/workflows/perp-research.yml"
   workflow_dispatch:
