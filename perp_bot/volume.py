@@ -95,8 +95,8 @@ def summarize(mask: pd.DataFrame, fwd: pd.DataFrame, abn: pd.DataFrame, h: int) 
     if n < 10:
         return {"n": n}
     per_date = abn.where(m).mean(axis=1).dropna()
-    raw = fwd.where(m).stack()
-    a = abn.where(m).stack()
+    raw = fwd.where(m).stack().dropna()
+    a = abn.where(m).stack().dropna()
     t = per_date.mean() / per_date.std(ddof=1) * math.sqrt(len(per_date)) / math.sqrt(h) if len(per_date) > 2 else float("nan")
     return {"n": n, "날짜": len(per_date), "초과": float(per_date.mean()), "t": float(t),
             "적중": float((a > 0).mean()), "순수익": float(raw.mean() - ROUND_TRIP),

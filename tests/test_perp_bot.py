@@ -250,3 +250,13 @@ def test_volume_events_no_lookahead_and_report():
     rows = volume.run_all(data)
     assert len(rows) == len(volume.HORIZONS) * (len(ev) + 1)
     assert "사건" in volume.report(rows, data)
+
+
+def test_volume_hit_rate_counts_only_events():
+    from perp_bot import volume
+    idx = pd.date_range("2024-01-01", periods=30, freq="D")
+    fwd = pd.DataFrame({"A": np.full(30, 0.05), "B": np.full(30, -0.05)}, index=idx)
+    abn = fwd - fwd.mean(axis=1).values[:, None]
+    mask = pd.DataFrame({"A": [True] * 20 + [False] * 10, "B": [False] * 30}, index=idx)
+    s = volume.summarize(mask, fwd, abn, 1)
+    assert s["n"] == 20 and s["적중"] == 1.0 and s["순수익"] == pytest.approx(0.05 - volume.ROUND_TRIP)
