@@ -8,7 +8,7 @@ from __future__ import annotations
 import platform
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 BG = "#1f3a5f"          # 교육 정책 카테고리색(짙은 남색)
 ACCENT = "#ffd166"      # 포인트색
@@ -268,34 +268,12 @@ def invest_tone(lane: str | None) -> str:
     return INVEST_TONES.get(letter, INVEST_TONES["A"])
 
 
-def _photo_background(src: Path, size: int, tone: str) -> Image.Image | None:
-    """본문 일러스트를 정사각형으로 잘라 썸네일 배경으로 쓴다. 글씨가 놓이는 위쪽은 레인 색으로 진하게 덮어
-    작은 홈피드 썸네일에서도 글씨가 또렷하고, 아래쪽은 그림이 보이게 연하게 덮는다. 열 수 없으면 None."""
-    try:
-        pic = Image.open(src).convert("RGB")
-    except (OSError, ValueError):
-        return None
-    w, h = pic.size
-    side = min(w, h)
-    pic = pic.crop(((w - side) // 2, (h - side) // 2, (w - side) // 2 + side, (h - side) // 2 + side))
-    pic = pic.resize((size, size), Image.LANCZOS)
-    r, g, b = (int(tone[i:i + 2], 16) for i in (1, 3, 5))
-    shade = Image.new("RGBA", (size, size))
-    shade_draw = ImageDraw.Draw(shade)
-    for y in range(size):
-        # 위 0.88 → 아래 0.30: 칩·질문 글씨(위 2/3)가 놓이는 곳은 진하게
-        alpha = 0.88 - 0.58 * max(0.0, (y / size - 0.35) / 0.65)
-        shade_draw.line([(0, y), (size, y)], fill=(r, g, b, int(255 * alpha)))
-    return Image.alpha_composite(pic.convert("RGBA"), shade).convert("RGB")
-
-
 def make_thumbnail_childhood(thumb: dict, domain: str | None, out: Path, size: int = THUMBNAIL_SIZE,
-                             tone: str | None = None, background: Path | None = None) -> Path:
-    """질문형·다크 썸네일. background(본문 일러스트)를 주면 단색 대신 그 장면 위에 같은 글씨를 얹는다."""
+                             tone: str | None = None) -> Path:
     final_size, size = size, _DRAW_SIZE
     tone = tone or childhood_tone(domain)
     accent = "#ffcf5a" if tone in WARM_TONES else "#ffd23f"
-    img = (_photo_background(background, size, tone) if background else None) or Image.new("RGB", (size, size), tone)
+    img = Image.new("RGB", (size, size), tone)
     draw = ImageDraw.Draw(img)
 
     chip_font = _font("bold", 38)
@@ -314,15 +292,73 @@ def make_thumbnail_childhood(thumb: dict, domain: str | None, out: Path, size: i
     y = 300
     y_end = y
     for line in lines:
-        if background:      # 그림 위에서는 그림자를 깔아 글씨 가장자리를 또렷하게
-            draw.text((94, y + 5), line, font=main_font, fill="#000000")
         draw.text((90, y), line, font=main_font, fill=WHITE)
         y_end = draw.textbbox((90, y), line, font=main_font)[3]   # 실제로 그려진 글자 아래끝
         y += line_h
     draw.rectangle([96, y_end + 16, 96 + 320, y_end + 34], fill=accent)
     if thumb.get("sub"):
-        if background:
-            draw.text((99, y_end + 87), thumb["sub"], font=_font("regular", 48), fill="#000000")
         draw.text((96, y_end + 84), thumb["sub"], font=_font("regular", 48), fill=accent)
 
+    return _save_thumbnail(img, out, final_size)
+
+
+def _darker(hex_color: str, factor: float = 0.55) -> str:
+    r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
+    return "#%02x%02x%02x" % (int(r * factor), int(g * factor), int(b * factor))
+
+
+def make_thumbnail_scene(thumb: dict, background: Path, out: Path, tone: str, size: int = THUMBNAIL_SIZE) -> Path:
+    """홈피드용 장면 썸네일. 본문 일러스트(Codex가 그린 그림)를 정사각형 배경으로 깔고, 글씨가 놓이는 영역만
+    흐리게(블러) + 레인 색으로 물들인 패널을 부드러운 가장자리로 얹은 뒤, 굵은 테두리 글씨를 올린다.
+    질문의 마지막 줄은 노란색으로 강조한다. 그림을 열 수 없으면 단색 썸네일로 대신한다."""
+    try:
+        pic = Image.open(background).convert("RGB")
+    except (OSError, ValueError):
+        return make_thumbnail_childhood(thumb, None, out, size=size, tone=tone)
+    final_size, size = size, _DRAW_SIZE
+    w, h = pic.size
+    side = min(w, h)
+    pic = pic.crop(((w - side) // 2, (h - side) // 2, (w - side) // 2 + side, (h - side) // 2 + side))
+    pic = pic.resize((size, size), Image.LANCZOS)
+    pic = Image.blend(pic, Image.new("RGB", (size, size), "#000000"), 0.15)      # 전체를 살짝 눌러 대비 확보
+    accent = "#ffd23f"
+    edge = _darker(tone, 0.45)
+    draw = ImageDraw.Draw(pic)
+
+    # 1) 글씨 배치 계산
+    chip_font = _font("bold", 40)
+    chip = thumb.get("chip", "")
+    lines = [line for line in (thumb.get("main_lines") or []) if line][:3]
+    font_size = 146
+    main_font = _font("bold", font_size)
+    while font_size > 96 and any(_width(draw, line, main_font) > size - 200 for line in lines):
+        font_size -= 6
+        main_font = _font("bold", font_size)
+    line_h = int(font_size * 1.2)
+    sub_font = _font("bold", 50)
+    top_y = 300
+    bottom = top_y + line_h * len(lines) + (110 if thumb.get("sub") else 10)
+    right = max([_width(draw, line, main_font) for line in lines] +
+                [_width(draw, thumb.get("sub", ""), sub_font), _width(draw, chip, chip_font) + 56]) + 90
+
+    # 2) 글씨 뒤 컬러 블러 패널(가장자리는 부드럽게 사라진다)
+    panel = Image.blend(pic.filter(ImageFilter.GaussianBlur(26)), Image.new("RGB", (size, size), tone), 0.62)
+    mask = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(mask).rounded_rectangle([40, 70, min(size - 30, right + 70), min(size - 30, bottom + 60)],
+                                           radius=60, fill=255)
+    mask = mask.filter(ImageFilter.GaussianBlur(38))
+    img = Image.composite(panel, pic, mask)
+    draw = ImageDraw.Draw(img)
+
+    # 3) 글씨: 칩 → 질문(굵은 테두리, 마지막 줄 노랑) → 보조
+    if chip:
+        draw.rounded_rectangle([90, 110, 90 + _width(draw, chip, chip_font) + 56, 192], radius=26, fill=accent)
+        draw.text((118, 128), chip, font=chip_font, fill=edge)
+    y = top_y
+    for i, line in enumerate(lines):
+        fill = accent if i == len(lines) - 1 and len(lines) > 1 else WHITE
+        draw.text((90, y), line, font=main_font, fill=fill, stroke_width=7, stroke_fill=edge)
+        y += line_h
+    if thumb.get("sub"):
+        draw.text((96, y + 34), thumb["sub"], font=sub_font, fill=WHITE, stroke_width=4, stroke_fill=edge)
     return _save_thumbnail(img, out, final_size)

@@ -93,7 +93,7 @@ def test_invest_thumbnail_uses_first_illustration_as_background(tmp_path):
 
 def test_invest_thumbnail_falls_back_to_solid_when_scene_unreadable(tmp_path):
     (tmp_path / "bad.png").write_bytes(b"not an image")
-    out = images.make_thumbnail_childhood({"chip": "x", "main_lines": ["질문"], "sub": ""}, None, tmp_path / "t.png",
-                                          tone=images.INVEST_TONES["C"], background=tmp_path / "bad.png")
+    out = images.make_thumbnail_scene({"chip": "x", "main_lines": ["질문"], "sub": ""}, tmp_path / "bad.png",
+                                      tmp_path / "t.png", images.INVEST_TONES["C"])
     px = Image.open(out).convert("RGB").getpixel((5, 590))
     assert "#%02x%02x%02x" % px == images.INVEST_TONES["C"]

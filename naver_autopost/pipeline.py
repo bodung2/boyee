@@ -368,9 +368,10 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
         # 홈피드용: 검수를 통과한 첫 일러스트 장면 위에 질문 글씨를 얹는다(새 그림을 만들지 않음). 없으면 단색.
         scene = next((out_dir / f"{i.get('name')}.png" for i in post.get("illustrations") or []
                       if (out_dir / f"{i.get('name')}.png").exists()), None)
+        thumb_out = fname("thumbnail", "thumbnail")
         imgs = {
-            "thumbnail": images.make_thumbnail_childhood(post["thumbnail"], None, fname("thumbnail", "thumbnail"),
-                                                         tone=tone, background=scene),
+            "thumbnail": (images.make_thumbnail_scene(post["thumbnail"], scene, thumb_out, tone) if scene
+                          else images.make_thumbnail_childhood(post["thumbnail"], None, thumb_out, tone=tone)),
             "card": images.make_card(post["card"], fname("card", "card"), tone=tone),
         }
     elif cfg.profile.thumbnail_style == "childhood":
