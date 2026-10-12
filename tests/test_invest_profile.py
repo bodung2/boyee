@@ -30,7 +30,8 @@ def test_invest_needs_question_thumbnail_lines():
     assert any("썸네일 메인은 1~3줄" in e for e in errors)
 
 
-@pytest.mark.parametrize("phrase", ["이 종목 매수 추천합니다", "수익 보장되는 방법", "현직 교사로서 말하면"])
+@pytest.mark.parametrize("phrase", ["이 종목 매수 추천합니다", "수익 보장되는 방법", "현직 교사로서 말하면",
+                                    "서울 집값 무조건 오른다"])
 def test_invest_blocks_advice_and_identity(phrase):
     post = invest_post()
     post["body_html"] += f"<p>{phrase}</p>"
@@ -66,6 +67,7 @@ def test_invest_thumbnail_uses_lane_tone(tmp_path):
     px = Image.open(out).convert("RGB").getpixel((5, 5))
     assert "#%02x%02x%02x" % px == images.INVEST_TONES["D"]
     assert images.invest_tone("?") == images.INVEST_TONES["A"]
+    assert set(images.INVEST_TONES) == set("ABCDEFG")      # 스킬의 레인 7개마다 색이 있다
 
 
 def test_invest_render_images_uses_bold_thumbnail(tmp_path, monkeypatch):

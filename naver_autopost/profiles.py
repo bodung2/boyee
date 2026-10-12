@@ -46,15 +46,15 @@ PROFILES: dict[str, Profile] = {
         neighbor_keywords=("누리과정", "유아 발달", "유치원 놀이", "초등 입학 준비", "한글 떼기",
                            "유아 수학 놀이", "엄마표 놀이", "유아 독서", "유아 활동지", "어린이집 생활"),
     ),
-    # 투자 블로그: 티스토리 '숫자로 보는 한국'(stats-auto-post)의 '통념 × 공식 숫자' 방식을 돈·투자 주제로 옮긴 글.
+    # 투자 블로그: 티스토리 '숫자로 보는 한국'(stats-auto-post)의 '통념 × 공식 숫자' 방식을 돈·부동산·일상 주제로 옮긴 글.
     # 홈피드·검색 유입용 후킹 제목/썸네일. 글쓴이 신원(교사)은 드러내지 않는다.
     "invest": Profile(
-        name="invest", label="투자·재테크 숫자",
+        name="invest", label="돈·생활 숫자",
         write_skill="invest-auto-post", factcheck_skill="invest-auto-factcheck",
         thumbnail_style="bold", illustrations=True,
         extra_forbidden=(
             "매수 추천", "매도 추천", "종목 추천", "지금 사야", "무조건 오른다", "수익 보장", "원금 보장",
-            "리딩방", "목표주가", "현직 교사", "교사인 제가", "저는 교사", "우리 반",   # 신원 노출 방지
+            "리딩방", "목표주가", "집값 무조건", "지금이 매수 타이밍", "현직 교사", "교사인 제가", "저는 교사", "우리 반",   # 신원 노출 방지
         ),
         min_sources=6, use_persona=False, social=False,
     ),
