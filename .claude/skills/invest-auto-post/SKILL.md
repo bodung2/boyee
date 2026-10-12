@@ -126,6 +126,11 @@ description: "네이버 투자 블로그용 '통념 × 공식 숫자' 글을 완
 
 ### 일러스트(illustrations)
 
+**첫 일러스트(`illust_a`)는 썸네일 배경도 된다.** 파이프라인이 이 그림을 정사각형으로 가운데를 잘라 레인 색을 위쪽에 진하게 덮고, 그 위에 `thumbnail.main_lines` 질문 글씨를 얹는다(홈피드 썸네일). 그래서 `illust_a`는:
+- 글의 통념이 한눈에 보이는 장면으로 고른다(예: 부동산 → 퇴근길에 아파트 단지를 올려다보는 사람, 결혼 비용 → 청구서 더미 앞에 앉은 커플의 뒷모습, 개미 → 지하철에서 증권 앱을 보는 직장인).
+- **주인공·핵심 사물은 그림 가운데 아래쪽**에 두고, 위쪽 절반은 하늘·벽처럼 단순하게 비운다(글씨 자리). 프롬프트에 "main subject in the lower center, simple uncluttered upper half" 를 넣는다.
+- 양옆은 잘리므로 중요한 것은 가로 가운데 60% 안에 둔다.
+
 `ILLUSTRATIONS`개만큼 `illust_a`, `illust_b`… 장면 프롬프트를 영어 2~4문장으로 쓴다.
 - 장면: 그 문단의 상황(예: 퇴근 지하철에서 휴대폰 증권 앱을 보는 30대 직장인의 뒷모습, 식탁에서 고지서와 계산기를 펼친 부부의 손).
 - 화풍 통일: "clean modern editorial illustration, flat vector with soft grain, deep navy and warm yellow accents, slightly humorous mood, Korean everyday setting, wide 16:9 composition".

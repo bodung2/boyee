@@ -268,12 +268,34 @@ def invest_tone(lane: str | None) -> str:
     return INVEST_TONES.get(letter, INVEST_TONES["A"])
 
 
+def _photo_background(src: Path, size: int, tone: str) -> Image.Image | None:
+    """본문 일러스트를 정사각형으로 잘라 썸네일 배경으로 쓴다. 글씨가 놓이는 위쪽은 레인 색으로 진하게 덮어
+    작은 홈피드 썸네일에서도 글씨가 또렷하고, 아래쪽은 그림이 보이게 연하게 덮는다. 열 수 없으면 None."""
+    try:
+        pic = Image.open(src).convert("RGB")
+    except (OSError, ValueError):
+        return None
+    w, h = pic.size
+    side = min(w, h)
+    pic = pic.crop(((w - side) // 2, (h - side) // 2, (w - side) // 2 + side, (h - side) // 2 + side))
+    pic = pic.resize((size, size), Image.LANCZOS)
+    r, g, b = (int(tone[i:i + 2], 16) for i in (1, 3, 5))
+    shade = Image.new("RGBA", (size, size))
+    shade_draw = ImageDraw.Draw(shade)
+    for y in range(size):
+        # 위 0.88 → 아래 0.30: 칩·질문 글씨(위 2/3)가 놓이는 곳은 진하게
+        alpha = 0.88 - 0.58 * max(0.0, (y / size - 0.35) / 0.65)
+        shade_draw.line([(0, y), (size, y)], fill=(r, g, b, int(255 * alpha)))
+    return Image.alpha_composite(pic.convert("RGBA"), shade).convert("RGB")
+
+
 def make_thumbnail_childhood(thumb: dict, domain: str | None, out: Path, size: int = THUMBNAIL_SIZE,
-                             tone: str | None = None) -> Path:
+                             tone: str | None = None, background: Path | None = None) -> Path:
+    """질문형·다크 썸네일. background(본문 일러스트)를 주면 단색 대신 그 장면 위에 같은 글씨를 얹는다."""
     final_size, size = size, _DRAW_SIZE
     tone = tone or childhood_tone(domain)
     accent = "#ffcf5a" if tone in WARM_TONES else "#ffd23f"
-    img = Image.new("RGB", (size, size), tone)
+    img = (_photo_background(background, size, tone) if background else None) or Image.new("RGB", (size, size), tone)
     draw = ImageDraw.Draw(img)
 
     chip_font = _font("bold", 38)
@@ -292,11 +314,15 @@ def make_thumbnail_childhood(thumb: dict, domain: str | None, out: Path, size: i
     y = 300
     y_end = y
     for line in lines:
+        if background:      # 그림 위에서는 그림자를 깔아 글씨 가장자리를 또렷하게
+            draw.text((94, y + 5), line, font=main_font, fill="#000000")
         draw.text((90, y), line, font=main_font, fill=WHITE)
         y_end = draw.textbbox((90, y), line, font=main_font)[3]   # 실제로 그려진 글자 아래끝
         y += line_h
     draw.rectangle([96, y_end + 16, 96 + 320, y_end + 34], fill=accent)
     if thumb.get("sub"):
+        if background:
+            draw.text((99, y_end + 87), thumb["sub"], font=_font("regular", 48), fill="#000000")
         draw.text((96, y_end + 84), thumb["sub"], font=_font("regular", 48), fill=accent)
 
     return _save_thumbnail(img, out, final_size)

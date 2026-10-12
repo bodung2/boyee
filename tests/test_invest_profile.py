@@ -78,3 +78,22 @@ def test_invest_render_images_uses_bold_thumbnail(tmp_path, monkeypatch):
     px = Image.open(imgs["thumbnail"]).convert("RGB").getpixel((5, 5))
     assert "#%02x%02x%02x" % px == images.INVEST_TONES["B"]
     assert imgs["card"].exists()
+
+
+def test_invest_thumbnail_uses_first_illustration_as_background(tmp_path):
+    from naver_autopost import pipeline
+    c = Config.load("invest")
+    Image.new("RGB", (1536, 864), "#ffffff").save(tmp_path / "illust_a.png")   # 흰 장면
+    imgs = pipeline.render_images(c, invest_post(lane="B"), tmp_path)
+    thumb = Image.open(imgs["thumbnail"]).convert("RGB")
+    solid = images.INVEST_TONES["B"]
+    top, bottom = thumb.getpixel((5, 5)), thumb.getpixel((5, thumb.height - 5))
+    assert "#%02x%02x%02x" % bottom != solid and sum(bottom) > sum(top)   # 아래쪽은 그림이 비친다
+
+
+def test_invest_thumbnail_falls_back_to_solid_when_scene_unreadable(tmp_path):
+    (tmp_path / "bad.png").write_bytes(b"not an image")
+    out = images.make_thumbnail_childhood({"chip": "x", "main_lines": ["질문"], "sub": ""}, None, tmp_path / "t.png",
+                                          tone=images.INVEST_TONES["C"], background=tmp_path / "bad.png")
+    px = Image.open(out).convert("RGB").getpixel((5, 590))
+    assert "#%02x%02x%02x" % px == images.INVEST_TONES["C"]
