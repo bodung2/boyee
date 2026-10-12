@@ -7,6 +7,7 @@
   python -m perp_bot bithumb             같은 검증을 빗썸 원화 마켓 코인 전체로
   python -m perp_bot intraday            빗썸 1시간 봉 차트 매매 검증(돌파·과매도·볼린저·급락 반등·시간대)
   python -m perp_bot volume              빗썸 전체 코인 거래량 신호 사건 분석(거래량↑ 가격 그대로 → 이후 수익?)
+  python -m perp_bot shortside           빗썸 거래량 신호로 Hyperliquid 숏을 쳤다면(맨숏·손절·BTC 헤지)
 
 1단계(지금): 실제 주문 기능 없음. 실제 주문은 모의 운용 결과를 본 뒤 별도 단계에서 만든다.
 """
@@ -136,6 +137,27 @@ def cmd_volume() -> int:
     return 0
 
 
+def cmd_shortside() -> int:
+    from . import shortside, volume
+
+    data = volume.load()
+    ev, _ = volume.events(volume.panel(data))
+    names = shortside.hl_names()
+    mapping = shortside.match(data.keys(), names)
+    since = pd.Timestamp("2023-01-01")
+    need = {"BTC"} | {c for key in shortside.SIGNALS.values() for c in ev[key].columns
+                      if ev[key].loc[ev[key].index >= since, c].any()}
+    use = {k: v for k, v in mapping.items() if k in need}
+    print(f"빗썸 {len(data)}개 코인 중 Hyperliquid에도 있는 코인 {len(mapping)}개, 그중 신호가 있는 코인 {len(use)}개")
+    hld = shortside.load_hl(use)
+    if "BTC" not in hld:
+        print("BTC 일봉을 못 받아 중단")
+        return 1
+    rows, mid = shortside.run(ev, hld, hld["BTC"], use)
+    print(shortside.report(rows, mid, use, hld))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="perp_bot")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -148,6 +170,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("bithumb")
     sub.add_parser("intraday")
     sub.add_parser("volume")
+    sub.add_parser("shortside")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     _load_dotenv(ROOT / ".env")
@@ -165,6 +188,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_intraday()
     if args.cmd == "volume":
         return cmd_volume()
+    if args.cmd == "shortside":
+        return cmd_shortside()
     if args.cmd == "status":
         sim = paper.load(STATE, c)
         try:

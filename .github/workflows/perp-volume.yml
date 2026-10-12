@@ -6,6 +6,7 @@ on:
     paths:
       - "perp_bot/volume.py"
       - "perp_bot/bithumb.py"
+      - "perp_bot/shortside.py"
       - ".github/workflows/perp-volume.yml"
   workflow_dispatch:
 
@@ -15,7 +16,7 @@ permissions:
 jobs:
   volume:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -27,3 +28,9 @@ jobs:
         run: python -m pytest -q tests/test_perp_bot.py
       - name: 빗썸 거래량 신호 사건 분석(실제 시세)
         run: python -m perp_bot volume
+        env:
+          BITHUMB_CACHE: ${{ runner.temp }}/bithumb
+      - name: 빗썸 신호 → Hyperliquid 숏 검증(실제 시세)
+        run: python -m perp_bot shortside
+        env:
+          BITHUMB_CACHE: ${{ runner.temp }}/bithumb

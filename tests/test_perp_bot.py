@@ -260,3 +260,19 @@ def test_volume_hit_rate_counts_only_events():
     mask = pd.DataFrame({"A": [True] * 20 + [False] * 10, "B": [False] * 30}, index=idx)
     s = volume.summarize(mask, fwd, abn, 1)
     assert s["n"] == 20 and s["적중"] == 1.0 and s["순수익"] == pytest.approx(0.05 - volume.ROUND_TRIP)
+
+
+def test_shortside_trades_stop_and_hedge():
+    from perp_bot import shortside
+    idx = pd.date_range("2024-01-01", periods=10, freq="D")
+    coin = pd.DataFrame({"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0}, index=idx)
+    coin.loc[idx[2], ["high", "close"]] = [120.0, 90.0]   # 둘째 보유일에 +20% 찍고 −10%로 마감
+    btc = pd.DataFrame({"open": 100.0, "high": 100.0, "low": 100.0, "close": 100.0}, index=idx)
+    btc.loc[idx[2], "close"] = 110.0
+    ev = pd.DataFrame({"X": [True] + [False] * 9}, index=idx)
+    tr = shortside.trades(ev, {"X": coin}, btc, 2)   # 1/1 신호 → 1/2 시가 진입 → 1/3 종가 청산
+    r = tr.iloc[0]
+    assert r["맨숏"] == pytest.approx(0.10 - shortside.COST)
+    assert r["맨숏+손절15%"] == pytest.approx(-0.15 - shortside.COST)
+    assert r["BTC 헤지"] == pytest.approx(0.10 + 0.10 - shortside.COST - shortside.HEDGE_COST)
+    assert shortside.match(["BTC", "PEPE", "ZZZ"], ["BTC", "kPEPE"]) == {"BTC": "BTC", "PEPE": "kPEPE"}
