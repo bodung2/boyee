@@ -22,6 +22,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: 오늘 날짜
+        id: today
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+      - name: 빗썸 일봉 보관본 불러오기(없으면 처음부터 받음, 있으면 최근 며칠만 새로 받음)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/bithumb
+          key: bithumb-daily-${{ steps.today.outputs.date }}-${{ github.run_id }}
+          restore-keys: |
+            bithumb-daily-
       - name: 패키지 설치
         run: pip install "pandas>=2.0" "numpy>=1.24" pytest
       - name: 테스트

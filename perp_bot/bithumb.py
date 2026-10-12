@@ -74,13 +74,19 @@ def _pages(path: str, coin: str, pause: float, max_pages: int, since: str | None
 
 
 def daily(coin: str, pause: float = 0.05, max_pages: int = 40) -> pd.DataFrame:
-    """환경변수 BITHUMB_CACHE에 폴더를 주면 한 번 받은 일봉을 저장해 두고 다시 쓴다(같은 실행 안 여러 분석용)."""
+    """환경변수 BITHUMB_CACHE에 폴더를 주면 받은 일봉을 저장해 두고, 다음에는 마지막 저장 며칠 전부터만 새로 받아
+    이어 붙인다(최근 며칠은 늘 다시 받아 덮어쓴다 — 받던 날 아직 안 끝난 봉이 있었을 수 있음)."""
     cache = os.environ.get("BITHUMB_CACHE")
     path = Path(cache) / f"{coin}_daily.pkl" if cache else None
-    if path and path.exists():
-        return pd.read_pickle(path)
-    pages = _pages("/candles/days", coin, pause, max_pages)
-    df = parse_candles(pages) if pages else pd.DataFrame()
+    old = pd.read_pickle(path) if path and path.exists() else None
+    if old is not None and len(old):
+        since = (old.index[-1] - pd.Timedelta(days=3)).strftime("%Y-%m-%d")
+        pages = _pages("/candles/days", coin, pause, max_pages, since=since)
+        new = parse_candles(pages) if pages else pd.DataFrame()
+        df = pd.concat([old[~old.index.isin(new.index)], new]).sort_index() if len(new) else old
+    else:
+        pages = _pages("/candles/days", coin, pause, max_pages)
+        df = parse_candles(pages) if pages else pd.DataFrame()
     if path:
         path.parent.mkdir(parents=True, exist_ok=True)
         df.to_pickle(path)

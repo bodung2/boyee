@@ -276,3 +276,23 @@ def test_shortside_trades_stop_and_hedge():
     assert r["맨숏+손절15%"] == pytest.approx(-0.15 - shortside.COST)
     assert r["BTC 헤지"] == pytest.approx(0.10 + 0.10 - shortside.COST - shortside.HEDGE_COST)
     assert shortside.match(["BTC", "PEPE", "ZZZ"], ["BTC", "kPEPE"]) == {"BTC": "BTC", "PEPE": "kPEPE"}
+
+
+def test_bithumb_daily_cache_only_fetches_recent(monkeypatch, tmp_path):
+    from perp_bot import bithumb
+    days = pd.date_range("2024-01-01", periods=300, freq="D")
+
+    def rows_for(ds):
+        return [{"candle_date_time_kst": f"{d:%Y-%m-%d}T09:00:00", "opening_price": 1, "high_price": 2,
+                 "low_price": 0.5, "trade_price": float(i), "candle_acc_trade_price": 1.0}
+                for i, d in zip(range(len(ds)), ds)][::-1]
+
+    calls = []
+    monkeypatch.setenv("BITHUMB_CACHE", str(tmp_path))
+    monkeypatch.setattr(bithumb, "_pages", lambda path, coin, pause, mp, since=None:
+                        calls.append(since) or rows_for(days if since is None else days[days >= pd.Timestamp(since)]))
+    first = bithumb.daily("BTC")
+    assert len(first) == 300 and calls == [None]
+    days = pd.date_range("2024-01-01", periods=305, freq="D")   # 5일 지남
+    again = bithumb.daily("BTC")
+    assert calls[1] == "2024-10-23" and len(again) == 305 and again.index.is_unique
