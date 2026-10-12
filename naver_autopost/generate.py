@@ -136,7 +136,7 @@ def _rel(path: Path) -> Path:
 def _persona_lines(cfg: Config, recent: bool = True) -> str:
     """페르소나 파일 위치(없으면 '(없음)')와 최근 자동 글에서 쓴 에피소드 번호."""
     p = persona.path()
-    if not p.exists():
+    if not cfg.profile.use_persona or not p.exists():
         return "PERSONA_FILE=(없음)\n"
     lines = f"PERSONA_FILE={_rel(p)}\n"
     if recent:

@@ -363,7 +363,14 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
         stem = "".join(ch for ch in str(names.get(key) or default) if ch not in '\\/:*?"<>|').strip() or default
         return out_dir / f"{stem}.png"
 
-    if cfg.profile.thumbnail_style == "childhood":
+    if cfg.profile.thumbnail_style == "bold":
+        tone = images.invest_tone(post.get("lane"))
+        imgs = {
+            "thumbnail": images.make_thumbnail_childhood(post["thumbnail"], None, fname("thumbnail", "thumbnail"),
+                                                         tone=tone),
+            "card": images.make_card(post["card"], fname("card", "card"), tone=tone),
+        }
+    elif cfg.profile.thumbnail_style == "childhood":
         tone = images.childhood_tone(post.get("domain"))
         imgs = {
             "thumbnail": images.make_thumbnail_childhood(post["thumbnail"], post.get("domain"),

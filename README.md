@@ -113,6 +113,19 @@ notepad .env        # NAVER_BLOG_ID, NAVER_CATEGORY_CHILDHOOD 입력
 - 카테고리는 글 종류로 자동 결정됩니다. 교직 실무(B 레인)는 '교직 꿀팁', 나머지는 '교육 정책 인사이트'입니다.
 - 예약: `scripts\setup_windows.ps1 -Profile edu` (블로그 06:00, 막힌 날 재시도 11:00, 인스타·쓰레드 20:00)
 
+## 투자 블로그 '숫자깡패 — 돈 편' (세 번째 네이버 계정, `--profile invest`)
+
+티스토리 '숫자로 보는 한국'(`stats-auto-post`)의 방식을 돈·투자 주제로 옮긴 글입니다. 커뮤니티에서 도는 돈 얘기(순자산·연봉·연금·개미 수익률·배당·세금)를 한국은행·국가데이터처·금감원·한국거래소 등 공식 숫자로 까 보고, 독자가 '내 위치'를 찾는 표를 앞에 둡니다.
+
+- 스킬: `.claude/skills/invest-auto-post`(글쓰기, `persona.md` = 반말·도발 말투), `invest-auto-factcheck`(검수)
+- **홈피드·검색 유입용:** 질문형 숫자 제목(검색어를 앞 15자 안에), 진한 배경에 노란 큰 글씨 썸네일(`main_lines` 1~3줄), 첫 화면에 결론 숫자, '내 위치 찾기' 표를 본문 앞 1/3 안에.
+- **지키는 선:** 종목·상품 권유·목표주가·수익 보장 문구, 글쓴이 신원(교사 등)·1인칭 경험은 구조 검사와 팩트체크에서 걸러집니다. 교사 페르소나 파일은 이 블로그에 넘기지 않습니다.
+- 출처는 6개 이상(공식 원문 2개 이상), 인스타·쓰레드 초안은 만들지 않습니다.
+- `.env`: `NAVER_BLOG_ID_INVEST=블로그아이디`, `NAVER_CATEGORY_INVEST=카테고리 이름`
+- 최초 1회 로그인: `python -m naver_autopost login --profile invest` (자동화용 크롬은 `.browser-profile-invest`로 따로 씁니다)
+- 시험 실행: `python -m naver_autopost run --profile invest --dry-run`
+- 예약: `scripts\setup_windows.ps1 -Profile invest` (블로그 09:00, 막힌 날 재시도 17:00)
+
 ## 구글 블로거 (korea-explained-blogger, 하루 1편)
 
 Codex(ChatGPT 구독)에 설치된 `korea-explained-blogger` 스킬로 글을 쓰고, **구글 공식 Blogger API**로 발행합니다.

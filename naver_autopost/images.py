@@ -251,9 +251,24 @@ def childhood_tone(domain: str | None) -> str:
     return CHILDHOOD_TONES.get((domain or "").strip().upper()[:1], CHILDHOOD_DEFAULT_TONE)
 
 
-def make_thumbnail_childhood(thumb: dict, domain: str | None, out: Path, size: int = THUMBNAIL_SIZE) -> Path:
+# 투자 블로그(bold): 레인별 진한 배경. 홈피드 썸네일에서 노란 큰 글씨가 잘 보이는 어두운 톤.
+INVEST_TONES = {
+    "A": "#14325c",   # 내 위치(자산·소득·연금) 딥네이비
+    "B": "#3b1f5e",   # 개미 vs 통계(투자자 행동) 딥퍼플
+    "C": "#0f4d3a",   # 돈 제도 숫자(세금·연금·ISA) 딥그린
+    "D": "#5c1f24",   # 시장·금리 숫자 딥레드
+}
+
+
+def invest_tone(lane: str | None) -> str:
+    letter = next((ch for ch in str(lane or "").upper() if ch.isalpha()), "")
+    return INVEST_TONES.get(letter, INVEST_TONES["A"])
+
+
+def make_thumbnail_childhood(thumb: dict, domain: str | None, out: Path, size: int = THUMBNAIL_SIZE,
+                             tone: str | None = None) -> Path:
     final_size, size = size, _DRAW_SIZE
-    tone = childhood_tone(domain)
+    tone = tone or childhood_tone(domain)
     accent = "#ffcf5a" if tone in WARM_TONES else "#ffd23f"
     img = Image.new("RGB", (size, size), tone)
     draw = ImageDraw.Draw(img)
