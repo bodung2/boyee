@@ -123,6 +123,9 @@ CHILDHOOD_EXTRA = """추가로 유아 발달 안전 기준을 점검하라: '정
 조바심 조장, 판매·구매 링크가 있으면 issues에 포함하고 correction에 안전한 표현을 제시하라."""
 
 
+INVEST_EXTRA = """이 글은 돈·부동산·생활비 통계 글이다. 평균/중앙값, 가구/개인, 총자산/순자산, 명목/실질, %/%p, 기준 시점 혼동과
+직접 계산한 값(배수·증감률·상위 %)을 특히 확인하라. 특정 종목·상품·단지 매수/매도 권유, 수익·원금 보장, 집값 전망 단정 표현이 있으면 issues에 포함하라."""
+
 def _output_text(resp: dict) -> str:
     if resp.get("output_text"):
         return resp["output_text"]
@@ -157,7 +160,8 @@ def _article(post: dict) -> str:
 
 
 def _instructions(cfg: Config) -> str:
-    return FACTCHECK_INSTRUCTIONS.format(extra=CHILDHOOD_EXTRA if cfg.profile.name == "childhood" else "")
+    extra = {"childhood": CHILDHOOD_EXTRA, "invest": INVEST_EXTRA}.get(cfg.profile.name, "")
+    return FACTCHECK_INSTRUCTIONS.format(extra=extra)
 
 
 def _checked(result: dict, backend: str) -> dict:

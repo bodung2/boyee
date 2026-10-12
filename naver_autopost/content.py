@@ -165,15 +165,16 @@ def validate(post: dict, profile: Profile | None = None) -> list[str]:
         errors.append(f"본문이 너무 짧습니다({len(text)}자 < {MIN_BODY_CHARS}자)")
 
     sources = post["sources"]
-    if len(sources) < MIN_SOURCES:
-        errors.append(f"출처가 부족합니다({len(sources)}개 < {MIN_SOURCES}개)")
+    min_sources = profile.min_sources if profile else MIN_SOURCES
+    if len(sources) < min_sources:
+        errors.append(f"출처가 부족합니다({len(sources)}개 < {min_sources}개)")
     if sum(1 for s in sources if s.get("primary")) < MIN_PRIMARY_SOURCES:
         errors.append(f"1차 출처가 {MIN_PRIMARY_SOURCES}개 미만입니다")
     if len(post["claims"]) < MIN_CLAIMS:
         errors.append(f"검증 대상 사실이 {MIN_CLAIMS}개 미만입니다")
 
     thumb = post["thumbnail"]
-    if profile and profile.thumbnail_style == "childhood":
+    if profile and profile.thumbnail_style in ("childhood", "bold"):
         lines = thumb.get("main_lines") or []
         if not 1 <= len(lines) <= 3:
             errors.append(f"썸네일 메인은 1~3줄이어야 합니다(현재 {len(lines)}줄)")

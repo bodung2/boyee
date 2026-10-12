@@ -113,6 +113,20 @@ notepad .env        # NAVER_BLOG_ID, NAVER_CATEGORY_CHILDHOOD 입력
 - 카테고리는 글 종류로 자동 결정됩니다. 교직 실무(B 레인)는 '교직 꿀팁', 나머지는 '교육 정책 인사이트'입니다.
 - 예약: `scripts\setup_windows.ps1 -Profile edu` (블로그 06:00, 막힌 날 재시도 11:00, 인스타·쓰레드 20:00)
 
+## 투자 블로그 '숫자로 까 보는 돈·생활' (세 번째 네이버 계정, `--profile invest`)
+
+티스토리 '숫자로 보는 한국'(`stats-auto-post`)의 방식을 옮긴 글입니다. 사람들이 궁금해하거나 편이 갈리는 질문이면 주제는 넓게 잡습니다. 7개 레인은 A 내 위치(자산·소득), B 부동산, C 일상 지출(결혼·육아·외식·차), D 일·직장, E 개미 vs 통계, F 제도·세금·연금, G 시장·금리입니다. 공식 숫자로 까 보고, 독자가 '내 위치'를 찾는 표를 앞에 둡니다. 티스토리와 같은 주제가 최근 60일 안에 나갔으면 각도를 바꿉니다.
+
+- 스킬: `.claude/skills/invest-auto-post`(글쓰기, `persona.md` = 본문 해요체, 제목·썸네일은 "~할까?"형 질문), `invest-auto-factcheck`(검수)
+- **썸네일:** 그 글의 첫 일러스트(Codex가 그린 그림)를 배경으로 깔고, 글씨 뒤만 레인 색으로 흐리게(컬러 블러) 처리한 뒤 굵은 테두리 글씨를 얹습니다. 질문의 마지막 줄은 노란색. 그림이 없으면 단색 썸네일.
+- **홈피드·검색 유입용:** 질문형 숫자 제목(검색어를 앞 15자 안에), 진한 배경에 노란 큰 글씨 썸네일(`main_lines` 1~3줄), 첫 화면에 결론 숫자, '내 위치 찾기' 표를 본문 앞 1/3 안에.
+- **지키는 선:** 종목·상품·부동산 단지 권유, 집값 전망 단정, 목표주가·수익 보장 문구, 글쓴이 신원(교사 등)·1인칭 경험은 구조 검사와 팩트체크에서 걸러집니다. 교사 페르소나 파일은 이 블로그에 넘기지 않습니다.
+- 출처는 6개 이상(공식 원문 2개 이상), 인스타·쓰레드 초안은 만들지 않습니다.
+- `.env`: `NAVER_BLOG_ID_INVEST=블로그아이디`, `NAVER_CATEGORY_INVEST=카테고리 이름`
+- 최초 1회 로그인: `python -m naver_autopost login --profile invest` (자동화용 크롬은 `.browser-profile-invest`로 따로 씁니다)
+- 시험 실행: `python -m naver_autopost run --profile invest --dry-run`
+- 예약: `scripts\setup_windows.ps1 -Profile invest` (블로그 09:00, 막힌 날 재시도 17:00)
+
 ## 구글 블로거 (korea-explained-blogger, 하루 1편)
 
 Codex(ChatGPT 구독)에 설치된 `korea-explained-blogger` 스킬로 글을 쓰고, **구글 공식 Blogger API**로 발행합니다.
