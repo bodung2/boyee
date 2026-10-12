@@ -236,3 +236,38 @@ def test_sector_stock_status_uses_liquidity_floor():
     rows = sectors.stock_table(US, close, vol, px["CASH"], sectors.Params())["XLK"]
     aapl = next(r for r in rows if r["ticker"] == "AAPL")
     assert aapl["status"] == "거래대금 부족"
+
+
+def _kr_snaps(months=60, n=120, seed=0):
+    rng = np.random.default_rng(seed)
+    dates = pd.date_range("2014-01-31", periods=months, freq="ME")
+    codes = [f"{i:05d}0" for i in range(n)]
+    price = pd.Series(10000.0, index=codes)
+    pbr = pd.Series(rng.uniform(0.3, 3, n), index=codes)
+    snaps = {}
+    for d in dates:
+        # 저PBR 종목이 조금 더 오르게(기준이 실제로 잡아내는지 확인)
+        price = price * (1 + rng.normal(0.01, 0.06, n) + 0.01 * (pbr < 1))
+        snaps[d] = pd.DataFrame({"종가": price, "시가총액": price * 1e6, "거래대금": 5e9, "상장주식수": 1e6,
+                                 "PER": rng.uniform(5, 30, n), "PBR": pbr, "DIV": 2.0, "외국인순매수": rng.normal(0, 1e8, n)})
+    return snaps
+
+
+def test_kr_factor_study_runs_and_finds_planted_value_effect():
+    from market_dashboard import kr_factors
+    snaps = _kr_snaps()
+    res = kr_factors.run(snaps)
+    rows = {r["name"]: r for r in res["rows"]}
+    assert set(rows) == set(kr_factors.FACTORS)
+    v = rows["저PBR(가치)"]
+    assert v["IS"]["Q1"]["CAGR"] > v["IS"]["Q5"]["CAGR"]
+    assert "종목 선정" in kr_factors.report(res)
+
+
+def test_kr_factor_split_adjusted_returns():
+    from market_dashboard import kr_factors
+    snaps = _kr_snaps(months=3, n=60)
+    d1, d2 = sorted(snaps)[:2]
+    snaps[d2].loc["000000", ["종가", "상장주식수"]] = [snaps[d1].loc["000000", "종가"] / 50, 50e6]  # 50:1 액면분할
+    r = kr_factors.monthly_returns(kr_factors.panel(snaps))
+    assert abs(r.loc[d1, "000000"] - 2.0 / 100 / 12) < 1e-9   # 가격 변화 없음 + 배당만
