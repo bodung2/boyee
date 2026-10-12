@@ -189,3 +189,50 @@ def test_entry_needs_strong_trend_but_holdings_stay_until_zero():
                           index=pd.date_range(end=t, periods=60, freq="W-FRI"))
     picks, _ = backtest.select(t, sig, weekly, {"A"}, p, keys)
     assert [pk.key for pk in picks] == ["A"]  # 보유 중인 A만 유지, B는 새로 편입하지 않음
+
+
+def _fake_country(c, days=900, seed=0, drop=()):
+    from market_dashboard import sectors
+    rng = np.random.default_rng(seed)
+    idx = pd.bdate_range("2021-01-01", periods=days)
+    cols = [t for t in sectors.tickers(c) if t not in drop]
+    close = {}
+    for i, t in enumerate(cols):
+        if t == c.cash and c.cash_is_rate:
+            close[t] = np.full(days, 4.0)
+            continue
+        close[t] = 100 * np.exp(np.cumsum(rng.normal(0.0004 * ((i % 5) - 2), 0.015, days)))
+    close = pd.DataFrame(close, index=idx)
+    vol = pd.DataFrame(1e7, index=idx, columns=cols)
+    return close, vol
+
+
+def test_sector_dashboard_builds_and_renders():
+    from market_dashboard import sector_html, sectors
+    from market_dashboard.sector_universe import KR, US
+    data = {"US": _fake_country(US), "KR": _fake_country(KR, seed=1, drop=("266410.KS",))}
+    d = sectors.build(data)
+    us, kr = d["countries"]
+    assert len(us["sectors"]) == len(US.sectors) and len(kr["sectors"]) == len(KR.sectors) - 1
+    assert "266410.KS" in kr["missing"]
+    s = us["sectors"][0]
+    assert len(s["hist"]) == len(us["frames"]) and s["stocks"]
+    assert sum(x["weight"] for x in us["sectors"]) <= 1.0 + 1e-9
+    assert all(x["weight"] <= sectors.SECTOR_RULE["max_weight"] + 1e-9 for x in us["sectors"])
+    assert us["backtest"]["table"][0]["name"] == "섹터 순환 규칙"
+    scores = [r["score"] for r in s["stocks"] if r.get("score") is not None]
+    assert scores and all(0 < v <= 1 for v in scores)
+    page = sector_html.render(d)
+    assert "주식 섹터 지도" in page and "</script>" in page
+    assert "섹터" in sectors.summary(d)
+
+
+def test_sector_stock_status_uses_liquidity_floor():
+    from market_dashboard import sectors
+    from market_dashboard.sector_universe import US
+    close, vol = _fake_country(US, seed=2)
+    vol.loc[:, "AAPL"] = 1.0   # 거래대금 거의 0
+    px = sectors.panel(US, close)
+    rows = sectors.stock_table(US, close, vol, px["CASH"], sectors.Params())["XLK"]
+    aapl = next(r for r in rows if r["ticker"] == "AAPL")
+    assert aapl["status"] == "거래대금 부족"

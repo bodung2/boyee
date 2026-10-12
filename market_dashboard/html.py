@@ -105,7 +105,7 @@ svg{fill:var(--ink2)} svg text{font-size:12px}
 </head>
 <body>
 <main>
-  <h1>자산군 모멘텀 대시보드</h1>
+  <h1>자산군 모멘텀 대시보드 <span class="sub">· <a href="sectors.html" style="color:var(--yellow)">주식 섹터 지도(미국·한국) →</a></span></h1>
   <div class="sub" id="asof"></div>
   <div class="chips" id="chips"></div>
 

@@ -5,6 +5,7 @@
   python -m market_dashboard run --base USD   달러 기준 수익으로 평가(기본 원화)
   python -m market_dashboard run --out site   결과를 site/index.html로(GitHub Pages 배포용)
   python -m market_dashboard analyze          자산군별 경향·'어느 구간에서 사면 좋았나' 표를 출력
+  python -m market_dashboard sectors --out site   미국·한국 주식 섹터 지도 → site/sectors.html
 """
 from __future__ import annotations
 
@@ -62,10 +63,34 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--out", help="이 폴더에 index.html로 저장(기본: output/market/dashboard.html)")
     an = sub.add_parser("analyze")
     an.add_argument("--offline", action="store_true")
+    se = sub.add_parser("sectors")
+    se.add_argument("--offline", action="store_true")
+    se.add_argument("--out", help="이 폴더에 sectors.html로 저장(기본: output/market/)")
     args = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     _load_dotenv(ROOT / ".env")
+
+    if args.cmd == "sectors":
+        from . import sector_html, sectors
+        from .sector_universe import COUNTRIES
+
+        got = {}
+        for c in COUNTRIES:
+            try:
+                got[c.key] = (pd.read_pickle(CACHE / f"sectors_{c.key}.pkl") if args.offline
+                              else sectors.fetch(c, CACHE))
+            except Exception as e:
+                log.warning("%s 섹터 시세 없음: %s", c.name, e)
+        d = sectors.build(got)
+        d["generated"] = datetime.now(KST).strftime("%Y-%m-%d %H:%M KST")
+        out = Path(args.out) if args.out else OUT
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "sectors.json").write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
+        (out / "sectors.html").write_text(sector_html.render(d), encoding="utf-8")
+        print(sectors.summary(d))
+        print(f"섹터 지도: {out / 'sectors.html'}")
+        return 0
 
     if args.cmd == "analyze":
         from . import analysis
