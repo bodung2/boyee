@@ -7,6 +7,7 @@
   python -m market_dashboard analyze          자산군별 경향·'어느 구간에서 사면 좋았나' 표를 출력
   python -m market_dashboard sectors --out site   미국·한국 주식 섹터 지도 → site/sectors.html
   python -m market_dashboard krfactors        한국 주식 종목 선정 방식(가치·수익성·저변동·모멘텀·수급 등) 비교
+  python -m market_dashboard krcombo          기준 섞기 비교 + 고배당이 왜 잘됐나 분해
 """
 from __future__ import annotations
 
@@ -65,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     an = sub.add_parser("analyze")
     an.add_argument("--offline", action="store_true")
     sub.add_parser("krfactors")
+    sub.add_parser("krcombo")
     se = sub.add_parser("sectors")
     se.add_argument("--offline", action="store_true")
     se.add_argument("--out", help="이 폴더에 sectors.html로 저장(기본: output/market/)")
@@ -73,6 +75,26 @@ def main(argv: list[str] | None = None) -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     _load_dotenv(ROOT / ".env")
+
+    if args.cmd == "krcombo":
+        from . import kr_combo, kr_factors
+
+        snaps = kr_factors.load(CACHE / "krx")
+        if len(snaps) < 24:
+            print("데이터가 부족해 중단(한국거래소 접속 실패 가능)")
+            return 1
+        p = kr_factors.panel(snaps)
+        ret, uni, sc = kr_factors.monthly_returns(p), kr_factors.universe(p), kr_factors.scores(p)
+        market = ret.where(uni).mean(axis=1).iloc[:-1]
+        try:
+            import yfinance as yf
+
+            k200 = yf.download("069500.KS", start="2009-12-01", auto_adjust=True, progress=False)["Close"].squeeze()
+        except Exception:
+            k200 = None
+        res = kr_combo.run_combos(p, ret, uni, sc, market, kr_factors.monthly_benchmark(k200, market.index))
+        print(kr_combo.report(res, kr_combo.dividend_anatomy(p, ret, uni, sc, market)))
+        return 0
 
     if args.cmd == "krfactors":
         from . import kr_factors

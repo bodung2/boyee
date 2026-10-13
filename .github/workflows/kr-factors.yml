@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - "market_dashboard/kr_factors.py"
+      - "market_dashboard/kr_combo.py"
       - ".github/workflows/kr-factors.yml"
   workflow_dispatch:
 
@@ -42,3 +43,4 @@ jobs:
             exit 0
           fi
           python -m market_dashboard krfactors
+          python -m market_dashboard krcombo

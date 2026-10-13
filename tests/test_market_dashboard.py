@@ -271,3 +271,20 @@ def test_kr_factor_split_adjusted_returns():
     snaps[d2].loc["000000", ["종가", "상장주식수"]] = [snaps[d1].loc["000000", "종가"] / 50, 50e6]  # 50:1 액면분할
     r = kr_factors.monthly_returns(kr_factors.panel(snaps))
     assert abs(r.loc[d1, "000000"] - 2.0 / 100 / 12) < 1e-9   # 가격 변화 없음 + 배당만
+
+
+def test_kr_factor_combo_and_dividend_anatomy():
+    from market_dashboard import kr_combo, kr_factors
+    snaps = _kr_snaps(months=60, n=150)
+    p = kr_factors.panel(snaps)
+    ret, uni, sc = kr_factors.monthly_returns(p), kr_factors.universe(p), kr_factors.scores(p)
+    market = ret.where(uni).mean(axis=1).iloc[:-1]
+    res = kr_combo.run_combos(p, ret, uni, sc, market, None)
+    assert len(res["rows"]) == 2 * (len(kr_combo.BASE) + len(kr_combo.COMBOS) + 3)
+    anat = kr_combo.dividend_anatomy(p, ret, uni, sc, market)
+    assert set(anat) == {"split", "profile", "capture", "calendar", "regression"}
+    text = kr_combo.report(res, anat)
+    assert "고배당은 왜" in text and "2017년까지 성적으로 골랐다면" in text
+    # 배당 제외 수익은 배당 포함보다 작다(배당수익률 2%/12)
+    pr = kr_factors.monthly_returns(p, include_div=False)
+    assert (ret - pr).stack().dropna().round(6).eq(round(0.02 / 12, 6)).mean() > 0.9

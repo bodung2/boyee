@@ -102,13 +102,14 @@ def panel(snaps: dict[pd.Timestamp, pd.DataFrame]) -> dict[str, pd.DataFrame]:
     return out
 
 
-def monthly_returns(p: dict[str, pd.DataFrame]) -> pd.DataFrame:
+def monthly_returns(p: dict[str, pd.DataFrame], include_div: bool = True) -> pd.DataFrame:
     """t월 말 → t+1월 말 수익(다음 행이 아니라 같은 행에 둔다: ret.loc[t] = t에 사서 t+1에 판 수익)."""
     px, sh, div = p["종가"], p["상장주식수"], p["DIV"].fillna(0)
     ratio = sh.shift(-1) / sh
     split = (ratio > 1.5) | (ratio < 0.67)          # 액면분할·병합: 가격 비율에 주식수 비율을 곱해 보정
     r = px.shift(-1) / px * ratio.where(split, 1.0) - 1
-    r = r + div / 100 / 12
+    if include_div:
+        r = r + div / 100 / 12
     gone = px.notna() & px.shift(-1).isna()
     r = r.where(~gone, DELIST_RET)
     r.iloc[-1] = np.nan
@@ -202,15 +203,22 @@ def run(snaps: dict[pd.Timestamp, pd.DataFrame], kodex200: pd.Series | None = No
     bench = {}
     for tag, mask in (("IS", market.index < SPLIT), ("OOS", market.index >= SPLIT)):
         bench[tag] = {"시장 평균(같은 비중)": stats(market[mask])}
-        if kodex200 is not None and len(kodex200):
-            k = kodex200.resample("ME").last().pct_change().shift(-1)
-            k.index = k.index.to_period("M")
-            kk = pd.Series(market.index.to_period("M").map(k), index=market.index)
+        kk = monthly_benchmark(kodex200, market.index)
+        if kk is not None:
             bench[tag]["KODEX 200"] = stats(kk[mask])
     n_uni = uni.sum(axis=1)
     return {"rows": rows, "bench": bench, "months": len(market), "start": market.index[0].strftime("%Y-%m"),
             "end": market.index[-1].strftime("%Y-%m"), "uni_size": int(n_uni.median()),
             "current": current_picks(p, sc, uni)}
+
+
+def monthly_benchmark(px: pd.Series | None, index: pd.DatetimeIndex) -> pd.Series | None:
+    """일별 가격 → 우리 월말 날짜 기준 '그달 말 → 다음 달 말' 수익."""
+    if px is None or not len(px):
+        return None
+    k = px.resample("ME").last().pct_change().shift(-1)
+    k.index = k.index.to_period("M")
+    return pd.Series(index.to_period("M").map(k), index=index, dtype=float)
 
 
 def current_picks(p, sc, uni, k: int = 15) -> dict:
