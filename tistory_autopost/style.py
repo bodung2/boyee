@@ -40,7 +40,12 @@ BASE = {
     "th": ("background:#f1f3f5;border:1px solid #bdbdbd;padding:12px 10px;font-weight:700;"
            "text-align:center;color:#111;"),
     "td": "border:1px solid #bdbdbd;padding:11px 10px;text-align:center;color:#333;",
+    "pre": ("background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;padding:14px 16px;margin:12px 0 22px;"
+            "overflow-x:auto;white-space:pre;font-size:14px;line-height:1.6;"),
+    "code": ("font-family:Consolas,'D2Coding','Courier New',monospace;font-size:14px;background:#f1f3f5;"
+             "padding:2px 6px;border-radius:4px;color:#c7254e;"),
 }
+CODE_IN_PRE = "font-family:Consolas,'D2Coding','Courier New',monospace;font-size:14px;color:#24292f;"
 BLOCK = {
     "summary": "background:#f7f7f7;border:1px solid #e2e2e2;padding:20px 24px 6px;margin:6px 0 34px;",
     "highlight": "border:2px solid #111;padding:20px 24px 6px;margin:26px 0 30px;",
@@ -48,14 +53,16 @@ BLOCK = {
                 "font-weight:700;"),
     "related": "margin:0 0 26px;",
     "sources": "margin:0 0 10px;",
+    "error": ("background:#fff5f5;border:1px solid #f1aeb5;border-left:4px solid #e03131;padding:16px 20px 4px;"
+              "margin:18px 0 26px;"),
 }
-BLOCK_TITLE = {
-    "summary": "📌 바쁜 사람용 3줄 요약",
-    "highlight": "🔢 숫자로 박제",
-    "oneline": "",
-    "related": "🔗 함께 보면 좋은 글",
-    "sources": "출처",
+BLOCK_TITLES = {
+    "stats": {"summary": "📌 바쁜 사람용 3줄 요약", "highlight": "🔢 숫자로 박제", "oneline": "",
+              "related": "🔗 함께 보면 좋은 글", "sources": "출처", "error": "오류 메시지"},
+    "fix": {"summary": "📌 3줄 요약", "highlight": "✅ 바로 해결", "oneline": "",
+            "related": "🔗 함께 보면 좋은 글", "sources": "참고한 공식 문서", "error": "⚠️ 이런 메시지가 떴다면"},
 }
+BLOCK_TITLE = BLOCK_TITLES["stats"]
 SOURCES_TEXT = "font-size:13px;line-height:1.7;color:#888;"
 CAPTION = "text-align:center;font-size:13px;color:#999;margin:-8px 0 26px;"
 BAR = "#2f6fed"
@@ -85,8 +92,10 @@ def bar_chart(rows: list[tuple[str, str]]) -> str:
 
 
 class _Styler(HTMLParser):
-    def __init__(self):
+    def __init__(self, titles: dict | None = None):
         super().__init__(convert_charrefs=False)
+        self.titles = titles or BLOCK_TITLE
+        self.in_pre = 0
         self.out: list[str] = []
         self.blocks: list[str | None] = []      # 열린 div의 data-block(없으면 None)
         self.chart: list[list[str]] | None = None
@@ -120,9 +129,9 @@ class _Styler(HTMLParser):
             if name in ("oneline", "related"):
                 self.out.append(f'<hr style="{BASE["hr"]}">')
             self.out.append(f'<div style="{BLOCK[name]}">')
-            if BLOCK_TITLE[name]:
+            if self.titles.get(name):
                 size = "13px;color:#888" if name == "sources" else "17px;color:#111"
-                self.out.append(f'<p style="font-size:{size};font-weight:700;margin:0 0 10px;">{BLOCK_TITLE[name]}</p>')
+                self.out.append(f'<p style="font-size:{size};font-weight:700;margin:0 0 10px;">{self.titles[name]}</p>')
             return
         if tag == "div":
             self.blocks.append(None)
@@ -130,6 +139,13 @@ class _Styler(HTMLParser):
             return
         style = BASE.get(tag, "")
         block = self._block()
+        if tag == "pre":
+            self.in_pre += 1
+        if tag == "code" and self.in_pre:
+            style = CODE_IN_PRE
+        elif tag in ("p", "pre") and block == "error":
+            style = ("font-family:Consolas,'D2Coding','Courier New',monospace;font-size:14px;line-height:1.6;"
+                     "color:#c92a2a;margin:0 0 12px;white-space:pre-wrap;word-break:break-all;")
         if block == "sources" and tag in ("ul", "li", "p", "a"):
             style = SOURCES_TEXT + ("color:#888;text-decoration:underline;" if tag == "a" else "")
             if tag == "ul":
@@ -160,6 +176,8 @@ class _Styler(HTMLParser):
             return
         if tag in VOID:
             return
+        if tag == "pre" and self.in_pre:
+            self.in_pre -= 1
         self.out.append(f"</{tag}>")
 
     def handle_startendtag(self, tag, attrs):
@@ -187,11 +205,12 @@ def _wrap_tables(body: str) -> str:
     return re.sub(r"<table\b.*?</table>", fix, body, flags=re.I | re.S)
 
 
-def stylize(body_html: str, images: dict[str, str] | None = None, captions: dict[str, str] | None = None) -> str:
+def stylize(body_html: str, images: dict[str, str] | None = None, captions: dict[str, str] | None = None,
+            mode: str = "stats") -> str:
     """의미 HTML → 네이버 블로그 서식이 입혀진 HTML. images는 그림 이름 → 티스토리 이미지 코드.
     올리지 못한 그림 자리는 지운다."""
     images, captions = images or {}, captions or {}
-    styler = _Styler()
+    styler = _Styler(BLOCK_TITLES.get(mode, BLOCK_TITLE))
     styler.feed(_wrap_tables(body_html))
     styler.close()
     out = "".join(styler.out)

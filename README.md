@@ -218,6 +218,15 @@ Codex(ChatGPT 구독)에 설치된 `korea-explained-blogger` 스킬로 글을 �
 - 글 규칙은 Codex 스킬(`korea-explained-blogger`)을 그대로 따르고, 자동 발행에 필요한 규칙(질문 금지, 확인 못 한 사실 삭제, 경험 지어내기 금지, 출력 형식)만
   `blogger_autopost/writer.py`의 프롬프트로 덧붙입니다.
 
+## 티스토리 '오류 해결' (기본, TISTORY_MODE=fix)
+
+윈도우에서 AI 코딩 도구(Claude Code, Codex CLI)·Python·Playwright·PowerShell·Git·작업 스케줄러·서치콘솔을 쓰다 만나는 오류를
+**정확한 오류 문구 → 원인 → 해결 명령 → 확인 방법** 순서로 담백하게 정리합니다. 오류 메시지를 그대로 구글에 붙여 넣는 사람을 노립니다.
+- 주제 큐: `data/tistory_fix_topics.json`(이 자동화 프로젝트에서 실제로 겪고 해결한 문제 위주. `experience`만 경험담으로 쓴다)
+- 스킬: `.claude/skills/fix-auto-post`, `fix-auto-factcheck`(명령어·옵션·경로를 공식 문서와 대조, 위험한 해결 단계 차단)
+- 서식: 오류 메시지 상자, 코드 블록(들여쓰기 그대로), 3줄 요약·한 줄 정리 등 네이버 블로그 기본 서식. 인포그래픽은 끔(명령어가 그림에 잘못 찍히는 것 방지)
+- `.env`: `TISTORY_MODE=fix`, `TISTORY_CATEGORY_FIX=카테고리 이름`. 예전 통계 글로 돌아가려면 `TISTORY_MODE=stats`
+
 ## 티스토리 '논쟁 × 공식 통계' (하루 1편)
 
 SNS에서 해마다 되풀이되는 논쟁(금수저, 연봉, 결혼, 집값, 키 등)에 **공식 통계로 숫자로 답하는 글**을 씁니다.

@@ -81,6 +81,26 @@ verdict: 문제 없음=pass, 고치면 되는 문제만=fix, 제목·핵심 수�
 """
 
 
+GPT_FACTCHECK_FIX = """너는 개발 도구·윈도우 문제 해결 글 검수자다. 아래 블로그 글은 사람 검토 없이 티스토리에 자동 발행된다.
+독자가 글의 명령어를 그대로 복사해 실행한다. 웹 검색으로 공식 문서(Microsoft Learn, Python 문서, Playwright, Git,
+OpenAI·Anthropic 문서, 각 도구의 GitHub 저장소·이슈)를 직접 찾아 아래를 하나씩 검증하라.
+- 오류 문구가 실제로 그 도구가 내는 문구와 같은가(번역·말 바꾸기로 검색에 안 걸리게 바뀌지 않았나)
+- 명령어·옵션·환경변수·설정 경로·메뉴 이름이 현재 공식 문서와 맞는가(없어진 옵션, 틀린 철자, 다른 OS용 명령 섞임)
+- 해결 순서가 위험하지 않은가(관리자 권한·보안 설정을 필요 이상으로 영구 변경, 데이터 삭제 명령, 출처 불명 스크립트 실행)
+- 버전·날짜·가격·한도 같은 사실이 원문과 같은가
+- 출처로 단 링크가 실제로 그 내용을 담고 있는가
+규칙: 원문으로 확인되면 문제 없음. 다르면 올바른 내용과 근거 URL. 어디서도 확인되지 않는 명령·사실은 삭제 권고.
+글쓴이의 경험담(직접 겪은 일)은 사실 확인 대상이 아니다. 문체 지적 금지. 근거 URL 없는 지적 금지.
+웹 검색을 쓸 수 없으면 {"verdict": "error", "summary": "no web search"} 만 출력하라. 파일을 만들거나 명령을 실행하지 말 것.
+
+오직 JSON 하나만 출력하라(코드블록 없이):
+{"verdict": "pass" | "fix" | "fail", "checked": 검증한 항목 개수,
+ "issues": [{"text": "본문 속 문제 문장(그대로)", "problem": "무엇이 틀렸나", "correction": "고친 문장 또는 '삭제'", "evidence_url": "https://..."}],
+ "summary": "한 줄 요약"}
+verdict: 문제 없음=pass, 고치면 되는 문제만=fix, 핵심 해결 명령이 틀렸거나 위험하거나 문제가 전체의 30% 초과=fail.
+"""
+
+
 def article(post: dict) -> str:
     sources = "\n".join(f"- {s.get('publisher', '')} | {s.get('title', '')} | {s.get('url', '')}"
                         for s in post.get("sources", []))
@@ -88,7 +108,8 @@ def article(post: dict) -> str:
 
 
 def gpt_factcheck(cfg: TistoryConfig, post: dict) -> dict:
-    result = _extract_json(run_codex(cfg, GPT_FACTCHECK + "\n\n" + article(post)))
+    prompt = GPT_FACTCHECK_FIX if getattr(cfg, "mode", "stats") == "fix" else GPT_FACTCHECK
+    result = _extract_json(run_codex(cfg, prompt + "\n\n" + article(post)))
     if result.get("verdict") == "error":
         raise CodexUnavailable(f"Codex에서 웹 검색을 쓸 수 없습니다: {result.get('summary', '')}")
     if result.get("verdict") not in ("pass", "fix", "fail"):
