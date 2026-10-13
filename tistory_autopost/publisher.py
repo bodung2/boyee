@@ -97,11 +97,34 @@ def _save_cookies(ctx, cfg: TistoryConfig) -> None:
     path.write_text(json.dumps(cookies, ensure_ascii=False), encoding="utf-8")
 
 
+def _login_hint(url: str) -> str:
+    """카카오 로그인 주소의 login_hint(저장된 계정)를 꺼낸다."""
+    import urllib.parse
+    return (urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("login_hint") or [""])[0]
+
+
+def _pick_saved_kakao_account(page: Page) -> bool:
+    """카카오 '간편 로그인'(저장된 계정을 한 번 눌러 고르는 화면)이면 그 계정을 누른다."""
+    hint = _login_hint(page.url)
+    candidates = [page.get_by_text(hint, exact=False)] if hint else []
+    candidates += [page.locator("button:has-text('계속하기')"), page.locator("a:has-text('계속하기')")]
+    for loc in candidates:
+        try:
+            if loc.count() and loc.first.is_visible():
+                log.info("카카오 간편 로그인: 저장된 계정 선택")
+                loc.first.click()
+                return True
+        except Exception:  # noqa: BLE001 - 화면 전환 중
+            continue
+    return False
+
+
 def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bool:
-    """글쓰기 화면을 연다. 로그인 화면으로 가면 카카오 자동 로그인 버튼을 눌러 기다린다."""
+    """글쓰기 화면을 연다. 로그인 화면으로 가면 카카오 자동 로그인 버튼을 누르고,
+    카카오 간편 로그인 화면이면 저장된 계정을 골라 기다린다. 실패하면 화면을 login_failed.png로 남긴다."""
     page.goto(_newpost_url(cfg), wait_until="domcontentloaded")
     deadline = time.time() + timeout
-    clicked = 0
+    clicked = picked = 0
     while time.time() < deadline:
         page.wait_for_timeout(1500)
         url = page.url
@@ -118,9 +141,15 @@ def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bo
                         break
                 except Exception:  # noqa: BLE001 - 화면 전환 중
                     pass
-        elif "accounts.kakao.com" in url and page.locator("input[type='password']").count():
-            log.warning("카카오 비밀번호 입력 화면입니다(자동 로그인이 풀림)")
-            return False
+        elif "accounts.kakao.com" in url:
+            if picked < 1 and _pick_saved_kakao_account(page):
+                picked += 1
+                continue
+            password = page.locator("input[type='password']")
+            if password.count() and password.first.is_visible():
+                log.warning("카카오 비밀번호 입력 화면입니다(카카오 로그인 유지 기간이 끝남)")
+                break
+    _shot(page, cfg.output_dir, "login_failed")
     return False
 
 
@@ -249,25 +278,46 @@ def _cm_value(page: Page) -> str:
     return page.evaluate(f"() => {{ const e = ({_VISIBLE_CM})(); return e ? e.CodeMirror.getValue() : ''; }}")
 
 
+_INDENT_OPTIONS = """([findCm, on]) => {
+    const e = (eval(findCm))(); if (!e || !e.CodeMirror.setOption) return null;
+    const cm = e.CodeMirror;
+    if (on === null) {   // 끄기: 원래 값을 돌려준다
+        const saved = {smartIndent: cm.getOption('smartIndent'), electricChars: cm.getOption('electricChars'),
+                       autoCloseTags: cm.getOption('autoCloseTags')};
+        cm.setOption('smartIndent', false); cm.setOption('electricChars', false); cm.setOption('autoCloseTags', false);
+        return saved;
+    }
+    for (const [k, v] of Object.entries(on)) cm.setOption(k, v);
+    return on;
+}"""
+
+
 def _set_body(page: Page, body_html: str) -> None:
-    """보이는 HTML 편집기에 사람이 입력하듯 넣는다(편집기 값을 코드로 바꾸면 티스토리가 저장하지 않는다)."""
+    """보이는 HTML 편집기에 사람이 입력하듯 넣는다(편집기 값을 코드로 바꾸면 티스토리가 저장하지 않는다).
+    코드 블록(<pre>)의 들여쓰기가 바뀌지 않게, 입력하는 동안 편집기의 자동 들여쓰기·태그 자동 닫기를 끈다."""
     cm = page.locator(".CodeMirror:visible").first
     cm.click()
-    page.keyboard.press(f"{MOD}+A")
-    page.keyboard.press("Delete")
-    page.keyboard.insert_text(body_html)
-    page.wait_for_timeout(800)
-    value = _cm_value(page)
-    if _squash(value) != _squash(body_html):
-        # 자동 들여쓰기·태그 자동 닫기 등으로 내용이 바뀌었으면 값을 바로잡는다(입력 이벤트는 이미 났다).
-        log.warning("입력 결과가 원문과 달라 편집기 값을 바로잡습니다(%d자 → %d자)", len(value), len(body_html))
-        page.evaluate(
-            """([html, findCm]) => { const e = (eval(findCm))(); e.CodeMirror.setValue(html); }""",
-            [body_html, _VISIBLE_CM],
-        )
-        page.keyboard.press("End")
-        page.keyboard.insert_text(" ")
-        page.keyboard.press("Backspace")
+    saved = page.evaluate(_INDENT_OPTIONS, [_VISIBLE_CM, None])
+    try:
+        page.keyboard.press(f"{MOD}+A")
+        page.keyboard.press("Delete")
+        page.keyboard.insert_text(body_html)
+        page.wait_for_timeout(800)
+        value = _cm_value(page)
+        exact = "<pre" in body_html.lower()        # 코드 블록은 공백 하나도 바뀌면 안 된다
+        if (value != body_html) if exact else (_squash(value) != _squash(body_html)):
+            # 자동 들여쓰기 등으로 내용이 바뀌었으면 값을 바로잡는다(입력 이벤트는 이미 났다).
+            log.warning("입력 결과가 원문과 달라 편집기 값을 바로잡습니다(%d자 → %d자)", len(value), len(body_html))
+            page.evaluate(
+                """([html, findCm]) => { const e = (eval(findCm))(); e.CodeMirror.setValue(html); }""",
+                [body_html, _VISIBLE_CM],
+            )
+            page.keyboard.press(f"{MOD}+End")
+            page.keyboard.insert_text(" ")
+            page.keyboard.press("Backspace")
+    finally:
+        if saved:
+            page.evaluate(_INDENT_OPTIONS, [_VISIBLE_CM, saved])
     log.info("본문 입력(HTML %d자)", len(_cm_value(page)))
 
 
@@ -544,7 +594,7 @@ def _fill_editor(cfg: TistoryConfig, page: Page, post: dict, out_dir: Path,
         post["_images_ok"] = len(codes)
         _switch_to_html(page)
         captions = {i.get("name", ""): i.get("caption") or "" for i in post.get("illustrations") or []}
-        body = style.stylize(post["body_html"], codes, captions)
+        body = style.stylize(post["body_html"], codes, captions, getattr(cfg, "mode", "stats"))
         post["_final_html"] = body
         _set_body(page, body)
         title_box = _find(page, "title")

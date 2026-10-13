@@ -11,6 +11,15 @@ PRIMARY_DOMAINS = (
     ".go.kr", "kosis.kr", "korea.kr", "bok.or.kr", "nps.or.kr", "oecd.org", "index.go.kr",
     "kdi.re.kr", "kihasa.re.kr", "krivet.re.kr", "kicce.re.kr",
 )
+# 오류 해결 글(TISTORY_MODE=fix)의 1차 출처: 도구를 만든 곳의 공식 문서·저장소
+FIX_PRIMARY_DOMAINS = (
+    "learn.microsoft.com", "support.microsoft.com", "docs.python.org", "python.org", "pypi.org",
+    "playwright.dev", "github.com", "docs.github.com", "git-scm.com", "nodejs.org", "docs.npmjs.com",
+    "developers.openai.com", "platform.openai.com", "help.openai.com", "openai.com",
+    "docs.anthropic.com", "docs.claude.com", "code.claude.com", "support.anthropic.com", "anthropic.com",
+    "chromium.org", "developer.chrome.com", "tistory.github.io",
+    "support.google.com", "developers.google.com", "core.telegram.org", "peps.python.org",
+)
 # 계층·성별 갈등 소재라 평가·조롱으로 읽히는 말은 막는다(숫자와 해석만 쓴다).
 JUDGMENT_WORDS = ("흙수저는", "루저", "패배자", "한남", "김치녀", "개념녀", "거지들", "노력을 안", "노력 부족")
 EXTRA_FORBIDDEN = ("<!--", "이 글은 AI", "style=")
@@ -50,16 +59,16 @@ def normalize(post: dict) -> dict:
     return post
 
 
-def is_primary(url: str) -> bool:
+def is_primary(url: str, mode: str = "stats") -> bool:
     host = (urlparse(url).hostname or "").lower()
-    for d in PRIMARY_DOMAINS:
+    for d in (FIX_PRIMARY_DOMAINS if mode == "fix" else PRIMARY_DOMAINS):
         if host.endswith(d) if d.startswith(".") else (host == d or host.endswith("." + d)):
             return True
     return False
 
 
 def validate(post: dict, min_sources: int = 4, min_primary: int = 2, min_data_points: int = 6,
-             min_body_chars: int = 1800) -> list[str]:
+             min_body_chars: int = 1800, mode: str = "stats") -> list[str]:
     errors = []
     title, body = post.get("title", ""), post.get("body_html", "")
     text = html_to_text(body)
@@ -69,21 +78,27 @@ def validate(post: dict, min_sources: int = 4, min_primary: int = 2, min_data_po
         errors.append(f"본문이 짧습니다({len(text)}자 < {min_body_chars}자)")
     if not post.get("topic_id"):
         errors.append("topic_id가 없습니다")
-    if "<table" not in body.lower():
+    if mode == "fix":
+        if 'data-block="error"' not in body:
+            errors.append('오류 문구 상자(<div data-block="error">)가 없습니다(검색어가 되는 핵심)')
+        if "<pre" not in body.lower():
+            errors.append("명령어·설정 코드 블록(<pre><code>)이 없습니다")
+    elif "<table" not in body.lower():
         errors.append("본문에 표(<table>)가 없습니다(내 위치를 찾는 표가 핵심)")
     if len(re.findall(r"<h2\b", body, flags=re.I)) < 3:
         errors.append("소제목(<h2>)이 3개 미만입니다")
     sources = post.get("sources") or []
     if len(sources) < min_sources:
         errors.append(f"출처가 {len(sources)}개(최소 {min_sources}개)")
-    primary = [s for s in sources if is_primary(s.get("url", ""))]
+    primary = [s for s in sources if is_primary(s.get("url", ""), mode)]
     if len(primary) < min_primary:
         errors.append(f"공식(1차) 출처가 {len(primary)}개(최소 {min_primary}개)")
     points = post.get("data_points") or []
     if len(points) < min_data_points:
-        errors.append(f"검증용 수치(data_points)가 {len(points)}개(최소 {min_data_points}개)")
+        errors.append(f"검증용 사실(data_points)이 {len(points)}개(최소 {min_data_points}개)")
+    keys = ("value", "source_url") if mode == "fix" else ("value", "stat", "period", "source_url")
     for i, d in enumerate(points):
-        missing = [k for k in ("value", "stat", "period", "source_url") if not str(d.get(k, "")).strip()]
+        missing = [k for k in keys if not str(d.get(k, "")).strip()]
         if missing:
             errors.append(f"data_points[{i}]에 {', '.join(missing)} 없음")
     for block, what in (("summary", "3줄 요약"), ("oneline", "한 줄 요약")):
@@ -100,7 +115,7 @@ def validate(post: dict, min_sources: int = 4, min_primary: int = 2, min_data_po
         if phrase in visible or phrase in body:
             errors.append(f"금지 문구: {phrase}")
     links = re.findall(r'<a\b[^>]*href="(https?://[^"]+)"', body, flags=re.I)
-    if not any(is_primary(u) for u in links):
+    if not any(is_primary(u, mode) for u in links):
         errors.append("본문 출처 섹션에 공식 출처 링크가 없습니다")
     return errors
 

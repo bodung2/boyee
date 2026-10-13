@@ -52,6 +52,8 @@ POST = {
 @pytest.fixture
 def cfg(tmp_path):
     c = TistoryConfig.load()
+    c.mode = "stats"                     # 아래 기존 테스트는 '숫자로 보는 한국' 글 기준
+    c.min_sources, c.min_data_points, c.infographic = 4, 6, True
     c.blog_name = "myblog"
     c.category = "통계로 보는 세상"
     c.output_dir = tmp_path / "out"
@@ -603,3 +605,106 @@ def test_republish_second_slot(cfg, monkeypatch):
     monkeypatch.setattr(publisher, "find_post_url", lambda c, t: None)
     assert pipeline.republish(cfg, slot=2) == 0 and fakes.published == [POST["title"]]
     assert history.load(cfg.history_file)[0]["slot"] == 2
+
+
+# ---------------------------------------------------------------- 오류 해결 모드(TISTORY_MODE=fix)
+
+FIX_BODY = (
+    '<div data-block="summary"><ul><li>옵션 위치 문제</li><li>순서를 바꾼다</li><li>버전 확인</li></ul></div>'
+    "<div data-block=\"error\"><p>error: unexpected argument '--search' found</p></div>"
+    "<p>자동화 작업을 돌리다 같은 메시지를 만났습니다. 원인은 옵션 위치였습니다.</p>"
+    "<p>[[IMAGE:illust_a]]</p>"
+    '<div data-block="highlight"><ul><li><code>codex --search exec</code> 순서로 실행합니다.</li></ul></div>'
+    "<h2>왜 이 오류가 나나</h2><p>" + "설치된 버전마다 옵션을 받는 위치가 다릅니다. " * 60 + "</p>"
+    "<h2>해결 방법</h2><p>PowerShell에서 실행합니다.</p>"
+    "<pre><code>def main():\n    if True:\n        print(&quot;keep&quot;)\n</code></pre>"
+    "<h2>해결됐는지 확인</h2><p>다시 실행합니다.</p>"
+    "<p>[[IMAGE:illust_b]]</p>"
+    '<div data-block="oneline"><p>옵션 위치를 확인합니다.</p></div>'
+    '<div data-block="sources"><ul><li><a href="https://developers.openai.com/codex/cli">OpenAI Codex CLI</a></li></ul></div>'
+)
+FIX_POST = {
+    "title": "Codex CLI 'unexpected argument --search' 오류: 옵션 위치 문제",
+    "topic_id": "codex-unexpected-argument", "lane": "queue", "tip_id": "",
+    "body_html": FIX_BODY, "tags": ["codex 오류"], "illustrations": ILLUSTRATIONS,
+    "data_points": [{"value": "codex --search exec", "source_url": "https://developers.openai.com/codex/cli"}] * 4,
+    "sources": [{"title": "Codex CLI", "publisher": "OpenAI", "url": "https://developers.openai.com/codex/cli"},
+                {"title": "codex", "publisher": "GitHub", "url": "https://github.com/openai/codex"},
+                {"title": "블로그", "publisher": "x", "url": "https://velog.io/a"}],
+}
+
+
+def test_fix_mode_is_default_with_its_own_skills_and_queue():
+    c = TistoryConfig.load()
+    assert c.mode == "fix" and c.write_skill == "fix-auto-post" and c.factcheck_skill == "fix-auto-factcheck"
+    assert c.topics_file.name == "tistory_fix_topics.json" and c.infographic is False
+
+
+def test_bundled_fix_queue_is_valid():
+    from naver_autopost.config import ROOT
+    items = topics.load(ROOT / "data" / "tistory_fix_topics.json")
+    assert len(items) >= 20
+    for t in items:
+        assert t["error"] and t["tool"] and t["queries"] and t["docs"] and t["priority"] in (1, 2, 3)
+    text = topics.brief(topics.rank(items, [], date(2026, 10, 13)), [], mode="fix")
+    assert "오류·증상" in text and "실제로 겪은 일" in text
+
+
+def test_fix_validation_rules():
+    ok = content.normalize(FIX_POST)
+    assert content.validate(ok, 3, 2, 4, 1800, "fix") == []
+    no_error = content.normalize({**FIX_POST, "body_html": FIX_BODY.replace('data-block="error"', 'data-block="x"')})
+    assert any("오류 문구 상자" in e for e in content.validate(no_error, 3, 2, 4, 1800, "fix"))
+    no_code = content.normalize({**FIX_POST, "body_html": FIX_BODY.replace("<pre>", "<p>").replace("</pre>", "</p>")})
+    assert any("코드 블록" in e for e in content.validate(no_code, 3, 2, 4, 1800, "fix"))
+    stats_src = content.normalize({**FIX_POST, "sources": POST["sources"]})
+    assert any("공식(1차) 출처" in e for e in content.validate(stats_src, 3, 2, 4, 1800, "fix"))
+
+
+def test_fix_style_keeps_code_whitespace_and_boxes():
+    from tistory_autopost import style
+    out = style.stylize(FIX_BODY, mode="fix")
+    assert "def main():\n    if True:\n        print(&quot;keep&quot;)" in out
+    assert "이런 메시지가 떴다면" in out and "참고한 공식 문서" in out and "숫자로 박제" not in out
+    assert "background:#f6f8fa" in out and "border-left:4px solid #e03131" in out
+    inline = re.search(r'<code style="([^"]*)">codex --search exec', out).group(1)
+    assert "c7254e" in inline                               # 본문 속 code는 강조, pre 안 code는 강조 없음
+
+
+def _kakao_route(ctx, simple: bool):
+    """카카오 로그인 화면 흉내: simple이면 저장된 계정을 누르면 들어가고, 아니면 비밀번호를 요구한다."""
+    account = ('<div onclick="location.href=\'https://www.tistory.com/auth/kakao/redirect\'">me@example.com</div>')
+    password = "<p>me@example.com</p><input type='password'>"
+
+    def serve(route):
+        url = route.request.url
+        has = "TSSESSION=" in (route.request.headers.get("cookie") or "")
+        if "/manage/newpost" in url:
+            body = "<title>editor</title>" if has else (
+                "<script>location.href='https://accounts.kakao.com/login/?login_hint=me%40example.com'</script>")
+            route.fulfill(status=200, content_type="text/html", body=body)
+        elif "accounts.kakao.com" in url:
+            route.fulfill(status=200, content_type="text/html", body=account if simple else password)
+        elif "/auth/kakao/redirect" in url:              # 로그인 성공: 티스토리가 쿠키를 주고 글쓰기 화면으로
+            route.fulfill(status=200, content_type="text/html", body=(
+                "<script>document.cookie='TSSESSION=abc; domain=.tistory.com; path=/; secure';"
+                "location.href='https://myblog.tistory.com/manage/newpost/'</script>"))
+        else:
+            route.fulfill(status=200, body="")
+    ctx.route(re.compile(r"https://[^/]*(tistory|kakao)\.com/.*"), serve)
+
+
+@pytest.mark.parametrize("simple", [True, False])
+def test_kakao_simple_login_or_password_page(cfg, tmp_path, simple):
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    cfg.output_dir = tmp_path / "out"
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        ctx = b.new_context()
+        _kakao_route(ctx, simple)
+        page = ctx.new_page()
+        ok = publisher._ensure_logged_in(page, cfg, timeout=12)
+        b.close()
+    assert ok is simple
+    assert (cfg.output_dir / "login_failed.png").exists() is (not simple)

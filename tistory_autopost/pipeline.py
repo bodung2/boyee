@@ -20,7 +20,7 @@ from . import content, inbox, topics, writer
 from .config import TistoryConfig
 
 log = logging.getLogger(__name__)
-LABEL = "티스토리 통계"
+LABEL = "티스토리"
 
 
 class Rejected(Exception):
@@ -59,15 +59,15 @@ def _load_post(out_dir: Path) -> dict:
 
 def _validate(cfg: TistoryConfig, post: dict) -> list[str]:
     return content.validate(post, cfg.min_sources, cfg.min_primary_sources, cfg.min_data_points,
-                            cfg.min_body_chars)
+                            cfg.min_body_chars, cfg.mode)
 
 
 def topic_brief(cfg: TistoryConfig, today: date) -> str:
     entries = history.load(cfg.history_file)
     ranked = topics.rank(topics.load(cfg.topics_file), entries, today)
     if not ranked and not inbox.pending(cfg):
-        raise RuntimeError("주제 큐를 모두 썼습니다. data/tistory_topics.json에 주제를 추가하세요.")
-    return topics.brief(ranked, inbox.pending(cfg))
+        raise RuntimeError(f"주제 큐를 모두 썼습니다. {cfg.topics_file.name}에 주제를 추가하세요.")
+    return topics.brief(ranked, inbox.pending(cfg), mode=cfg.mode)
 
 
 def _gpt_check(cfg: TistoryConfig, out_dir: Path) -> dict:
@@ -283,7 +283,8 @@ def run(cfg: TistoryConfig, dry_run: bool = False, force: bool = False, slot: in
             # 글쓰기(수십 분) 전에 로그인부터 확인한다.
             if not publisher.check_session(cfg):
                 raise publisher.SessionExpired(
-                    "티스토리 로그인이 풀려 있습니다. `python -m tistory_autopost login`으로 다시 로그인하세요.")
+                    "티스토리(카카오) 로그인이 풀려 있습니다. `python -m tistory_autopost login`으로 다시 로그인하세요"
+                    "(카카오 로그인 화면에서 '로그인 상태 유지' 체크). 마지막 화면: output\\tistory\\login_failed.png")
             try:
                 log.info("텔레그램 화제 제보 %d건을 받았습니다", inbox.pull(cfg))
             except Exception as e:  # noqa: BLE001 - 제보는 보조 입력이라 실패해도 큐로 진행한다
