@@ -33,6 +33,7 @@ BENCH = "069500.KS"      # KODEX 200
 YEARS = 3
 FRAMES = 52              # 지도 시간 막대: 지난 52주(주 단위)
 TRAIL = 8                # 꼬리 8주
+ODD_DIV = 10.0           # 배당수익률이 이 이상이면 일회성(특별배당)일 수 있다고 표시
 SPIKE = 1.0              # 거래대금 변화가 이 이상(2배)이고 1개월 수익이 ±5% 안이면 '거래만 급증'
 QUADS = ("거래 늘며 강세", "강세·거래 식음", "약세에 거래 몰림", "소외")
 
@@ -120,7 +121,7 @@ def quad(x: float | None, v: float | None) -> str:
 def volume_change(value: pd.DataFrame) -> pd.DataFrame:
     recent = value.rolling(20, min_periods=15).mean()
     base = value.shift(20).rolling(100, min_periods=60).mean()
-    return np.log2((recent / base).where(base > 0))
+    return np.log2((recent / base).where((base > 0) & (recent > 0)))
 
 
 def build(uni: pd.DataFrame, close: pd.DataFrame, volume: pd.DataFrame, p: Params | None = None) -> dict:
@@ -160,6 +161,8 @@ def build(uni: pd.DataFrame, close: pd.DataFrame, volume: pd.DataFrame, p: Param
         tags = []
         if c in div_top:
             tags.append("고배당30")
+        if not is_b and (info["DIV"] or 0) >= ODD_DIV:
+            tags.append("특별배당?")
         if v is not None and v >= SPIKE and r1m is not None and abs(r1m) < 0.05:
             tags.append("거래만 급증")
         if bool(sig["overheat"].loc[t, c]):
