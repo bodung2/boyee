@@ -249,25 +249,46 @@ def _cm_value(page: Page) -> str:
     return page.evaluate(f"() => {{ const e = ({_VISIBLE_CM})(); return e ? e.CodeMirror.getValue() : ''; }}")
 
 
+_INDENT_OPTIONS = """([findCm, on]) => {
+    const e = (eval(findCm))(); if (!e || !e.CodeMirror.setOption) return null;
+    const cm = e.CodeMirror;
+    if (on === null) {   // 끄기: 원래 값을 돌려준다
+        const saved = {smartIndent: cm.getOption('smartIndent'), electricChars: cm.getOption('electricChars'),
+                       autoCloseTags: cm.getOption('autoCloseTags')};
+        cm.setOption('smartIndent', false); cm.setOption('electricChars', false); cm.setOption('autoCloseTags', false);
+        return saved;
+    }
+    for (const [k, v] of Object.entries(on)) cm.setOption(k, v);
+    return on;
+}"""
+
+
 def _set_body(page: Page, body_html: str) -> None:
-    """보이는 HTML 편집기에 사람이 입력하듯 넣는다(편집기 값을 코드로 바꾸면 티스토리가 저장하지 않는다)."""
+    """보이는 HTML 편집기에 사람이 입력하듯 넣는다(편집기 값을 코드로 바꾸면 티스토리가 저장하지 않는다).
+    코드 블록(<pre>)의 들여쓰기가 바뀌지 않게, 입력하는 동안 편집기의 자동 들여쓰기·태그 자동 닫기를 끈다."""
     cm = page.locator(".CodeMirror:visible").first
     cm.click()
-    page.keyboard.press(f"{MOD}+A")
-    page.keyboard.press("Delete")
-    page.keyboard.insert_text(body_html)
-    page.wait_for_timeout(800)
-    value = _cm_value(page)
-    if _squash(value) != _squash(body_html):
-        # 자동 들여쓰기·태그 자동 닫기 등으로 내용이 바뀌었으면 값을 바로잡는다(입력 이벤트는 이미 났다).
-        log.warning("입력 결과가 원문과 달라 편집기 값을 바로잡습니다(%d자 → %d자)", len(value), len(body_html))
-        page.evaluate(
-            """([html, findCm]) => { const e = (eval(findCm))(); e.CodeMirror.setValue(html); }""",
-            [body_html, _VISIBLE_CM],
-        )
-        page.keyboard.press("End")
-        page.keyboard.insert_text(" ")
-        page.keyboard.press("Backspace")
+    saved = page.evaluate(_INDENT_OPTIONS, [_VISIBLE_CM, None])
+    try:
+        page.keyboard.press(f"{MOD}+A")
+        page.keyboard.press("Delete")
+        page.keyboard.insert_text(body_html)
+        page.wait_for_timeout(800)
+        value = _cm_value(page)
+        exact = "<pre" in body_html.lower()        # 코드 블록은 공백 하나도 바뀌면 안 된다
+        if (value != body_html) if exact else (_squash(value) != _squash(body_html)):
+            # 자동 들여쓰기 등으로 내용이 바뀌었으면 값을 바로잡는다(입력 이벤트는 이미 났다).
+            log.warning("입력 결과가 원문과 달라 편집기 값을 바로잡습니다(%d자 → %d자)", len(value), len(body_html))
+            page.evaluate(
+                """([html, findCm]) => { const e = (eval(findCm))(); e.CodeMirror.setValue(html); }""",
+                [body_html, _VISIBLE_CM],
+            )
+            page.keyboard.press(f"{MOD}+End")
+            page.keyboard.insert_text(" ")
+            page.keyboard.press("Backspace")
+    finally:
+        if saved:
+            page.evaluate(_INDENT_OPTIONS, [_VISIBLE_CM, saved])
     log.info("본문 입력(HTML %d자)", len(_cm_value(page)))
 
 
@@ -544,7 +565,7 @@ def _fill_editor(cfg: TistoryConfig, page: Page, post: dict, out_dir: Path,
         post["_images_ok"] = len(codes)
         _switch_to_html(page)
         captions = {i.get("name", ""): i.get("caption") or "" for i in post.get("illustrations") or []}
-        body = style.stylize(post["body_html"], codes, captions)
+        body = style.stylize(post["body_html"], codes, captions, getattr(cfg, "mode", "stats"))
         post["_final_html"] = body
         _set_body(page, body)
         title_box = _find(page, "title")

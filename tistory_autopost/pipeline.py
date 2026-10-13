@@ -59,15 +59,15 @@ def _load_post(out_dir: Path) -> dict:
 
 def _validate(cfg: TistoryConfig, post: dict) -> list[str]:
     return content.validate(post, cfg.min_sources, cfg.min_primary_sources, cfg.min_data_points,
-                            cfg.min_body_chars)
+                            cfg.min_body_chars, cfg.mode)
 
 
 def topic_brief(cfg: TistoryConfig, today: date) -> str:
     entries = history.load(cfg.history_file)
     ranked = topics.rank(topics.load(cfg.topics_file), entries, today)
     if not ranked and not inbox.pending(cfg):
-        raise RuntimeError("주제 큐를 모두 썼습니다. data/tistory_topics.json에 주제를 추가하세요.")
-    return topics.brief(ranked, inbox.pending(cfg))
+        raise RuntimeError(f"주제 큐를 모두 썼습니다. {cfg.topics_file.name}에 주제를 추가하세요.")
+    return topics.brief(ranked, inbox.pending(cfg), mode=cfg.mode)
 
 
 def _gpt_check(cfg: TistoryConfig, out_dir: Path) -> dict:
