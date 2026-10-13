@@ -189,3 +189,142 @@ def test_entry_needs_strong_trend_but_holdings_stay_until_zero():
                           index=pd.date_range(end=t, periods=60, freq="W-FRI"))
     picks, _ = backtest.select(t, sig, weekly, {"A"}, p, keys)
     assert [pk.key for pk in picks] == ["A"]  # 보유 중인 A만 유지, B는 새로 편입하지 않음
+
+
+def _fake_country(c, days=900, seed=0, drop=()):
+    from market_dashboard import sectors
+    rng = np.random.default_rng(seed)
+    idx = pd.bdate_range("2021-01-01", periods=days)
+    cols = [t for t in sectors.tickers(c) if t not in drop]
+    close = {}
+    for i, t in enumerate(cols):
+        if t == c.cash and c.cash_is_rate:
+            close[t] = np.full(days, 4.0)
+            continue
+        close[t] = 100 * np.exp(np.cumsum(rng.normal(0.0004 * ((i % 5) - 2), 0.015, days)))
+    close = pd.DataFrame(close, index=idx)
+    vol = pd.DataFrame(1e7, index=idx, columns=cols)
+    return close, vol
+
+
+def test_sector_dashboard_builds_and_renders():
+    from market_dashboard import sector_html, sectors
+    from market_dashboard.sector_universe import KR, US
+    data = {"US": _fake_country(US), "KR": _fake_country(KR, seed=1, drop=("266410.KS",))}
+    d = sectors.build(data)
+    us, kr = d["countries"]
+    assert len(us["sectors"]) == len(US.sectors) and len(kr["sectors"]) == len(KR.sectors) - 1
+    assert "266410.KS" in kr["missing"]
+    s = us["sectors"][0]
+    assert len(s["hist"]) == len(us["frames"]) and s["stocks"]
+    assert sum(x["weight"] for x in us["sectors"]) <= 1.0 + 1e-9
+    assert all(x["weight"] <= sectors.SECTOR_RULE["max_weight"] + 1e-9 for x in us["sectors"])
+    assert us["backtest"]["table"][0]["name"] == "섹터 순환 규칙"
+    scores = [r["score"] for r in s["stocks"] if r.get("score") is not None]
+    assert scores and all(0 < v <= 1 for v in scores)
+    page = sector_html.render(d)
+    assert "주식 섹터 지도" in page and "</script>" in page
+    assert "섹터" in sectors.summary(d)
+
+
+def test_sector_stock_status_uses_liquidity_floor():
+    from market_dashboard import sectors
+    from market_dashboard.sector_universe import US
+    close, vol = _fake_country(US, seed=2)
+    vol.loc[:, "AAPL"] = 1.0   # 거래대금 거의 0
+    px = sectors.panel(US, close)
+    rows = sectors.stock_table(US, close, vol, px["CASH"], sectors.Params())["XLK"]
+    aapl = next(r for r in rows if r["ticker"] == "AAPL")
+    assert aapl["status"] == "거래대금 부족"
+
+
+def _kr_snaps(months=60, n=120, seed=0):
+    rng = np.random.default_rng(seed)
+    dates = pd.date_range("2014-01-31", periods=months, freq="ME")
+    codes = [f"{i:05d}0" for i in range(n)]
+    price = pd.Series(10000.0, index=codes)
+    pbr = pd.Series(rng.uniform(0.3, 3, n), index=codes)
+    snaps = {}
+    for d in dates:
+        # 저PBR 종목이 조금 더 오르게(기준이 실제로 잡아내는지 확인)
+        price = price * (1 + rng.normal(0.01, 0.06, n) + 0.01 * (pbr < 1))
+        snaps[d] = pd.DataFrame({"종가": price, "시가총액": price * 1e6, "거래대금": 5e9, "상장주식수": 1e6,
+                                 "PER": rng.uniform(5, 30, n), "PBR": pbr, "DIV": 2.0, "외국인순매수": rng.normal(0, 1e8, n)})
+    return snaps
+
+
+def test_kr_factor_study_runs_and_finds_planted_value_effect():
+    from market_dashboard import kr_factors
+    snaps = _kr_snaps()
+    res = kr_factors.run(snaps)
+    rows = {r["name"]: r for r in res["rows"]}
+    assert set(rows) == set(kr_factors.FACTORS)
+    v = rows["저PBR(가치)"]
+    assert v["IS"]["Q1"]["CAGR"] > v["IS"]["Q5"]["CAGR"]
+    assert "종목 선정" in kr_factors.report(res)
+
+
+def test_kr_factor_split_adjusted_returns():
+    from market_dashboard import kr_factors
+    snaps = _kr_snaps(months=3, n=60)
+    d1, d2 = sorted(snaps)[:2]
+    snaps[d2].loc["000000", ["종가", "상장주식수"]] = [snaps[d1].loc["000000", "종가"] / 50, 50e6]  # 50:1 액면분할
+    r = kr_factors.monthly_returns(kr_factors.panel(snaps))
+    assert abs(r.loc[d1, "000000"] - 2.0 / 100 / 12) < 1e-9   # 가격 변화 없음 + 배당만
+
+
+def test_kr_factor_combo_and_dividend_anatomy():
+    from market_dashboard import kr_combo, kr_factors
+    snaps = _kr_snaps(months=60, n=150)
+    p = kr_factors.panel(snaps)
+    ret, uni, sc = kr_factors.monthly_returns(p), kr_factors.universe(p), kr_factors.scores(p)
+    market = ret.where(uni).mean(axis=1).iloc[:-1]
+    res = kr_combo.run_combos(p, ret, uni, sc, market, None)
+    assert len(res["rows"]) == 2 * (len(kr_combo.BASE) + len(kr_combo.COMBOS) + 3)
+    anat = kr_combo.dividend_anatomy(p, ret, uni, sc, market)
+    assert set(anat) == {"split", "profile", "capture", "calendar", "regression"}
+    text = kr_combo.report(res, anat)
+    assert "고배당은 왜" in text and "2017년까지 성적으로 골랐다면" in text
+    # 배당 제외 수익은 배당 포함보다 작다(배당수익률 2%/12)
+    pr = kr_factors.monthly_returns(p, include_div=False)
+    assert (ret - pr).stack().dropna().round(6).eq(round(0.02 / 12, 6)).mean() > 0.9
+
+
+def _kr_stock_data(n=40, days=800, seed=3):
+    from market_dashboard import kr_stocks
+    rng = np.random.default_rng(seed)
+    codes = [f"{i:05d}0" for i in range(1, n + 1)]
+    uni = pd.DataFrame({
+        "시가총액": np.linspace(5e13, 5e11, n), "DIV": rng.uniform(0, 7, n), "PBR": rng.uniform(0.3, 3, n),
+        "PER": rng.uniform(4, 30, n), "시장": ["KOSDAQ" if i % 4 == 0 else "KOSPI" for i in range(n)],
+        "종목명": [f"종목{i}" for i in range(n)], "기준일": "2024-01-02"}, index=codes)
+    idx = pd.bdate_range("2021-01-01", periods=days)
+    cols = codes + [kr_stocks.CASH, kr_stocks.BENCH]
+    close = pd.DataFrame({c: 100 * np.exp(np.cumsum(rng.normal(0.0003 * ((i % 5) - 2), 0.02, days)))
+                          for i, c in enumerate(cols)}, index=idx)
+    close[kr_stocks.CASH] = 100 * (1 + 0.03 / 252) ** np.arange(days)
+    vol = pd.DataFrame(rng.uniform(1e8, 2e8, (days, len(cols))), index=idx, columns=cols)
+    vol.iloc[-20:, 1] *= 6          # 두 번째 종목: 최근 거래 급증
+    vol.loc[:, codes[2]] = 10.0     # 세 번째 종목: 거래대금 부족 → 제외
+    return uni, close, vol
+
+
+def test_kr_stock_map_builds_and_renders():
+    from market_dashboard import kr_html, kr_stocks
+    uni, close, vol = _kr_stock_data()
+    d = kr_stocks.build(uni, close, vol)
+    stocks = [s for s in d["stocks"] if not s["bench"]]
+    codes = {s["code"] for s in stocks}
+    assert uni.index[2] not in codes and len(stocks) == len(uni) - 1
+    assert any(s["bench"] for s in d["stocks"])
+    assert sum("고배당30" in s["tags"] for s in stocks) == kr_stocks.DIV_N
+    top_div = uni.drop(uni.index[2])["DIV"].idxmax()
+    assert next(s for s in stocks if s["code"] == top_div)["div_rank"] == 1
+    spike = next(s for s in stocks if s["code"] == uni.index[1])
+    assert spike["vchg"] > 1.5
+    assert all(len(s["hist"]) == len(d["frames"]) for s in d["stocks"])
+    assert sum(d["counts"].values()) <= len(stocks)
+    page = kr_html.render(d)
+    assert "한국 종목 지도" in page and 'href="kr.html" class="on"' in page
+    assert "고배당 30" in kr_stocks.summary(d)
+    assert "한국 종목" in kr_html.render_error("x")

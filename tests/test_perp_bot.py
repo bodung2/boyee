@@ -84,3 +84,215 @@ def test_paper_tick_resumes_from_saved_state(tmp_path):
     assert sim.last_bar == str(IDX[-1]) and path.exists()
     again, msgs2 = paper.tick(path, c, data, {})
     assert msgs2 == []  # 같은 봉을 두 번 처리하지 않는다
+
+
+def _daily(rows):
+    idx = pd.date_range("2022-01-01", periods=len(rows), freq="D")
+    return pd.DataFrame(rows, columns=["open", "high", "low", "close"], index=idx)
+
+
+def test_bracket_stop_first_when_both_hit_same_day():
+    from perp_bot import research
+    flat = [(100, 101, 99, 100)] * 20                 # ATR(14) = 2
+    df = _daily(flat + [(100, 120, 80, 100)] + [(100, 101, 99, 100)] * 5)
+    ent = pd.Series(False, index=df.index)
+    ent.iloc[19] = True                               # 다음 날(20번째) 시가 100에 진입
+    tr = research.run_bracket(df, ent, sl_atr=1.0, rr=3)
+    assert len(tr) == 1 and tr[0].reason == "손절" and tr[0].r < -1
+
+
+def test_bracket_target_pays_rr_minus_costs_and_no_lookahead():
+    from perp_bot import research
+    flat = [(100, 101, 99, 100)] * 20
+    df = _daily(flat + [(100, 101, 99.5, 100)] + [(100, 107, 99.5, 106)] + [(106, 107, 105, 106)] * 3)
+    ent = pd.Series(False, index=df.index)
+    ent.iloc[19] = True
+    tr = research.run_bracket(df, ent, sl_atr=1.0, rr=3)
+    t = tr[0]
+    assert t.reason == "익절" and t.entry_date == df.index[20]   # 신호 다음 날 진입
+    assert 2.7 < t.r < 3.0                             # +3R에서 비용·펀딩만 빠짐
+    # 신호 날 이후의 가격을 바꿔도 진입·손절폭은 그대로(미래 정보 안 씀)
+    df2 = df.copy()
+    df2.iloc[21:, :] = 50
+    t2 = research.run_bracket(df2, ent, sl_atr=1.0, rr=3)[0]
+    assert t2.entry_date == t.entry_date and t2.reason.startswith("손절")
+    # 매일 평가한 수익을 더하면 거래 R × 1%와 같다(보유 중 되돌림도 낙폭에 잡힘)
+    r = research.trades_to_returns(tr, df)
+    assert r.sum() == pytest.approx(research.RISK * t.r)
+
+
+def test_research_positions_and_split():
+    from perp_bot import research
+    rng = np.random.default_rng(0)
+    idx = pd.date_range("2018-01-01", "2023-12-31", freq="D")
+    close = pd.Series(100 * np.exp(np.cumsum(rng.normal(0.001, 0.03, len(idx)))), index=idx)
+    df = pd.DataFrame({"open": close.shift(1).fillna(100), "high": close * 1.01, "low": close * 0.99, "close": close})
+    r = research.run_positions(df, research.pos_hold(df))
+    assert abs(r.iloc[5] - (close.iloc[5] / close.iloc[4] - 1 - research.FUND_LONG / 365)) < 1e-12
+    isr, oos = research.split(r)
+    assert isr["CAGR"] != oos["CAGR"] and "허용 레버리지(−33%)" in oos
+    rows = research.run_all({"BTC": df, "ETH": df, "SOL": df})
+    assert len(rows) == 3 * len(research.strategies(df)) + 2
+    assert "IS" in research.report(rows)
+
+
+def _coins(n=10, days=900, seed=0):
+    rng = np.random.default_rng(seed)
+    idx = pd.date_range("2019-01-06", periods=days, freq="D")
+    close = {}
+    for i in range(n):
+        drift = 0.004 if i == 3 else 0.0
+        close[f"C{i}"] = 100 * np.exp(np.cumsum(rng.normal(drift, 0.02, days)))
+    close["BTC"] = 100 * np.exp(np.cumsum(rng.normal(0.001, 0.02, days)))
+    close = pd.DataFrame(close, index=idx)
+    return close, close * 1e6
+
+
+def test_xsmom_picks_strong_coin_and_charges_costs():
+    from perp_bot import xsmom
+    close, dvol = _coins()
+    r, info = xsmom.backtest(close, dvol, top=1, look=30)
+    hold, _ = xsmom.backtest(close, dvol, top=1, look=1, fixed={"C3": 1.0})
+    assert (1 + r).prod() > 1 and info["평균 보유 수"] == pytest.approx(1.0)
+    # 같은 코인을 계속 들고 있으면 거의 보유와 같고, 갈아탈 때만 비용이 빠진다
+    assert (1 + r).prod() <= (1 + hold).prod() * 1.05
+
+
+def test_xsmom_no_lookahead():
+    from perp_bot import xsmom
+    close, dvol = _coins()
+    cut = close.index[600]
+    r1, _ = xsmom.backtest(close, dvol, top=3, look=14, filt="btc100")
+    fut = close.copy()
+    fut.loc[cut:] = fut.loc[cut:] * np.linspace(1, 5, len(fut.loc[cut:]))[:, None]
+    r2, _ = xsmom.backtest(fut, fut * 1e6, top=3, look=14, filt="btc100")
+    before = r1.index < cut - pd.Timedelta(days=1)
+    assert np.allclose(r1[before], r2[before])
+
+
+def test_bithumb_pages_back_through_history(monkeypatch):
+    from perp_bot import bithumb
+    days = pd.date_range("2018-01-01", periods=450, freq="D")[::-1]
+    rows = [{"candle_date_time_kst": f"{d:%Y-%m-%d}T00:00:00", "opening_price": 1, "high_price": 2, "low_price": 0.5,
+             "trade_price": float(i), "candle_acc_trade_price": 10.0} for i, d in enumerate(days)]
+    calls = []
+
+    def fake(path, params=None, tries=5):
+        calls.append(params.get("to"))
+        to = params.get("to")
+        start = 0 if to is None else next(i for i, r in enumerate(rows) if r["candle_date_time_kst"].replace("T", " ") == to) + 1
+        return rows[start:start + params["count"]]
+
+    monkeypatch.setattr(bithumb, "_get", fake)
+    df = bithumb.daily("BTC", pause=0)
+    assert len(df) == 450 and df.index[0] == pd.Timestamp("2018-01-01") and df.index.is_monotonic_increasing
+    assert len(calls) == 3 and df["close"].iloc[-1] == 0.0  # 가장 최근 봉이 맨 끝
+
+
+def _hourly(n=3000, seed=0):
+    rng = np.random.default_rng(seed)
+    idx = pd.date_range("2021-01-01", periods=n, freq="h")
+    c = 100 * np.exp(np.cumsum(rng.normal(0, 0.01, n)))
+    o = np.r_[100, c[:-1]]
+    return pd.DataFrame({"open": o, "high": np.maximum(o, c) * 1.002, "low": np.minimum(o, c) * 0.998,
+                         "close": c, "value": c, "volume": rng.lognormal(0, 1, n)}, index=idx)
+
+
+def test_intraday_signals_use_only_past():
+    from perp_bot import intraday
+    df = _hourly()
+    fut = df.copy()
+    fut.iloc[2000:] = fut.iloc[2000:] * 3
+    a, b = intraday.signals(df), intraday.signals(fut)
+    for k in a:
+        assert a[k].iloc[:2000].equals(b[k].iloc[:2000]), k
+    hours = intraday.best_hours(df, df.index[1500])
+    assert intraday.best_hours(fut, df.index[1500]) == hours  # 시간대 선택도 IS 기간만 본다
+
+
+def test_intraday_position_costs():
+    from perp_bot import intraday
+    df = _hourly(500)
+    flip = pd.Series(np.arange(500) % 2, index=df.index, dtype=float)  # 매시간 사고팔기
+    r0 = intraday.run_positions(df, flip, 0.0)
+    r1 = intraday.run_positions(df, flip, 0.001)
+    assert (r0 - r1).sum() == pytest.approx(0.001 * flip.diff().abs().fillna(0).sum(), rel=0.01)
+
+
+def _daily_panel(n_coins=30, days=900, seed=0):
+    rng = np.random.default_rng(seed)
+    idx = pd.date_range("2022-01-01", periods=days, freq="D")
+    data = {}
+    for i in range(n_coins):
+        c = 1000 * np.exp(np.cumsum(rng.normal(0, 0.04, days)))
+        o = np.r_[1000, c[:-1]]
+        v = 3e8 * rng.lognormal(0, 0.5, days)
+        v[rng.random(days) < 0.03] *= 6  # 가끔 거래대금 폭발
+        data[f"C{i}"] = pd.DataFrame({"open": o, "high": np.maximum(o, c) * 1.01, "low": np.minimum(o, c) * 0.99,
+                                      "close": c, "value": v, "volume": v / c}, index=idx)
+    return data
+
+
+def test_volume_events_no_lookahead_and_report():
+    from perp_bot import volume
+    data = _daily_panel()
+    p = volume.panel(data)
+    ev, ok = volume.events(p)
+    fut = {k: d.copy() for k, d in data.items()}
+    for d in fut.values():
+        d.iloc[600:] = d.iloc[600:] * 2
+    ev2, ok2 = volume.events(volume.panel(fut))
+    for k in ev:
+        assert ev[k].iloc[:600].equals(ev2[k].iloc[:600]), k
+    assert ev["E1 거래대금 3배 + 가격 ±2% 이내(아이디어 그대로)"].values.sum() > 0
+    fwd, abn = volume.forward(p, ok, 3)
+    assert abs(abn.where(ok).mean(axis=1).dropna()).max() < 1e-12  # 시장 평균 대비라 날짜별 평균은 0
+    rows = volume.run_all(data)
+    assert len(rows) == len(volume.HORIZONS) * (len(ev) + 1)
+    assert "사건" in volume.report(rows, data)
+
+
+def test_volume_hit_rate_counts_only_events():
+    from perp_bot import volume
+    idx = pd.date_range("2024-01-01", periods=30, freq="D")
+    fwd = pd.DataFrame({"A": np.full(30, 0.05), "B": np.full(30, -0.05)}, index=idx)
+    abn = fwd - fwd.mean(axis=1).values[:, None]
+    mask = pd.DataFrame({"A": [True] * 20 + [False] * 10, "B": [False] * 30}, index=idx)
+    s = volume.summarize(mask, fwd, abn, 1)
+    assert s["n"] == 20 and s["적중"] == 1.0 and s["순수익"] == pytest.approx(0.05 - volume.ROUND_TRIP)
+
+
+def test_shortside_trades_stop_and_hedge():
+    from perp_bot import shortside
+    idx = pd.date_range("2024-01-01", periods=10, freq="D")
+    coin = pd.DataFrame({"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0}, index=idx)
+    coin.loc[idx[2], ["high", "close"]] = [120.0, 90.0]   # 둘째 보유일에 +20% 찍고 −10%로 마감
+    btc = pd.DataFrame({"open": 100.0, "high": 100.0, "low": 100.0, "close": 100.0}, index=idx)
+    btc.loc[idx[2], "close"] = 110.0
+    ev = pd.DataFrame({"X": [True] + [False] * 9}, index=idx)
+    tr = shortside.trades(ev, {"X": coin}, btc, 2)   # 1/1 신호 → 1/2 시가 진입 → 1/3 종가 청산
+    r = tr.iloc[0]
+    assert r["맨숏"] == pytest.approx(0.10 - shortside.COST)
+    assert r["맨숏+손절15%"] == pytest.approx(-0.15 - shortside.COST)
+    assert r["BTC 헤지"] == pytest.approx(0.10 + 0.10 - shortside.COST - shortside.HEDGE_COST)
+    assert shortside.match(["BTC", "PEPE", "ZZZ"], ["BTC", "kPEPE"]) == {"BTC": "BTC", "PEPE": "kPEPE"}
+
+
+def test_bithumb_daily_cache_only_fetches_recent(monkeypatch, tmp_path):
+    from perp_bot import bithumb
+    days = pd.date_range("2024-01-01", periods=300, freq="D")
+
+    def rows_for(ds):
+        return [{"candle_date_time_kst": f"{d:%Y-%m-%d}T09:00:00", "opening_price": 1, "high_price": 2,
+                 "low_price": 0.5, "trade_price": float(i), "candle_acc_trade_price": 1.0}
+                for i, d in zip(range(len(ds)), ds)][::-1]
+
+    calls = []
+    monkeypatch.setenv("BITHUMB_CACHE", str(tmp_path))
+    monkeypatch.setattr(bithumb, "_pages", lambda path, coin, pause, mp, since=None:
+                        calls.append(since) or rows_for(days if since is None else days[days >= pd.Timestamp(since)]))
+    first = bithumb.daily("BTC")
+    assert len(first) == 300 and calls == [None]
+    days = pd.date_range("2024-01-01", periods=305, freq="D")   # 5일 지남
+    again = bithumb.daily("BTC")
+    assert calls[1] == "2024-10-23" and len(again) == 305 and again.index.is_unique

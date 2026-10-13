@@ -21,7 +21,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -30,7 +30,7 @@ jobs:
           python-version: "3.12"
 
       - name: 패키지 설치(대시보드에 필요한 것만)
-        run: pip install "pandas>=2.0" "numpy>=1.24" "yfinance>=0.2.40"
+        run: pip install "pandas>=2.0" "numpy>=1.24" "yfinance>=0.2.40" pykrx
 
       # 지난 실행에서 받은 시세. Yahoo가 막히는 날에도 이 저장본으로 화면을 만든다.
       - uses: actions/cache@v4
@@ -45,6 +45,18 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           DASHBOARD_URL: https://bodung2.github.io/boyee/
         run: python -m market_dashboard run --out site --notify
+
+      - name: 미국 섹터 지도 — 실패해도 자산군 대시보드는 그대로 게시
+        continue-on-error: true
+        run: python -m market_dashboard sectors --out site
+
+      # 종목 목록·배당은 한국거래소(KRX_ID·KRX_PW 비밀값), 시세는 Yahoo. 한국거래소가 막히면 지난번 목록을 쓴다.
+      - name: 한국 종목 지도(시가총액 상위 200) — 실패해도 다른 화면은 그대로 게시
+        continue-on-error: true
+        env:
+          KRX_ID: ${{ secrets.KRX_ID }}
+          KRX_PW: ${{ secrets.KRX_PW }}
+        run: python -m market_dashboard krstocks --out site
 
       - uses: actions/upload-pages-artifact@v3
         with:
