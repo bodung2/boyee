@@ -10,7 +10,7 @@ class Profile:
     label: str
     write_skill: str
     factcheck_skill: str
-    thumbnail_style: str        # "edu"(가운데 정렬) | "childhood"(질문형·다크, 좌상단 고정 레이아웃)
+    thumbnail_style: str        # "edu"(가운데 정렬) | "childhood"·"bold"(질문형·다크, 좌상단 고정 레이아웃)
     illustrations: bool         # AI 이미지(기본: Codex/ChatGPT 구독)로 본문 일러스트 생성
     extra_forbidden: tuple[str, ...] = ()
     # 레인별 블로그 카테고리(없으면 NAVER_CATEGORY_<프로필> 하나를 쓴다). 마지막 "*"는 나머지 레인.
@@ -18,6 +18,9 @@ class Profile:
     # 이웃 후보 추천(neighbors): 콘텐츠 관리 시트의 탭 이름, 비슷한 블로그를 찾는 기본 검색어
     neighbor_tab: str = ""
     neighbor_keywords: tuple[str, ...] = ()
+    min_sources: int = 10       # 구조 검증: 출처 최소 개수
+    use_persona: bool = True    # 교사 페르소나(꾸쓰) 파일을 글쓰기에 넘길지. 신원을 감추는 블로그는 False
+    social: bool = True         # 블로그 발행 뒤 인스타·쓰레드 초안을 만들지
 
 
 PROFILES: dict[str, Profile] = {
@@ -42,6 +45,18 @@ PROFILES: dict[str, Profile] = {
         neighbor_tab="유아 이웃 후보",
         neighbor_keywords=("누리과정", "유아 발달", "유치원 놀이", "초등 입학 준비", "한글 떼기",
                            "유아 수학 놀이", "엄마표 놀이", "유아 독서", "유아 활동지", "어린이집 생활"),
+    ),
+    # 투자 블로그: 티스토리 '숫자로 보는 한국'(stats-auto-post)의 '통념 × 공식 숫자' 방식을 돈·부동산·일상 주제로 옮긴 글.
+    # 홈피드·검색 유입용 후킹 제목/썸네일. 글쓴이 신원(교사)은 드러내지 않는다.
+    "invest": Profile(
+        name="invest", label="돈·생활 숫자",
+        write_skill="invest-auto-post", factcheck_skill="invest-auto-factcheck",
+        thumbnail_style="bold", illustrations=True,
+        extra_forbidden=(
+            "매수 추천", "매도 추천", "종목 추천", "지금 사야", "무조건 오른다", "수익 보장", "원금 보장",
+            "리딩방", "목표주가", "집값 무조건", "지금이 매수 타이밍", "현직 교사", "교사인 제가", "저는 교사", "우리 반",   # 신원 노출 방지
+        ),
+        min_sources=6, use_persona=False, social=False,
     ),
 }
 
