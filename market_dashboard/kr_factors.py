@@ -84,7 +84,12 @@ def snapshot(day: str, cache_dir: Path) -> pd.DataFrame:
 
 def load(cache_dir: Path, start: str = START) -> dict[pd.Timestamp, pd.DataFrame]:
     snaps = {}
-    for d in month_ends(start):
+    try:
+        days = month_ends(start)
+    except Exception as e:   # 한국거래소가 가끔 빈 응답을 준다 → 스냅숏 0개로 돌려 '데이터 부족'으로 처리
+        log.warning("한국거래소 날짜 목록 실패: %s", e)
+        return snaps
+    for d in days:
         try:
             snaps[pd.Timestamp(d)] = snapshot(d, cache_dir)
         except Exception as e:
