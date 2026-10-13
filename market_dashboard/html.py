@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import json
 
+from . import nav
+
 
 def render(data: dict) -> str:
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    return TEMPLATE.replace("__DATA__", payload)
+    return TEMPLATE.replace("__NAV__", nav.bar("index.html")).replace("__DATA__", payload)
 
 
 TEMPLATE = r"""<!doctype html>
@@ -105,7 +107,8 @@ svg{fill:var(--ink2)} svg text{font-size:12px}
 </head>
 <body>
 <main>
-  <h1>자산군 모멘텀 대시보드 <span class="sub">· <a href="sectors.html" style="color:var(--yellow)">주식 섹터 지도(미국·한국) →</a></span></h1>
+  __NAV__
+  <h1>자산군 모멘텀 대시보드</h1>
   <div class="sub" id="asof"></div>
   <div class="chips" id="chips"></div>
 

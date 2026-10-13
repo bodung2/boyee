@@ -288,3 +288,43 @@ def test_kr_factor_combo_and_dividend_anatomy():
     # 배당 제외 수익은 배당 포함보다 작다(배당수익률 2%/12)
     pr = kr_factors.monthly_returns(p, include_div=False)
     assert (ret - pr).stack().dropna().round(6).eq(round(0.02 / 12, 6)).mean() > 0.9
+
+
+def _kr_stock_data(n=40, days=800, seed=3):
+    from market_dashboard import kr_stocks
+    rng = np.random.default_rng(seed)
+    codes = [f"{i:05d}0" for i in range(1, n + 1)]
+    uni = pd.DataFrame({
+        "시가총액": np.linspace(5e13, 5e11, n), "DIV": rng.uniform(0, 7, n), "PBR": rng.uniform(0.3, 3, n),
+        "PER": rng.uniform(4, 30, n), "시장": ["KOSDAQ" if i % 4 == 0 else "KOSPI" for i in range(n)],
+        "종목명": [f"종목{i}" for i in range(n)], "기준일": "2024-01-02"}, index=codes)
+    idx = pd.bdate_range("2021-01-01", periods=days)
+    cols = codes + [kr_stocks.CASH, kr_stocks.BENCH]
+    close = pd.DataFrame({c: 100 * np.exp(np.cumsum(rng.normal(0.0003 * ((i % 5) - 2), 0.02, days)))
+                          for i, c in enumerate(cols)}, index=idx)
+    close[kr_stocks.CASH] = 100 * (1 + 0.03 / 252) ** np.arange(days)
+    vol = pd.DataFrame(rng.uniform(1e8, 2e8, (days, len(cols))), index=idx, columns=cols)
+    vol.iloc[-20:, 1] *= 6          # 두 번째 종목: 최근 거래 급증
+    vol.loc[:, codes[2]] = 10.0     # 세 번째 종목: 거래대금 부족 → 제외
+    return uni, close, vol
+
+
+def test_kr_stock_map_builds_and_renders():
+    from market_dashboard import kr_html, kr_stocks
+    uni, close, vol = _kr_stock_data()
+    d = kr_stocks.build(uni, close, vol)
+    stocks = [s for s in d["stocks"] if not s["bench"]]
+    codes = {s["code"] for s in stocks}
+    assert uni.index[2] not in codes and len(stocks) == len(uni) - 1
+    assert any(s["bench"] for s in d["stocks"])
+    assert sum("고배당30" in s["tags"] for s in stocks) == kr_stocks.DIV_N
+    top_div = uni.drop(uni.index[2])["DIV"].idxmax()
+    assert next(s for s in stocks if s["code"] == top_div)["div_rank"] == 1
+    spike = next(s for s in stocks if s["code"] == uni.index[1])
+    assert spike["vchg"] > 1.5
+    assert all(len(s["hist"]) == len(d["frames"]) for s in d["stocks"])
+    assert sum(d["counts"].values()) <= len(stocks)
+    page = kr_html.render(d)
+    assert "한국 종목 지도" in page and 'href="kr.html" class="on"' in page
+    assert "고배당 30" in kr_stocks.summary(d)
+    assert "한국 종목" in kr_html.render_error("x")

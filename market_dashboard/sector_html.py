@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import json
 
+from . import nav
+
 
 def render(data: dict) -> str:
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    return TEMPLATE.replace("__DATA__", payload)
+    return TEMPLATE.replace("__NAV__", nav.bar("sectors.html")).replace("__DATA__", payload)
 
 
 TEMPLATE = r"""<!doctype html>
@@ -65,7 +67,8 @@ svg{fill:var(--ink2);font-size:12px}
 </head>
 <body>
 <main>
-  <h1>주식 섹터 지도 <span class="sub">· <a href="index.html">자산군 대시보드로</a></span></h1>
+  __NAV__
+  <h1 id="title">주식 섹터 지도</h1>
   <div class="sub" id="asof"></div>
   <div class="tabs" id="tabs"></div>
   <div id="countries"></div>
@@ -102,6 +105,7 @@ const qColor = q => ({"주도":"var(--red)","둔화":"var(--yellow)","회복":"#
 const lerp = (p,q,f) => p==null ? q : q==null ? p : p+(q-p)*f;
 const money = (v, cur) => v==null ? "–" : cur==="KRW" ? (v/1e8).toFixed(0)+"억" : "$"+(v/1e6).toFixed(0)+"M";
 
+if(D.countries.length===1){ $("title").textContent=D.countries[0].name+" 섹터 지도"; document.title=D.countries[0].name+" 섹터 지도"; $("tabs").style.display="none"; }
 $("asof").textContent = D.countries.map(c=>`${c.name} ${c.asof}`).join(" · ") + (D.generated?` · 갱신 ${D.generated}`:"");
 $("missing").textContent = D.countries.filter(c=>c.missing.length).map(c=>`${c.name}: 시세를 받지 못한 티커 ${c.missing.join(", ")}`).join(" / ");
 

@@ -5,7 +5,8 @@
   python -m market_dashboard run --base USD   달러 기준 수익으로 평가(기본 원화)
   python -m market_dashboard run --out site   결과를 site/index.html로(GitHub Pages 배포용)
   python -m market_dashboard analyze          자산군별 경향·'어느 구간에서 사면 좋았나' 표를 출력
-  python -m market_dashboard sectors --out site   미국·한국 주식 섹터 지도 → site/sectors.html
+  python -m market_dashboard sectors --out site   미국 주식 섹터 지도 → site/sectors.html (--country US KR 로 한국 섹터도)
+  python -m market_dashboard krstocks --out site  한국 시가총액 상위 200종목 지도(추세 × 거래대금) → site/kr.html
   python -m market_dashboard krfactors        한국 주식 종목 선정 방식(가치·수익성·저변동·모멘텀·수급 등) 비교
   python -m market_dashboard krcombo          기준 섞기 비교 + 고배당이 왜 잘됐나 분해
 """
@@ -71,6 +72,10 @@ def main(argv: list[str] | None = None) -> int:
     se.add_argument("--offline", action="store_true")
     se.add_argument("--out", help="이 폴더에 sectors.html로 저장(기본: output/market/)")
     se.add_argument("--check-names", action="store_true", help="티커가 맞는 종목인지 Yahoo 이름과 나란히 출력")
+    se.add_argument("--country", nargs="+", default=["US"], choices=["US", "KR"], help="지도에 넣을 나라(기본 미국만)")
+    ks = sub.add_parser("krstocks")
+    ks.add_argument("--offline", action="store_true")
+    ks.add_argument("--out", help="이 폴더에 kr.html로 저장(기본: output/market/)")
     args = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -143,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         got = {}
-        for c in COUNTRIES:
+        for c in [c for c in COUNTRIES if c.key in args.country]:
             try:
                 got[c.key] = (pd.read_pickle(CACHE / f"sectors_{c.key}.pkl") if args.offline
                               else sectors.fetch(c, CACHE))
@@ -157,6 +162,30 @@ def main(argv: list[str] | None = None) -> int:
         (out / "sectors.html").write_text(sector_html.render(d), encoding="utf-8")
         print(sectors.summary(d))
         print(f"섹터 지도: {out / 'sectors.html'}")
+        return 0
+
+    if args.cmd == "krstocks":
+        from . import kr_html, kr_stocks
+
+        out = Path(args.out) if args.out else OUT
+        out.mkdir(parents=True, exist_ok=True)
+        try:
+            if args.offline:
+                uni = pd.read_pickle(CACHE / "kr_universe.pkl")
+                close, vol = pd.read_pickle(CACHE / "kr_prices.pkl")
+            else:
+                uni = kr_stocks.fetch_universe(CACHE)
+                close, vol = kr_stocks.fetch_prices(uni, CACHE)
+            d = kr_stocks.build(uni, close, vol)
+        except Exception as e:
+            log.exception("한국 종목 지도 실패")
+            (out / "kr.html").write_text(kr_html.render_error(str(e)), encoding="utf-8")
+            return 1
+        d["generated"] = datetime.now(KST).strftime("%Y-%m-%d %H:%M KST")
+        (out / "kr.json").write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
+        (out / "kr.html").write_text(kr_html.render(d), encoding="utf-8")
+        print(kr_stocks.summary(d))
+        print(f"한국 종목 지도: {out / 'kr.html'}")
         return 0
 
     if args.cmd == "analyze":

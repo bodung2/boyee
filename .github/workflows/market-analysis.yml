@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: 패키지 설치
-        run: pip install "pandas>=2.0" "numpy>=1.24" "yfinance>=0.2.40" pytest
+        run: pip install "pandas>=2.0" "numpy>=1.24" "yfinance>=0.2.40" pykrx pytest
       - name: 대시보드 테스트
         run: python -m pytest -q tests/test_market_dashboard.py
       - name: 경향 분석(실제 시세)
@@ -32,8 +32,16 @@ jobs:
       - name: 섹터 티커 이름 확인(한국 코드가 맞는 종목인지)
         continue-on-error: true
         run: python -m market_dashboard sectors --check-names
-      - name: 섹터 지도 화면 내려받기용으로 보관
+      - name: 한국 종목 지도(실제 데이터, 게시하지 않음)
+        continue-on-error: true
+        env:
+          KRX_ID: ${{ secrets.KRX_ID }}
+          KRX_PW: ${{ secrets.KRX_PW }}
+        run: python -m market_dashboard krstocks --out site
+      - name: 섹터·한국 종목 화면 내려받기용으로 보관
         uses: actions/upload-artifact@v4
         with:
           name: sectors-preview
-          path: site/sectors.html
+          path: |
+            site/sectors.html
+            site/kr.html
