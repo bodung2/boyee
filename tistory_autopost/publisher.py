@@ -97,11 +97,34 @@ def _save_cookies(ctx, cfg: TistoryConfig) -> None:
     path.write_text(json.dumps(cookies, ensure_ascii=False), encoding="utf-8")
 
 
+def _login_hint(url: str) -> str:
+    """카카오 로그인 주소의 login_hint(저장된 계정)를 꺼낸다."""
+    import urllib.parse
+    return (urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("login_hint") or [""])[0]
+
+
+def _pick_saved_kakao_account(page: Page) -> bool:
+    """카카오 '간편 로그인'(저장된 계정을 한 번 눌러 고르는 화면)이면 그 계정을 누른다."""
+    hint = _login_hint(page.url)
+    candidates = [page.get_by_text(hint, exact=False)] if hint else []
+    candidates += [page.locator("button:has-text('계속하기')"), page.locator("a:has-text('계속하기')")]
+    for loc in candidates:
+        try:
+            if loc.count() and loc.first.is_visible():
+                log.info("카카오 간편 로그인: 저장된 계정 선택")
+                loc.first.click()
+                return True
+        except Exception:  # noqa: BLE001 - 화면 전환 중
+            continue
+    return False
+
+
 def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bool:
-    """글쓰기 화면을 연다. 로그인 화면으로 가면 카카오 자동 로그인 버튼을 눌러 기다린다."""
+    """글쓰기 화면을 연다. 로그인 화면으로 가면 카카오 자동 로그인 버튼을 누르고,
+    카카오 간편 로그인 화면이면 저장된 계정을 골라 기다린다. 실패하면 화면을 login_failed.png로 남긴다."""
     page.goto(_newpost_url(cfg), wait_until="domcontentloaded")
     deadline = time.time() + timeout
-    clicked = 0
+    clicked = picked = 0
     while time.time() < deadline:
         page.wait_for_timeout(1500)
         url = page.url
@@ -118,9 +141,15 @@ def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bo
                         break
                 except Exception:  # noqa: BLE001 - 화면 전환 중
                     pass
-        elif "accounts.kakao.com" in url and page.locator("input[type='password']").count():
-            log.warning("카카오 비밀번호 입력 화면입니다(자동 로그인이 풀림)")
-            return False
+        elif "accounts.kakao.com" in url:
+            if picked < 1 and _pick_saved_kakao_account(page):
+                picked += 1
+                continue
+            password = page.locator("input[type='password']")
+            if password.count() and password.first.is_visible():
+                log.warning("카카오 비밀번호 입력 화면입니다(카카오 로그인 유지 기간이 끝남)")
+                break
+    _shot(page, cfg.output_dir, "login_failed")
     return False
 
 

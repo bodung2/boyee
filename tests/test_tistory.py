@@ -669,3 +669,42 @@ def test_fix_style_keeps_code_whitespace_and_boxes():
     assert "background:#f6f8fa" in out and "border-left:4px solid #e03131" in out
     inline = re.search(r'<code style="([^"]*)">codex --search exec', out).group(1)
     assert "c7254e" in inline                               # 본문 속 code는 강조, pre 안 code는 강조 없음
+
+
+def _kakao_route(ctx, simple: bool):
+    """카카오 로그인 화면 흉내: simple이면 저장된 계정을 누르면 들어가고, 아니면 비밀번호를 요구한다."""
+    account = ('<div onclick="location.href=\'https://www.tistory.com/auth/kakao/redirect\'">me@example.com</div>')
+    password = "<p>me@example.com</p><input type='password'>"
+
+    def serve(route):
+        url = route.request.url
+        has = "TSSESSION=" in (route.request.headers.get("cookie") or "")
+        if "/manage/newpost" in url:
+            body = "<title>editor</title>" if has else (
+                "<script>location.href='https://accounts.kakao.com/login/?login_hint=me%40example.com'</script>")
+            route.fulfill(status=200, content_type="text/html", body=body)
+        elif "accounts.kakao.com" in url:
+            route.fulfill(status=200, content_type="text/html", body=account if simple else password)
+        elif "/auth/kakao/redirect" in url:              # 로그인 성공: 티스토리가 쿠키를 주고 글쓰기 화면으로
+            route.fulfill(status=200, content_type="text/html", body=(
+                "<script>document.cookie='TSSESSION=abc; domain=.tistory.com; path=/; secure';"
+                "location.href='https://myblog.tistory.com/manage/newpost/'</script>"))
+        else:
+            route.fulfill(status=200, body="")
+    ctx.route(re.compile(r"https://[^/]*(tistory|kakao)\.com/.*"), serve)
+
+
+@pytest.mark.parametrize("simple", [True, False])
+def test_kakao_simple_login_or_password_page(cfg, tmp_path, simple):
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    cfg.output_dir = tmp_path / "out"
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        ctx = b.new_context()
+        _kakao_route(ctx, simple)
+        page = ctx.new_page()
+        ok = publisher._ensure_logged_in(page, cfg, timeout=12)
+        b.close()
+    assert ok is simple
+    assert (cfg.output_dir / "login_failed.png").exists() is (not simple)
