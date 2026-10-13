@@ -42,5 +42,13 @@ jobs:
             echo "::notice::KRX_ID·KRX_PW 비밀값이 없어 한국거래소 데이터 단계를 건너뜀(저장소 Settings → Secrets and variables → Actions)"
             exit 0
           fi
-          python -m market_dashboard krfactors
-          python -m market_dashboard krcombo
+          # 종료 코드 2 = 한국거래소가 데이터를 주지 않아 스냅숏이 모자람(코드 오류가 아니므로 실패로 치지 않음)
+          for cmd in krfactors krcombo; do
+            rc=0
+            python -m market_dashboard "$cmd" || rc=$?
+            if [ "$rc" -eq 2 ]; then
+              echo "::notice::한국거래소 스냅숏이 모자라 $cmd 를 건너뜀(접속 실패·보관본 없음). workflow_dispatch 로 다시 돌리면 보관본을 씀"
+              exit 0
+            fi
+            [ "$rc" -eq 0 ] || exit "$rc"
+          done

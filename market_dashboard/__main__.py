@@ -82,7 +82,7 @@ def main(argv: list[str] | None = None) -> int:
         snaps = kr_factors.load(CACHE / "krx")
         if len(snaps) < 24:
             print("데이터가 부족해 중단(한국거래소 접속 실패 가능)")
-            return 1
+            return 2
         p = kr_factors.panel(snaps)
         ret, uni, sc = kr_factors.monthly_returns(p), kr_factors.universe(p), kr_factors.scores(p)
         market = ret.where(uni).mean(axis=1).iloc[:-1]
@@ -103,7 +103,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"월말 스냅숏 {len(snaps)}개")
         if len(snaps) < 24:
             print("데이터가 부족해 중단(한국거래소 접속 실패 가능)")
-            return 1
+            return 2
         try:
             import yfinance as yf
 
