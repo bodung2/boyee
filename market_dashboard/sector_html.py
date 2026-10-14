@@ -121,6 +121,7 @@ function widget(C){
       <button data-a="prev" aria-label="1주 전">◀</button>
       <input type="range" aria-label="날짜 선택">
       <button data-a="next" aria-label="1주 후">▶︎</button>
+      <select data-a="speed" class="speed" aria-label="재생 속도"></select>
       <span class="date"></span><span class="ago"></span>
     </div>
     <svg role="img" aria-label="${esc(C.name)} 섹터 추세 강도와 가속도 사분면"></svg>
@@ -140,7 +141,7 @@ function widget(C){
     <div class="warnbox btWarn" style="display:none"></div>
   </section>`;
   const q = s => root.querySelector(s);
-  const svg=q("svg"), range=q("input[type=range]");
+  const svg=q("svg"), range=q("input[type=range]"), speed=bindSpeed(q("[data-a=speed]"));  // 1× = 초당 15거래일
   const F=C.frames.length-1, FMIN=Math.min(C.trail_days,F);
   let fi=F, selected=(C.sectors.find(s=>s.weight>0)||C.sectors[0]||{}).key, raf=null;
   const ALL=C.sectors.flatMap(s=>s.hist.filter(h=>h[0]!=null&&h[1]!=null));
@@ -200,7 +201,7 @@ function widget(C){
     q(".ago").textContent=F-fi<0.5?"오늘":`${Math.round((F-fi)/5)}주 전`; drawDyn(); }
   function stop(){ if(raf){cancelAnimationFrame(raf); raf=null;} q("[data-a=play]").textContent="▶"; }
   function play(){ if(fi>=F-0.01) setFrame(FMIN); q("[data-a=play]").textContent="❚❚"; let last=performance.now();
-    const step=now=>{ setFrame(fi+(now-last)/1000*15); last=now; if(fi>=F){stop();return;} raf=requestAnimationFrame(step); }; raf=requestAnimationFrame(step); }
+    const step=now=>{ setFrame(fi+(now-last)/1000*15*speed()); last=now; if(fi>=F){stop();return;} raf=requestAnimationFrame(step); }; raf=requestAnimationFrame(step); }
   function glide(to){ stop(); const from=fi, t0=performance.now(); to=Math.max(FMIN,Math.min(F,to));
     const step=now=>{ const k=Math.min(1,(now-t0)/350), e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2; setFrame(from+(to-from)*e); if(k<1) raf=requestAnimationFrame(step); else raf=null; };
     raf=requestAnimationFrame(step); }
