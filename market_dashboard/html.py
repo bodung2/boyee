@@ -121,7 +121,7 @@ svg{fill:var(--ink2)} svg text{font-size:12px}
       <button id="tbPrev" aria-label="1주 전">◀</button>
       <input id="tbRange" type="range" aria-label="날짜 선택">
       <button id="tbNext" aria-label="1주 후">▶︎</button>
-      <button id="tbSpeed" aria-label="재생 속도">1×</button>
+      <select id="tbSpeed" class="speed" aria-label="재생 속도"></select>
       <span class="date" id="tbDate"></span><span class="ago" id="tbAgo"></span>
     </div>
     <div class="moves" id="moves"></div>
@@ -328,7 +328,7 @@ function drawMoves(){
 }
 /* 시간 막대: 재생은 화면 주사율에 맞춰 연속으로, 버튼은 1주를 부드럽게 넘어간다 */
 const range=$("tbRange"); range.min=FMIN; range.max=F; range.step="any"; range.value=F;
-const SPEEDS=[10,20,40]; let speedIx=0;  // 초당 거래일
+const BASE_SPEED=10, speed=bindSpeed($("tbSpeed"));  // 1× = 초당 10거래일
 let raf=null, tween=null;
 function setFrame(t){ fi=Math.max(FMIN,Math.min(F,t)); range.value=fi;
   const d=Math.round(fi); $("tbDate").textContent=D.frames[d];
@@ -339,7 +339,7 @@ function play(){
   if(fi>=F-0.01) setFrame(FMIN);
   $("tbPlay").textContent="❚❚"; let last=performance.now();
   const step=now=>{ const dt=(now-last)/1000; last=now;
-    setFrame(fi+dt*SPEEDS[speedIx]); if(fi>=F){ stop(); return; } raf=requestAnimationFrame(step); };
+    setFrame(fi+dt*BASE_SPEED*speed()); if(fi>=F){ stop(); return; } raf=requestAnimationFrame(step); };
   raf=requestAnimationFrame(step);
 }
 function glide(target){  // 버튼: 0.35초 동안 부드럽게 이동
@@ -352,7 +352,6 @@ range.addEventListener("input",()=>{ if(raf) stop(); setFrame(+range.value); });
 $("tbPrev").onclick=()=>glide(Math.round(fi)-5);
 $("tbNext").onclick=()=>glide(Math.round(fi)+5);
 $("tbPlay").onclick=()=>{ raf&&$("tbPlay").textContent!=="▶" ? stop() : play(); };
-$("tbSpeed").onclick=()=>{ speedIx=(speedIx+1)%SPEEDS.length; $("tbSpeed").textContent=`${2**speedIx}×`; };
 addEventListener("keydown",ev=>{ if(ev.target.tagName==="INPUT"&&ev.target!==range) return;
   if(ev.key==="ArrowLeft"){ ev.preventDefault(); glide(Math.round(fi)-5); } else if(ev.key==="ArrowRight"){ ev.preventDefault(); glide(Math.round(fi)+5); } });
 let rz; addEventListener("resize",()=>{clearTimeout(rz); rz=setTimeout(drawQuad,150);});

@@ -95,6 +95,7 @@ svg{display:block;width:100%;height:auto;fill:var(--ink2);font-size:12px}
       <button id="tbPrev" aria-label="1주 전">◀</button>
       <input type="range" id="tbRange" aria-label="날짜 선택">
       <button id="tbNext" aria-label="1주 후">▶︎</button>
+      <select id="tbSpeed" class="speed" aria-label="재생 속도"></select>
       <span class="date" id="tbDate"></span><span class="ago" id="tbAgo"></span>
     </div>
     <svg id="map" role="img" aria-label="한국 상위 200종목 추세 강도와 거래대금 변화"></svg>
@@ -235,11 +236,11 @@ function drawDyn(){
     g.addEventListener("click",()=>select(s.code,false));
   });
 }
-const range=$("tbRange");
+const range=$("tbRange"), speed=bindSpeed($("tbSpeed"));  // 1× = 초당 4주
 function setFrame(t){ fi=Math.max(FMIN,Math.min(F,t)); range.value=fi; $("tbDate").textContent=D.frames[Math.round(fi)]; $("tbAgo").textContent=F-fi<0.5?"이번 주":`${Math.round(F-fi)}주 전`; drawDyn(); }
 function stop(){ if(raf){cancelAnimationFrame(raf); raf=null;} $("tbPlay").textContent="▶"; }
 function play(){ if(fi>=F-0.01) setFrame(FMIN); $("tbPlay").textContent="❚❚"; let last=performance.now();
-  const step=now=>{ setFrame(fi+(now-last)/1000*4); last=now; if(fi>=F){stop();return;} raf=requestAnimationFrame(step); }; raf=requestAnimationFrame(step); }
+  const step=now=>{ setFrame(fi+(now-last)/1000*4*speed()); last=now; if(fi>=F){stop();return;} raf=requestAnimationFrame(step); }; raf=requestAnimationFrame(step); }
 function glide(to){ stop(); const from=fi, t0=performance.now(); to=Math.max(FMIN,Math.min(F,to));
   const step=now=>{ const k=Math.min(1,(now-t0)/350), e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2; setFrame(from+(to-from)*e); if(k<1) raf=requestAnimationFrame(step); else raf=null; }; raf=requestAnimationFrame(step); }
 range.min=FMIN; range.max=F; range.step="any"; range.value=F;
