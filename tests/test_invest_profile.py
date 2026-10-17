@@ -112,3 +112,33 @@ def test_invest_neighbor_prompt_does_not_reveal_teacher(tmp_path, monkeypatch):
     neighbors.choose(Config.load("invest"), [], 5, tmp_path)
     assert "꾸쓰" not in seen["p"] and "교사" not in seen["p"]
     assert "재테크" in seen["p"] and "리딩방" in seen["p"]
+
+
+HIST = [
+    {"date": "2026-10-13", "title": "4대보험료 얼마나 올랐을까?", "url": "https://blog.naver.com/acridortt/1", "lane": "F"},
+    {"date": "2026-10-16", "title": "순자산 10억, 상위 몇 %일까?", "url": "https://blog.naver.com/acridortt/2", "lane": "A"},
+    {"date": "2026-10-17", "title": "자가보유율 청년은?", "url": "https://blog.naver.com/acridortt/3", "lane": "B"},
+    {"date": "2026-10-15", "title": "정년 몇 살에 그만둘까?", "url": "https://blog.naver.com/acridortt/4", "lane": "D"},
+    {"title": "주소 없는 글", "url": "", "lane": "A"},
+]
+
+
+def test_related_links_filled_from_history_same_lane_first():
+    body = "<p>본문</p><div data-block=\"oneline\"><p>한 줄</p></div><p>출처: 국가데이터처 — 자료(2025)</p>"
+    out, added = content.ensure_related(body, HIST, lane="A", title="연봉 4천, 상위 몇 %일까?")
+    assert added
+    block = out[out.index('data-block="related"'):out.index("출처:")]
+    assert block.index("acridortt/2") < block.index("acridortt/3") < block.index("acridortt/4")   # 같은 레인 → 최근 순
+    assert "acridortt/1" not in block and "주소 없는 글" not in block                            # 3개까지
+    assert "같은 주제를 다른 숫자로" in block
+
+
+def test_related_links_kept_when_writer_added_them():
+    body = '<p>본문</p><div data-block="related"><p>「x」 — y</p><p>https://blog.naver.com/a/9</p></div>'
+    assert content.ensure_related(body, HIST, "A") == (body, False)
+    assert content.ensure_related("<p>본문</p>", [], "A") == ("<p>본문</p>", False)
+
+
+def test_related_links_skip_this_post_itself():
+    out, _ = content.ensure_related("<p>x</p>", HIST[:1], "F", title="4대보험료 얼마나 올랐을까?")
+    assert out == "<p>x</p>"

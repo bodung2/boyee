@@ -22,6 +22,7 @@ class Profile:
     neighbor_owner: str = "교사 SR(꾸쓰쌤)"    # 이웃 추천 프롬프트에서 블로그 주인을 부르는 말
     neighbor_exclude: str = ""                 # 이웃 후보에서 더 빼야 할 블로그 유형
     min_sources: int = 10       # 구조 검증: 출처 최소 개수
+    auto_related: bool = False  # 글 끝 '함께 보면 좋은 글'이 비면 발행 이력에서 자동으로 채운다
     max_title: int = 100        # 구조 검증: 제목 최대 글자 수(모바일 홈피드에서 잘리지 않게 줄이는 블로그도 있다)
     use_persona: bool = True    # 교사 페르소나(꾸쓰) 파일을 글쓰기에 넘길지. 신원을 감추는 블로그는 False
     social: bool = True         # 블로그 발행 뒤 인스타·쓰레드 초안을 만들지
@@ -60,7 +61,7 @@ PROFILES: dict[str, Profile] = {
             "매수 추천", "매도 추천", "종목 추천", "지금 사야", "무조건 오른다", "수익 보장", "원금 보장",
             "리딩방", "목표주가", "집값 무조건", "지금이 매수 타이밍", "현직 교사", "교사인 제가", "저는 교사", "우리 반",   # 신원 노출 방지
         ),
-        min_sources=6, use_persona=False, social=False, max_title=28,
+        min_sources=6, use_persona=False, social=False, max_title=28, auto_related=True,
         # 이웃 추천: 신원(교사)을 드러내지 않는 블로그라 주인을 중립적으로 부른다
         neighbor_tab="투자 이웃 후보",
         neighbor_keywords=("재테크", "연봉 실수령액", "청약", "내집마련", "국민연금", "연말정산",
