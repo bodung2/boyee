@@ -104,11 +104,16 @@ def _google(cfg: BloggerConfig, url: str, body: dict | None = None) -> dict:
                                  method="POST" if body is not None else "GET",
                                  headers={"Authorization": f"Bearer {api.access_token(cfg)}",
                                           "Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            return json.loads(resp.read().decode("utf-8") or "{}")
-    except urllib.error.HTTPError as e:
-        return {"_error": f"HTTP {e.code}: {e.read().decode('utf-8', 'replace')[:500]}"}
+    for attempt in range(2):     # 구글이 잠깐 느릴 때 한 번 더(시간 초과로 진단 전체가 멈추지 않게)
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                return json.loads(resp.read().decode("utf-8") or "{}")
+        except urllib.error.HTTPError as e:
+            return {"_error": f"HTTP {e.code}: {e.read().decode('utf-8', 'replace')[:500]}"}
+        except (TimeoutError, OSError) as e:      # URLError·소켓 시간 초과
+            if attempt:
+                return {"_error": f"응답 없음(시간 초과): {e}"[:300]}
+    return {"_error": "응답 없음"}
 
 
 def page_seo(html_text: str) -> dict:
