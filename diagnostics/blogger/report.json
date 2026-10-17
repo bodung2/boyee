@@ -2010,19 +2010,6 @@
         "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
         "error": null,
         "verdict": "NEUTRAL",
-        "coverageState": "Discovered - currently not indexed",
-        "indexingState": "INDEXING_STATE_UNSPECIFIED",
-        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
-        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
-        "lastCrawlTime": null,
-        "googleCanonical": null,
-        "userCanonical": null,
-        "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED"
-      },
-      {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
-        "error": null,
-        "verdict": "NEUTRAL",
         "coverageState": "URL is unknown to Google",
         "indexingState": "INDEXING_STATE_UNSPECIFIED",
         "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
@@ -2031,6 +2018,19 @@
         "googleCanonical": null,
         "userCanonical": null,
         "crawledAs": null
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "Discovered - currently not indexed",
+        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
+        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
+        "lastCrawlTime": null,
+        "googleCanonical": null,
+        "userCanonical": null,
+        "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED"
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
@@ -2049,14 +2049,14 @@
         "url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
         "error": null,
         "verdict": "NEUTRAL",
-        "coverageState": "URL is unknown to Google",
+        "coverageState": "Discovered - currently not indexed",
         "indexingState": "INDEXING_STATE_UNSPECIFIED",
         "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
         "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
         "lastCrawlTime": null,
         "googleCanonical": null,
         "userCanonical": null,
-        "crawledAs": null
+        "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED"
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
