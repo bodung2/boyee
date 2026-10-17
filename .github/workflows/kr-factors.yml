@@ -1,0 +1,54 @@
+# 한국 주식 종목 선정 방식 비교(팩터 연구)를 한국거래소 데이터로 돌려 실행 기록(로그)에 남긴다.
+name: kr-factors
+
+on:
+  pull_request:
+    paths:
+      - "market_dashboard/kr_factors.py"
+      - "market_dashboard/kr_combo.py"
+      - ".github/workflows/kr-factors.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  factors:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 한국거래소 월말 스냅숏 보관본 불러오기
+        uses: actions/cache@v4
+        with:
+          path: data/market/krx
+          key: krx-snapshots-${{ github.run_id }}
+          restore-keys: krx-snapshots-
+      - name: 패키지 설치
+        run: pip install "pandas>=2.0" "numpy>=1.24" "yfinance>=0.2.40" pykrx pytest
+      - name: 테스트
+        run: python -m pytest -q tests/test_market_dashboard.py -k kr_factor
+      # 한국거래소(KRX 정보데이터시스템)는 로그인한 계정으로만 데이터를 준다.
+      # 저장소 Settings → Secrets and variables → Actions 에 KRX_ID, KRX_PW 를 넣으면 이 단계가 돈다(없으면 건너뜀).
+      - name: 종목 선정 방식 비교(실제 데이터)
+        env:
+          KRX_ID: ${{ secrets.KRX_ID }}
+          KRX_PW: ${{ secrets.KRX_PW }}
+        run: |
+          if [ -z "$KRX_ID" ] || [ -z "$KRX_PW" ]; then
+            echo "::notice::KRX_ID·KRX_PW 비밀값이 없어 한국거래소 데이터 단계를 건너뜀(저장소 Settings → Secrets and variables → Actions)"
+            exit 0
+          fi
+          # 종료 코드 2 = 한국거래소가 데이터를 주지 않아 스냅숏이 모자람(코드 오류가 아니므로 실패로 치지 않음)
+          for cmd in krfactors krcombo; do
+            rc=0
+            python -m market_dashboard "$cmd" || rc=$?
+            if [ "$rc" -eq 2 ]; then
+              echo "::notice::한국거래소 스냅숏이 모자라 $cmd 를 건너뜀(접속 실패·보관본 없음). workflow_dispatch 로 다시 돌리면 보관본을 씀"
+              exit 0
+            fi
+            [ "$rc" -eq 0 ] || exit "$rc"
+          done

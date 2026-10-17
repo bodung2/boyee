@@ -102,8 +102,36 @@ def remove_markers(body_html: str, names: set[str]) -> str:
     return IMAGE_MARKER.sub(lambda m: "" if m.group(1) in names else m.group(0), body_html)
 
 
-def validate(post: dict, profile: Profile | None = None) -> list[str]:
-    """발행을 막아야 하는 문제 목록. 비어 있으면 통과."""
+_H2 = re.compile(r"<h2\b", re.I)
+
+
+def fix_card_marker(body_html: str) -> tuple[str, bool]:
+    """요약 카드 자리([[IMAGE:card]])가 없으면 1번 챕터 끝(2번 챕터 제목 바로 앞)에 넣고, 여러 개면 첫 번째만 남긴다.
+    (카드는 post["card"]로 프로그램이 그리므로 자리만 맞으면 된다) (고친 본문, 바뀌었는지)"""
+    count = [0]
+
+    def keep_first(m: re.Match) -> str:
+        if m.group(1) != "card":
+            return m.group(0)
+        count[0] += 1
+        return m.group(0) if count[0] == 1 else ""
+    body = IMAGE_MARKER.sub(keep_first, body_html)
+    if count[0] >= 1:
+        return body, count[0] > 1
+    marker = "<p>[[IMAGE:card]]</p>"
+    heads = list(_H2.finditer(body))
+    if len(heads) >= 2:
+        at = heads[1].start()
+    else:
+        tail = re.search(r'<div\b[^>]*data-block=["\'](?:oneline|related)', body, re.I)
+        at = tail.start() if tail else len(body)
+    return body[:at] + marker + body[at:], True
+
+
+def validate(post: dict, profile: Profile | None = None, after_factcheck: bool = False) -> list[str]:
+    """발행을 막아야 하는 문제 목록. 비어 있으면 통과.
+    after_factcheck: 팩트체크가 틀린 문장을 지운 뒤라 분량 기준은 기본값(MIN_BODY_CHARS)만 본다
+    (분량 때문에 검수까지 끝난 글을 버리지 않게)."""
     errors: list[str] = []
     for key in ("title", "body_html", "tags", "sources", "claims", "thumbnail", "card"):
         if not post.get(key):
@@ -112,8 +140,9 @@ def validate(post: dict, profile: Profile | None = None) -> list[str]:
         return errors
 
     title = post["title"]
-    if len(title) > 100:
-        errors.append(f"제목이 너무 깁니다({len(title)}자)")
+    max_title = profile.max_title if profile else 100
+    if len(title) > max_title:
+        errors.append(f"제목이 너무 깁니다({len(title)}자 > {max_title}자). 검색어로 시작하는 짧은 질문으로 줄이세요")
 
     body = post["body_html"]
     markers = [m.group(1) for m in IMAGE_MARKER.finditer(body)]
@@ -135,19 +164,21 @@ def validate(post: dict, profile: Profile | None = None) -> list[str]:
     for phrase in profile.extra_forbidden if profile else ():
         if _affirmative_use(everything, phrase):
             errors.append(f"금지 표현이 있습니다: '{phrase}'")
-    if len(text) < MIN_BODY_CHARS:
-        errors.append(f"본문이 너무 짧습니다({len(text)}자 < {MIN_BODY_CHARS}자)")
+    min_body = profile.min_body_chars if profile and not after_factcheck else MIN_BODY_CHARS
+    if len(text) < min_body:
+        errors.append(f"본문이 너무 짧습니다({len(text)}자 < {min_body}자)")
 
     sources = post["sources"]
-    if len(sources) < MIN_SOURCES:
-        errors.append(f"출처가 부족합니다({len(sources)}개 < {MIN_SOURCES}개)")
+    min_sources = profile.min_sources if profile else MIN_SOURCES
+    if len(sources) < min_sources:
+        errors.append(f"출처가 부족합니다({len(sources)}개 < {min_sources}개)")
     if sum(1 for s in sources if s.get("primary")) < MIN_PRIMARY_SOURCES:
         errors.append(f"1차 출처가 {MIN_PRIMARY_SOURCES}개 미만입니다")
     if len(post["claims"]) < MIN_CLAIMS:
         errors.append(f"검증 대상 사실이 {MIN_CLAIMS}개 미만입니다")
 
     thumb = post["thumbnail"]
-    if profile and profile.thumbnail_style == "childhood":
+    if profile and profile.thumbnail_style in ("childhood", "bold"):
         lines = thumb.get("main_lines") or []
         if not 1 <= len(lines) <= 3:
             errors.append(f"썸네일 메인은 1~3줄이어야 합니다(현재 {len(lines)}줄)")
@@ -165,3 +196,39 @@ def validate(post: dict, profile: Profile | None = None) -> list[str]:
     if not post["tags"]:
         errors.append("태그가 없습니다")
     return errors
+
+
+_RELATED_DIV = re.compile(r'<div\b[^>]*data-block=["\']related["\']', re.I)
+_SOURCES_P = re.compile(r'<p>\s*(?:<strong>\s*)?(?:📚\s*)?(?:출처|참고 자료|자료 출처)', re.I)
+
+
+def ensure_related(body_html: str, entries: list[dict], lane: str = "", title: str = "",
+                   count: int = 3) -> tuple[str, bool]:
+    """글 끝 '함께 보면 좋은 글'이 없으면 이 블로그의 발행 이력에서 골라 넣는다(교육·유아 글과 같은 서식).
+    같은 레인 글 → 최근 글 순. 주소가 있는 이 블로그 글만 쓴다. (본문, 넣었는지)"""
+    if _RELATED_DIV.search(body_html):
+        return body_html, False
+    seen, picks = set(), []
+    pool = [e for e in entries if "blog.naver.com" in str(e.get("url", "")) and e.get("title")
+            and e.get("title") != title]
+    pool.sort(key=lambda e: str(e.get("date") or ""), reverse=True)
+    lane_letter = str(lane or "").strip().upper()[:1]
+    same = [e for e in pool if lane_letter and str(e.get("lane", "")).strip().upper()[:1] == lane_letter]
+    for e in same + pool:
+        if e["url"] in seen:
+            continue
+        seen.add(e["url"])
+        picks.append((e, e in same))
+        if len(picks) == count:
+            break
+    if not picks:
+        return body_html, False
+    items = "".join(
+        f"<p>「{html.escape(e['title'])}」 — {'같은 주제를 다른 숫자로 본 글이에요' if same_lane else '함께 읽으면 좋은 최근 글이에요'}</p>"
+        f"<p>{html.escape(e['url'])}</p>"
+        for e, same_lane in picks)
+    block = f'<div data-block="related">{items}</div>'
+    m = _SOURCES_P.search(body_html)
+    if m:
+        return body_html[:m.start()] + block + body_html[m.start():], True
+    return body_html + block, True

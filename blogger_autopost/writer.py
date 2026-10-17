@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 from naver_autopost.codex_image import codex_home
+from naver_autopost import persona
 from naver_autopost.content import html_to_text
 from naver_autopost.openai_client import CodexAccountError, CodexUnavailable, _extract_json, run_codex
 
@@ -31,8 +32,9 @@ This run is fully automatic: nobody reviews the post before it goes live on the 
 
 Already published posts (newest first):
 {history}
-{feedback}
-DELIVERABLE (this replaces any output/delivery format the skill describes; keep all of its writing rules):
+{persona}{feedback}
+DELIVERABLE (this replaces only the skill's output/delivery format; keep ALL of its writing rules, and follow
+its guidance on images — what to show, style, placement — when you fill "illustrations" and "photos" below):
 Save ONE file named post.json (UTF-8) in the current working directory, exactly this shape:
 {{
   "title": "post title",
@@ -40,23 +42,42 @@ Save ONE file named post.json (UTF-8) in the current working directory, exactly 
   "labels": ["3 to 8 Blogger labels"],
   "topic": "one-line description of the topic",
   "summary": "one-sentence summary",
+  "search_description": "the exact text of the opening paragraph (120-155 characters)",
   "sources": [{{"title": "source page title", "publisher": "who published it", "url": "https://..."}}],
-  "photos": [{{"section": 0, "subject": "exactly what the photo must show", "search": "Wikimedia Commons search words",
+  "illustrations": [{{"section": 1, "prompt": "detailed English image-generation prompt", "alt": "alt text",
+                     "caption": "short caption"}}],
+  "persona_used": ["E20"],
+  "photos": [{{"section": 2, "subject": "exactly what the photo must show", "search": "Wikimedia Commons search words",
+              "alternatives": ["other search words", "..."], "fallback_prompt": "photorealistic English image prompt",
               "alt": "alt text", "caption": "short caption"}}]
 }}
 body_html rules:
 - An HTML fragment only: <p>, <h2>, <h3>, <ul>/<ol>/<li>, <table>, <blockquote>, <strong>, <em>, <a href>, <hr>.
 - No <html>, <head>, <body>, <h1> (Blogger shows the title itself), no <script>, <style>, <iframe>, no Markdown.
-- Do not put <img> tags or image placeholders in body_html, and do not refer to pictures in the text.
-  Photos are added automatically from "photos" below.
-"photos" ({photos} at most, or [] if no photo would help): real photos to look for on Wikimedia Commons.
-- "section": 0 = top of the post, N = right after the N-th <h2> heading.
+- Start body_html with a <p> that directly answers the reader's main question in 1-2 sentences, 120-155
+  characters, containing the main search phrase. The blog uses this opening paragraph as the page's meta
+  description in search results, so make it a complete, self-contained summary (no "In this post..." filler).
+  Put the same text in "search_description". Never start with an image, a caption or a heading.
+- Do not put <img> tags or image placeholders in body_html. Images are inserted automatically from
+  "illustrations" and "photos" ("section": 0 = right after that opening paragraph, N = right after the N-th <h2>).
+  Spread them over different sections where a picture really helps the reader.
+- Internal links: where it genuinely helps, link to 2-3 related posts from the "Already published posts" list
+  inside the text, using their exact URLs. Never invent URLs. (A short related-posts list is also added
+  automatically at the end, so do not add your own "related posts" section.)
+- If the skill asks for a sources/references section, put it inside body_html as HTML with real links.
+"illustrations" (exactly {illustrations}): pictures an image model will draw for this post.
+- "prompt": a detailed English prompt in an illustration style (not a photorealistic photo) that explains or
+  sets the scene for that section. No text, letters, numbers, logos or maps in the picture.
+"photos" (exactly {photos}, always): a real photo to find on Wikimedia Commons.
 - "subject": a concrete, checkable subject in English (e.g. "Seoul subway ticket gates with a T-money card reader"),
   something that really exists in Korea. A reviewer will reject photos that do not clearly show it.
 - "search": 2-5 English keywords with proper names (e.g. "Gyeongbokgung Geunjeongjeon"); no generic mood words.
-- Prefer places, buildings, food, objects and signs over people.
-- If the skill asks for a sources/references section, put it inside body_html as HTML with real links.
+  "alternatives": 1-2 other searches for the same subject in case the first finds nothing usable.
+  "fallback_prompt": if no usable real photo is found, an image model will make a photorealistic image from this
+  English prompt instead (labelled as AI-generated). Describe a typical, generic scene of the subject; no text or signs.
+- Prefer well-known places, buildings, food, objects and signs over people.
 "sources" lists every page you actually read to verify the facts (at least {min_sources}).
+"persona_used": the episode IDs ([E..]) from the author persona you used, or [] if none.
 After saving post.json, reply with just: done
 """
 
@@ -69,6 +90,8 @@ Rules:
   Not confirmable anywhere reliable: recommend deleting it ("삭제" or "delete").
 - Also check that the links in the post and the listed sources really say what the post claims.
 - Do not comment on style, opinions or tone unless they state something false.
+- First-person statements about the author's own experience or opinion ("As a teacher, I...", "In my view...")
+  are not web-checkable; do not flag them. Only check general facts inside them (rules, numbers, names).
 - Only report issues you can back with an evidence URL.
 If you cannot use web search, output only {{"verdict": "error", "summary": "no web search"}}.
 Do not create files or run commands.
@@ -143,6 +166,33 @@ def _codex(cfg: BloggerConfig, prompt: str, cwd: Path | None, sandbox: str, time
         raise CodexAccountError(f"Codex(ChatGPT)를 쓸 수 없습니다: {e}") from e
 
 
+PERSONA_BLOCK = """
+AUTHOR PERSONA (the blog is written by "teacher-K"; the profile below is in Korean — use it as the ONLY source of the
+author's own experiences and opinions):
+- Weave in 0-2 episodes ([E..]) that genuinely fit today's topic, in the first person ("As a teacher, I...",
+  "At home with my two daughters..."). Never invent any experience, anecdote or result that is not in the persona,
+  and do not change its numbers, durations or events (you may rephrase naturally in English).
+- Avoid episodes recently used: {recent}.
+- End the post with a short "my take" paragraph (2-4 sentences) that reflects the persona's views, clearly phrased
+  as opinion ("In my view...", "As a teacher and a parent, I think...").
+- Voice: calm, kind local explainer; no hype, few or no emoji, light humor only occasionally.
+- Never reveal the grade the author teaches, where the author lives or works, or any school or family names.
+- On sensitive topics (politics, extreme views, gender conflict, religion, regional stereotypes, teacher unions)
+  give no personal opinion; if they come up, stay neutral and close by weighing pros and cons.
+--- PERSONA ---
+{text}
+--- END PERSONA ---
+"""
+
+
+def persona_block(cfg: BloggerConfig) -> str:
+    text = persona.load()
+    if not text:
+        return ""
+    recent = persona.recent_used(sorted(cfg.history_file.parent.glob("published_*.json")))
+    return PERSONA_BLOCK.format(recent=", ".join(recent) or "none", text=text.strip())
+
+
 def write_post(cfg: BloggerConfig, out_dir: Path, today: str, history: list[dict], feedback: str = "") -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     skill_file = find_skill(cfg)
@@ -152,7 +202,9 @@ def write_post(cfg: BloggerConfig, out_dir: Path, today: str, history: list[dict
           f"{feedback}\n") if feedback else ""
     prompt = WRITE_PROMPT.replace("${skill}", f"${cfg.skill}").format(
         skill=cfg.skill, skill_hint=hint, today=today, history=_history_lines(history), feedback=fb,
-        min_sources=cfg.min_sources, photos=cfg.photos)
+        persona=persona_block(cfg),
+        min_sources=cfg.min_sources, photos=cfg.photos,
+        illustrations=cfg.illustrations)
     (out_dir / "write_prompt.txt").write_text(prompt, encoding="utf-8")
     log.info("Codex 글쓰기 시작(%s 스킬)", cfg.skill)
     reply = _codex(cfg, prompt, out_dir, "workspace-write", cfg.write_timeout)
@@ -228,3 +280,35 @@ def review_photos(cfg: BloggerConfig, title: str, slots: list[dict]) -> dict:
     choices = result.get("choices") or {}
     log.info("사진 검수: %s", choices)
     return {str(k): str(v) for k, v in choices.items() if v}
+
+
+ILLUSTRATION_REVIEW_PROMPT = """ILLUSTRATION REVIEW. The attached images were generated by an image model for a public blog post
+about Korea, in the order listed below. Look at each image itself.
+Blog post title: {title}
+
+{items}
+
+Each image is either kind=illustration (must look like an illustration) or kind=photo (must look like a natural,
+realistic photograph; it will be labelled as AI-generated).
+An image is "ok" only if ALL are true:
+- it fits its description and would help a reader of this post,
+- no text, letters, numbers, signs with writing, logos or watermarks (garbled pseudo-text counts as text),
+- no distorted faces, hands or bodies, no obvious generation glitches,
+- nothing offensive, sexual, graphic, or culturally wrong for Korea (e.g. Japanese or Chinese clothing,
+  architecture or flags presented as Korean),
+- kind=illustration: it does not look like a real photograph. kind=photo: it looks realistic and natural.
+Otherwise give a short reason.
+
+Output ONLY one JSON object (no code fence): {{"<id>": "ok" or "reason", ...}}
+"""
+
+
+def review_illustrations(cfg: BloggerConfig, title: str, items: list[dict]) -> dict:
+    """items: [{"id", "desc", "path"}] → {id: "ok" | 이유}"""
+    lines = [f"image #{n} = {it['id']} (kind={it.get('kind', 'illustration')}): {it['desc']}"
+             for n, it in enumerate(items, 1)]
+    prompt = ILLUSTRATION_REVIEW_PROMPT.format(title=title, items="\n".join(lines))
+    result = _extract_json(_codex(cfg, prompt, None, "read-only", cfg.codex_timeout,
+                                  images=[it["path"] for it in items]))
+    log.info("생성 그림 검수: %s", result)
+    return {str(k): str(v).strip().lower() if str(v).strip().lower() == "ok" else str(v) for k, v in result.items()}
