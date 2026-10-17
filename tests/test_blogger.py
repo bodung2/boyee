@@ -916,3 +916,16 @@ def test_script_hints_find_url_rewriting_scripts():
     hints = diagnose.script_hints(html)
     assert len(hints) == 2 and "location.replace" in hints[0] and "refresh" in hints[1]
     assert diagnose.script_hints("<script>var a=1</script>") == []
+
+
+def test_google_api_timeout_is_reported_not_raised(cfg, monkeypatch):
+    from blogger_autopost import diagnose
+    monkeypatch.setattr(api, "access_token", lambda c: "t")
+    calls = []
+
+    def slow(req, timeout=60):
+        calls.append(1)
+        raise TimeoutError("read timed out")
+    monkeypatch.setattr(diagnose.urllib.request, "urlopen", slow)
+    r = diagnose._google(cfg, "https://example.org", {"a": 1})
+    assert "시간 초과" in r["_error"] and len(calls) == 2
