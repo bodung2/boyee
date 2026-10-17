@@ -22,8 +22,10 @@ from .config import BloggerConfig
 log = logging.getLogger(__name__)
 API = "https://commons.wikimedia.org/w/api.php"
 USER_AGENT = "boyee-blogger-autopost/1.0 (https://github.com/bodung2/boyee)"
-THUMB_WIDTH = 1200
-REVIEW_WIDTH = 640
+# 위키미디어는 정해진 썸네일 너비만 내준다(그 밖의 너비는 HTTP 400 "Use thumbnail sizes listed on https://w.wiki/GHai").
+STANDARD_WIDTHS = (20, 40, 60, 120, 250, 330, 500, 960, 1280, 1920, 3840)
+THUMB_WIDTH = 1280
+REVIEW_WIDTH = 500
 MIN_WIDTH = 800
 
 # 상업 이용·출처 표기만으로 쓸 수 있는 라이선스(GFDL 단독, NC, ND, 비자유 이미지는 쓰지 않는다)
@@ -72,7 +74,7 @@ def search(query: str, limit: int = 4, fetch=None) -> list[dict]:
         found.append({
             "title": page.get("title", ""),
             "description": html_to_text(_meta(info, "ImageDescription")),
-            "thumb_url": info.get("thumburl") or info.get("url"),
+            "thumb_url": standard_thumb(info.get("thumburl") or info.get("url")),
             "thumb_width": info.get("thumbwidth") or info.get("width"),
             "thumb_height": info.get("thumbheight") or info.get("height"),
             "page_url": info.get("descriptionurl") or "",
@@ -83,6 +85,18 @@ def search(query: str, limit: int = 4, fetch=None) -> list[dict]:
         if len(found) >= limit:
             break
     return found
+
+
+_THUMB_SIZE = re.compile(r"(upload\.wikimedia\.org/[^\s\"']*/thumb/[^\s\"']*?/)(\d+)px-")
+
+
+def standard_thumb(url: str) -> str:
+    """위키미디어 썸네일 주소의 너비를 허용된 크기(그 이상 중 가장 작은 것)로 바꾼다."""
+    def fix(m: re.Match) -> str:
+        width = int(m.group(2))
+        ok = next((w for w in STANDARD_WIDTHS if w >= width), STANDARD_WIDTHS[-1])
+        return f"{m.group(1)}{ok}px-"
+    return _THUMB_SIZE.sub(fix, url)
 
 
 def _download(url: str, out: Path, fetch_bytes=None) -> Path:
