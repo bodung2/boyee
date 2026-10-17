@@ -1,5 +1,5 @@
 @echo off
-rem Daily neighbor suggestions for both blogs (Windows Task Scheduler).
+rem Daily neighbor suggestions for the childhood, edu and investment blogs (Windows Task Scheduler).
 rem The whole script is one block so cmd reads it fully before self_update.py may replace this file.
 (
 chcp 65001 >nul
@@ -8,5 +8,6 @@ cd /d "%~dp0.."
 ".venv\Scripts\python.exe" scripts\self_update.py
 ".venv\Scripts\python.exe" -m naver_autopost neighbors --profile childhood %*
 ".venv\Scripts\python.exe" -m naver_autopost neighbors --profile edu %*
+".venv\Scripts\python.exe" -m naver_autopost neighbors --profile invest %*
 exit /b
 )

@@ -125,7 +125,8 @@ notepad .env        # NAVER_BLOG_ID, NAVER_CATEGORY_CHILDHOOD 입력
 - `.env`: `NAVER_BLOG_ID_INVEST=블로그아이디`, `NAVER_CATEGORY_INVEST=카테고리 이름`
 - 최초 1회 로그인: `python -m naver_autopost login --profile invest` (자동화용 크롬은 `.browser-profile-invest`로 따로 씁니다)
 - 시험 실행: `python -m naver_autopost run --profile invest --dry-run`
-- 예약: `scripts\setup_windows.ps1 -Profile invest` (블로그 09:00, 막힌 날 재시도 17:00)
+- 예약: `scripts\setup_windows.ps1 -Profile invest` (블로그 07:00 출근길 홈피드, 막힌 날 재시도 10:00)
+- 이웃 후보 추천도 투자 블로그 몫(시트 '투자 이웃 후보' 탭)을 매일 함께 만듭니다. 제목은 15~25자·답을 숨긴 질문형, 글 끝은 독자가 자기 구간을 댓글로 답하는 질문입니다.
 
 ## 구글 블로거 (korea-explained-blogger, 하루 1편)
 

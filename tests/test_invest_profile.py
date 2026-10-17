@@ -49,7 +49,7 @@ def test_invest_config_hides_persona_and_skips_social(monkeypatch):
         monkeypatch.delenv(k, raising=False)
     c = Config.load("invest")
     assert c.social_draft is False
-    assert c.retry_time == "17:00"
+    assert c.retry_time == "10:00"
     assert c.profile_dir.name == ".browser-profile-invest"
     assert c.history_file.name == "published_invest.json"
     assert generate._persona_lines(c) == "PERSONA_FILE=(없음)\n"
@@ -97,3 +97,18 @@ def test_invest_thumbnail_falls_back_to_solid_when_scene_unreadable(tmp_path):
                                       tmp_path / "t.png", images.INVEST_TONES["C"])
     px = Image.open(out).convert("RGB").getpixel((5, 590))
     assert "#%02x%02x%02x" % px == images.INVEST_TONES["C"]
+
+
+def test_invest_title_must_be_short_for_mobile_home_feed():
+    long_title = "순자산 3억이면 상위 몇 %일까? 통계로 확인해 봤어요"
+    assert any("제목이 너무 깁니다" in e for e in content.validate(invest_post(title=long_title), INVEST))
+    assert content.validate(invest_post(title="순자산 3억, 상위 몇 %일까?"), INVEST) == []
+
+
+def test_invest_neighbor_prompt_does_not_reveal_teacher(tmp_path, monkeypatch):
+    from naver_autopost import neighbors
+    seen = {}
+    monkeypatch.setattr(generate, "_run_claude", lambda c, p, log_file, light=False: seen.setdefault("p", p))
+    neighbors.choose(Config.load("invest"), [], 5, tmp_path)
+    assert "꾸쓰" not in seen["p"] and "교사" not in seen["p"]
+    assert "재테크" in seen["p"] and "리딩방" in seen["p"]
