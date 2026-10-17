@@ -193,3 +193,39 @@ def validate(post: dict, profile: Profile | None = None) -> list[str]:
     if not post["tags"]:
         errors.append("태그가 없습니다")
     return errors
+
+
+_RELATED_DIV = re.compile(r'<div\b[^>]*data-block=["\']related["\']', re.I)
+_SOURCES_P = re.compile(r'<p>\s*(?:<strong>\s*)?(?:📚\s*)?(?:출처|참고 자료|자료 출처)', re.I)
+
+
+def ensure_related(body_html: str, entries: list[dict], lane: str = "", title: str = "",
+                   count: int = 3) -> tuple[str, bool]:
+    """글 끝 '함께 보면 좋은 글'이 없으면 이 블로그의 발행 이력에서 골라 넣는다(교육·유아 글과 같은 서식).
+    같은 레인 글 → 최근 글 순. 주소가 있는 이 블로그 글만 쓴다. (본문, 넣었는지)"""
+    if _RELATED_DIV.search(body_html):
+        return body_html, False
+    seen, picks = set(), []
+    pool = [e for e in entries if "blog.naver.com" in str(e.get("url", "")) and e.get("title")
+            and e.get("title") != title]
+    pool.sort(key=lambda e: str(e.get("date") or ""), reverse=True)
+    lane_letter = str(lane or "").strip().upper()[:1]
+    same = [e for e in pool if lane_letter and str(e.get("lane", "")).strip().upper()[:1] == lane_letter]
+    for e in same + pool:
+        if e["url"] in seen:
+            continue
+        seen.add(e["url"])
+        picks.append((e, e in same))
+        if len(picks) == count:
+            break
+    if not picks:
+        return body_html, False
+    items = "".join(
+        f"<p>「{html.escape(e['title'])}」 — {'같은 주제를 다른 숫자로 본 글이에요' if same_lane else '함께 읽으면 좋은 최근 글이에요'}</p>"
+        f"<p>{html.escape(e['url'])}</p>"
+        for e, same_lane in picks)
+    block = f'<div data-block="related">{items}</div>'
+    m = _SOURCES_P.search(body_html)
+    if m:
+        return body_html[:m.start()] + block + body_html[m.start():], True
+    return body_html + block, True

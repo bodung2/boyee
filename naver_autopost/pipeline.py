@@ -487,6 +487,12 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
                     log.info("오늘 글은 이미 블로그에 있습니다(기록만 바로잡음): %s", found["url"])
                     return 0
             post = produce(cfg, today, out_dir)
+            if cfg.profile.auto_related:
+                post["body_html"], added = content.ensure_related(
+                    post["body_html"], history.load(cfg.history_file), post.get("lane", ""), post.get("title", ""))
+                if added:
+                    log.info("함께 보면 좋은 글을 발행 이력에서 채웠습니다")
+                    _save_json(out_dir / "post.json", post)
             info_ok = add_infographic(cfg, post, out_dir)
             imgs = render_images(cfg, post, out_dir)
             post["blog_category"] = cfg.category_for(post.get("lane"))
