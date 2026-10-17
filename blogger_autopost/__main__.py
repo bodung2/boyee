@@ -181,6 +181,10 @@ def _diagnose(cfg: BloggerConfig, push: bool) -> int:
         g = row["googlebot_mobile"]
         chain = " → ".join(str(h["status"]) for h in g["hops"])
         print(f"  구글 휴대폰 로봇으로 열기: {g['verdict']} ({chain}) {row['url']}")
+    for row in r.get("rendered_mobile", [])[:3]:
+        if row.get("final_url"):
+            moved = "주소 그대로" if row["final_url"].split("?")[0] == row["url"] else f"→ {row['final_url']}"
+            print(f"  스크립트 실행 후: {moved} (주소 바뀐 횟수 {len(row['navigations'])}, 의심 스크립트 {len(row['script_hints'])}개)")
     print(f"  저장: {path}")
     return 0 if not push else _push_diagnostics("Blogger search traffic diagnostics")
 
