@@ -138,8 +138,9 @@ def validate(post: dict, profile: Profile | None = None) -> list[str]:
         return errors
 
     title = post["title"]
-    if len(title) > 100:
-        errors.append(f"제목이 너무 깁니다({len(title)}자)")
+    max_title = profile.max_title if profile else 100
+    if len(title) > max_title:
+        errors.append(f"제목이 너무 깁니다({len(title)}자 > {max_title}자). 검색어로 시작하는 짧은 질문으로 줄이세요")
 
     body = post["body_html"]
     markers = [m.group(1) for m in IMAGE_MARKER.finditer(body)]

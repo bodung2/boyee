@@ -1,4 +1,4 @@
-﻿# 이웃 후보 추천 예약(유아·교육 두 블로그, 매일 한 번)
+﻿# 이웃 후보 추천 예약(유아·교육·투자 블로그, 매일 한 번)
 #   powershell -ExecutionPolicy Bypass -File scripts\setup_neighbors_windows.ps1 -Time 19:00
 param([string]$Time = "19:00")
 $ErrorActionPreference = "Stop"

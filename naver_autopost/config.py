@@ -165,9 +165,9 @@ class Config:
             style_mode=env("STYLE_MODE", "native").strip().lower(),
             limit_wait_max_min=int(env("CLAUDE_LIMIT_WAIT_MAX_MIN", "330")),
             # 아침 발행이 막히면 이 시각에 예약 작업이 한 번 더 돌린다(setup_windows.ps1 -RetryTime과 같게). off면 끔
-            # 기본값: 교육 11:00(06:00 발행), 유아 15:00(12:00 발행), 투자 17:00(09:00 발행) — 블로그끼리 겹치지 않게
+            # 기본값: 교육 11:00(06:00 발행), 유아 15:00(12:00 발행), 투자 10:00(07:00 발행) — 블로그끼리 겹치지 않게
             retry_time=(env(f"RETRY_TIME_{profile.name.upper()}")
-                        or {"childhood": "15:00", "invest": "17:00"}.get(profile.name, "11:00")).strip(),
+                        or {"childhood": "15:00", "invest": "10:00"}.get(profile.name, "11:00")).strip(),
             telegram_bot_token=env("TELEGRAM_BOT_TOKEN", "").strip(),
             telegram_chat_id=env("TELEGRAM_CHAT_ID", "").strip(),
         )

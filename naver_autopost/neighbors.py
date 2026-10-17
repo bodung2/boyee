@@ -231,15 +231,16 @@ def choose(cfg: Config, candidates: list[dict], count: int, out_dir: Path) -> tu
     picks_path = out_dir / "picks.json"
     picks_path.unlink(missing_ok=True)
     prompt = (
-        f"너는 교사 SR(꾸쓰쌤)의 네이버 {cfg.profile.label} 블로그 운영을 돕는다. "
+        f"너는 {cfg.profile.neighbor_owner}의 네이버 {cfg.profile.label} 블로그 운영을 돕는다. "
         f"{generate._rel(out_dir / 'candidates.json')}에 오늘 찾은 이웃 후보 블로그 목록이 있다"
         "(블로그 이름, 최근 글 제목·본문 일부, 최근 30일 글 제목들, 광고성 글 수).\n\n"
         f"SR의 블로그 주제({cfg.profile.label}, {', '.join(cfg.profile.neighbor_keywords[:6])} 등)와 결이 맞는 "
         f"블로그를 최대 {count}곳 골라라. SR이 직접 방문해 글을 읽고 댓글을 달고 이웃 신청을 할 곳이다.\n"
         "고르는 기준:\n"
-        "- 같은 관심사의 독자(학부모·교사)가 모이는, 직접 쓴 정보·경험 글 위주의 블로그\n"
+        f"- 같은 관심사의 독자({cfg.profile.neighbor_audience})가 모이는, 직접 쓴 정보·경험 글 위주의 블로그\n"
         "- 체험단·협찬·광고·상품 판매·학원 홍보 위주 블로그, 다른 글을 짜깁기한 블로그, 자동 생성 글로 보이는 곳은 제외\n"
-        "- 주제가 멀거나(맛집·여행 위주 등) 정치·논쟁 위주인 곳은 제외\n"
+        + (f"- {cfg.profile.neighbor_exclude}도 제외\n" if cfg.profile.neighbor_exclude else "")
+        + "- 주제가 멀거나(맛집·여행 위주 등) 정치·논쟁 위주인 곳은 제외\n"
         "- 맞는 곳이 적으면 억지로 채우지 말고 적게 골라라\n\n"
         "고른 블로그마다 최근 글 본문을 바탕으로 아래를 한국어로 써라. 본문에 없는 내용은 지어내지 마라.\n"
         "- reason: 이웃으로 맺을 만한 이유 한 줄(40자 안팎)\n"
