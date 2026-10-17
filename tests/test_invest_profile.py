@@ -15,7 +15,8 @@ def invest_post(**over):
         thumbnail={"chip": "내 위치", "main_lines": ["순자산 3억", "상위 몇 %?"], "sub": "가계금융복지조사"},
         illustrations=[{"name": "illust_a", "prompt": "commuter on a subway ...", "desc_ko": "도입", "alt": "지하철"}],
     )
-    post["body_html"] = "<p>[[IMAGE:illust_a]]</p>" + post["body_html"]
+    post["body_html"] = ("<p>[[IMAGE:illust_a]]</p>" + post["body_html"]
+                         + "<h2>사례로 계산해 보기</h2><p>" + "예를 들어 연봉 4천 B씨는 표의 가운데쯤이에요. " * 70 + "</p>")
     post["sources"] = post["sources"][:6]
     post.update(over)
     return post
@@ -142,3 +143,10 @@ def test_related_links_kept_when_writer_added_them():
 def test_related_links_skip_this_post_itself():
     out, _ = content.ensure_related("<p>x</p>", HIST[:1], "F", title="4대보험료 얼마나 올랐을까?")
     assert out == "<p>x</p>"
+
+
+def test_invest_body_needs_3000_chars():
+    short = invest_post()
+    short["body_html"] = "<p>[[IMAGE:illust_a]]</p><p>[[IMAGE:card]]</p><p>" + "짧은 본문이에요. " * 200 + "</p>"
+    assert any("본문이 너무 짧습니다" in e and "3000" in e for e in content.validate(short, INVEST))
+    assert not any("본문이 너무 짧습니다" in e for e in content.validate(short, INVEST, after_factcheck=True))

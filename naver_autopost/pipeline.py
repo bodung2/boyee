@@ -276,7 +276,7 @@ def _attempt(cfg: Config, today: str, out_dir: Path, feedback: str, resume: bool
         log.info("ChatGPT 팩트체크 완료")
         _mark(out_dir, gpt_pass=True)
 
-    errors = content.validate(post, cfg.profile)
+    errors = content.validate(post, cfg.profile, after_factcheck=True)
     if errors:
         raise Rejected("팩트체크 수정 후 구조 검증 실패:\n- " + "\n- ".join(errors))
     return post
@@ -305,7 +305,7 @@ def produce(cfg: Config, today: str, out_dir: Path) -> dict:
     ready = out_dir / "ready.json"
     if ready.exists() and (out_dir / "post.json").exists():
         post = _load_post(out_dir / "post.json")
-        if not content.validate(post, cfg.profile):
+        if not content.validate(post, cfg.profile, after_factcheck=True):
             log.info("검수를 통과한 오늘 글이 이미 있어 재사용합니다: %s", post["title"])
             return post
 
