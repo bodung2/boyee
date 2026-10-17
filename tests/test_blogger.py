@@ -536,6 +536,9 @@ def test_diagnose_collects_report(cfg, tmp_path, monkeypatch):
             '<link rel="canonical" href="https://kb.blogspot.com/2026/10/t.html"></head></html>')
     monkeypatch.setattr(diagnose, "_fetch", lambda url: (200, "<loc>a</loc><loc>b</loc>" if "sitemap" in url else page, {}))
     monkeypatch.setattr(diagnose, "_hop", lambda url, ua: (200, "", page))
+    monkeypatch.setattr(diagnose, "render_mobile", lambda urls: [{"url": u, "final_url": u, "navigations": [u],
+                                                                  "script_hints": []} for u in urls])
+    monkeypatch.setattr(diagnose, "_fetch_as", lambda url, ua: (200, "<html>m</html>", {}))
     calls = []
 
     def fake_google(c, url, body=None):
@@ -904,3 +907,12 @@ def test_wikimedia_thumbnails_use_allowed_widths():
     body = f'<p>Intro paragraph here.</p><figure><img src="{base}1200px-X.jpg"></figure>'
     new, _ = seo.improve(body, "", "t", [], [])
     assert "1280px-X.jpg" in new and "1200px" not in new
+
+
+def test_script_hints_find_url_rewriting_scripts():
+    from blogger_autopost import diagnose
+    html = ('<script>if(location.search.indexOf("m=1")>0){location.replace(location.pathname)}</script>'
+            '<script>var plain = 1;</script><meta http-equiv="refresh" content="0;url=/x">')
+    hints = diagnose.script_hints(html)
+    assert len(hints) == 2 and "location.replace" in hints[0] and "refresh" in hints[1]
+    assert diagnose.script_hints("<script>var a=1</script>") == []

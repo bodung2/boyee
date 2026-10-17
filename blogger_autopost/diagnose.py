@@ -90,6 +90,15 @@ def _fetch(url: str) -> tuple[int, str, dict]:
         return 0, str(e), {}
 
 
+def _fetch_as(url: str, ua: str) -> tuple[int, str, dict]:
+    req = urllib.request.Request(url, headers={"User-Agent": ua})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.status, resp.read().decode("utf-8", "replace"), dict(resp.headers)
+    except Exception as e:  # noqa: BLE001
+        return 0, str(e), {}
+
+
 def _google(cfg: BloggerConfig, url: str, body: dict | None = None) -> dict:
     req = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None,
                                  method="POST" if body is not None else "GET",
@@ -240,6 +249,10 @@ def run(cfg: BloggerConfig, out_dir: Path) -> Path:
                                 **page_seo(text)})
     report["public_pages"] = public
     report["redirects"] = redirects(blog_url, [p["url"] for p in posts[:8]])
+    report["rendered_mobile"] = render_mobile([p["url"] for p in posts[:3]])
+    if posts:      # 휴대폰용 페이지 원본(스크립트 확인용, 공개 페이지라 비밀 정보 없음)
+        _, mobile_html, _ = _fetch_as(posts[0]["url"] + "?m=1", AGENTS["googlebot_mobile"])
+        (out_dir / "post_mobile.html").write_text(mobile_html, encoding="utf-8")
     report["search_console"] = search_console(cfg, blog_url, [p["url"] for p in posts])
 
     path = out_dir / "report.json"
@@ -269,6 +282,56 @@ def render(urls: list[str]) -> dict[str, str]:
     except Exception as e:  # noqa: BLE001
         log.warning("브라우저를 띄우지 못했습니다(스크립트 실행 전 HTML로 확인): %s", e)
     return out
+
+
+_SUSPECT = re.compile(r"location\.(?:replace|assign|href)|history\.(?:replaceState|pushState)|m=1|http-equiv", re.I)
+
+
+def script_hints(html_text: str) -> list[str]:
+    """페이지 스크립트 중 주소를 바꾸거나 ?m=1을 다루는 부분(리디렉션 반복의 흔한 원인)."""
+    hints = []
+    for m in re.finditer(r"<script\b[^>]*>(.*?)</script>", html_text, re.I | re.S):
+        code = m.group(1)
+        for h in _SUSPECT.finditer(code):
+            hints.append(re.sub(r"\s+", " ", code[max(h.start() - 100, 0):h.end() + 100]))
+    meta = re.findall(r"<meta[^>]+http-equiv=[\"']refresh[^>]*>", html_text, re.I)
+    return list(dict.fromkeys(hints + meta))[:12]
+
+
+def render_mobile(urls: list[str], wait_ms: int = 6000) -> list[dict]:
+    """구글 휴대폰 로봇처럼 페이지를 열어 스크립트까지 실행한 뒤, 주소가 어떻게 바뀌는지 기록한다.
+    (서버 리디렉션은 없는데 스크립트가 주소를 바꾸면 ?m=1과 맞물려 '리디렉션 오류'가 날 수 있다)"""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return [{"_error": "playwright 없음"}]
+    rows: list[dict] = []
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            ctx = browser.new_context(user_agent=AGENTS["googlebot_mobile"], viewport={"width": 412, "height": 915},
+                                      is_mobile=True)
+            for url in urls:
+                page = ctx.new_page()
+                navs: list[str] = []
+                page.on("framenavigated", lambda f, navs=navs, page=page: navs.append(f.url) if f == page.main_frame else None)
+                row: dict = {"url": url}
+                try:
+                    page.goto(url, wait_until="load", timeout=45000)
+                    first = page.content() if page.url.split("?")[0] == url else ""
+                    page.wait_for_timeout(wait_ms)
+                    html_text = page.content()
+                    hints = list(dict.fromkeys(script_hints(first) + script_hints(html_text)))
+                    row.update(final_url=page.url, navigations=navs[:10], script_hints=hints,
+                               canonical=page_seo(html_text)["canonical"])
+                except Exception as e:  # noqa: BLE001
+                    row.update(error=str(e)[:300], navigations=navs[:10])
+                rows.append(row)
+                page.close()
+            browser.close()
+    except Exception as e:  # noqa: BLE001
+        rows.append({"_error": f"브라우저를 띄우지 못했습니다: {e}"[:300]})
+    return rows
 
 
 def check_meta(cfg: BloggerConfig, limit: int = 8, renderer=render) -> list[dict]:
