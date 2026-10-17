@@ -4,11 +4,83 @@
     "description": "Clear explainers on Korea — society, education, and daily life, from a Korean teacher.",
     "url": "https://koreabreakdown.blogspot.com/",
     "published": "2026-08-28T00:05:23+09:00",
-    "updated": "2026-10-09T21:00:00+09:00",
-    "total_posts": 12
+    "updated": "2026-10-18T01:49:59+09:00",
+    "total_posts": 15
   },
-  "scheduled": [],
+  "scheduled": [
+    {
+      "title": "Korean Apartment Maintenance Fees Explained: What Your Gwanlibi Bill Really Includes",
+      "published": "2026-10-18T21:00:00+09:00"
+    }
+  ],
   "posts": [
+    {
+      "title": "Korean School Grades Explained: How Foreign Children Are Placed in 2026",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+      "published": "2026-10-12T21:00:00+09:00",
+      "labels": [
+        "Education in Korea",
+        "Foreign Parents",
+        "Korean Schools",
+        "Life in Korea",
+        "School Enrollment"
+      ],
+      "words": 1655,
+      "chars": 10526,
+      "h2": 8,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 5,
+      "external_links": 5,
+      "first_200_chars": "Korean school grade placement follows a March school year, but foreign children are placed by records and completed schooling, not age alone.\nGrade placement begins with the Korean calendar, but previ"
+    },
+    {
+      "title": "Korean Phone Verification for Foreigners: Why It Fails and How to Fix It",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+      "published": "2026-10-11T21:00:00+09:00",
+      "labels": [
+        "Everyday Korea",
+        "Foreign Residents",
+        "Korean Phone Verification",
+        "Life in Korea",
+        "PASS App"
+      ],
+      "words": 1421,
+      "chars": 9098,
+      "h2": 8,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 5,
+      "external_links": 11,
+      "first_200_chars": "Korean phone verification checks the identity tied to your mobile account, not just the number. Foreign residents need matching carrier records.\nIn Korea, the identity attached to the mobile account m"
+    },
+    {
+      "title": "Seoul Climate Card in 2026: What Tourists Can Still Buy After October 1",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+      "published": "2026-10-10T21:00:00+09:00",
+      "labels": [
+        "Climate Card",
+        "Everyday Korea",
+        "Korea Travel",
+        "Life in Korea",
+        "Seoul Transportation",
+        "Tmoney"
+      ],
+      "words": 1589,
+      "chars": 9514,
+      "h2": 9,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 2,
+      "internal_links": 5,
+      "external_links": 6,
+      "first_200_chars": "The Seoul Climate Card still offers 1-, 2-, 3-, 5-, and 7-day tourist passes in 2026, but the old 30-day pass ended on October 1.\nThe short-term Climate Card remains available, but route coverage matt"
+    },
     {
       "title": "Emergency Numbers in Korea: When to Call 112, 119, 110, and 1330",
       "url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
@@ -283,7 +355,7 @@
       "meta_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
       "meta_description_tags": 1,
       "meta_robots": null,
-      "og_image": "https://lh3.googleusercontent.com/d/1TpGsnmKIObuaKMluHg7RiFMLuJlE2pV9=w1200-h630-p-k-no-nu",
+      "og_image": "https://lh3.googleusercontent.com/d/132TDdOMlKM_9IYxQ29NkiVE9D6YaiPpE=w1200-h630-p-k-no-nu",
       "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
       "canonical": "https://koreabreakdown.blogspot.com/",
       "og_url": "https://koreabreakdown.blogspot.com/",
@@ -292,7 +364,7 @@
       "h1_count": 1,
       "has_adsense": true,
       "has_search_console_verification": false,
-      "html_bytes": 162737
+      "html_bytes": 163237
     },
     "robots": {
       "url": "https://koreabreakdown.blogspot.com/robots.txt",
@@ -304,8 +376,8 @@
       "url": "https://koreabreakdown.blogspot.com/sitemap.xml",
       "status": 200,
       "x_robots_tag": "noindex",
-      "url_count": 12,
-      "head": "<?xml version='1.0' encoding='UTF-8'?><urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\"><url><loc>https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html</loc><lastmod>2026-10-09T12:00:00Z</lastmod></url><url><loc>https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html</loc><lastmod>2026-10-08T12:00:00Z</lastmod></url><url><loc>https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html</loc><lastmod>2026-10-07T12:00:00Z</lastmod></url><url><loc>https://koreabreakdown.blogspot.com/2026/10/korean"
+      "url_count": 15,
+      "head": "<?xml version='1.0' encoding='UTF-8'?><urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\"><url><loc>https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html</loc><lastmod>2026-10-12T12:00:00Z</lastmod></url><url><loc>https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html</loc><lastmod>2026-10-11T12:00:00Z</lastmod></url><url><loc>https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html</loc><lastmod>2026-10-10T12:00:00Z</lastmod></url><url><loc>https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-kor"
     },
     "feed": {
       "url": "https://koreabreakdown.blogspot.com/feeds/posts/default",
@@ -313,6 +385,63 @@
       "x_robots_tag": null
     },
     "posts": [
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "status": 200,
+        "x_robots_tag": null,
+        "title_tag": "Korean School Grades Explained: How Foreign Children Are Placed in 2026",
+        "meta_description": null,
+        "meta_description_tags": 0,
+        "meta_robots": null,
+        "og_image": "https://lh3.googleusercontent.com/d/132TDdOMlKM_9IYxQ29NkiVE9D6YaiPpE=w1200-h630-p-k-no-nu",
+        "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "meta_refresh": null,
+        "js_redirect": null,
+        "h1_count": 1,
+        "has_adsense": true,
+        "has_search_console_verification": false,
+        "html_bytes": 135954
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "status": 200,
+        "x_robots_tag": null,
+        "title_tag": "Korean Phone Verification for Foreigners: Why It Fails and How to Fix It",
+        "meta_description": null,
+        "meta_description_tags": 0,
+        "meta_robots": null,
+        "og_image": "https://lh3.googleusercontent.com/d/1GgZvOhhfmAacjrD0g0TWFxcOcimOFtRz=w1200-h630-p-k-no-nu",
+        "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "meta_refresh": null,
+        "js_redirect": null,
+        "h1_count": 1,
+        "has_adsense": true,
+        "has_search_console_verification": false,
+        "html_bytes": 134822
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "status": 200,
+        "x_robots_tag": null,
+        "title_tag": "Seoul Climate Card in 2026: What Tourists Can Still Buy After October 1",
+        "meta_description": null,
+        "meta_description_tags": 0,
+        "meta_robots": null,
+        "og_image": "https://lh3.googleusercontent.com/d/18hcUA4jP0qlUOzP4Rpe4HlbWzgjU7iS-=w1200-h630-p-k-no-nu",
+        "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "meta_refresh": null,
+        "js_redirect": null,
+        "h1_count": 1,
+        "has_adsense": true,
+        "has_search_console_verification": false,
+        "html_bytes": 135409
+      },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
         "status": 200,
@@ -330,7 +459,7 @@
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 134873
+        "html_bytes": 135694
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
@@ -349,7 +478,7 @@
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 134253
+        "html_bytes": 135074
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
@@ -368,7 +497,7 @@
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 135509
+        "html_bytes": 136330
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
@@ -387,7 +516,7 @@
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 133993
+        "html_bytes": 134814
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
@@ -406,7 +535,7 @@
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 132838
+        "html_bytes": 133659
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
@@ -425,7 +554,7 @@
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 132998
+        "html_bytes": 133819
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
@@ -444,7 +573,7 @@
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 128623
+        "html_bytes": 129488
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
@@ -463,7 +592,7 @@
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 134538
+        "html_bytes": 135403
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/09/jeonse-vs-wolse-in-korea-2026-guide-for.html",
@@ -482,7 +611,7 @@
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 151860
+        "html_bytes": 152681
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/08/how-much-do-korean-public-school.html",
@@ -501,7 +630,7 @@
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 151753
+        "html_bytes": 152618
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/08/is-south-korea-really-banning.html",
@@ -520,7 +649,7 @@
         "h1_count": 2,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 142796
+        "html_bytes": 143617
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/08/why-korean-parents-spend-so-much-on.html",
@@ -539,7 +668,7 @@
         "h1_count": 19,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 145254
+        "html_bytes": 146075
       }
     ]
   },
@@ -632,6 +761,285 @@
         ],
         "canonical": "https://koreabreakdown.blogspot.com/",
         "og_url": "https://koreabreakdown.blogspot.com/",
+        "meta_robots": null,
+        "meta_refresh": null,
+        "js_redirect": null
+      }
+    },
+    {
+      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+      "googlebot_mobile": {
+        "verdict": "ok",
+        "hops": [
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+            "status": 302,
+            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1"
+          },
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1",
+            "status": 200
+          }
+        ],
+        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "meta_robots": null,
+        "meta_refresh": null,
+        "js_redirect": null
+      },
+      "mobile": {
+        "verdict": "ok",
+        "hops": [
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+            "status": 302,
+            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1"
+          },
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1",
+            "status": 200
+          }
+        ],
+        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "meta_robots": null,
+        "meta_refresh": null,
+        "js_redirect": null
+      },
+      "desktop": {
+        "verdict": "ok",
+        "hops": [
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+            "status": 200
+          }
+        ],
+        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "meta_robots": null,
+        "meta_refresh": null,
+        "js_redirect": null
+      },
+      "http_googlebot_mobile": {
+        "verdict": "ok",
+        "hops": [
+          {
+            "url": "http://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+            "status": 302,
+            "location": "http://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1"
+          },
+          {
+            "url": "http://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1",
+            "status": 301,
+            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1"
+          },
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1",
+            "status": 200
+          }
+        ],
+        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "meta_robots": null,
+        "meta_refresh": null,
+        "js_redirect": null
+      },
+      "m1_googlebot_mobile": {
+        "verdict": "ok",
+        "hops": [
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1",
+            "status": 200
+          }
+        ],
+        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "meta_robots": null,
+        "meta_refresh": null,
+        "js_redirect": null
+      }
+    },
+    {
+      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+      "googlebot_mobile": {
+        "verdict": "ok",
+        "hops": [
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+            "status": 302,
+            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1"
+          },
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1",
+            "status": 200
+          }
+        ],
+        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "meta_robots": null,
+        "meta_refresh": null,
+        "js_redirect": null
+      },
+      "mobile": {
+        "verdict": "ok",
+        "hops": [
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+            "status": 302,
+            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1"
+          },
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1",
+            "status": 200
+          }
+        ],
+        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "meta_robots": null,
+        "meta_refresh": null,
+        "js_redirect": null
+      },
+      "desktop": {
+        "verdict": "ok",
+        "hops": [
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+            "status": 200
+          }
+        ],
+        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "meta_robots": null,
+        "meta_refresh": null,
+        "js_redirect": null
+      },
+      "http_googlebot_mobile": {
+        "verdict": "ok",
+        "hops": [
+          {
+            "url": "http://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+            "status": 302,
+            "location": "http://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1"
+          },
+          {
+            "url": "http://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1",
+            "status": 301,
+            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1"
+          },
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1",
+            "status": 200
+          }
+        ],
+        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "meta_robots": null,
+        "meta_refresh": null,
+        "js_redirect": null
+      },
+      "m1_googlebot_mobile": {
+        "verdict": "ok",
+        "hops": [
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1",
+            "status": 200
+          }
+        ],
+        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "meta_robots": null,
+        "meta_refresh": null,
+        "js_redirect": null
+      }
+    },
+    {
+      "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+      "googlebot_mobile": {
+        "verdict": "ok",
+        "hops": [
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+            "status": 302,
+            "location": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1"
+          },
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1",
+            "status": 200
+          }
+        ],
+        "canonical": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "meta_robots": null,
+        "meta_refresh": null,
+        "js_redirect": null
+      },
+      "mobile": {
+        "verdict": "ok",
+        "hops": [
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+            "status": 302,
+            "location": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1"
+          },
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1",
+            "status": 200
+          }
+        ],
+        "canonical": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "meta_robots": null,
+        "meta_refresh": null,
+        "js_redirect": null
+      },
+      "desktop": {
+        "verdict": "ok",
+        "hops": [
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+            "status": 200
+          }
+        ],
+        "canonical": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "meta_robots": null,
+        "meta_refresh": null,
+        "js_redirect": null
+      },
+      "http_googlebot_mobile": {
+        "verdict": "ok",
+        "hops": [
+          {
+            "url": "http://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+            "status": 302,
+            "location": "http://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1"
+          },
+          {
+            "url": "http://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1",
+            "status": 301,
+            "location": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1"
+          },
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1",
+            "status": 200
+          }
+        ],
+        "canonical": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "meta_robots": null,
+        "meta_refresh": null,
+        "js_redirect": null
+      },
+      "m1_googlebot_mobile": {
+        "verdict": "ok",
+        "hops": [
+          {
+            "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1",
+            "status": 200
+          }
+        ],
+        "canonical": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1101,285 +1509,6 @@
         "meta_refresh": null,
         "js_redirect": null
       }
-    },
-    {
-      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
-      "googlebot_mobile": {
-        "verdict": "ok",
-        "hops": [
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
-            "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html?m=1"
-          },
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html?m=1",
-            "status": 200
-          }
-        ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
-        "meta_robots": null,
-        "meta_refresh": null,
-        "js_redirect": null
-      },
-      "mobile": {
-        "verdict": "ok",
-        "hops": [
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
-            "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html?m=1"
-          },
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html?m=1",
-            "status": 200
-          }
-        ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
-        "meta_robots": null,
-        "meta_refresh": null,
-        "js_redirect": null
-      },
-      "desktop": {
-        "verdict": "ok",
-        "hops": [
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
-            "status": 200
-          }
-        ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
-        "meta_robots": null,
-        "meta_refresh": null,
-        "js_redirect": null
-      },
-      "http_googlebot_mobile": {
-        "verdict": "ok",
-        "hops": [
-          {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
-            "status": 302,
-            "location": "http://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html?m=1"
-          },
-          {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html?m=1",
-            "status": 301,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html?m=1"
-          },
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html?m=1",
-            "status": 200
-          }
-        ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
-        "meta_robots": null,
-        "meta_refresh": null,
-        "js_redirect": null
-      },
-      "m1_googlebot_mobile": {
-        "verdict": "ok",
-        "hops": [
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html?m=1",
-            "status": 200
-          }
-        ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
-        "meta_robots": null,
-        "meta_refresh": null,
-        "js_redirect": null
-      }
-    },
-    {
-      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
-      "googlebot_mobile": {
-        "verdict": "ok",
-        "hops": [
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
-            "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html?m=1"
-          },
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html?m=1",
-            "status": 200
-          }
-        ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
-        "meta_robots": null,
-        "meta_refresh": null,
-        "js_redirect": null
-      },
-      "mobile": {
-        "verdict": "ok",
-        "hops": [
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
-            "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html?m=1"
-          },
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html?m=1",
-            "status": 200
-          }
-        ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
-        "meta_robots": null,
-        "meta_refresh": null,
-        "js_redirect": null
-      },
-      "desktop": {
-        "verdict": "ok",
-        "hops": [
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
-            "status": 200
-          }
-        ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
-        "meta_robots": null,
-        "meta_refresh": null,
-        "js_redirect": null
-      },
-      "http_googlebot_mobile": {
-        "verdict": "ok",
-        "hops": [
-          {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
-            "status": 302,
-            "location": "http://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html?m=1"
-          },
-          {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html?m=1",
-            "status": 301,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html?m=1"
-          },
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html?m=1",
-            "status": 200
-          }
-        ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
-        "meta_robots": null,
-        "meta_refresh": null,
-        "js_redirect": null
-      },
-      "m1_googlebot_mobile": {
-        "verdict": "ok",
-        "hops": [
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html?m=1",
-            "status": 200
-          }
-        ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
-        "meta_robots": null,
-        "meta_refresh": null,
-        "js_redirect": null
-      }
-    },
-    {
-      "url": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
-      "googlebot_mobile": {
-        "verdict": "ok",
-        "hops": [
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
-            "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html?m=1"
-          },
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html?m=1",
-            "status": 200
-          }
-        ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
-        "meta_robots": null,
-        "meta_refresh": null,
-        "js_redirect": null
-      },
-      "mobile": {
-        "verdict": "ok",
-        "hops": [
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
-            "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html?m=1"
-          },
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html?m=1",
-            "status": 200
-          }
-        ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
-        "meta_robots": null,
-        "meta_refresh": null,
-        "js_redirect": null
-      },
-      "desktop": {
-        "verdict": "ok",
-        "hops": [
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
-            "status": 200
-          }
-        ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
-        "meta_robots": null,
-        "meta_refresh": null,
-        "js_redirect": null
-      },
-      "http_googlebot_mobile": {
-        "verdict": "ok",
-        "hops": [
-          {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
-            "status": 302,
-            "location": "http://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html?m=1"
-          },
-          {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html?m=1",
-            "status": 301,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html?m=1"
-          },
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html?m=1",
-            "status": 200
-          }
-        ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
-        "meta_robots": null,
-        "meta_refresh": null,
-        "js_redirect": null
-      },
-      "m1_googlebot_mobile": {
-        "verdict": "ok",
-        "hops": [
-          {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html?m=1",
-            "status": 200
-          }
-        ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
-        "meta_robots": null,
-        "meta_refresh": null,
-        "js_redirect": null
-      }
     }
   ],
   "search_console": {
@@ -1748,6 +1877,78 @@
           "impressions": 0,
           "ctr": 0,
           "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-07"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-08"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-09"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-10"
+          ],
+          "clicks": 0,
+          "impressions": 1,
+          "ctr": 0,
+          "position": 7
+        },
+        {
+          "keys": [
+            "2026-10-11"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-12"
+          ],
+          "clicks": 0,
+          "impressions": 1,
+          "ctr": 0,
+          "position": 9
+        },
+        {
+          "keys": [
+            "2026-10-13"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-14"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
         }
       ],
       "responseAggregationType": "byProperty"
@@ -1756,9 +1957,31 @@
       "responseAggregationType": "byProperty"
     },
     "by_page": {
+      "rows": [
+        {
+          "keys": [
+            "https://koreabreakdown.blogspot.com/2026/08/why-korean-parents-spend-so-much-on.html"
+          ],
+          "clicks": 0,
+          "impressions": 2,
+          "ctr": 0,
+          "position": 8
+        }
+      ],
       "responseAggregationType": "byPage"
     },
     "by_country": {
+      "rows": [
+        {
+          "keys": [
+            "usa"
+          ],
+          "clicks": 0,
+          "impressions": 2,
+          "ctr": 0,
+          "position": 8
+        }
+      ],
       "responseAggregationType": "byProperty"
     },
     "sitemaps": {
@@ -1769,13 +1992,13 @@
           "isPending": false,
           "isSitemapsIndex": false,
           "type": "sitemap",
-          "lastDownloaded": "2026-10-09T02:42:25.802Z",
+          "lastDownloaded": "2026-10-15T20:20:38.001Z",
           "warnings": "0",
           "errors": "0",
           "contents": [
             {
               "type": "web",
-              "submitted": "11",
+              "submitted": "15",
               "indexed": "0"
             }
           ]
@@ -1783,6 +2006,45 @@
       ]
     },
     "inspections": [
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "Discovered - currently not indexed",
+        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
+        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
+        "lastCrawlTime": null,
+        "googleCanonical": null,
+        "userCanonical": null,
+        "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED"
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "URL is unknown to Google",
+        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
+        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
+        "lastCrawlTime": null,
+        "googleCanonical": null,
+        "userCanonical": null,
+        "crawledAs": null
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "Redirect error",
+        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "robotsTxtState": "ALLOWED",
+        "pageFetchState": "REDIRECT_ERROR",
+        "lastCrawlTime": "2026-10-13T08:41:11Z",
+        "googleCanonical": null,
+        "userCanonical": null,
+        "crawledAs": "MOBILE"
+      },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
         "error": null,
@@ -1800,14 +2062,14 @@
         "url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
         "error": null,
         "verdict": "NEUTRAL",
-        "coverageState": "URL is unknown to Google",
+        "coverageState": "Redirect error",
         "indexingState": "INDEXING_STATE_UNSPECIFIED",
-        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
-        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
-        "lastCrawlTime": null,
+        "robotsTxtState": "ALLOWED",
+        "pageFetchState": "REDIRECT_ERROR",
+        "lastCrawlTime": "2026-10-13T08:45:18Z",
         "googleCanonical": null,
         "userCanonical": null,
-        "crawledAs": null
+        "crawledAs": "MOBILE"
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
@@ -1817,7 +2079,7 @@
         "indexingState": "INDEXING_STATE_UNSPECIFIED",
         "robotsTxtState": "ALLOWED",
         "pageFetchState": "REDIRECT_ERROR",
-        "lastCrawlTime": "2026-10-07T23:19:10Z",
+        "lastCrawlTime": "2026-10-13T08:45:18Z",
         "googleCanonical": null,
         "userCanonical": null,
         "crawledAs": "MOBILE"
@@ -1891,14 +2153,14 @@
         "url": "https://koreabreakdown.blogspot.com/2026/09/jeonse-vs-wolse-in-korea-2026-guide-for.html",
         "error": null,
         "verdict": "NEUTRAL",
-        "coverageState": "Discovered - currently not indexed",
+        "coverageState": "Redirect error",
         "indexingState": "INDEXING_STATE_UNSPECIFIED",
-        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
-        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
-        "lastCrawlTime": null,
+        "robotsTxtState": "ALLOWED",
+        "pageFetchState": "REDIRECT_ERROR",
+        "lastCrawlTime": "2026-10-13T08:53:20Z",
         "googleCanonical": null,
         "userCanonical": null,
-        "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED"
+        "crawledAs": "MOBILE"
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/08/how-much-do-korean-public-school.html",
