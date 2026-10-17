@@ -1511,6 +1511,35 @@
       }
     }
   ],
+  "rendered_mobile": [
+    {
+      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+      "final_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1",
+      "navigations": [
+        "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1"
+      ],
+      "script_hints": [],
+      "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html"
+    },
+    {
+      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+      "final_url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1",
+      "navigations": [
+        "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1"
+      ],
+      "script_hints": [],
+      "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html"
+    },
+    {
+      "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+      "final_url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1",
+      "navigations": [
+        "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1"
+      ],
+      "script_hints": [],
+      "canonical": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html"
+    }
+  ],
   "search_console": {
     "registered_sites": [
       "https://koreabreakdown.blogspot.com/"
@@ -2010,14 +2039,14 @@
         "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
         "error": null,
         "verdict": "NEUTRAL",
-        "coverageState": "URL is unknown to Google",
+        "coverageState": "Discovered - currently not indexed",
         "indexingState": "INDEXING_STATE_UNSPECIFIED",
         "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
         "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
         "lastCrawlTime": null,
         "googleCanonical": null,
         "userCanonical": null,
-        "crawledAs": null
+        "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED"
       },
       {
         "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
