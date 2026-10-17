@@ -310,7 +310,7 @@ def test_run_with_photos(cfg, tmp_path, monkeypatch):
     assert pipeline.run(cfg) == 0
     body = fake.drafts["1"]["content"]
     assert '<h2>How it works</h2><figure' in body
-    assert "1200px-Gyeongbokgung.jpg" in body and "CC BY-SA 4.0" in body and "Kim" in body
+    assert "1280px-Gyeongbokgung.jpg" in body and "CC BY-SA 4.0" in body and "Kim" in body
     assert "NC_photo" not in body
     review_args = [json.loads(p.read_text()) for p in state.glob("args_*.txt")
                    if "--image" in json.loads(p.read_text())]
@@ -893,3 +893,14 @@ def test_redirect_chain_follows_and_flags_loops():
     rows = diagnose.redirects("https://b/", ["https://b/p.html"], hop=lambda u, ua: (200, "", "<p>x</p>"))
     assert set(rows[1]) >= {"googlebot_mobile", "desktop", "http_googlebot_mobile", "m1_googlebot_mobile"}
     assert rows[1]["m1_googlebot_mobile"]["hops"][0]["url"] == "https://b/p.html?m=1"
+
+
+def test_wikimedia_thumbnails_use_allowed_widths():
+    from blogger_autopost import seo
+    base = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/X.jpg/"
+    assert photos.standard_thumb(base + "1200px-X.jpg") == base + "1280px-X.jpg"
+    assert photos.standard_thumb(base + "640px-X.jpg") == base + "960px-X.jpg"
+    assert photos.standard_thumb(base + "500px-X.jpg") == base + "500px-X.jpg"
+    body = f'<p>Intro paragraph here.</p><figure><img src="{base}1200px-X.jpg"></figure>'
+    new, _ = seo.improve(body, "", "t", [], [])
+    assert "1280px-X.jpg" in new and "1200px" not in new

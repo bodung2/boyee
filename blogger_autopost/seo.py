@@ -91,7 +91,8 @@ def set_related(body: str, posts: list[dict]) -> str:
 
 def improve(body: str, url: str, title: str, labels: list[str], candidates: list[dict]) -> tuple[str, dict]:
     """A(그림을 첫 문단 뒤로) + B(관련 글 링크). (새 본문, 바뀐 내용 요약)"""
-    new, moved = move_leading_images(body)
+    from .photos import standard_thumb       # 예전 글의 위키미디어 사진 주소(1200px 등)가 깨지지 않게
+    new, moved = move_leading_images(standard_thumb(body))
     related = pick_related(url, title, labels, candidates)
     new = set_related(new, related)
     return new, {"moved_images": moved, "related": [r["title"] for r in related]}
