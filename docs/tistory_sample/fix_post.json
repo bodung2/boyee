@@ -1,0 +1,103 @@
+{
+  "title": "파이썬 'cp949' codec can't encode character 오류 해결 (윈도우)",
+  "topic_id": "cp949-encode-print",
+  "lane": "queue",
+  "tip_id": "",
+  "body_html": "<div data-block=\"summary\"><ul>\n<li>원인: 출력이 파일·파이프로 갈 때 파이썬이 한국어 윈도우 기본 인코딩(cp949)을 씁니다. cp949에 없는 문자(이모지 등)에서 멈춥니다.</li>\n<li>해결: UTF-8 모드로 실행합니다. <code>python -X utf8</code> 또는 환경변수 <code>PYTHONUTF8=1</code>.</li>\n<li>확인: <code>sys.flags.utf8_mode</code>가 1, <code>sys.stdout.encoding</code>이 utf-8이면 됩니다.</li>\n</ul></div>\n<div data-block=\"error\"><p>UnicodeEncodeError: 'cp949' codec can't encode character '\\u2705' in position 0: illegal multibyte sequence</p></div>\n<p>윈도우에서 파이썬 스크립트가 한글이나 이모지를 출력하다가 위 메시지를 내고 멈추는 경우입니다.</p>\n<p>블로그 자동 발행 작업을 만들면서 같은 메시지를 만났습니다. 자동화가 호출하는 파이썬 보조 스크립트가 윈도우에서 한글·이모지를 출력하다 멈췄고, UTF-8 모드로 실행하게 바꿔 해결했습니다.</p>\n<p>[[IMAGE:illust_a]]</p>\n<div data-block=\"highlight\"><ul>\n<li>한 번만: <code>python -X utf8 스크립트.py</code></li>\n<li>PowerShell 창 전체: <code>$env:PYTHONUTF8 = \"1\"</code> 입력 후 실행</li>\n<li>배치 파일·작업 스케줄러: 실행 줄 앞에 <code>set PYTHONUTF8=1</code></li>\n</ul></div>\n<h2>왜 이 오류가 나나</h2>\n<p>파이썬은 텍스트를 내보낼 때 문자열을 바이트로 바꿉니다. 이때 어떤 인코딩을 쓸지는 출력 대상과 설정에 따라 달라집니다.</p>\n<h3>콘솔이 아니라 파일·파이프로 출력할 때</h3>\n<p>파이썬 3.6부터 윈도우 콘솔 창에 직접 출력할 때는 유니코드로 내보냅니다(PEP 528). 그래서 콘솔에서 바로 실행하면 오류가 안 나는데, 같은 스크립트를 다른 프로그램이 실행하거나 출력을 파일로 넘기면 오류가 납니다.</p>\n<p>출력이 파일이나 파이프로 가면 파이썬은 시스템 로캘 인코딩을 씁니다. 한국어 윈도우에서는 이것이 cp949입니다. cp949는 한글은 표현하지만 ✅ 같은 이모지는 표현하지 못합니다. 그래서 그 글자를 만나는 순간 <code>UnicodeEncodeError</code>가 납니다.</p>\n<p>이런 상황에서 자주 생깁니다.</p>\n<ul>\n<li>작업 스케줄러로 실행하고 출력을 로그 파일에 남길 때</li>\n<li>다른 프로그램이 <code>subprocess</code>로 파이썬을 실행할 때</li>\n<li><code>python 스크립트.py &gt; log.txt</code>처럼 출력을 파일로 넘길 때</li>\n</ul>\n<h3>파일을 쓸 때 인코딩을 지정하지 않았을 때</h3>\n<p><code>open()</code>에 <code>encoding</code>을 주지 않고 파일을 쓰면 같은 이유로 cp949를 씁니다. 이모지가 들어간 글을 파일로 저장할 때도 같은 오류가 납니다.</p>\n<h2>해결 방법</h2>\n<h3>1. UTF-8 모드로 실행하기 (가장 간단)</h3>\n<p>UTF-8 모드를 켜면 표준 입출력과 인코딩을 지정하지 않은 파일 입출력이 모두 UTF-8을 씁니다(PEP 540). 파이썬 3.7부터 쓸 수 있습니다.</p>\n<p>한 번만 적용하려면 실행할 때 옵션을 붙입니다.</p>\n<pre><code>python -X utf8 스크립트.py</code></pre>\n<p>PowerShell에서 지금 창에만 적용하려면 환경변수를 먼저 설정합니다.</p>\n<pre><code>$env:PYTHONUTF8 = \"1\"\npython 스크립트.py</code></pre>\n<p>명령 프롬프트나 배치 파일(.bat)에서는 이렇게 씁니다. 작업 스케줄러가 배치 파일을 실행한다면 이 줄을 실행 줄 앞에 넣으면 됩니다.</p>\n<pre><code>set PYTHONUTF8=1\npython 스크립트.py</code></pre>\n<p>앞으로 여는 모든 창에 적용하려면 사용자 환경변수로 저장합니다. 이미 열려 있는 창에는 적용되지 않으니 새 창을 열어서 실행합니다.</p>\n<pre><code>setx PYTHONUTF8 1</code></pre>\n<h3>2. 코드에서 직접 지정하기</h3>\n<p>스크립트를 고칠 수 있다면 출력과 파일 쓰기에 UTF-8을 직접 지정합니다.</p>\n<pre><code>import sys\nsys.stdout.reconfigure(encoding=\"utf-8\")\n\nwith open(\"result.txt\", \"w\", encoding=\"utf-8\") as f:\n    f.write(\"완료 ✅\")</code></pre>\n<h2>해결됐는지 확인</h2>\n<p>오류가 났던 것과 같은 방식(같은 창 설정, 같은 배치 파일)으로 아래를 실행합니다.</p>\n<pre><code>python -c \"import sys; print(sys.flags.utf8_mode, sys.stdout.encoding)\"</code></pre>\n<p><code>1 utf-8</code>이 나오면 UTF-8 모드가 켜진 것입니다. 이 상태에서 원래 스크립트를 다시 실행해 봅니다.</p>\n<p>[[IMAGE:illust_b]]</p>\n<h2>그래도 안 될 때</h2>\n<ul>\n<li><strong>PYTHONIOENCODING이 설정돼 있는지:</strong> 표준 입출력에는 이 환경변수가 UTF-8 모드보다 우선합니다. PowerShell에서 <code>$env:PYTHONIOENCODING</code>으로 확인하고, 다른 값이 들어 있으면 지우거나 utf-8로 바꿉니다.</li>\n<li><strong>파이썬이 아니라 읽는 쪽 문제인지:</strong> 오류는 사라졌는데 로그를 열면 한글이 깨져 보인다면, 파일은 UTF-8로 잘 저장됐고 읽는 프로그램이 cp949로 읽고 있는 것입니다. 읽는 쪽에서 UTF-8로 열면 됩니다.</li>\n<li><strong>파이썬 버전:</strong> <code>python --version</code>으로 확인합니다. 파이썬 3.15부터는 UTF-8 모드가 기본으로 켜집니다(PEP 686). 3.14 이하라면 위 설정이 필요합니다.</li>\n</ul>\n<h2>자주 묻는 질문</h2>\n<h3>콘솔에서는 되는데 작업 스케줄러에서만 오류가 나요.</h3>\n<p>콘솔 창에 직접 출력할 때와 파일·파이프로 출력할 때 인코딩이 다르기 때문입니다. 작업 스케줄러가 실행하는 배치 파일에 <code>set PYTHONUTF8=1</code>을 넣습니다.</p>\n<h3>시스템 로캘을 UTF-8로 바꿔야 하나요?</h3>\n<p>파이썬 문제라면 그럴 필요는 없습니다. 시스템 전체 설정은 다른 프로그램에도 영향을 주므로, 파이썬만 UTF-8 모드로 실행하는 쪽이 안전합니다.</p>\n<div data-block=\"oneline\"><p>cp949 인코딩 오류는 파이썬을 UTF-8 모드로 실행하면 대부분 해결됩니다. 배치 파일이라면 <code>set PYTHONUTF8=1</code> 한 줄입니다.</p></div>\n<div data-block=\"sources\"><ul>\n<li><a href=\"https://peps.python.org/pep-0540/\">PEP 540 – Add a new UTF-8 Mode</a></li>\n<li><a href=\"https://peps.python.org/pep-0528/\">PEP 528 – Change Windows console encoding to UTF-8</a></li>\n<li><a href=\"https://peps.python.org/pep-0686/\">PEP 686 – Make UTF-8 mode default</a></li>\n<li><a href=\"https://docs.python.org/3/library/os.html#utf8-mode\">Python 문서 – Python UTF-8 Mode</a></li>\n<li><a href=\"https://docs.python.org/3/whatsnew/3.15.html\">Python 문서 – What's new in Python 3.15</a></li>\n<li><a href=\"https://learn.microsoft.com/windows-server/administration/windows-commands/setx\">Microsoft Learn – setx</a></li>\n</ul></div>\n",
+  "illustrations": [
+    {
+      "name": "illust_a",
+      "prompt": "A person seen from behind at a desk at night, looking at a laptop showing an abstract red warning window, a cup of coffee beside. Clean modern editorial illustration, flat vector with soft grain, muted navy and warm orange accents, calm mood.",
+      "desc_ko": "도입: 스크립트가 오류로 멈춘 장면",
+      "caption": "콘솔에서는 되던 스크립트가 예약 실행에서만 멈출 때",
+      "alt": "노트북 경고창을 보는 사람의 뒷모습"
+    },
+    {
+      "name": "illust_b",
+      "prompt": "A person stretching in a chair in front of a laptop showing an abstract green check icon, morning light through a window. Clean modern editorial illustration, flat vector with soft grain, muted navy and warm orange accents, calm mood.",
+      "desc_ko": "해결 후 확인",
+      "caption": "설정 한 줄로 해결",
+      "alt": "문제가 풀려 기지개 켜는 사람"
+    }
+  ],
+  "tags": [
+    "cp949 codec can't encode character",
+    "UnicodeEncodeError",
+    "파이썬 인코딩 오류",
+    "PYTHONUTF8",
+    "파이썬 이모지 출력 오류",
+    "윈도우 파이썬"
+  ],
+  "summary": "윈도우 파이썬이 파일·파이프로 출력할 때 cp949를 써서 생기는 UnicodeEncodeError를 UTF-8 모드로 해결하는 방법.",
+  "data_points": [
+    {
+      "value": "python -X utf8",
+      "label": "UTF-8 모드 실행 옵션",
+      "source_url": "https://peps.python.org/pep-0540/"
+    },
+    {
+      "value": "PYTHONUTF8=1",
+      "label": "UTF-8 모드 환경변수",
+      "source_url": "https://peps.python.org/pep-0540/"
+    },
+    {
+      "value": "파이썬 3.7부터 UTF-8 모드",
+      "label": "도입 버전",
+      "source_url": "https://peps.python.org/pep-0540/"
+    },
+    {
+      "value": "파이썬 3.6부터 콘솔 출력은 유니코드",
+      "label": "PEP 528",
+      "source_url": "https://peps.python.org/pep-0528/"
+    },
+    {
+      "value": "PYTHONIOENCODING이 표준 입출력에서 우선",
+      "label": "우선순위",
+      "source_url": "https://peps.python.org/pep-0540/"
+    },
+    {
+      "value": "파이썬 3.15부터 UTF-8 모드 기본",
+      "label": "PEP 686",
+      "source_url": "https://peps.python.org/pep-0686/"
+    },
+    {
+      "value": "sys.stdout.reconfigure(encoding=...)",
+      "label": "3.7+",
+      "source_url": "https://docs.python.org/3/library/io.html#io.TextIOWrapper.reconfigure"
+    },
+    {
+      "value": "setx는 이후 새 창부터 적용",
+      "label": "setx",
+      "source_url": "https://learn.microsoft.com/windows-server/administration/windows-commands/setx"
+    }
+  ],
+  "sources": [
+    {
+      "title": "PEP 540",
+      "publisher": "Python",
+      "url": "https://peps.python.org/pep-0540/"
+    },
+    {
+      "title": "PEP 528",
+      "publisher": "Python",
+      "url": "https://peps.python.org/pep-0528/"
+    },
+    {
+      "title": "PEP 686",
+      "publisher": "Python",
+      "url": "https://peps.python.org/pep-0686/"
+    },
+    {
+      "title": "What's new in Python 3.15",
+      "publisher": "Python",
+      "url": "https://docs.python.org/3/whatsnew/3.15.html"
+    },
+    {
+      "title": "setx",
+      "publisher": "Microsoft",
+      "url": "https://learn.microsoft.com/windows-server/administration/windows-commands/setx"
+    }
+  ],
+  "experience_used": "자동화가 호출하는 파이썬 보조 스크립트가 윈도우에서 한글·이모지 출력 중 멈춤 → UTF-8 모드로 해결",
+  "research_log": "샘플: 이 환경에서는 검색 결과로 PEP 540/686·3.15 문서 내용을 확인. 실제 실행 때는 fix-auto-factcheck가 공식 문서 원문과 다시 대조한다."
+}

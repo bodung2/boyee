@@ -1,0 +1,380 @@
+{
+  "_about": "티스토리 '오류 해결' 주제 큐(TISTORY_MODE=fix). experience는 블로그 주인이 이 자동화 프로젝트에서 실제로 겪고 해결한 일만 적는다(글에서 경험으로 쓸 수 있는 유일한 근거). priority 1=핵심, 2=보통, 3=틈새.",
+  "topics": [
+    {
+      "id": "ps-file-arg-missing",
+      "tool": "PowerShell",
+      "error": "-File 매개 변수에 대한 인수 'scripts\\xxx.ps1'이(가) 없습니다. 기존 '.ps1' 파일의 경로를 -File 매개 변수의 인수로 제공하십시오.",
+      "title_hint": "PowerShell '-File 매개 변수에 대한 인수가 없습니다' 오류 원인과 해결",
+      "queries": [
+        "-File 매개 변수에 대한 인수",
+        "powershell -File 오류",
+        "ps1 파일 경로 오류"
+      ],
+      "docs": [
+        "learn.microsoft.com about_PowerShell_exe",
+        "learn.microsoft.com about_Execution_Policies"
+      ],
+      "experience": "설치 스크립트를 실행했는데 이 오류가 났다. 원인은 스크립트 파일이 아직 없는 브랜치(작업 폴더)에서 실행한 것이었고, 최신 코드를 받은 뒤 다시 실행해 해결했다.",
+      "priority": 1
+    },
+    {
+      "id": "claude-usage-limit",
+      "tool": "Claude Code",
+      "error": "You've hit your session limit · resets 7:30am (Asia/Seoul)",
+      "title_hint": "Claude Code 사용 한도 도달 메시지, 언제 풀리고 어떻게 이어서 하나",
+      "queries": [
+        "claude code 사용 한도",
+        "claude session limit resets",
+        "클로드 코드 한도 초기화 시간"
+      ],
+      "docs": [
+        "support.anthropic.com 사용 한도 안내",
+        "code.claude.com 문서"
+      ],
+      "experience": "매일 자동으로 글을 쓰는 작업이 이 메시지로 멈췄다. 메시지에 적힌 리셋 시각까지 기다렸다가 멈춘 단계부터 이어서 하도록 바꿔 해결했다.",
+      "priority": 1
+    },
+    {
+      "id": "codex-unexpected-argument",
+      "tool": "Codex CLI",
+      "error": "error: unexpected argument '--search' found",
+      "title_hint": "Codex CLI 'unexpected argument --search' 오류: 옵션 위치 문제",
+      "queries": [
+        "codex unexpected argument",
+        "codex exec --search 오류",
+        "codex cli 웹 검색 옵션"
+      ],
+      "docs": [
+        "developers.openai.com Codex CLI 문서",
+        "github.com/openai/codex"
+      ],
+      "experience": "자동화에서 codex exec --search 형태로 실행하자 설치된 버전에서 이 오류가 났다. 옵션 위치를 바꾼 조합(--search exec)으로 실행해 해결했다.",
+      "priority": 1
+    },
+    {
+      "id": "codex-api-key-billing",
+      "tool": "Codex CLI",
+      "error": "ChatGPT 구독으로 로그인했는데 Codex가 API 키로 과금되는 증상(환경변수 OPENAI_API_KEY가 있을 때)",
+      "title_hint": "Codex CLI가 ChatGPT 구독 대신 API로 과금될 때: OPENAI_API_KEY 확인",
+      "queries": [
+        "codex chatgpt 로그인 api 과금",
+        "codex OPENAI_API_KEY",
+        "codex sign in with chatgpt"
+      ],
+      "docs": [
+        "developers.openai.com Codex 인증 문서",
+        "help.openai.com Codex 요금 안내"
+      ],
+      "experience": "PC에 OPENAI_API_KEY 환경변수가 있으면 Codex가 구독이 아닌 API 쪽으로 돌 수 있어, 자동화에서 Codex를 부를 때 이 변수를 빼고 넘기도록 바꿨다.",
+      "priority": 1
+    },
+    {
+      "id": "codex-out-of-credits",
+      "tool": "Codex CLI",
+      "error": "workspace is out of credits",
+      "title_hint": "Codex 'workspace is out of credits' 메시지 뜻과 대처",
+      "queries": [
+        "codex out of credits",
+        "codex 크레딧 부족",
+        "codex workspace credits"
+      ],
+      "docs": [
+        "help.openai.com Codex 사용량·크레딧 안내",
+        "developers.openai.com Codex 문서"
+      ],
+      "experience": "자동 팩트체크 단계가 이 메시지로 실패했다. 일시적 오류가 아니라 계정 사용량 문제라서, 재시도하지 않고 바로 알림을 보내도록 처리했다.",
+      "priority": 2
+    },
+    {
+      "id": "codex-not-recognized",
+      "tool": "Codex CLI",
+      "error": "'codex'은(는) 내부 또는 외부 명령, 실행할 수 있는 프로그램, 또는 배치 파일이 아닙니다.",
+      "title_hint": "윈도우에서 'codex은(는) 내부 또는 외부 명령이 아닙니다' 해결",
+      "queries": [
+        "codex 내부 또는 외부 명령",
+        "codex 명령어 인식 안됨",
+        "codex cli 설치 윈도우"
+      ],
+      "docs": [
+        "developers.openai.com Codex CLI 설치",
+        "docs.npmjs.com 전역 설치 경로",
+        "learn.microsoft.com 환경 변수 Path"
+      ],
+      "experience": "",
+      "priority": 1
+    },
+    {
+      "id": "claude-not-recognized",
+      "tool": "Claude Code",
+      "error": "'claude'은(는) 내부 또는 외부 명령, 실행할 수 있는 프로그램, 또는 배치 파일이 아닙니다.",
+      "title_hint": "윈도우에서 'claude은(는) 내부 또는 외부 명령이 아닙니다' 해결",
+      "queries": [
+        "claude 내부 또는 외부 명령",
+        "claude code 윈도우 설치",
+        "claude 명령어 안됨"
+      ],
+      "docs": [
+        "code.claude.com 설치 문서",
+        "learn.microsoft.com 환경 변수 Path"
+      ],
+      "experience": "",
+      "priority": 1
+    },
+    {
+      "id": "playwright-executable-missing",
+      "tool": "Playwright(Python)",
+      "error": "BrowserType.launch: Executable doesn't exist at ... Looks like Playwright was just installed or updated. Please run the following command to download new browsers: playwright install",
+      "title_hint": "Playwright 'Executable doesn't exist' 오류: 브라우저 버전 맞추기",
+      "queries": [
+        "playwright executable doesn't exist",
+        "playwright install 오류",
+        "playwright 브라우저 버전"
+      ],
+      "docs": [
+        "playwright.dev/python 브라우저 설치 문서",
+        "github.com/microsoft/playwright"
+      ],
+      "experience": "자동 발행 테스트 중 Playwright 패키지만 새 버전으로 올라가고 설치된 브라우저는 옛 버전이라 이 오류가 났다. 패키지 버전을 설치된 브라우저에 맞추거나 playwright install로 해결했다.",
+      "priority": 1
+    },
+    {
+      "id": "powershell-log-mojibake",
+      "tool": "PowerShell",
+      "error": "Get-Content로 로그를 열면 한글이 '諛쒗뻾 紐⑸줉'처럼 깨져 보임(UTF-8 파일을 다른 인코딩으로 읽음)",
+      "title_hint": "PowerShell Get-Content 한글 깨짐(諛쒗뻾 같은 글자) 해결",
+      "queries": [
+        "get-content 한글 깨짐",
+        "powershell utf-8 한글 깨짐",
+        "로그 한글 깨짐 윈도우"
+      ],
+      "docs": [
+        "learn.microsoft.com Get-Content -Encoding",
+        "learn.microsoft.com about_Character_Encoding"
+      ],
+      "experience": "자동 발행 로그를 PowerShell에서 Get-Content로 열었더니 한글이 전부 깨져 보였다. 파일은 UTF-8로 정상이었고, 읽을 때 인코딩을 지정해 해결했다.",
+      "priority": 1
+    },
+    {
+      "id": "csv-cp949-decode",
+      "tool": "Python",
+      "error": "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xb1 in position 0: invalid start byte",
+      "title_hint": "엑셀에서 저장한 CSV를 파이썬이 못 읽을 때(UnicodeDecodeError, CP949)",
+      "queries": [
+        "unicodedecodeerror utf-8 csv 엑셀",
+        "파이썬 csv 한글 cp949",
+        "csv 인코딩 오류 파이썬"
+      ],
+      "docs": [
+        "docs.python.org codecs 표준 인코딩",
+        "docs.python.org csv 모듈"
+      ],
+      "experience": "구글 시트에서 받은 CSV는 잘 읽혔는데, 엑셀에서 다시 저장한 CSV는 이 오류가 났다. UTF-8로 먼저 읽고 실패하면 CP949로 읽도록 바꿔 해결했다.",
+      "priority": 1
+    },
+    {
+      "id": "cp949-encode-print",
+      "tool": "Python",
+      "error": "UnicodeEncodeError: 'cp949' codec can't encode character '\\u2705' in position 0: illegal multibyte sequence",
+      "title_hint": "윈도우 파이썬 'cp949 codec can't encode character' 해결(PYTHONUTF8)",
+      "queries": [
+        "cp949 codec can't encode character",
+        "파이썬 이모지 출력 오류 윈도우",
+        "PYTHONUTF8"
+      ],
+      "docs": [
+        "docs.python.org PYTHONUTF8 UTF-8 모드",
+        "peps.python.org PEP 540"
+      ],
+      "experience": "자동화가 호출하는 파이썬 보조 스크립트가 윈도우에서 한글·이모지를 출력하다 멈췄다. UTF-8 모드(PYTHONUTF8=1)로 실행하게 해 해결했다.",
+      "priority": 1
+    },
+    {
+      "id": "winerror32-file-locked",
+      "tool": "Python(Windows)",
+      "error": "PermissionError: [WinError 32] 다른 프로세스가 파일을 사용 중이기 때문에 프로세스가 액세스 할 수 없습니다",
+      "title_hint": "WinError 32 '다른 프로세스가 파일을 사용 중' 파이썬에서 해결하는 법",
+      "queries": [
+        "winerror 32 파이썬",
+        "다른 프로세스가 파일을 사용 중이기 때문에",
+        "permissionerror winerror 32"
+      ],
+      "docs": [
+        "docs.python.org PermissionError",
+        "learn.microsoft.com 파일 공유 위반"
+      ],
+      "experience": "다른 프로그램(Codex)이 방금 만든 이미지 파일을 아직 잡고 있어 옮기다 이 오류가 났다. 몇 초 기다렸다가 다시 시도하도록 바꿔 해결했다.",
+      "priority": 2
+    },
+    {
+      "id": "subprocess-korean-args",
+      "tool": "Python(Windows)",
+      "error": "subprocess로 .cmd 프로그램에 여러 줄 한글 인자를 넘기면 글자가 깨지거나 첫 줄만 전달됨",
+      "title_hint": "윈도우 subprocess에서 .cmd에 여러 줄 한글 인자가 깨질 때: stdin으로 넘기기",
+      "queries": [
+        "subprocess 한글 깨짐 윈도우",
+        "cmd 인자 줄바꿈 깨짐",
+        "subprocess input stdin"
+      ],
+      "docs": [
+        "docs.python.org subprocess",
+        "learn.microsoft.com cmd 인수 처리"
+      ],
+      "experience": "Claude Code(claude.cmd)에 여러 줄 한글 지시문을 명령줄 인자로 넘기자 내용이 망가졌다. 지시문을 표준 입력(stdin)으로 넘기도록 바꿔 해결했다.",
+      "priority": 2
+    },
+    {
+      "id": "task-scheduler-sleep",
+      "tool": "작업 스케줄러",
+      "error": "작업 스케줄러에 등록한 작업이 PC가 절전 중일 때 실행되지 않음",
+      "title_hint": "작업 스케줄러가 절전 모드에서 실행 안 될 때 확인할 설정",
+      "queries": [
+        "작업 스케줄러 절전 모드 실행",
+        "작업 스케줄러 절전 해제",
+        "예약 작업 실행 안됨"
+      ],
+      "docs": [
+        "learn.microsoft.com Task Scheduler 설정(WakeToRun, StartWhenAvailable)",
+        "learn.microsoft.com 전원 옵션 절전 모드 해제 타이머"
+      ],
+      "experience": "매일 새벽 자동 발행을 걸어 두고, 절전 중이면 깨워서 실행하고 꺼져 있었으면 켜지자마자 밀린 실행을 하도록 작업 설정을 맞췄다.",
+      "priority": 1
+    },
+    {
+      "id": "task-scheduler-0x1",
+      "tool": "작업 스케줄러",
+      "error": "작업 스케줄러 마지막 실행 결과 (0x1)",
+      "title_hint": "작업 스케줄러 '마지막 실행 결과 0x1' 원인과 해결",
+      "queries": [
+        "작업 스케줄러 0x1",
+        "task scheduler 0x1",
+        "작업 스케줄러 배치파일 실행 안됨"
+      ],
+      "docs": [
+        "learn.microsoft.com Task Scheduler",
+        "learn.microsoft.com schtasks"
+      ],
+      "experience": "",
+      "priority": 2
+    },
+    {
+      "id": "git-checkout-overwritten",
+      "tool": "Git",
+      "error": "error: Your local changes to the following files would be overwritten by checkout",
+      "title_hint": "git checkout 'local changes would be overwritten' 오류 해결",
+      "queries": [
+        "your local changes would be overwritten by checkout",
+        "git checkout 오류",
+        "git 로컬 변경 덮어쓰기"
+      ],
+      "docs": [
+        "git-scm.com git-checkout",
+        "git-scm.com git-stash"
+      ],
+      "experience": "자동화 PC가 다른 브랜치로 바뀌어 있어 되돌리려다 이런 상황을 겪었다. 고친 파일이 있으면 브랜치를 바꾸지 않고 알리도록 업데이트 스크립트를 만들었다.",
+      "priority": 2
+    },
+    {
+      "id": "python-m-no-module",
+      "tool": "Python",
+      "error": "No module named tistory_autopost (python -m 실행 시 패키지를 못 찾음)",
+      "title_hint": "python -m 실행 시 'No module named' 오류: 실행 위치와 브랜치 확인",
+      "queries": [
+        "python -m no module named",
+        "no module named 패키지 폴더",
+        "python -m 실행 위치"
+      ],
+      "docs": [
+        "docs.python.org -m 옵션",
+        "docs.python.org sys.path"
+      ],
+      "experience": "새 기능을 실행하려는데 이 오류가 났다. 코드가 아직 다른 브랜치에만 있어서 작업 폴더에 해당 패키지 폴더가 없었던 것이 원인이었다.",
+      "priority": 2
+    },
+    {
+      "id": "korean-username-path",
+      "tool": "Windows",
+      "error": "사용자 폴더 이름이 한글(C:\\Users\\홍길동)이라 일부 개발 도구 경로가 깨지거나 오류가 남",
+      "title_hint": "윈도우 사용자 이름이 한글일 때 생기는 경로 문제와 피하는 법",
+      "queries": [
+        "윈도우 사용자 이름 한글 오류",
+        "사용자 폴더 한글 경로 문제",
+        "한글 경로 파이썬 오류"
+      ],
+      "docs": [
+        "learn.microsoft.com 사용자 프로필 폴더",
+        "docs.python.org 파일 시스템 인코딩"
+      ],
+      "experience": "자동화를 돌리는 PC의 사용자 폴더 이름이 한글이라, 오류 메시지 속 경로가 깨져 보였다.",
+      "priority": 2
+    },
+    {
+      "id": "gsc-redirect-error",
+      "tool": "Google Search Console",
+      "error": "서치콘솔 페이지 색인 '리디렉션 오류' (블로그스팟 ?m=1 모바일 주소)",
+      "title_hint": "구글 서치콘솔 '리디렉션 오류' 블로그스팟에서 확인할 것",
+      "queries": [
+        "서치콘솔 리디렉션 오류",
+        "블로그스팟 리디렉션 오류",
+        "search console redirect error blogger"
+      ],
+      "docs": [
+        "support.google.com/webmasters 페이지 색인 생성 보고서",
+        "developers.google.com/search 리디렉션"
+      ],
+      "experience": "영어 블로그(블로그스팟) 글 9편이 서치콘솔에서 '리디렉션 오류'로 나왔다. 구글 휴대폰 로봇처럼 주소를 따라가 보며 원인을 점검했다.",
+      "priority": 1
+    },
+    {
+      "id": "gsc-discovered-not-indexed",
+      "tool": "Google Search Console",
+      "error": "발견됨 - 현재 색인이 생성되지 않음",
+      "title_hint": "서치콘솔 '발견됨 - 현재 색인이 생성되지 않음' 뜻과 할 수 있는 것",
+      "queries": [
+        "발견됨 현재 색인이 생성되지 않음",
+        "서치콘솔 색인 안됨",
+        "discovered currently not indexed"
+      ],
+      "docs": [
+        "support.google.com/webmasters 페이지 색인 생성 보고서",
+        "developers.google.com/search 크롤링 예산"
+      ],
+      "experience": "새로 연 블로그스팟 글이 이 상태로 한동안 머물렀다.",
+      "priority": 1
+    },
+    {
+      "id": "ps-execution-policy",
+      "tool": "PowerShell",
+      "error": "이 시스템에서 스크립트를 실행할 수 없으므로 ...ps1 파일을 로드할 수 없습니다.",
+      "title_hint": "PowerShell 실행 정책 오류, 전체를 풀지 않고 한 번만 실행하는 법",
+      "queries": [
+        "이 시스템에서 스크립트를 실행할 수 없으므로",
+        "powershell 실행 정책",
+        "ExecutionPolicy Bypass"
+      ],
+      "docs": [
+        "learn.microsoft.com about_Execution_Policies",
+        "learn.microsoft.com Set-ExecutionPolicy"
+      ],
+      "experience": "설치 스크립트는 정책을 영구로 바꾸지 않고 powershell -ExecutionPolicy Bypass -File 형태로 한 번만 실행하게 했다.",
+      "priority": 3
+    },
+    {
+      "id": "telegram-getupdates-conflict",
+      "tool": "Telegram Bot API",
+      "error": "Conflict: can't use getUpdates method while webhook is active; use deleteWebhook to delete the webhook first",
+      "title_hint": "텔레그램 봇 'can't use getUpdates method while webhook is active' 해결",
+      "queries": [
+        "telegram getupdates webhook is active",
+        "텔레그램 봇 getUpdates 오류",
+        "deleteWebhook"
+      ],
+      "docs": [
+        "core.telegram.org/bots/api getUpdates",
+        "core.telegram.org/bots/api deleteWebhook"
+      ],
+      "experience": "",
+      "priority": 3
+    }
+  ]
+}

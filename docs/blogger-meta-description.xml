@@ -1,0 +1,35 @@
+<!--
+  구글 블로거 테마에 '검색 설명(meta description)' 자동 넣기 — 한 번만 하면 된다.
+
+  블로거 API로는 글마다 검색 설명을 넣을 수 없고, 테마의 data:view.description도 검색 설명을 직접 넣지 않은
+  글에서는 비어 있다(2026-10 check-meta로 확인). 그래서 글 페이지가 열릴 때 스크립트가 본문 첫 문단(40자 이상인
+  첫 <p>, 그림 설명 제외)으로 검색 설명을 채운다. 구글은 스크립트를 실행한 뒤의 페이지를 보므로 이 설명을 읽는다
+  (Google Search Central 'JavaScript SEO 기본사항': JavaScript로 meta description을 설정·변경할 수 있음).
+  편집 화면에서 검색 설명을 직접 넣은 글은 건드리지 않는다.
+
+  넣는 곳: 블로거 → 테마 → '맞춤설정' 옆 ▼ → HTML 편집 → Ctrl+F로 all-head-content 검색
+          → (지난번에 넣은 3줄이 있으면 지우고) 그 줄 바로 아래에 아래 코드를 통째로 붙여넣고 저장.
+-->
+<b:if cond='data:view.isSingleItem and !data:blog.metaDescription'>
+<script>//<![CDATA[
+document.addEventListener('DOMContentLoaded', function () {
+  var metas = document.querySelectorAll('meta[name="description"]');
+  for (var i = 0; i < metas.length; i++) { if (metas[i].content.trim()) return; }
+  var body = document.querySelector('.post-body, .entry-content, [itemprop="articleBody"]');
+  if (!body) return;
+  var text = '';
+  var ps = body.querySelectorAll('p');
+  for (var j = 0; j < ps.length; j++) {
+    if (ps[j].closest('figure, figcaption, .kb-related')) continue;
+    var t = ps[j].textContent.replace(/\s+/g, ' ').trim();
+    if (t.length >= 40) { text = t; break; }
+  }
+  if (!text) return;
+  if (text.length > 160) text = text.slice(0, 157).replace(/\s+\S*$/, '') + '…';
+  var meta = metas[0] || document.createElement('meta');
+  meta.setAttribute('name', 'description');
+  meta.setAttribute('content', text);
+  if (!metas[0]) document.head.appendChild(meta);
+});
+//]]></script>
+</b:if>

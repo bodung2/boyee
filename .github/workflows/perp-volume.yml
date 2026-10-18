@@ -1,0 +1,46 @@
+# 빗썸 전체 코인 거래량 신호 사건 분석을 실제 시세로 돌려 실행 기록(로그)에 남긴다. 주문은 하지 않는다.
+name: perp-volume
+
+on:
+  pull_request:
+    paths:
+      - "perp_bot/volume.py"
+      - "perp_bot/bithumb.py"
+      - "perp_bot/shortside.py"
+      - ".github/workflows/perp-volume.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  volume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 오늘 날짜
+        id: today
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+      - name: 빗썸 일봉 보관본 불러오기(없으면 처음부터 받음, 있으면 최근 며칠만 새로 받음)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/bithumb
+          key: bithumb-daily-${{ steps.today.outputs.date }}-${{ github.run_id }}
+          restore-keys: |
+            bithumb-daily-
+      - name: 패키지 설치
+        run: pip install "pandas>=2.0" "numpy>=1.24" pytest
+      - name: 테스트
+        run: python -m pytest -q tests/test_perp_bot.py
+      - name: 빗썸 거래량 신호 사건 분석(실제 시세)
+        run: python -m perp_bot volume
+        env:
+          BITHUMB_CACHE: ${{ runner.temp }}/bithumb
+      - name: 빗썸 신호 → Hyperliquid 숏 검증(실제 시세)
+        run: python -m perp_bot shortside
+        env:
+          BITHUMB_CACHE: ${{ runner.temp }}/bithumb
