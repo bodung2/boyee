@@ -345,6 +345,31 @@ python -m pytest -q
 python -m naver_autopost preview output/childhood/2026-09-27 --profile childhood   # 발행 없이 미리보기
 ```
 
+## 예약 작업 한 번에 등록 (Windows)
+
+모든 자동 실행(네이버 교육·투자·유아, 티스토리 2편, 구글 블로거, 인스타·쓰레드, 이웃 추천, 시장 대시보드, 선물 봇 모의투자)을
+한 번에 등록합니다. 작업 이름은 블로그별 설치 스크립트와 같아서 다시 실행하면 새 시각으로 덮어씁니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_all_schedules.ps1 -WhatIf                       # 미리 보기
+powershell -ExecutionPolicy Bypass -File scripts\setup_all_schedules.ps1                               # 등록
+powershell -ExecutionPolicy Bypass -File scripts\setup_all_schedules.ps1 -Skip PerpBotPaper,MarketDashboard   # 일부 빼고
+```
+
+| 시각 | 작업 |
+|---|---|
+| 01:05부터 4시간마다 | 선물 봇 모의투자(PerpBotPaper) |
+| 03:00 | 구글 블로거 |
+| 06:00 (11:00 재시도) | 네이버 교육 |
+| 07:00 (10:00 재시도) | 네이버 투자 |
+| 07:40 화~토 | 시장 대시보드 |
+| 08:30 / 17:00 | 티스토리 1편째 / 2편째 |
+| 12:00 (15:00 재시도) | 네이버 유아 |
+| 19:00 | 네이버 이웃 후보 추천 |
+| 20:00 / 21:00 | 교육 / 유아 인스타·쓰레드 |
+
+시각을 바꾸려면 `scripts/setup_all_schedules.ps1`의 `$Schedule` 표만 고친 뒤 다시 실행합니다.
+
 ## 코드 자동 업데이트(브랜치 고정)
 
 모든 예약 작업(`scripts/run_*.bat`)은 글을 쓰기 전에 `scripts/self_update.py`를 먼저 실행합니다.
