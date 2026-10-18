@@ -369,6 +369,7 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_all_schedules.ps1 -Skip P
 | 20:00 / 21:00 | 교육 / 유아 인스타·쓰레드 |
 
 시각을 바꾸려면 `scripts/setup_all_schedules.ps1`의 `$Schedule` 표만 고친 뒤 다시 실행합니다.
+예전 이름(`NaverEduAutoPost`)으로 남은 작업은 자동으로 지우고, 이 폴더의 실행 파일을 돌리는데 표에 없는 작업(손으로 만든 작업 등)은 목록으로 보여 줍니다. 그것도 지우려면 `-RemoveOld`를 붙입니다.
 
 ## 코드 자동 업데이트(브랜치 고정)
 
