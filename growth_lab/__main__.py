@@ -5,6 +5,10 @@
   python -m growth_lab status [--blog invest]    장부 요약(주제 상태·무덤·탐색 후보·실험·제안)
   python -m growth_lab brief --blog invest       오늘 글쓰기에 넘길 안내문 미리 보기
   python -m growth_lab diagnose --blog invest [--no-push]   통계 화면 구조 진단(조회수를 못 찾을 때)
+  python -m growth_lab approve 투3 [--text "고친 문장"]   제안 승인(투=투자, 티=티스토리) / reject 투3: 거절
+
+주간 보고는 diagnostics/growth/<블로그>/weekly.md로 GitHub에 올라간다(글 제목·주소 없이, LAB_PUSH_REPORT=false로 끔).
+Claude 대화에서 정한 승인·거절은 data/lab_decisions.json으로 들어와 다음 실행 때 반영된다.
 """
 from __future__ import annotations
 
@@ -67,6 +71,10 @@ def collect_all(cfg: LabConfig, blogs: list[str], today: str) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="growth_lab")
     sub = parser.add_subparsers(dest="cmd", required=True)
+    for name in ("approve", "reject"):
+        p = sub.add_parser(name)
+        p.add_argument("proposal", help="제안 번호(예: 투3, 티2)")
+        p.add_argument("--text", default="", help="승인하면서 규칙 문장을 고칠 때")
     for name in ("daily", "collect", "review", "status", "brief", "diagnose"):
         p = sub.add_parser(name)
         p.add_argument("--blog", choices=list(BLOGS), help="한 블로그만(기본: LAB_BLOGS 전체)")
@@ -85,6 +93,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "status":
         return _status(cfg, blogs)
+    if args.cmd in ("approve", "reject"):
+        return _decide(cfg, args.proposal, "승인" if args.cmd == "approve" else "거절", args.text, today)
     _setup_logging(cfg, today)
     if args.cmd == "diagnose":
         from . import diagnose
@@ -101,13 +111,18 @@ def main(argv: list[str] | None = None) -> int:
     try:
         with _Lock(cfg.log_dir / ".run-lab.lock"):
             notes: list[str] = []
+            notes += _apply_decisions(cfg, blogs, today)
             if args.cmd in ("daily", "collect"):
                 notes += collect_all(cfg, blogs, today)
             weekday = WEEKDAYS.get(os.environ.get("LAB_REVIEW_WEEKDAY", "일").strip()[:1], 6)
             if args.cmd == "review" or (args.cmd == "daily" and datetime.now(KST).weekday() == weekday):
                 _pull_telegram(cfg)
                 for blog in blogs:
-                    review.run(blog, cfg, today, use_claude=not getattr(args, "no_claude", False))
+                    review.run(blog, cfg, today, use_claude=not getattr(args, "no_claude", False), idents=_idents())
+                if cfg.push_report:
+                    from naver_autopost.__main__ import _push_diagnostics
+                    if _push_diagnostics("Growth lab: weekly report"):
+                        notes.append("⚠️ 주간 보고를 GitHub에 올리지 못했습니다(로그 확인)")
             if notes:
                 send_text(cfg.telegram_bot_token, cfg.telegram_chat_id, "[성장 실험실]\n" + "\n".join(notes))
         return 0
@@ -115,6 +130,43 @@ def main(argv: list[str] | None = None) -> int:
         log.exception("성장 실험실 실패")
         send_text(cfg.telegram_bot_token, cfg.telegram_chat_id, f"[성장 실험실 실패] {today}\n{e}")
         return 1
+
+
+def _idents() -> list[str]:
+    """공개 보고에서 지울 블로그 아이디(네이버 세 블로그·티스토리)."""
+    keys = ("NAVER_BLOG_ID", "NAVER_BLOG_ID_EDU", "NAVER_BLOG_ID_INVEST", "NAVER_BLOG_ID_CHILDHOOD", "TISTORY_BLOG")
+    out = [os.environ.get(k, "").strip() for k in keys]
+    return [i.removeprefix("https://").split(".tistory.com")[0].strip("/") for i in out if i]
+
+
+def _apply_decisions(cfg: LabConfig, blogs: list[str], today: str) -> list[str]:
+    from . import review, store
+    notes = []
+    for blog in blogs:
+        led = store.load_ledger(cfg, blog)
+        got = review.apply_repo_decisions(blog, cfg, led, today)
+        if got:
+            store.save_ledger(cfg, blog, led)
+            notes += [f"[{BLOGS[blog].label}] {n}" for n in got]
+    return notes
+
+
+def _decide(cfg: LabConfig, proposal: str, verb: str, text: str, today: str) -> int:
+    import re
+    from . import review, store
+    m = re.fullmatch(r"\s*([가-힣])?\s*(\d+)\s*", proposal)
+    blog = next((b for b, pre in review.PREFIX.items() if m and pre == m.group(1)), None)
+    if not m or not blog:
+        print("제안 번호는 '투3'(투자)·'티2'(티스토리)처럼 적습니다")
+        return 1
+    led = store.load_ledger(cfg, blog)
+    note = review.decide(blog, cfg, led, int(m.group(2)), verb, today, text)
+    if not note:
+        print(f"결정할 수 있는 제안 {proposal}이 없습니다(이미 정했거나 번호가 다름). `python -m growth_lab status`로 확인하세요.")
+        return 1
+    store.save_ledger(cfg, blog, led)
+    print(note)
+    return 0
 
 
 def _status(cfg: LabConfig, blogs: list[str]) -> int:

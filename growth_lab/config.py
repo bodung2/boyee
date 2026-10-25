@@ -45,7 +45,7 @@ class LabConfig:
     min_baseline_posts: int  # 중간값을 믿을 수 있는 최소 글 수
     health_min_views: int    # 최근 14일 블로그 전체 조회 증가가 이보다 적으면 주제 판정을 멈춘다(채널 문제)
     rank_max_queries: int    # 하루 검색 순위 확인 횟수(블로그별)
-    push_report: bool        # 주간 리뷰 요약을 diagnostics/growth에 올릴지
+    push_report: bool        # 주간 보고(글 제목·주소 뺀 주제 단위)를 diagnostics/growth/<블로그>/weekly.md로 GitHub에 올릴지
     naver_stat_urls: list[str] = field(default_factory=list)
     tistory_stat_urls: list[str] = field(default_factory=list)
     naver_search_id: str = ""
@@ -82,7 +82,7 @@ class LabConfig:
             min_baseline_posts=int(env("LAB_MIN_BASELINE_POSTS", "5")),
             health_min_views=int(env("LAB_HEALTH_MIN_VIEWS", "20")),
             rank_max_queries=int(env("LAB_RANK_MAX_QUERIES", "30")),
-            push_report=_bool("LAB_PUSH_REPORT", False),
+            push_report=_bool("LAB_PUSH_REPORT", True),
             naver_stat_urls=split("LAB_NAVER_STAT_URLS"),
             tistory_stat_urls=split("LAB_TISTORY_STAT_URLS"),
             naver_search_id=env("NAVER_SEARCH_CLIENT_ID", "").strip(),

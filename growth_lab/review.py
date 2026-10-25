@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import subprocess
 from datetime import date, timedelta
 from pathlib import Path
@@ -82,8 +83,24 @@ def advance_experiment(blog: str, ledger: dict, table: list[dict], today: str, r
     return f"🧪 화풍 실험 중: {exp['arms'][0]} vs {exp['arms'][1]} (~{exp['post_until']})"
 
 
+def decide(blog: str, cfg: LabConfig, ledger: dict, pid: int, verb: str, today: str, text: str = "") -> str | None:
+    """제안 하나를 승인·거절한다. 승인된 규칙은 플레이북의 '확정 규칙'이 된다(text가 있으면 고친 문장으로).
+    처리했으면 알림 문구, 없는 제안·이미 정한 제안이면 None."""
+    prop = next((p for p in ledger["proposals"] if p["id"] == pid), None)
+    if not prop or prop["status"] != "pending" or verb not in ("승인", "거절"):
+        return None
+    prop["status"] = "approved" if verb == "승인" else "rejected"
+    prop["decided"] = today
+    if text.strip():
+        prop["text"] = text.strip()[:300]
+    if prop["status"] == "approved":
+        store.add_approved_rule(cfg, blog, prop["text"], today)
+    store.log_change(ledger, today, f"제안 {PREFIX[blog]}{prop['id']} {verb}", prop["text"][:120])
+    return f"제안 {PREFIX[blog]}{prop['id']} {verb}: {prop['text'][:60]}"
+
+
 def handle_commands(blog: str, cfg: LabConfig, ledger: dict, today: str, inbox_file: Path) -> list[str]:
-    """텔레그램 답장("승인 투3"/"거절 투3")으로 제안을 처리한다. 승인된 규칙은 플레이북의 '확정 규칙'으로 들어간다."""
+    """텔레그램 답장("승인 투3"/"거절 투3")으로 제안을 처리한다."""
     from tistory_autopost import inbox
 
     notes = []
@@ -93,18 +110,88 @@ def handle_commands(blog: str, cfg: LabConfig, ledger: dict, today: str, inbox_f
         if not c.get("prefix") and len(cfg.blogs) > 1:
             inbox.mark_command(inbox_file, c.get("update_id"), "블로그 글자(투/티)가 없어 무시")
             continue
-        prop = next((p for p in ledger["proposals"] if p["id"] == c["id"]), None)
-        if not prop or prop["status"] != "pending":
-            inbox.mark_command(inbox_file, c.get("update_id"), "없는 제안")
-            continue
-        prop["status"] = "approved" if c["verb"] == "승인" else "rejected"
-        prop["decided"] = today
-        if prop["status"] == "approved":
-            store.add_approved_rule(cfg, blog, prop["text"], today)
-        store.log_change(ledger, today, f"제안 {PREFIX[blog]}{prop['id']} {c['verb']}", prop["text"][:120])
-        notes.append(f"제안 {PREFIX[blog]}{prop['id']} {c['verb']}: {prop['text'][:60]}")
-        inbox.mark_command(inbox_file, c.get("update_id"), prop["status"])
+        note = decide(blog, cfg, ledger, c["id"], c["verb"], today)
+        inbox.mark_command(inbox_file, c.get("update_id"), "처리" if note else "없는 제안")
+        if note:
+            notes.append(note)
     return notes
+
+
+DECISIONS_FILE = "lab_decisions.json"     # data/ 아래, git에 올라감 — Claude 대화에서 정한 승인·거절을 PC로 보낸다
+
+
+def apply_repo_decisions(blog: str, cfg: LabConfig, ledger: dict, today: str) -> list[str]:
+    """저장소의 data/lab_decisions.json({"decisions": [{"blog", "id", "verb", "text"?}]})을 한 번씩만 반영한다.
+    PC는 예약 작업마다 최신 코드를 받아 오므로, PR이 병합되면 다음 실행 때 들어온다."""
+    path = cfg.history_dir / DECISIONS_FILE
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except json.JSONDecodeError as e:
+        return [f"⚠️ {DECISIONS_FILE}를 읽지 못했습니다: {e}"]
+    done = {tuple(x) for x in ledger.setdefault("applied_decisions", [])}
+    notes = []
+    for d in data.get("decisions", []):
+        try:
+            key = (str(d["blog"]), int(d["id"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if key[0] != blog or key in done:
+            continue
+        note = decide(blog, cfg, ledger, key[1], str(d.get("verb", "")), today, str(d.get("text") or ""))
+        ledger["applied_decisions"].append(list(key))
+        done.add(key)
+        if note:
+            notes.append(note)
+    return notes
+
+
+_URL = re.compile(r"https?://\S+")
+
+
+def scrub(text: str, titles: list[str], idents: list[str]) -> str:
+    """공개 저장소에 올리기 전에 글 제목·주소·블로그 아이디를 지운다(투자 블로그가 다른 블로그와 이어지지 않게)."""
+    text = _URL.sub("(주소)", str(text or ""))
+    for t in sorted({t for t in titles if len(t) >= 6}, key=len, reverse=True):
+        text = text.replace(t, "(글 제목)")
+    for i in idents:
+        if i:
+            text = text.replace(i, "<BLOG>")
+    return text
+
+
+def write_weekly(blog: str, cfg: LabConfig, ledger: dict, verdicts: list[dict], channel: str, result: dict,
+                 today: str, titles: list[str], idents: list[str]) -> Path:
+    """GitHub에 올리는 주간 보고(diagnostics/growth/<블로그>/weekly.md). 주제 단위 숫자와 제안만, 글 제목·주소는 지운다."""
+    spec = BLOGS[blog]
+    s = lambda t: scrub(t, titles, idents)  # noqa: E731
+    funnel = result.get("funnel") or {}
+    lines = [f"# 성장 실험실 주간 보고 · {spec.label} · {today}", "",
+             f"- 채널: {s(channel)}",
+             f"- 막힌 단계: {s(funnel.get('stage', '-'))} — {s(str(funnel.get('evidence', ''))[:300])}", "",
+             "## 주제 점수 (블로그 중간값 대비, 판정 나이 조회수)", "",
+             "| 주제 | 상태 | 점수 | 판정한 글 / 쓴 글 | 최고 검색 순위 |", "|---|---|---|---|---|"]
+    for v in verdicts:
+        if v["topic"] == scoring.OWN:
+            continue
+        lines.append(f"| {s(v['topic'])} | {STATUS_KO[v['status']]} | {v['ratio'] if v['ratio'] is not None else '-'} "
+                     f"| {v['evaluated']} / {v['posts']} | {v['best_rank'] or '-'} |")
+    if not verdicts:
+        lines.append("| (아직 판정할 데이터가 모자람) | | | | |")
+    exp = ledger.get("experiment")
+    lines += ["", "## 실험", f"- 채택된 화풍: {(ledger.get('adopted') or {}).get('image_style', 'base')}",
+              f"- 진행 중: {exp['arms'][0]} vs {exp['arms'][1]} ({exp['status']}, ~{exp['post_until']})" if exp else "- 진행 중: 없음"]
+    lines += ["", "## 무덤"] + ([f"- {s(g['name'])} — {s(g.get('reason', ''))}" for g in ledger["graveyard"]] or ["- (없음)"])
+    lines += ["", "## 탐색 후보 (검색 수요 = 기준 검색어 대비 배수)"] + (
+        [f"- {s(c['name'])} (수요 {c.get('demand', '-')})" for c in ledger["explore_queue"][:10]] or ["- (없음)"])
+    pend = [p for p in ledger["proposals"] if p["status"] == "pending"]
+    lines += ["", "## 결정이 필요한 제안"] + ([f"- **{PREFIX[blog]}{p['id']}** {s(p['text'])}  \n  근거: {s(p.get('evidence', ''))}"
+                                         for p in pend] or ["- (없음)"])
+    if result.get("report"):
+        lines += ["", "## 요약", s(str(result["report"])[:900])]
+    out = cfg.diagnostics_dir / blog / "weekly.md"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return out
 
 
 def review_input(blog: str, cfg: LabConfig, ledger: dict, table: list[dict], verdicts: list[dict], channel: str,
@@ -229,7 +316,8 @@ def report_text(blog: str, ledger: dict, verdicts: list[dict], channel: str, not
 
 
 def run(blog: str, cfg: LabConfig, today: str, use_claude: bool = True, demand_post=None,
-        inbox_file: Path | None = None) -> dict:
+        inbox_file: Path | None = None, idents: list[str] | None = None) -> dict:
+    """idents: 공개 보고에서 지울 블로그 아이디들."""
     ledger = store.load_ledger(cfg, blog)
     entries = history.load(cfg.history_file(blog))
     rows = store.load_metrics(cfg, blog)
@@ -238,6 +326,7 @@ def run(blog: str, cfg: LabConfig, today: str, use_claude: bool = True, demand_p
     gain = scoring.health_daily(daily, today) if daily["fetched"] else scoring.health(rows, today)
     verdicts, channel = scoring.judge(table, cfg, gain)
     notes = handle_commands(blog, cfg, ledger, today, inbox_file or cfg.history_dir / "tistory_inbox.json")
+    notes += apply_repo_decisions(blog, cfg, ledger, today)
     notes += apply_verdicts(ledger, verdicts, today)
     exp_note = advance_experiment(blog, ledger, table, today, ready=bool(verdicts) and channel == "정상")
     if exp_note:
@@ -258,6 +347,12 @@ def run(blog: str, cfg: LabConfig, today: str, use_claude: bool = True, demand_p
             log.exception("리뷰(Claude) 실패")
             notes.append(f"⚠️ 진단·리서치 실패: {str(e)[:200]}")
     store.save_ledger(cfg, blog, ledger)
+    if cfg.push_report:
+        try:
+            write_weekly(blog, cfg, ledger, verdicts, channel, result, today,
+                         [e.get("title", "") for e in entries], idents or [])
+        except Exception as e:  # noqa: BLE001 - 보고 파일 실패로 리뷰 결과를 잃지 않게
+            log.warning("주간 보고 파일 실패: %s", e)
     text = report_text(blog, ledger, verdicts, channel, notes, result)
     (work / "report.txt").write_text(text, encoding="utf-8")
     send_text(cfg.telegram_bot_token, cfg.telegram_chat_id, text)
