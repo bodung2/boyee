@@ -21,3 +21,6 @@ data/market/
 
 # 코인 선물 봇 모의 운용 상태
 data/perp/
+
+# 성장 실험실: 장부·지표·플레이북(집 PC가 매일 고쳐 씀)
+data/lab/

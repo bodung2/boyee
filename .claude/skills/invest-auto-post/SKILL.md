@@ -90,6 +90,15 @@ description: "네이버 투자 블로그용 '통념 × 공식 숫자' 글을 완
 - 시장: 기준금리, 예금·대출 금리, 가계부채, 환율, 물가
 6. 고른 주제의 공식 원문을 열 수 없으면 다른 주제로 바꾼다(사람에게 묻지 않는다).
 
+### 성장 실험실 안내가 있으면
+
+프롬프트 끝에 `[성장 실험실 안내]`가 붙어 있으면(조회수·검색 순위를 보고 자동으로 정한 오늘의 방향) 위 1~5의 주제 고르기보다 **그 안내의 차례를 먼저** 따른다.
+- **시험 계속:** 적힌 주제 안에서 이미 쓴 글과 다른 질문으로. **집중:** 유망 주제 목록 중 하나, 적힌 '실제 유입 검색어'를 제목 앞에. **탐색:** 장부에 없는 새 주제(탐색 후보 우선). **기본:** 위 1~5 그대로.
+- 어느 차례든 레인 규칙·점수(검색 수요·시기)·0절 원칙은 그대로다. 안내대로는 공식 원문을 확인할 수 없으면 1~5로 고르고 `lab_mode`를 `"기본"`으로 적는다.
+- **무덤**에 있는 주제와 같거나 비슷한 주제는 쓰지 않는다(파이프라인이 막는다).
+- 안내 끝의 **플레이북**은 이 블로그에서 지금까지 통한 것·안 통한 것이다. 이 스킬의 규칙과 부딪히면 스킬을 따른다.
+- `post.json`에 `lab_mode`, `lab_topic`(2~6단어 주제 이름, 이미 있는 이름이면 그대로), `lab_keyword`(이 글이 노리는 대표 검색어 하나), `image_style_id`를 넣는다.
+
 ## 2. 리서치
 
 - **최신 발표부터.** "<통계명> <올해/작년> 결과 보도자료"로 가장 최근 발표를 찾는다. 기관 이름도 최신으로(통계청 → 2025년부터 '국가데이터처', mods.go.kr).
@@ -162,6 +171,7 @@ description: "네이버 투자 블로그용 '통념 × 공식 숫자' 글을 완
 `ILLUSTRATIONS`개만큼 `illust_a`, `illust_b`… 장면 프롬프트를 영어 2~4문장으로 쓴다.
 - 장면: 그 문단의 상황(예: 퇴근 지하철에서 휴대폰 증권 앱을 보는 30대 직장인의 뒷모습, 식탁에서 고지서와 계산기를 펼친 부부의 손).
 - 화풍 통일: "clean modern editorial illustration, flat vector with soft grain, deep navy and warm yellow accents, slightly humorous mood, Korean everyday setting, wide 16:9 composition".
+  - 성장 실험실 안내에 `IMAGE_STYLE`이 있으면 위 문장 대신 그 문장을 그대로 쓴다(화풍 실험). 아래 "반드시 포함"·"금지"는 어떤 화풍이든 그대로다.
 - 반드시 포함: "no text, no letters, no numbers, no logos, no watermark, no stock chart numbers", "generic people, not any real person or brand".
 - 금지: 실존 인물·회사 로고, 돈다발·코인 더미 같은 자극적 상징 남발, 특정 집단 비하 묘사. 사람은 뒷모습·실루엣·작게.
 
@@ -192,6 +202,7 @@ Write 도구로 UTF-8 JSON 하나를 저장한다. 이미지(PNG)는 파이프�
   "claims": [{"text": "본문에 쓴 수치 문장 그대로", "source_url": "https://...", "quote": "원문에서 그 수치를 보여주는 발췌 1~2문장"}],
   "data_points": [{"value": "원문 숫자 그대로", "label": "가구 평균 순자산", "unit": "가구", "measure": "평균", "period": "2025년 3월 말", "source_url": "https://...", "derived": false}],
   "persona_used": [],
+  "lab_mode": "탐색", "lab_topic": "순자산 상위 퍼센트", "lab_keyword": "순자산 상위 퍼센트", "image_style_id": "base",
   "research_log": {"sources_read": 8, "lane_score": "A 레인, 5점 중 5점: ...", "why_this_topic": "선정 이유", "formulas": ["상위 % 계산식 ..."]}
 }
 ```

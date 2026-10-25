@@ -62,12 +62,35 @@ def _validate(cfg: TistoryConfig, post: dict) -> list[str]:
                             cfg.min_body_chars, cfg.mode)
 
 
-def topic_brief(cfg: TistoryConfig, today: date) -> str:
+def topic_brief(cfg: TistoryConfig, today: date, slot: int = 1) -> str:
     entries = history.load(cfg.history_file)
     ranked = topics.rank(topics.load(cfg.topics_file), entries, today)
-    if not ranked and not inbox.pending(cfg):
+    lab = _lab_brief(today.isoformat(), slot)
+    if lab:
+        # 성장 실험실: 무덤 계열은 큐에서 빼고 유망 계열을 앞으로(탐색 차례면 큐 밖 주제도 쓴다)
+        from growth_lab.brief import queue_order
+        ranked = queue_order("tistory", ranked)
+    if not ranked and not inbox.pending(cfg) and not lab:
         raise RuntimeError(f"주제 큐를 모두 썼습니다. {cfg.topics_file.name}에 주제를 추가하세요.")
-    return topics.brief(ranked, inbox.pending(cfg), mode=cfg.mode)
+    text = topics.brief(ranked, inbox.pending(cfg), mode=cfg.mode) if (ranked or inbox.pending(cfg)) else ""
+    return (text + "\n\n" + lab).strip() if lab else text
+
+
+def _lab_brief(today: str, slot: int) -> str:
+    try:
+        from growth_lab import brief, config as lab_config
+        return brief.for_blog("tistory", today, slot) if lab_config.enabled("tistory") else ""
+    except Exception as e:  # noqa: BLE001 - 실험실 문제로 글쓰기가 멈추면 안 된다
+        log.warning("성장 실험실 안내 실패(원래대로 씁니다): %s", e)
+        return ""
+
+
+def _lab_fields(post: dict) -> dict:
+    try:
+        from growth_lab.features import history_fields
+        return history_fields(post)
+    except Exception:  # noqa: BLE001
+        return {}
 
 
 def _gpt_check(cfg: TistoryConfig, out_dir: Path) -> dict:
@@ -136,14 +159,19 @@ def image_files(post: dict, out_dir: Path) -> list[tuple[str, Path]]:
     return [(n, out_dir / f"{n}.png") for n in dict.fromkeys(names) if (out_dir / f"{n}.png").exists()]
 
 
-def _attempt(cfg: TistoryConfig, today: str, out_dir: Path, feedback: str, resume: bool) -> dict:
+def _attempt(cfg: TistoryConfig, today: str, out_dir: Path, feedback: str, resume: bool, slot: int = 1) -> dict:
     stage = _load(out_dir / "stage.json") if resume else {}
     if not stage.get("written"):
-        brief = topic_brief(cfg, date.fromisoformat(today))
+        brief = topic_brief(cfg, date.fromisoformat(today), slot)
         try:
             writer.write_post(cfg, out_dir, today, brief, feedback)
         except generate.NoPostError as e:
             raise Rejected(f"{e}. 원문을 확인할 수 있는 다음 후보 주제로 질문하지 말고 끝까지 써라.") from e
+        if _lab_brief(today, slot):
+            from growth_lab.brief import check_post
+            problem = check_post("tistory", _load(out_dir / "post.json"))
+            if problem:
+                raise Rejected(problem)
         _mark(out_dir, written=True)
     else:
         log.info("이미 쓴 글을 이어서 처리합니다")
@@ -186,7 +214,7 @@ def _attempt(cfg: TistoryConfig, today: str, out_dir: Path, feedback: str, resum
     return post
 
 
-def produce(cfg: TistoryConfig, today: str, out_dir: Path) -> dict:
+def produce(cfg: TistoryConfig, today: str, out_dir: Path, slot: int = 1) -> dict:
     """발행할 글을 만든다. 떨어지면 TISTORY_MAX_ATTEMPTS번까지 다시 쓴다(Claude 한도는 기다렸다 이어서)."""
     feedback = ""
     resume = bool(_load(out_dir / "stage.json").get("written")) and (out_dir / "post.json").exists()
@@ -196,7 +224,7 @@ def produce(cfg: TistoryConfig, today: str, out_dir: Path) -> dict:
             shutil.move(str(out_dir), str(out_dir.with_name(f"{out_dir.name}-rejected-{stamp}")))
         log.info("[tistory] 글쓰기 시도 %d/%d%s", attempt, cfg.max_attempts, " (이어서)" if resume else "")
         try:
-            return _attempt(cfg, today, out_dir, feedback, resume)
+            return _attempt(cfg, today, out_dir, feedback, resume, slot)
         except Rejected as e:
             feedback = str(e)
             log.warning(feedback)
@@ -294,7 +322,7 @@ def run(cfg: TistoryConfig, dry_run: bool = False, force: bool = False, slot: in
             deadline = datetime.now(KST).timestamp() + cfg.limit_wait_max_min * 60
             while post is None:
                 try:
-                    post = produce(cfg, today, out_dir)
+                    post = produce(cfg, today, out_dir, slot)
                 except generate.ClaudeLimitError as e:
                     if e.reset_at.timestamp() > deadline:
                         raise
@@ -319,7 +347,7 @@ def run(cfg: TistoryConfig, dry_run: bool = False, force: bool = False, slot: in
             history.append(cfg.history_file, {
                 "date": today, "slot": slot, "title": post["title"], "url": url, "topic_id": post.get("topic_id", ""),
                 "lane": post.get("lane", "queue"), "tip_id": post.get("tip_id", ""),
-                "tags": post.get("tags", []), "source": "autopost",
+                "tags": post.get("tags", []), "source": "autopost", **_lab_fields(post),
             })
             if post.get("tip_id"):
                 inbox.mark_used(cfg, post["tip_id"], url)
@@ -373,7 +401,7 @@ def republish(cfg: TistoryConfig, day: str | None = None, dry_run: bool = False,
             else:
                 entries.append({"date": day, "slot": slot, "title": post["title"], "url": url, "topic_id": post.get("topic_id", ""),
                                 "lane": post.get("lane", "queue"), "tip_id": post.get("tip_id", ""),
-                                "tags": post.get("tags", []), "source": "autopost"})
+                                "tags": post.get("tags", []), "source": "autopost", **_lab_fields(post)})
             history.save(cfg.history_file, entries)
             note = "" if post.get("_category_ok") is not False else (
                 "\n⚠️ 카테고리를 찾지 못했습니다. 화면에 보인 카테고리: " + (", ".join(post.get("_category_seen") or []) or "(읽지 못함)"))

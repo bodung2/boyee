@@ -27,6 +27,7 @@ $Schedule = @(
     @{ Name = "NaverNeighbors";                Bat = "run_neighbors.bat";        Arg = "";                  Times = @("19:00"); Hours = 2;   Wake = $true;  Desc = "네이버 이웃 후보 추천" }
     @{ Name = "NaverAutoPost-Social-edu";      Bat = "run_social.bat";           Arg = "--profile edu";     Times = @("20:00"); Hours = 2;   Wake = $true;  Desc = "교육 블로그 인스타·쓰레드" }
     @{ Name = "NaverAutoPost-Social-childhood"; Bat = "run_social.bat";          Arg = "--profile childhood"; Times = @("21:00"); Hours = 2; Wake = $true; Desc = "유아 블로그 인스타·쓰레드" }
+    @{ Name = "GrowthLab";                     Bat = "run_growth_lab.bat";       Arg = "";                  Times = @("22:30"); Hours = 3;   Wake = $true;  Desc = "성장 실험실: 투자·티스토리 통계 수집(일요일엔 주간 리뷰)" }
 )
 
 # -File로 실행하면 "A,B"가 문자열 하나로 들어오므로 쉼표로 나눈다
