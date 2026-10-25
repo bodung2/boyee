@@ -43,9 +43,10 @@
 2. 시험 수집: `.venv\Scripts\python.exe -m growth_lab collect` → `python -m growth_lab status`에서 '조회수 찾은 글' 수를 확인합니다.
    - **0편이면** 통계 화면 구조가 예상과 다른 것입니다. `.venv\Scripts\python.exe -m growth_lab diagnose`를 실행하고(구조만 GitHub에 올림)
      Claude에게 "올렸어"라고 알려 주세요. 수집기를 실제 화면에 맞춰 고칩니다. 스크린샷은 `output\lab\<블로그>\diagnose-날짜\`(PC에만)에 있습니다.
-3. (권장) 검색 수요 확인: [네이버 개발자센터](https://developers.naver.com/apps/#/list) → 이웃 추천에 쓰는 애플리케이션 → API 설정 →
-   사용 API에 **데이터랩(검색어트렌드)** 추가. 안 하면 수요 확인만 빠지고 나머지는 돕니다.
-4. 네이버 검색 API 키(`NAVER_SEARCH_CLIENT_ID/SECRET`)가 `.env`에 있으면 검색 순위도 모읍니다(이웃 추천과 같은 키).
+3. 검색 순위는 키 없이 모읍니다: 투자 블로그는 네이버 블로그 탭, 티스토리는 다음 블로그 탭의 첫 화면에서 우리 글 순서를
+   읽습니다(하루 20번까지, 2초씩 쉬며). 네이버 개발자센터가 2026-07-31부터 검색·데이터랩 API 신규 발급을 멈춰서입니다.
+   예전에 받은 키(`NAVER_SEARCH_CLIENT_ID/SECRET`)가 있으면 그 API를 씁니다(2027-06-30까지).
+4. 검색 수요 확인(데이터랩)은 키가 없으면 꺼집니다. 쓰려면 네이버 클라우드 플랫폼의 NAVER API HUB 키가 필요합니다(아직 연결 안 함).
 
 ## 제안 받고 결정하기 (텔레그램 없이도)
 

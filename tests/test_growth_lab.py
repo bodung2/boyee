@@ -313,7 +313,39 @@ def test_search_rank_and_check():
                {"date": "2026-01-01", "url": url(2), "tags": ["오래된글"]}]
     out = rank.check(entries, "naver", "id", "sec", "2026-10-20", fetch=fetch)
     assert list(out) == [stats.post_key(url(1))]
-    assert rank.check(entries, "naver", "", "", "2026-10-20") == {}
+    page = '<a href="https://blog.naver.com/other/224000000777">x</a><a href="https://blog.naver.com/myblog/224000000001">y</a>'
+    naps = []
+    out = rank.check(entries, "naver", "", "", "2026-10-20", fetch=lambda u: page, sleep=naps.append)
+    assert out == {stats.post_key(url(1)): {"query": "연봉실수령액", "blog": 2}} and naps == []   # 키 없이: 검색 결과 화면
+
+
+def test_ordered_posts_from_search_pages():
+    naver = ('<a href="https://blog.naver.com/PostView.naver?blogId=aaa&amp;logNo=224000000111">1</a>'
+             '<a href="https://m.blog.naver.com/bbb/224000000222">2</a>'
+             '<a href="https://blog.naver.com/aaa/224000000111">중복</a>'
+             '<a href="https://blog.naver.com/myblog/224000000001?ref=x">3</a>')
+    assert [i["link"] for i in rank.ordered_posts(naver)] == [
+        "https://blog.naver.com/aaa/224000000111", "https://blog.naver.com/bbb/224000000222",
+        "https://blog.naver.com/myblog/224000000001"]
+    assert rank.page_rank("q", url(1), "naver", fetch=lambda u: naver) == {"query": "q", "blog": 3}
+    daum = ('<a href="https://other.tistory.com/55">a</a><a href="https://brunch.co.kr/@x/9">b</a>'
+            '<a href="https://eskimo.tistory.com/m/123">c</a>')
+    seen = []
+    got = rank.page_rank("오류", "https://eskimo.tistory.com/123", "tistory", fetch=lambda u: seen.append(u) or daum)
+    assert got == {"query": "오류", "daum": 3} and "search.daum.net" in seen[0] and "w=blog" in seen[0]
+    with pytest.raises(RuntimeError):
+        rank.page_rank("q", url(1), "naver", fetch=lambda u: "<html>로봇 확인</html>")
+
+
+def test_page_rank_stops_after_repeated_failures():
+    entries = [{"date": "2026-10-1" + str(i), "url": url(i), "tags": [f"t{i}"]} for i in range(6)]
+    calls = []
+
+    def boom(u):
+        calls.append(u)
+        raise OSError("blocked")
+    assert rank.check(entries, "naver", "", "", "2026-10-20", fetch=boom, sleep=lambda s: None) == {}
+    assert len(calls) == 3                                    # 연달아 3번 막히면 그날은 멈춘다
 
 
 def test_demand_compare_errors():
@@ -444,7 +476,7 @@ def test_collect_uses_daily_sum_as_views(cfg):
                                     "json": _rank_json([("연봉 5천, 실수령액 얼마일까?", "/myblog/224000000001", 3)])}],
                         daily={"2026-10-23": _rank_json([("연봉 5천, 실수령액 얼마일까?", "/myblog/224000000001", 8)]),
                                "2026-10-24": _rank_json([("연봉 5천, 실수령액 얼마일까?", "/myblog/224000000001", 6)])})
-    snap = metrics.collect("invest", cfg, "2026-10-25", capture_fn=lambda: cap)
+    snap = metrics.collect("invest", cfg, "2026-10-25", capture_fn=lambda: cap, rank_fetch=lambda u: "")
     assert snap["posts"][stats.post_key(url(1))]["views"] == 14 and snap["posts"][stats.post_key(url(1))]["src"] == "daily"
     assert metrics.days_to_fetch(cfg, "invest", "2026-10-25")[-2:] == ["2026-10-24", "2026-10-25"]
     assert "2026-10-23" not in metrics.days_to_fetch(cfg, "invest", "2026-10-25")
