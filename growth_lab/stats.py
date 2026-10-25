@@ -286,7 +286,7 @@ def capture_tistory(cfg, override: list[str], shots: Path | None = None) -> Capt
     """cfg: tistory_autopost.config.TistoryConfig — 발행용 크롬 프로필과 저장 쿠키를 그대로 쓴다."""
     from playwright.sync_api import sync_playwright
 
-    from tistory_autopost.publisher import _ensure_logged_in, _open, _save_cookies
+    from tistory_autopost.publisher import _close, _ensure_logged_in, _open, _save_cookies
 
     cap = Capture()
     with sync_playwright() as p:
@@ -302,7 +302,7 @@ def capture_tistory(cfg, override: list[str], shots: Path | None = None) -> Capt
             _browse(ctx, _start_urls("tistory", cfg.blog_name, cfg.blog_url, override), TISTORY_NAV, cap, shots,
                     ("accounts.kakao.com", "/auth/login", "logins.daum.net"))
         finally:
-            ctx.close()
+            _close(ctx, cfg)
     return cap
 
 

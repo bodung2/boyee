@@ -68,6 +68,11 @@ def _on_login_page(url: str) -> bool:
 # 티스토리 로그인 쿠키(TSSESSION)는 브라우저를 닫으면 사라지는 세션 쿠키라서, 로그인 직후 쿠키를
 # 파일로 따로 저장해 두었다가 브라우저를 열 때마다 다시 넣는다. 서버에서 만료됐으면 카카오 자동 로그인
 # ('로그인 상태 유지')으로 다시 들어간다.
+# - 저장 파일은 '프로필에 없는 쿠키'만 채운다. 카카오는 로그인 유지 쿠키를 쓸 때마다 새 값으로 바꾸는데,
+#   예전 파일 값으로 프로필의 새 값을 덮어쓰면 카카오가 옛 값을 거부해 로그인 유지가 풀린다.
+# - 로그인된 브라우저를 닫을 때마다(글쓰기·통계 읽기 포함) 쿠키 파일을 새 값으로 바꾼다.
+# - 그래도 카카오 로그인 유지 기간이 끝나 비밀번호 화면이 나오면, .env에 KAKAO_LOGIN_ID·KAKAO_LOGIN_PASSWORD가
+#   있을 때만 직접 로그인하고, 카카오톡 확인(2단계 인증)을 요구하면 텔레그램으로 알린 뒤 10분까지 기다린다.
 KAKAO_LOGIN_BUTTONS = ["a.link_kakao_id", "a:has-text('카카오계정으로 로그인')", "button:has-text('카카오계정으로 로그인')",
                        "a:has-text('카카오 계정으로 로그인')"]
 
@@ -83,11 +88,27 @@ def _open(p, cfg: TistoryConfig, headless: bool):
         try:
             cookies = json.loads(path.read_text(encoding="utf-8"))
             now = time.time()
-            # 이미 만료된 쿠키는 넣지 않는다(세션 쿠키는 expires=-1).
-            ctx.add_cookies([c for c in cookies if c.get("expires", -1) in (-1, None) or c["expires"] > now])
+            have = {_cookie_key(c) for c in ctx.cookies()}
+            # 이미 만료된 쿠키(세션 쿠키는 expires=-1)와 프로필에 이미 있는(더 새) 쿠키는 넣지 않는다.
+            ctx.add_cookies([c for c in cookies if _cookie_key(c) not in have
+                             and (c.get("expires", -1) in (-1, None) or c["expires"] > now)])
         except Exception as e:  # noqa: BLE001 - 저장 쿠키가 깨져도 프로필 로그인으로 계속한다
             log.warning("저장된 로그인 쿠키를 읽지 못했습니다: %s", e)
     return ctx
+
+
+def _cookie_key(c: dict) -> tuple:
+    return c.get("name"), c.get("domain", "").lstrip("."), c.get("path", "/")
+
+
+def _close(ctx, cfg: TistoryConfig) -> None:
+    """로그인된 상태면 새 쿠키를 저장한 뒤 브라우저를 닫는다(다음에 열 때 옛 쿠키를 넣지 않게)."""
+    try:
+        if any(c["name"] == "TSSESSION" for c in ctx.cookies("https://www.tistory.com")):
+            _save_cookies(ctx, cfg)
+    except Exception as e:  # noqa: BLE001 - 저장 실패로 발행 결과를 바꾸지 않는다
+        log.warning("로그인 쿠키 저장 실패: %s", e)
+    ctx.close()
 
 
 def _save_cookies(ctx, cfg: TistoryConfig) -> None:
@@ -119,12 +140,76 @@ def _pick_saved_kakao_account(page: Page) -> bool:
     return False
 
 
+APPROVAL_WAIT_SEC = 600
+KAKAO_ID_INPUTS = ["input[name='loginId']", "input[name='email']", "input[type='email']",
+                   "input[autocomplete='username']"]
+KAKAO_STAY = ["input[name='saveSignedIn']", "input[name='staySignedIn']", "label:has-text('로그인 상태 유지')",
+              "label:has-text('간편로그인 정보 저장')"]
+KAKAO_SUBMIT = ["button[type='submit']", "button:has-text('로그인')"]
+
+
+def _tell(cfg: TistoryConfig, text: str) -> None:
+    from naver_autopost.notify import send_text
+    send_text(getattr(cfg, "telegram_bot_token", ""), getattr(cfg, "telegram_chat_id", ""), text)
+
+
+def _first_visible(page: Page, selectors: list[str]) -> Locator | None:
+    for sel in selectors:
+        loc = page.locator(sel)
+        try:
+            if loc.count() and loc.first.is_visible():
+                return loc.first
+        except Exception:  # noqa: BLE001
+            continue
+    return None
+
+
+def _kakao_password_login(page: Page, cfg: TistoryConfig) -> bool:
+    """카카오 비밀번호 화면에서 .env의 계정으로 로그인한다('로그인 상태 유지' 체크). 값이 없으면 하지 않는다."""
+    login_id, password = getattr(cfg, "kakao_login_id", ""), getattr(cfg, "kakao_login_password", "")
+    if not password:
+        return False
+    box = _first_visible(page, KAKAO_ID_INPUTS)
+    if box is not None and not (box.input_value() or "").strip():
+        if not login_id:
+            log.warning("카카오 아이디 칸이 비어 있는데 KAKAO_LOGIN_ID가 없습니다")
+            return False
+        box.press_sequentially(login_id, delay=60)
+    pw = _first_visible(page, ["input[type='password']"])
+    if pw is None:
+        return False
+    pw.press_sequentially(password, delay=60)
+    stay = _first_visible(page, KAKAO_STAY)
+    try:
+        if stay is not None and not (stay.get_attribute("type") == "checkbox" and stay.is_checked()):
+            stay.click()
+    except Exception:  # noqa: BLE001 - 체크박스 모양이 달라도 로그인은 시도한다
+        pass
+    submit = _first_visible(page, KAKAO_SUBMIT)
+    if submit is None:
+        pw.press("Enter")
+    else:
+        submit.click()
+    log.info("카카오 비밀번호 로그인 시도(.env의 KAKAO_LOGIN_ID)")
+    return True
+
+
+def _kakao_needs_approval(page: Page) -> bool:
+    """카카오톡으로 로그인 확인을 보냈다는 화면(2단계 인증)인가."""
+    try:
+        text = page.inner_text("body", timeout=2000)
+    except Exception:  # noqa: BLE001
+        return False
+    return "카카오톡" in text and any(w in text for w in ("확인 요청", "인증 요청", "로그인 요청", "알림을 보냈"))
+
+
 def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bool:
     """글쓰기 화면을 연다. 로그인 화면으로 가면 카카오 자동 로그인 버튼을 누르고,
     카카오 간편 로그인 화면이면 저장된 계정을 골라 기다린다. 실패하면 화면을 login_failed.png로 남긴다."""
     page.goto(_newpost_url(cfg), wait_until="domcontentloaded")
     deadline = time.time() + timeout
     clicked = picked = 0
+    typed = told = False
     while time.time() < deadline:
         page.wait_for_timeout(1500)
         url = page.url
@@ -146,7 +231,18 @@ def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bo
                 picked += 1
                 continue
             password = page.locator("input[type='password']")
+            if typed and _kakao_needs_approval(page):
+                if not told:
+                    told = True
+                    deadline = max(deadline, time.time() + APPROVAL_WAIT_SEC)
+                    _tell(cfg, "[티스토리] 카카오가 로그인 확인을 요청했습니다. 휴대폰 카카오톡 알림에서 "
+                               f"'확인'을 눌러 주세요({APPROVAL_WAIT_SEC // 60}분 기다립니다).")
+                continue
             if password.count() and password.first.is_visible():
+                if not typed and _kakao_password_login(page, cfg):
+                    typed = True
+                    deadline = max(deadline, time.time() + 60)
+                    continue
                 log.warning("카카오 비밀번호 입력 화면입니다(카카오 로그인 유지 기간이 끝남)")
                 break
     _shot(page, cfg.output_dir, "login_failed")
@@ -688,7 +784,7 @@ def publish(cfg: TistoryConfig, post: dict, out_dir: Path, dry_run: bool = False
                 raise PublishUncertain(f"발행 버튼을 누른 뒤 확인하지 못했습니다(블로그에서 직접 확인하세요): {e}") from e
             return _verify_published(page, cfg, post, out_dir)
         finally:
-            ctx.close()
+            _close(ctx, cfg)
 
 
 def diagnose(cfg: TistoryConfig, out_dir: Path) -> Path:
@@ -720,4 +816,4 @@ def diagnose(cfg: TistoryConfig, out_dir: Path) -> Path:
             (out_dir / "newpost.html").write_text(page.content(), encoding="utf-8")
             return path
         finally:
-            ctx.close()
+            _close(ctx, cfg)

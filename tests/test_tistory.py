@@ -1,6 +1,7 @@
 """티스토리 '논쟁 × 공식 통계' 자동 발행: 주제 선정·제보·검증·전체 흐름·가짜 에디터 발행을 확인한다."""
 import json
 import re
+import time
 from datetime import date, datetime
 
 import pytest
@@ -708,3 +709,72 @@ def test_kakao_simple_login_or_password_page(cfg, tmp_path, simple):
         b.close()
     assert ok is simple
     assert (cfg.output_dir / "login_failed.png").exists() is (not simple)
+
+
+def test_saved_cookies_never_overwrite_fresher_profile_cookies(cfg):
+    """카카오 로그인 유지 쿠키는 쓸 때마다 바뀐다. 저장 파일의 옛 값이 프로필의 새 값을 덮으면 로그인 유지가 풀린다."""
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    later = time.time() + 86400
+    with sync_playwright() as p:
+        ctx = publisher._open(p, cfg, headless=True)
+        ctx.add_cookies([{"name": "_kawlt", "value": "new", "domain": ".kakao.com", "path": "/", "expires": later}])
+        ctx.close()
+    publisher._state_file(cfg).write_text(json.dumps([
+        {"name": "_kawlt", "value": "old", "domain": ".kakao.com", "path": "/", "expires": later},
+        {"name": "TSSESSION", "value": "sess", "domain": ".tistory.com", "path": "/", "expires": -1}]), encoding="utf-8")
+    with sync_playwright() as p:
+        ctx = publisher._open(p, cfg, headless=True)
+        got = {c["name"]: c["value"] for c in ctx.cookies()}
+        publisher._close(ctx, cfg)                       # 로그인 상태(TSSESSION)면 닫을 때 새 값으로 저장
+    assert got["_kawlt"] == "new" and got["TSSESSION"] == "sess"
+    saved = {c["name"]: c["value"] for c in json.loads(publisher._state_file(cfg).read_text(encoding="utf-8"))}
+    assert saved["_kawlt"] == "new"
+
+
+KAKAO_FORM = """<!doctype html><meta charset="utf-8">
+<input name="loginId" value=""><input type="password" name="password">
+<label><input type="checkbox" name="saveSignedIn"> 로그인 상태 유지</label>
+<button type="submit" onclick="fetch('https://accounts.kakao.com/record', {method: 'POST', body: JSON.stringify([
+  document.querySelector('[name=loginId]').value, document.querySelector('[type=password]').value,
+  document.querySelector('[name=saveSignedIn]').checked])}); document.body.innerHTML='<p>카카오톡으로 로그인 확인 요청을 보냈습니다.</p>';
+  setTimeout(()=>location.href='https://www.tistory.com/auth/kakao/redirect', 2500)">로그인</button>"""
+
+
+def test_kakao_password_login_waits_for_kakaotalk_approval(cfg, tmp_path, monkeypatch):
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    told = []
+    monkeypatch.setattr(publisher, "_tell", lambda c, text: told.append(text))
+    cfg.kakao_login_id, cfg.kakao_login_password = "me@example.com", "pw-123"
+    cfg.output_dir = tmp_path / "out"
+
+    def serve(route):
+        url = route.request.url
+        has = "TSSESSION=" in (route.request.headers.get("cookie") or "")
+        if "/manage/newpost" in url:
+            route.fulfill(status=200, content_type="text/html", body="<title>editor</title>" if has else
+                          "<script>location.href='https://accounts.kakao.com/login/'</script>")
+        elif "accounts.kakao.com/record" in url:
+            sent.append(json.loads(route.request.post_data))
+            route.fulfill(status=200, body="")
+        elif "accounts.kakao.com" in url:
+            route.fulfill(status=200, content_type="text/html", body=KAKAO_FORM)
+        elif "/auth/kakao/redirect" in url:
+            route.fulfill(status=200, content_type="text/html", body=(
+                "<script>document.cookie='TSSESSION=abc; domain=.tistory.com; path=/; secure';"
+                "location.href='https://myblog.tistory.com/manage/newpost/'</script>"))
+        else:
+            route.fulfill(status=200, body="")
+
+    sent = []
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        ctx = b.new_context()
+        ctx.route(re.compile(r"https://[^/]*(tistory|kakao)\.com/.*"), serve)
+        page = ctx.new_page()
+        ok = publisher._ensure_logged_in(page, cfg, timeout=12)
+        b.close()
+    assert ok                                            # 비밀번호 로그인 → 카카오톡 확인 대기 → 글쓰기 화면
+    assert sent == [["me@example.com", "pw-123", True]]   # 아이디·비밀번호 입력, '로그인 상태 유지' 체크
+    assert told and "카카오톡" in told[0]

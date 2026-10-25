@@ -312,7 +312,8 @@ def run(cfg: TistoryConfig, dry_run: bool = False, force: bool = False, slot: in
             if not publisher.check_session(cfg):
                 raise publisher.SessionExpired(
                     "티스토리(카카오) 로그인이 풀려 있습니다. `python -m tistory_autopost login`으로 다시 로그인하세요"
-                    "(카카오 로그인 화면에서 '로그인 상태 유지' 체크). 마지막 화면: output\\tistory\\login_failed.png")
+                    "(카카오 로그인 화면에서 '로그인 상태 유지' 체크). 자주 풀리면 .env에 KAKAO_LOGIN_ID·KAKAO_LOGIN_PASSWORD를 "
+                    "넣어 두면 다음부터 자동으로 다시 로그인합니다. 마지막 화면: output\\tistory\\login_failed.png")
             try:
                 log.info("텔레그램 화제 제보 %d건을 받았습니다", inbox.pull(cfg))
             except Exception as e:  # noqa: BLE001 - 제보는 보조 입력이라 실패해도 큐로 진행한다
