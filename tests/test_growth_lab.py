@@ -225,6 +225,10 @@ def test_review_without_claude_updates_ledger(cfg):
     assert led["experiment"]["arms"] == ["base", "watercolor"]       # 채널 정상 + 점수 있음 → 화풍 실험 시작
     assert "성장 실험실" in res["report"] and "무덤 1개" in res["report"]
     assert (cfg.output_dir / "invest" / f"review-{day(20)}" / "review_input.json").exists()
+    pushed = LabConfig(**{**cfg.__dict__, "push_report": True})
+    review.run("invest", pushed, day(21), use_claude=False, inbox_file=cfg.history_dir / "inbox.json", idents=["myblog"])
+    weekly = (cfg.diagnostics_dir / "invest" / "weekly.md").read_text(encoding="utf-8")
+    assert "주간 보고" in weekly and "myblog" not in weekly and "글0" not in weekly
 
 
 def test_review_with_claude_applies_result_and_limits_writes(cfg, monkeypatch):
@@ -450,3 +454,44 @@ def test_collect_uses_daily_sum_as_views(cfg):
 def test_diagnose_query_shape():
     assert diagnose._query_shape("timeDimension=DATE&startDate=2026-10-25&exclude=&_=17") == {
         "timeDimension": "DATE", "startDate": "9999-99-99", "exclude": "", "_": "99"}
+
+
+# ---------------------------------------------------------------- 텔레그램 없이 결정하기
+
+def test_repo_decisions_apply_once_with_edited_text(cfg):
+    led = store.empty_ledger()
+    led["proposals"] += [{"id": 1, "text": "도입에 결론 숫자", "status": "pending"},
+                         {"id": 2, "text": "발행 시각 20시", "status": "pending"}]
+    cfg.history_dir.mkdir(parents=True, exist_ok=True)
+    (cfg.history_dir / review.DECISIONS_FILE).write_text(json.dumps({"decisions": [
+        {"blog": "invest", "id": 1, "verb": "승인", "text": "도입 첫 문장에 결론 숫자를 쓴다"},
+        {"blog": "invest", "id": 2, "verb": "거절"},
+        {"blog": "tistory", "id": 1, "verb": "승인"}]}, ensure_ascii=False), encoding="utf-8")
+    notes = review.apply_repo_decisions("invest", cfg, led, "2026-10-26")
+    assert len(notes) == 2 and [p["status"] for p in led["proposals"]] == ["approved", "rejected"]
+    assert "도입 첫 문장에 결론 숫자를 쓴다" in store.approved_rules(store.load_learned(cfg, "invest"))
+    assert review.apply_repo_decisions("invest", cfg, led, "2026-10-27") == []        # 같은 결정은 한 번만
+
+
+def test_weekly_report_hides_titles_urls_and_ids(cfg):
+    led = store.empty_ledger()
+    led["proposals"].append({"id": 3, "text": "「연봉 5천, 실수령액 얼마일까?」처럼 조건을 앞에", "status": "pending",
+                             "evidence": "https://blog.naver.com/secretid/224000000001 조회 3배"})
+    led["graveyard"].append({"name": "코인 투자자 수", "reason": "점수 0.3"})
+    verdicts = [{"topic": "연봉 실수령액", "status": "promising", "ratio": 1.8, "evaluated": 3, "posts": 3, "best_rank": 4}]
+    out = review.write_weekly("invest", cfg, led, verdicts, "정상", {"report": "secretid 블로그 요약"}, "2026-10-25",
+                              ["연봉 5천, 실수령액 얼마일까?"], ["secretid"])
+    text = out.read_text(encoding="utf-8")
+    assert "연봉 5천, 실수령액 얼마일까?" not in text and "secretid" not in text and "blog.naver.com" not in text
+    assert "**투3**" in text and "연봉 실수령액 | 유망 | 1.8" in text and "코인 투자자 수" in text
+
+
+def test_cli_approve(cfg, monkeypatch, capsys):
+    from growth_lab import __main__ as cli
+    led = store.empty_ledger()
+    led["proposals"].append({"id": 5, "text": "표를 첫 화면에", "status": "pending"})
+    store.save_ledger(cfg, "tistory", led)
+    assert cli._decide(cfg, "티5", "승인", "", "2026-10-26") == 0
+    assert store.load_ledger(cfg, "tistory")["proposals"][0]["status"] == "approved"
+    assert cli._decide(cfg, "티5", "승인", "", "2026-10-26") == 1          # 이미 정한 제안
+    assert cli._decide(cfg, "5", "승인", "", "2026-10-26") == 1            # 블로그 글자 없음

@@ -47,9 +47,19 @@
    사용 API에 **데이터랩(검색어트렌드)** 추가. 안 하면 수요 확인만 빠지고 나머지는 돕니다.
 4. 네이버 검색 API 키(`NAVER_SEARCH_CLIENT_ID/SECRET`)가 `.env`에 있으면 검색 순위도 모읍니다(이웃 추천과 같은 키).
 
+## 제안 받고 결정하기 (텔레그램 없이도)
+
+- 일요일 리뷰가 끝나면 PC가 `diagnostics/growth/<블로그>/weekly.md`를 GitHub에 올립니다. 주제 이름·점수·무덤·제안만 담고,
+  **글 제목·주소·블로그 아이디는 지웁니다**(저장소가 공개라서). 끄려면 `.env`에 `LAB_PUSH_REPORT=false`.
+- 월요일 아침 Claude가 그 보고를 읽고 대화창에 제안을 정리해 올립니다. 답은 대화창에 "투3 승인", "티2 거절",
+  "투4는 이렇게 바꿔서 승인"처럼 하면 됩니다.
+- Claude가 그 결정을 `data/lab_decisions.json`에 적어 PR을 올리고, 병합되면 PC가 다음 예약 작업 때 받아 와 반영합니다.
+- PC에서 바로 정하려면: `python -m growth_lab approve 투3` / `python -m growth_lab reject 투3`
+  (승인하면서 문장을 고치려면 `--text "고친 문장"`). 텔레그램을 연결했다면 봇에게 "승인 투3"으로 답해도 됩니다.
+
 ## 매일·매주 할 일
 
-- 없습니다. 일요일 밤 텔레그램 보고를 읽고, 제안이 있으면 `승인 투3` / `거절 투3`(투자), `승인 티2`(티스토리)로 답장합니다.
+- 없습니다. 월요일 아침 대화창(또는 텔레그램)에 올라오는 제안에 답하면 됩니다.
 - 언제든: `python -m growth_lab status`(장부 요약), `python -m growth_lab brief --blog invest`(내일 글쓰기에 들어갈 안내 미리 보기),
   `python -m growth_lab review`(주간 리뷰를 지금 실행).
 - 끄기: `.env`에 `LAB_BLOGS=`(빈 값). 한 블로그만: `LAB_BLOGS=invest`. 기준값은 `.env.example`의 `LAB_*`.
