@@ -32,7 +32,7 @@ def compare(candidates: dict[str, list[str]], anchor: str, client_id: str, clien
             today: date | None = None, post=None) -> dict[str, float | None] | dict[str, str]:
     """{후보 이름: 기준 대비 최근 3달 평균 검색량 비율}. 키가 없거나 권한이 없으면 {"_error": 이유}."""
     if not (client_id and client_secret):
-        return {"_error": "NAVER_SEARCH_CLIENT_ID/SECRET이 없습니다"}
+        return {"_error": "꺼짐(네이버 검색 API 키 없음 — 2026-07부터 개발자센터 신규 발급 중단, 필요하면 NAVER API HUB)"}
     if not anchor:
         return {"_error": "기준 검색어가 없습니다"}
     today = today or date.today()

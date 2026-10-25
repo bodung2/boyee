@@ -268,7 +268,8 @@ def apply_review(blog: str, cfg: LabConfig, ledger: dict, result: dict, today: s
         scores = demand.compare({c["name"]: c["keywords"] for c in cands}, demand.anchor_for(blog),
                                 cfg.naver_search_id, cfg.naver_search_secret, date.fromisoformat(today), demand_post)
         if "_error" in scores:
-            notes.append(f"⚠️ 검색 수요 확인 못 함: {scores['_error']}")
+            mark = "ℹ️" if scores["_error"].startswith("꺼짐") else "⚠️"
+            notes.append(f"{mark} 검색 수요 확인 {scores['_error']}")
         for c in cands:
             c["demand"] = scores.get(c["name"]) if "_error" not in scores else None
         # 검색이 거의 없는 후보(기준의 5% 미만)는 쓰기 전에 거른다
