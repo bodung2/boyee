@@ -60,6 +60,7 @@ def check(entries: list[dict], platform: str, client_id: str, client_secret: str
     from datetime import date
 
     if not (client_id and client_secret):
+        log.info("NAVER_SEARCH_CLIENT_ID/SECRET이 없어 검색 순위 확인을 건너뜁니다")
         return {}
     d0 = date.fromisoformat(today)
     recent = []

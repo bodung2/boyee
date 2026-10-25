@@ -60,6 +60,9 @@ class TistoryConfig:
     infographic_timeout: int
     codex_image_timeout: int
     codex_effort: str = ""
+    # 카카오 로그인 유지가 끝났을 때만 쓰는 계정(비우면 직접 `login`). .env는 git에 올라가지 않는다.
+    kakao_login_id: str = ""
+    kakao_login_password: str = ""
 
     @property
     def blog_url(self) -> str:
@@ -117,4 +120,6 @@ class TistoryConfig:
             infographic_skill=env("INFOGRAPHIC_SKILL", "onepage").strip(),
             infographic_timeout=int(env("INFOGRAPHIC_TIMEOUT_SEC", "900")),
             codex_image_timeout=int(env("CODEX_IMAGE_TIMEOUT_SEC", "360")),
+            kakao_login_id=env("KAKAO_LOGIN_ID", "").strip(),
+            kakao_login_password=env("KAKAO_LOGIN_PASSWORD", ""),
         )
