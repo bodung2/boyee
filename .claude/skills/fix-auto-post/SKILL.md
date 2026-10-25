@@ -38,6 +38,19 @@ description: "티스토리 '오류 해결' 글을 완전 자동 발행용으로 
 2. 아니면 `[주제 큐 상위 후보]` 1순위. 공식 문서로 원인·해결을 확인하지 못하면 다음 후보로 넘어간다.
 3. `HISTORY_FILE`에 같은 `topic_id`가 있으면 쓰지 않는다.
 
+### 성장 실험실 안내가 있으면
+
+프롬프트 끝에 `[성장 실험실 안내]`가 붙어 있으면(조회수·검색 순위를 보고 자동으로 정한 오늘의 방향) 그 차례를 따른다.
+- **기본·집중·시험 계속:** 위 1~3대로 큐에서 고르되, 안내에 적힌 주제(도구 계열)에 맞는 후보를 먼저. 맞는 큐 후보가 없으면 그 계열에서
+  많이 검색되는 다른 오류를 큐 밖에서 고른다.
+- **탐색:** 큐 밖의 새 계열을 시험한다(탐색 후보 우선). 블로그의 큰 줄기(컴퓨터·개발 도구 오류 해결) 안에서, 정확한 오류 문구가 있고
+  공식 문서로 원인·해결을 확인할 수 있는 것만.
+- 큐 밖 주제는 `topic_id`를 `"lab-"` + 영문 소문자 슬러그(예: `lab-docker-wsl-update`), `lane`을 `"lab"`으로 쓰고 **경험담 없이** 쓴다
+  (`experience_used`는 빈 문자열). `HISTORY_FILE`에 같은 오류를 다룬 글이 있으면 쓰지 않는다.
+- **무덤**에 있는 주제와 같거나 비슷한 주제는 쓰지 않는다(파이프라인이 막는다). 안내 끝의 **플레이북**이 이 스킬과 부딪히면 스킬을 따른다.
+- `post.json`에 `lab_mode`, `lab_topic`(도구 계열 이름 예: "PowerShell 오류", "Git 인증 오류" — 이미 있는 이름이면 그대로),
+  `lab_keyword`(대표 검색어 = 보통 오류 문구의 핵심 부분), `image_style_id`를 넣는다.
+
 ## 2. 리서치
 
 1. **오류 문구로 검색해 실제 원인을 좁힌다.** 같은 문구라도 원인이 여러 개면 흔한 순서로 정리한다.
@@ -81,7 +94,7 @@ description: "티스토리 '오류 해결' 글을 완전 자동 발행용으로 
 
 그림 자리(`illust_a`, `illust_b`)마다 ChatGPT 이미지 생성용 영어 프롬프트를 쓴다.
 - **장면:** 상황을 보여 주는 장면(예: 밤에 노트북 앞에서 빨간 경고창을 보는 사람의 뒷모습, 문제가 풀려 기지개 켜는 사람). 화면 속 내용은 추상적인 창·아이콘으로만.
-- **화풍:** "clean modern editorial illustration, flat vector with soft grain, muted navy and warm orange accents, calm mood".
+- **화풍:** "clean modern editorial illustration, flat vector with soft grain, muted navy and warm orange accents, calm mood". 성장 실험실 안내에 `IMAGE_STYLE`이 있으면 이 문장 대신 그 문장을 그대로 쓴다(화풍 실험).
 - **금지:** 글자·숫자·코드·로고·실제 프로그램 화면(가짜 글자가 생긴다), 실존 인물·브랜드 로고.
 - 사람은 뒷모습·실루엣·작은 크기로.
 
@@ -110,6 +123,7 @@ description: "티스토리 '오류 해결' 글을 완전 자동 발행용으로 
   ],
   "sources": [{"title": "문서 이름", "publisher": "OpenAI", "url": "https://..."}],
   "experience_used": "주제 큐의 experience를 썼으면 그 내용 요약, 안 썼으면 빈 문자열",
+  "lab_mode": "기본", "lab_topic": "Codex CLI 오류", "lab_keyword": "codex unexpected argument", "image_style_id": "base",
   "research_log": "원인 판단 근거, 연 문서, 버전"
 }
 ```

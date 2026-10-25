@@ -268,6 +268,17 @@ notepad .env                                              # TISTORY_BLOG, TISTOR
 - 발행 화면을 못 찾는다는 오류가 나면 `python -m tistory_autopost diagnose`를 실행하고 `output/tistory/diagnostics/`를 Claude에게 보여 주세요.
   티스토리 화면 구조는 실제 계정으로 확인하지 못한 상태에서 만들어서, 첫 `--dry-run`에서 셀렉터를 고칠 수 있습니다(`tistory_autopost/publisher.py`의 `SELECTORS`).
 
+## 성장 실험실 (투자 블로그·티스토리: 주제와 글쓰기 방식을 스스로 바꿔 가기)
+
+매일 밤 블로그 통계 화면(글별 조회수)과 네이버 검색 순위를 모으고, 일요일마다 주제를 판정합니다.
+시험 글 3편이 블로그 중간값보다 잘 나온 주제는 계속 쓰고(유입 검색어로 확장), 안 나온 주제는 **무덤**에 이유와 함께 기록해 같은·비슷한 주제로 다시 가지 않습니다.
+10편 중 3편꼴로 새 주제를 탐색하고, 그림 화풍도 두 가지를 번갈아 써서 나은 쪽을 채택합니다.
+Claude가 막힌 단계(수요·노출·클릭·읽기)를 진단하고 상위 글·플랫폼 변화를 리서치해 블로그별 플레이북을 새로 씁니다. 사실 확인·안전 규칙은 바뀌지 않습니다.
+
+- 자세한 설명·처음 설정: [docs/GROWTH_LAB.md](docs/GROWTH_LAB.md)
+- 예약: `scripts\setup_all_schedules.ps1 -Only GrowthLab` (매일 22:30, 일요일엔 주간 리뷰까지)
+- 확인: `python -m growth_lab status`, 조회수를 못 읽으면 `python -m growth_lab diagnose`
+
 ## 이웃 후보 추천 (유아·교육, 하루 5곳씩)
 
 내 블로그와 주제가 비슷하고 **최근 7일 안에 글을 쓴** 네이버 블로그를 찾아, 콘텐츠 관리 시트(`블로그_콘텐츠_관리시트`)의
@@ -367,6 +378,7 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_all_schedules.ps1 -Skip P
 | 12:00 (15:00 재시도) | 네이버 유아 |
 | 19:00 | 네이버 이웃 후보 추천 |
 | 20:00 / 21:00 | 교육 / 유아 인스타·쓰레드 |
+| 22:30 | 성장 실험실 수집(일요일엔 주간 리뷰) |
 
 시각을 바꾸려면 `scripts/setup_all_schedules.ps1`의 `$Schedule` 표만 고친 뒤 다시 실행합니다.
 예전 이름(`NaverEduAutoPost`)으로 남은 작업은 자동으로 지우고, 이 폴더의 실행 파일을 돌리는데 표에 없는 작업(손으로 만든 작업 등)은 목록으로 보여 줍니다. 그것도 지우려면 `-RemoveOld`를 붙입니다.

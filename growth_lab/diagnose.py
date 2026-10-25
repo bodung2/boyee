@@ -1,0 +1,69 @@
+"""통계 화면 진단: 수집기가 조회수를 못 찾을 때 화면이 어떤 데이터를 받아 오는지 '구조만' 저장한다.
+
+저장소가 공개라서 값(제목·닉네임·숫자 원본)은 올리지 않는다. 응답 주소의 경로, 필드 이름과 값의 종류,
+우리 글이 매칭됐는지(예/아니오)만 diagnostics/growth/<블로그>/에 남긴다. 스크린샷과 원본은 집 PC의 output/lab/에만."""
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+
+from naver_autopost import history
+
+from . import stats
+from .config import LabConfig
+from .metrics import blog_ident, capture, _platform_cfg
+
+
+def shape(obj, depth: int = 0, max_depth: int = 6):
+    """값을 지우고 구조만: 문자열 → "str", 숫자 → "int"/"float", 목록은 첫 항목 구조 + 개수."""
+    if depth > max_depth:
+        return "…"
+    if isinstance(obj, dict):
+        # 날짜·검색어·제목이 키인 표(값이 키에 들어 있음)는 키를 지운다
+        if obj and not all(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,39}", str(k)) for k in obj):
+            return {"__map__": len(obj), "value": shape(next(iter(obj.values())), depth + 1)}
+        return {str(k): shape(v, depth + 1) for k, v in list(obj.items())[:40]}
+    if isinstance(obj, list):
+        return {"__list__": len(obj), "item": shape(obj[0], depth + 1)} if obj else []
+    if isinstance(obj, bool):
+        return "bool"
+    if isinstance(obj, int):
+        return "int"
+    if isinstance(obj, float):
+        return "float"
+    if obj is None:
+        return "null"
+    return "str"
+
+
+def _path_only(url: str, ident: str) -> str:
+    url = url.replace(ident, "<BLOG>") if ident else url
+    url = re.sub(r"/[^/]*(%[0-9A-Fa-f]{2}|[^\x00-\x7f])[^/]*", "/<x>", url)   # 한글·인코딩된 경로 조각
+    return re.sub(r"/\d{5,}", "/<N>", url)
+
+
+def run(blog: str, cfg: LabConfig, today: str) -> Path:
+    pcfg = _platform_cfg(blog)
+    ident = blog_ident(pcfg)
+    local = cfg.output_dir / blog / f"diagnose-{today}"
+    local.mkdir(parents=True, exist_ok=True)
+    cap = capture(blog, cfg, pcfg, shots=local)
+    stats.save_capture(cap, local, {ident: "<BLOG>"} if ident else None, max_json=5_000_000)
+    entries = [e for e in history.load(cfg.history_file(blog)) if e.get("url")]
+    matched = stats.match_posts(cap, entries)
+    report = {
+        "date": today, "blog": blog, "logged_in": cap.logged_in,
+        "errors": [_path_only(e, ident) for e in cap.errors],
+        "pages": [{"url": _path_only(p["url"], ident), "nav": p.get("nav", ""), "text_lines": len(p.get("text", "").splitlines()),
+                   "has_numbers": bool(re.search(r"\d", p.get("text", "")))} for p in cap.pages],
+        "responses": [{"url": _path_only(r.get("url", ""), ident), "query_keys": sorted({kv.split("=")[0] for kv in
+                       (r.get("query") or "").split("&") if kv})[:20], "shape": shape(r.get("json"))}
+                      for r in cap.responses[:80]],
+        "posts_known": len(entries), "posts_matched": len(matched),
+        "matched_fields": sorted({c["field"] for m in matched.values() for c in m["candidates"]}),
+    }
+    out = cfg.diagnostics_dir / blog / "stat_structure.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
+    return out

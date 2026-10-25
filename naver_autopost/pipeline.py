@@ -233,6 +233,27 @@ def _fix_structure(cfg: Config, out_dir: Path, post_path: Path) -> dict:
     return post
 
 
+def _lab_check(cfg: Config, post_path: Path) -> str:
+    """성장 실험실 무덤(해 봤는데 안 된 주제)에 있는 주제면 거절 사유. 실험실 대상이 아니면 빈 문자열."""
+    try:
+        from growth_lab import brief, config as lab_config
+        if not lab_config.enabled(cfg.profile.name):
+            return ""
+        return brief.check_post(cfg.profile.name, json.loads(post_path.read_text(encoding="utf-8")))
+    except Exception as e:  # noqa: BLE001
+        log.warning("성장 실험실 확인 실패(통과로 봅니다): %s", e)
+        return ""
+
+
+def _lab_fields(post: dict) -> dict:
+    """발행 이력에 남길 실험실 꼬리표(주제 이름·차례·글 모양). 실패해도 기록은 남긴다."""
+    try:
+        from growth_lab.features import history_fields
+        return history_fields(post)
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 def _attempt(cfg: Config, today: str, out_dir: Path, feedback: str, resume: bool = False) -> dict:
     """글 1편을 발행 가능한 상태로 만든다. resume이면 지난 실행이 멈춘 단계부터 이어서 한다
     (예: OpenAI 잔액 부족으로 멈췄을 때 이미 쓴 글·통과한 검수를 다시 하지 않음)."""
@@ -244,6 +265,9 @@ def _attempt(cfg: Config, today: str, out_dir: Path, feedback: str, resume: bool
         except generate.NoPostError as e:
             raise Rejected(f"{e}. 직전 주제는 원문을 확인하지 못했을 수 있으니 원문을 열 수 있는 다른 주제를 골라 "
                            "질문하지 말고 끝까지 써라.") from e
+        lab_problem = _lab_check(cfg, post_path)
+        if lab_problem:
+            raise Rejected(lab_problem)
         post = _fix_structure(cfg, out_dir, post_path)
         _mark(out_dir, written=True)
     else:
@@ -526,6 +550,7 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
                 "lane": post.get("lane", ""), "cluster": post.get("cluster", ""), "domain": post.get("domain"),
                 "tags": post.get("tags", []), "source": "autopost",
                 "persona_used": persona.clean_used(post.get("persona_used"), persona.load()),
+                **_lab_fields(post),
             })
             notify.send(cfg, f"[{label} 자동발행 완료] {post['title']}\n{url}\n{cat_note}{_social_drafts(cfg, out_dir, url)}")
             return 0

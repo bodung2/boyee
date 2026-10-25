@@ -84,11 +84,14 @@ def _claude_bin(cfg: Config) -> str:
     return found
 
 
-def _run_claude(cfg: Config, prompt: str, log_file: Path, light: bool = False) -> None:
+def _run_claude(cfg: Config, prompt: str, log_file: Path, light: bool = False,
+                tools: list[str] | None = None, permission_mode: str = "acceptEdits") -> None:
+    """tools·permission_mode: 쓰기 범위를 좁혀야 하는 작업(성장 실험실 리뷰)은 permission_mode="default"와
+    경로가 붙은 Write(...) 규칙만 허용해, 목록에 없는 도구·경로는 묻지 않고 거절되게 한다."""
     cmd = [
         _claude_bin(cfg), "-p",
-        "--permission-mode", "acceptEdits",
-        "--allowedTools", ",".join(ALLOWED_TOOLS),
+        "--permission-mode", permission_mode,
+        "--allowedTools", ",".join(tools or ALLOWED_TOOLS),
         "--output-format", "json",
     ]
     model = cfg.claude_model_light if light else cfg.claude_model
@@ -145,6 +148,16 @@ def _persona_lines(cfg: Config, recent: bool = True) -> str:
     return lines
 
 
+def _lab_brief(cfg: Config, today: str) -> str:
+    """성장 실험실 안내(오늘 차례·주제·화풍). 실험실 대상 블로그가 아니거나 실패하면 빈 문자열."""
+    try:
+        from growth_lab import brief, config as lab_config
+        return brief.for_blog(cfg.profile.name, today) if lab_config.enabled(cfg.profile.name) else ""
+    except Exception as e:  # noqa: BLE001 - 실험실 문제로 글쓰기가 멈추면 안 된다
+        log.warning("성장 실험실 안내 실패(원래대로 씁니다): %s", e)
+        return ""
+
+
 def write_post(cfg: Config, out_dir: Path, today: str, feedback: str = "") -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     related = [p for p in sorted(cfg.data_dir.glob("published_*.json")) if p != cfg.history_file]
@@ -158,6 +171,9 @@ def write_post(cfg: Config, out_dir: Path, today: str, feedback: str = "") -> Pa
         "사람 검토 없이 자동 발행되므로 사실 정확성이 최우선이다. 질문하지 말고 끝까지 진행하라. "
         "고른 주제의 원문(보도자료·PDF 등)을 열 수 없으면 사람에게 묻지 말고, 원문을 확인할 수 있는 다른 주제로 바꿔 끝까지 써라."
     )
+    lab = _lab_brief(cfg, today)
+    if lab:
+        prompt += "\n\n" + lab
     if feedback:
         prompt += f"\n\n직전 시도는 아래 이유로 발행이 거부되었다. 다른 주제를 고르거나 문제를 해결하라:\n{feedback}"
     _run_claude(cfg, prompt, out_dir / "claude_write.log")
