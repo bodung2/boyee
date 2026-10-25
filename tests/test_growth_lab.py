@@ -1,5 +1,6 @@
 """성장 실험실: 통계 매칭·점수·판정·오늘의 방향·화풍 실험·주간 리뷰 적용·텔레그램 답장을 확인한다."""
 import json
+import urllib.parse
 from datetime import date, timedelta
 
 import pytest
@@ -358,3 +359,94 @@ def test_writer_prompt_gets_lab_brief(monkeypatch, tmp_path):
     assert "[성장 실험실 안내]" in seen["p"] and "IMAGE_STYLE_ID=" in seen["p"]
     generate.write_post(Config.load("edu"), tmp_path / "out", "2026-10-20")
     assert "[성장 실험실 안내]" not in seen["p"]
+
+
+# ---------------------------------------------------------------- 네이버 일별 글 조회수(열 모양 표)
+
+def _rank_json(rows):
+    """네이버 조회수 순위 응답 모양: rows가 열(column)별 목록."""
+    cols = {"date": [], "cv": [], "rank": [], "title": [], "uri": [], "createDate": []}
+    for i, (title, uri, cv) in enumerate(rows, 1):
+        for k, v in zip(cols, ["2026-10-24", cv, i, title, uri, "2026-10-20"]):
+            cols[k].append(v)
+    return {"statusCode": 200, "message": "ok", "result": {"statDataList": [{"dataId": "x", "data": {
+        "columnInfo": list(cols), "rows": cols}, "utime": "t"}]}}
+
+
+def test_columnar_rows_are_matched():
+    posts = [{"url": url(1), "title": "연봉 5천, 실수령액 얼마일까?"}, {"url": url(2), "title": "청약 가점, 몇 점이면 될까?"}]
+    cap = stats.Capture(responses=[{"url": "https://blog.stat.naver.com/api/blog/rank/cvContentPc",
+                                    "json": _rank_json([("연봉 5천, 실수령액 얼마일까?", "/myblog/224000000001", 37),
+                                                        ("다른 글", "/myblog/224000000099", 5)])}])
+    got = stats.match_posts(cap, posts)
+    assert got[stats.post_key(url(1))]["views"] == 37 and stats.post_key(url(2)) not in got
+
+
+class _Resp:
+    def __init__(self, data):
+        self.data = data
+
+    def text(self):
+        return json.dumps(self.data, ensure_ascii=False)
+
+
+class _Ctx:
+    """ctx.request.get만 흉내: startDate별로 다른 조회수를 돌려준다."""
+    def __init__(self, by_day):
+        self.by_day, self.urls = by_day, []
+        self.request = self
+
+    def get(self, u, headers=None):
+        self.urls.append(u)
+        day = dict(urllib.parse.parse_qsl(u.split("?", 1)[1]))["startDate"]
+        return _Resp(_rank_json(self.by_day.get(day, [])))
+
+
+def test_fetch_daily_replays_page_request_per_day():
+    seen = {"url": "https://blog.stat.naver.com/api/blog/rank/cvContentPc",
+            "query": "timeDimension=DATE&startDate=2026-10-25&exclude=&_=1", "json": {}}
+    cap = stats.Capture(responses=[seen])
+    ctx = _Ctx({"2026-10-23": [("연봉 5천, 실수령액 얼마일까?", "/myblog/224000000001", 10)],
+                "2026-10-24": [("연봉 5천, 실수령액 얼마일까?", "/myblog/224000000001", 4)]})
+    stats.fetch_daily(ctx, cap, ["2026-10-23", "2026-10-24"])
+    assert sorted(cap.daily) == ["2026-10-23", "2026-10-24"]
+    assert all("timeDimension=DATE" in u and "exclude=" in u for u in ctx.urls)
+    views = stats.daily_views(cap, [{"url": url(1), "title": "연봉 5천, 실수령액 얼마일까?"}])
+    assert views == {stats.post_key(url(1)): {"2026-10-23": 10, "2026-10-24": 4}}
+    # 화면 요청이 없으면 이유를 남기고 아무것도 받지 않는다
+    empty = stats.Capture()
+    stats.fetch_daily(ctx, empty, ["2026-10-23"])
+    assert not empty.daily and empty.errors
+
+
+def test_daily_merge_and_scoring(cfg):
+    k = stats.post_key(url(1))
+    store.merge_daily(cfg, "invest", {k: {day(0): 5, day(1): 7}}, [day(0), day(1)])
+    data = store.merge_daily(cfg, "invest", {}, [day(1)])          # 다시 받은 날 순위에 없으면 0으로 본다
+    assert data["posts"][k] == {day(0): 5} and day(1) in data["fetched"]
+    store.merge_daily(cfg, "invest", {k: {d: 10 for d in [day(i) for i in range(2, 9)]}}, [day(i) for i in range(2, 9)])
+    daily = store.load_daily(cfg, "invest")
+    entry = {"date": day(0), "title": "t", "url": url(1), "source": "autopost", "lab_topic": "A"}
+    table = scoring.post_table("invest", [entry], [], day(20), {}, daily)
+    assert table[0]["v1"] == 5 + 0 + 10 * 6 and table[0]["v2"] is None   # 14일째까지 받은 날이 모자라면 판정 안 함
+    assert table[0]["views_now"] == 75
+    assert scoring.health_daily(daily, day(9)) == 75 - 0 and scoring.health_daily({"fetched": [], "posts": {}}, day(9)) is None
+
+
+def test_collect_uses_daily_sum_as_views(cfg):
+    history.save(cfg.history_file("invest"), [{"date": "2026-10-20", "title": "연봉 5천, 실수령액 얼마일까?",
+                                               "url": url(1), "source": "autopost"}])
+    cap = stats.Capture(responses=[{"url": "https://blog.stat.naver.com/api/blog/rank/cvContentPc",
+                                    "json": _rank_json([("연봉 5천, 실수령액 얼마일까?", "/myblog/224000000001", 3)])}],
+                        daily={"2026-10-23": _rank_json([("연봉 5천, 실수령액 얼마일까?", "/myblog/224000000001", 8)]),
+                               "2026-10-24": _rank_json([("연봉 5천, 실수령액 얼마일까?", "/myblog/224000000001", 6)])})
+    snap = metrics.collect("invest", cfg, "2026-10-25", capture_fn=lambda: cap)
+    assert snap["posts"][stats.post_key(url(1))]["views"] == 14 and snap["posts"][stats.post_key(url(1))]["src"] == "daily"
+    assert metrics.days_to_fetch(cfg, "invest", "2026-10-25")[-2:] == ["2026-10-24", "2026-10-25"]
+    assert "2026-10-23" not in metrics.days_to_fetch(cfg, "invest", "2026-10-25")
+    assert len(metrics.days_to_fetch(cfg, "invest", "2026-10-25")) == metrics.DAILY_BACKFILL_DAYS - 1
+
+
+def test_diagnose_query_shape():
+    assert diagnose._query_shape("timeDimension=DATE&startDate=2026-10-25&exclude=&_=17") == {
+        "timeDimension": "DATE", "startDate": "9999-99-99", "exclude": "", "_": "99"}

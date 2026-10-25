@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import re
+import urllib.parse
 from pathlib import Path
 
 from naver_autopost import history
@@ -43,12 +44,20 @@ def _path_only(url: str, ident: str) -> str:
     return re.sub(r"/\d{5,}", "/<N>", url)
 
 
+def _query_shape(query: str) -> dict[str, str]:
+    """요청 매개변수의 이름과 값 '모양'만: 영문 대문자 상수(DATE 등)는 그대로, 나머지는 숫자→9·글자→a."""
+    out = {}
+    for k, v in urllib.parse.parse_qsl(query, keep_blank_values=True)[:20]:
+        out[k[:30]] = v if re.fullmatch(r"[A-Z_]{1,20}", v) else re.sub(r"[^\W\d_]", "a", re.sub(r"\d", "9", v))[:30]
+    return out
+
+
 def run(blog: str, cfg: LabConfig, today: str) -> Path:
     pcfg = _platform_cfg(blog)
     ident = blog_ident(pcfg)
     local = cfg.output_dir / blog / f"diagnose-{today}"
     local.mkdir(parents=True, exist_ok=True)
-    cap = capture(blog, cfg, pcfg, shots=local)
+    cap = capture(blog, cfg, pcfg, shots=local, today=today)
     stats.save_capture(cap, local, {ident: "<BLOG>"} if ident else None, max_json=5_000_000)
     entries = [e for e in history.load(cfg.history_file(blog)) if e.get("url")]
     matched = stats.match_posts(cap, entries)
@@ -57,10 +66,11 @@ def run(blog: str, cfg: LabConfig, today: str) -> Path:
         "errors": [_path_only(e, ident) for e in cap.errors],
         "pages": [{"url": _path_only(p["url"], ident), "nav": p.get("nav", ""), "text_lines": len(p.get("text", "").splitlines()),
                    "has_numbers": bool(re.search(r"\d", p.get("text", "")))} for p in cap.pages],
-        "responses": [{"url": _path_only(r.get("url", ""), ident), "query_keys": sorted({kv.split("=")[0] for kv in
-                       (r.get("query") or "").split("&") if kv})[:20], "shape": shape(r.get("json"))}
+        "responses": [{"url": _path_only(r.get("url", ""), ident), "query": _query_shape(r.get("query") or ""),
+                       "shape": shape(r.get("json"))}
                       for r in cap.responses[:80]],
         "posts_known": len(entries), "posts_matched": len(matched),
+        "daily_days": len(cap.daily), "daily_posts_matched": len(stats.daily_views(cap, entries)),
         "matched_fields": sorted({c["field"] for m in matched.values() for c in m["candidates"]}),
     }
     out = cfg.diagnostics_dir / blog / "stat_structure.json"
