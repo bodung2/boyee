@@ -95,6 +95,32 @@ def load_metrics(cfg: LabConfig, blog: str) -> list[dict]:
     return sorted(rows, key=lambda r: r.get("date", ""))
 
 
+# ---- 일별 글 조회수(네이버 조회수 순위) ----
+
+def daily_path(cfg: LabConfig, blog: str) -> Path:
+    return cfg.data_dir / f"daily_{blog}.json"
+
+
+def load_daily(cfg: LabConfig, blog: str) -> dict:
+    """{"fetched": [받아 온 날짜], "posts": {글 주소: {날짜: 그날 조회수}}}"""
+    data = _read_json(daily_path(cfg, blog), {})
+    return {"fetched": data.get("fetched", []), "posts": data.get("posts", {})}
+
+
+def merge_daily(cfg: LabConfig, blog: str, views: dict[str, dict[str, int]], fetched: list[str]) -> dict:
+    """새로 받은 날짜는 그날 값으로 바꾼다(그날 순위에 없던 글은 0으로 본다)."""
+    data = load_daily(cfg, blog)
+    days = set(fetched)
+    for key, by_day in data["posts"].items():
+        for d in days:
+            by_day.pop(d, None)
+    for key, by_day in views.items():
+        data["posts"].setdefault(key, {}).update(by_day)
+    data["fetched"] = sorted(set(data["fetched"]) | days)
+    _write_json(daily_path(cfg, blog), data)
+    return data
+
+
 # ---- 플레이북 ----
 
 def learned_path(cfg: LabConfig, blog: str) -> Path:

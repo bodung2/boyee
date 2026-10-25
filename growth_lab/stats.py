@@ -14,18 +14,20 @@ import html
 import json
 import logging
 import re
+import time
 import urllib.parse
+from datetime import date
 from dataclasses import dataclass, field
 from pathlib import Path
 
 log = logging.getLogger(__name__)
 
+# 2026-10 진단으로 확인한 실제 화면(일간 현황 · 조회수 순위 · 유입분석 · 조회수)
 NAVER_URLS = [
     "https://admin.blog.naver.com/{blog}/stat/today",
-    "https://admin.blog.naver.com/{blog}/stat/cv",
-    "https://admin.blog.naver.com/{blog}/stat/rank/cv",
-    "https://admin.blog.naver.com/{blog}/stat/referer/total",
-    "https://admin.blog.naver.com/{blog}/stat/referer/search",
+    "https://admin.blog.naver.com/{blog}/stat/rank_pv",
+    "https://admin.blog.naver.com/{blog}/stat/referer",
+    "https://admin.blog.naver.com/{blog}/stat/visit_pv",
 ]
 NAVER_NAV = ["조회수 순위", "게시물 통계", "게시글 통계", "유입분석", "검색어", "조회수"]
 TISTORY_URLS = [
@@ -49,6 +51,7 @@ class Capture:
     pages: list[dict] = field(default_factory=list)       # [{url, nav, text}]
     errors: list[str] = field(default_factory=list)
     logged_in: bool = True
+    daily: dict = field(default_factory=dict)              # 날짜 → 그날 글별 조회수 응답(네이버 조회수 순위)
 
 
 def post_key(url: str) -> str:
@@ -109,6 +112,23 @@ def _count_fields(d: dict) -> list[tuple[str, int]]:
     return [(k, v) for k, v, _ in sorted(out, key=lambda x: x[2])]
 
 
+def _expand(obj):
+    """열(column) 모양 표를 줄 모양으로 바꾼다. 네이버 통계는 글별 값을
+    {"rows": {"title": [...], "uri": [...], "cv": [...]}}처럼 같은 길이의 목록 묶음으로 준다."""
+    if isinstance(obj, list):
+        return [_expand(v) for v in obj]
+    if not isinstance(obj, dict):
+        return obj
+    out = {k: _expand(v) for k, v in obj.items()}
+    rows = out.get("rows")
+    if isinstance(rows, dict) and rows and all(isinstance(v, list) for v in rows.values()):
+        n = {len(v) for v in rows.values()}
+        if len(n) == 1 and n.pop() > 0:
+            cols = list(rows)
+            out["rows"] = [dict(zip(cols, vals)) for vals in zip(*rows.values())]
+    return out
+
+
 def _walk(obj, visit) -> None:
     if isinstance(obj, dict):
         visit(obj)
@@ -149,12 +169,72 @@ def match_posts(cap: Capture, posts: list[dict]) -> dict[str, dict]:
                     cands.append({"src": src, "field": fields[0][0], "value": fields[0][1]})
 
         for r in cap.responses:
-            _walk(r.get("json"), lambda d, s=r.get("url", ""): visit(d, s))
+            _walk(_expand(r.get("json")), lambda d, s=r.get("url", ""): visit(d, s))
         if not cands and len(title) >= 8:
             cands += _text_candidates(cap, title, p.get("title", ""))
         if cands:
             found[key] = cands
     return {k: {"views": max(c["value"] for c in v), "candidates": v[:6]} for k, v in found.items()}
+
+
+def daily_views(cap: Capture, posts: list[dict]) -> dict[str, dict[str, int]]:
+    """날짜별 '조회수 순위' 응답에서 우리 글의 그날 조회수. {글 주소: {날짜: 조회수}} (순위에 없는 날은 0으로 본다)"""
+    out: dict[str, dict[str, int]] = {}
+    keyed = [(post_key(p.get("url", "")), _norm(p.get("title", "")), id_tokens(p.get("url", ""))) for p in posts]
+    for day, data in cap.daily.items():
+        rows: list[dict] = []
+        _walk(_expand(data), rows.append)
+        for key, title, ids in keyed:
+            if not key:
+                continue
+            for d in rows:
+                if _matches(d, title, ids):
+                    fields = _count_fields(d)
+                    if fields:
+                        out.setdefault(key, {})[day] = fields[0][1]
+                        break
+    return out
+
+
+# 네이버 '조회수 순위' 화면이 부르는 요청(그날 글별 조회수). 화면이 실제로 보낸 요청을 날짜만 바꿔 다시 보낸다
+# (매개변수 이름·형식은 화면이 정한 그대로 따른다).
+NAVER_DAILY = "/api/blog/rank/cvContent"
+
+
+def _date_param(value: str, day: str) -> str | None:
+    d = date.fromisoformat(day)
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value or ""):
+        return d.isoformat()
+    if re.fullmatch(r"\d{8}", value or ""):
+        return d.strftime("%Y%m%d")
+    return None
+
+
+def fetch_daily(ctx, cap: Capture, days: list[str], referer: str = "https://admin.blog.naver.com/") -> None:
+    """화면에서 본 '조회수 순위' 요청을 날짜별로 다시 보내 cap.daily에 담는다(로그인된 브라우저의 쿠키를 그대로 쓴다)."""
+    seen = next((r for r in cap.responses if NAVER_DAILY in r.get("url", "")), None)
+    if not seen:
+        cap.errors.append("조회수 순위 화면의 데이터 요청을 찾지 못했습니다(일별 글 조회수 없음)")
+        return
+    params = dict(urllib.parse.parse_qsl(seen.get("query", ""), keep_blank_values=True))
+    if _date_param(params.get("startDate", ""), "2000-01-01") is None:
+        cap.errors.append(f"조회수 순위 요청의 날짜 형식을 모릅니다: startDate={params.get('startDate', '')[:20]}")
+        return
+    if params.get("timeDimension", "DATE").upper() != "DATE":
+        cap.errors.append(f"조회수 순위 화면이 일간이 아닙니다(timeDimension={params.get('timeDimension')}) — 일간으로 바꿔 받습니다")
+        params["timeDimension"] = "DATE"
+    for day in days:
+        q = {**params, "startDate": _date_param(params["startDate"], day), "_": str(int(time.time() * 1000))}
+        try:
+            resp = ctx.request.get(seen["url"] + "?" + urllib.parse.urlencode(q), headers={"Referer": referer})
+            data = _loose_json(resp.text())
+        except Exception as e:  # noqa: BLE001 - 하루치 실패는 다음 실행에서 다시 받는다
+            cap.errors.append(f"{day} 조회수 순위: {e}"[:200])
+            continue
+        if isinstance(data, dict) and data.get("statusCode", 200) in (200, "200", 0) and "result" in data:
+            cap.daily[day] = data
+        else:
+            cap.errors.append(f"{day} 조회수 순위 응답이 예상과 다릅니다")
 
 
 def _text_candidates(cap: Capture, title: str, raw_title: str) -> list[dict]:
@@ -262,8 +342,9 @@ def _browse(ctx, starts: list[str], nav: list[str], cap: Capture, shots: Path | 
                 page.screenshot(path=str(shots / f"{step:02d}-{word}.png"), full_page=True)
 
 
-def capture_naver(cfg, override: list[str], shots: Path | None = None) -> Capture:
-    """cfg: naver_autopost.config.Config(투자 프로필) — 발행용 크롬 프로필을 그대로 쓴다."""
+def capture_naver(cfg, override: list[str], shots: Path | None = None, days: list[str] | None = None) -> Capture:
+    """cfg: naver_autopost.config.Config(투자 프로필) — 발행용 크롬 프로필을 그대로 쓴다.
+    days: 글별 조회수를 받아 올 날짜들(YYYY-MM-DD)."""
     from playwright.sync_api import sync_playwright
 
     from naver_autopost.publisher import _launch, _logged_in
@@ -277,6 +358,8 @@ def capture_naver(cfg, override: list[str], shots: Path | None = None) -> Captur
                 cap.errors.append("네이버 로그인이 풀려 있습니다")
                 return cap
             _browse(ctx, _start_urls("naver", cfg.blog_id, "", override), NAVER_NAV, cap, shots, ("nid.naver.com",))
+            if days and cap.logged_in:
+                fetch_daily(ctx, cap, days)
         finally:
             ctx.close()
     return cap
@@ -316,7 +399,7 @@ def save_capture(cap: Capture, out_dir: Path, redact: dict[str, str] | None = No
                 text = text.replace(old, new)
         return text
 
-    data = {"logged_in": cap.logged_in, "errors": cap.errors,
+    data = {"logged_in": cap.logged_in, "errors": cap.errors, "daily_days": sorted(cap.daily),
             "pages": [{**p, "text": clean(p.get("text", ""))} for p in cap.pages],
             "responses": []}
     used = 0

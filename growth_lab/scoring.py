@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from statistics import median
 
@@ -65,6 +65,28 @@ def views_at_age(series: list[tuple[date, int]], published: date, age: int, tol:
     return best[1] if best else None
 
 
+def views_at_age_daily(by_day: dict[str, int], fetched: set[str], published: date, age: int,
+                       today: date) -> int | None:
+    """일별 조회수를 발행일부터 age일째까지 더한 값. 그 사이 날짜를 모두 받아 왔고 age일째가 지났을 때만."""
+    end = published + timedelta(days=age)
+    if end >= today:
+        return None
+    days = [(published + timedelta(days=i)).isoformat() for i in range(age + 1)]
+    if any(d not in fetched for d in days):
+        return None
+    return sum(int(by_day.get(d, 0)) for d in days)
+
+
+def health_daily(daily: dict, today: str, days: int = 14) -> int | None:
+    """최근 days일(오늘 제외) 블로그 전체(우리 글 합계) 조회수. 그 기간을 절반 넘게 못 받았으면 None."""
+    d0 = date.fromisoformat(today)
+    window = {(d0 - timedelta(days=i)).isoformat() for i in range(1, days + 1)}
+    got = window & set(daily.get("fetched", []))
+    if len(got) < days // 2:
+        return None
+    return sum(int(v) for by_day in daily.get("posts", {}).values() for d, v in by_day.items() if d in got)
+
+
 def _best_rank(rows: list[dict], key: str) -> int | None:
     ranks = []
     for r in rows:
@@ -73,10 +95,14 @@ def _best_rank(rows: list[dict], key: str) -> int | None:
     return min(ranks) if ranks else None
 
 
-def post_table(blog: str, entries: list[dict], rows: list[dict], today: str, maps: dict[str, str]) -> list[dict]:
+def post_table(blog: str, entries: list[dict], rows: list[dict], today: str, maps: dict[str, str],
+               daily: dict | None = None) -> list[dict]:
+    """daily(일별 글 조회수)가 있으면 그것으로, 없으면 매일 기록한 누적 조회수로 N일째 조회수를 낸다."""
     spec = BLOGS[blog]
     series = _series(rows)
     d0 = date.fromisoformat(today)
+    fetched = set((daily or {}).get("fetched", []))
+    per_post = (daily or {}).get("posts", {})
     out = []
     for e in entries:
         if not e.get("url"):
@@ -87,12 +113,19 @@ def post_table(blog: str, entries: list[dict], rows: list[dict], today: str, map
             continue
         key = post_key(e["url"])
         s = series.get(key, [])
+        if fetched:
+            by_day = per_post.get(key, {})
+            v1 = views_at_age_daily(by_day, fetched, pub, spec.eval_days[0], d0)
+            v2 = views_at_age_daily(by_day, fetched, pub, spec.eval_days[1], d0)
+            now = sum(int(v) for v in by_day.values())
+        else:
+            v1, v2 = views_at_age(s, pub, spec.eval_days[0]), views_at_age(s, pub, spec.eval_days[1])
+            now = s[-1][1] if s else None
         out.append({
             "key": key, "title": e.get("title", ""), "date": pub.isoformat(), "age": (d0 - pub).days,
             "topic": topic_of(blog, e, maps), "autopost": e.get("source") == "autopost",
             "mode": e.get("lab_mode", ""), "features": e.get("lab") or {},
-            "views_now": s[-1][1] if s else None,
-            "v1": views_at_age(s, pub, spec.eval_days[0]), "v2": views_at_age(s, pub, spec.eval_days[1]),
+            "views_now": now, "v1": v1, "v2": v2,
             "best_rank": _best_rank(rows, key),
         })
     return out
