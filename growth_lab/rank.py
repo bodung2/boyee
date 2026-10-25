@@ -96,18 +96,22 @@ def _get_page(url: str) -> str:
         return resp.read().decode("utf-8", "replace")
 
 
-def page_rank(query: str, url: str, platform: str, fetch=None) -> dict:
-    """키 없이: 검색 결과 첫 화면에서의 순위. {"query", "blog"|"daum": 순위|None(첫 화면 밖)}"""
+def page_rank(query: str, url: str, platform: str, fetch=None, debug_dir=None) -> dict:
+    """키 없이: 검색 결과 첫 화면에서의 순위. {"query", "blog"|"daum": 순위|None(첫 화면 밖)}
+    글 주소를 못 찾으면 그 화면을 debug_dir/search_<플랫폼>.html로 남긴다(diagnose가 구조를 본다)."""
     name, base, k1, v1, qk = PAGES[platform]
     raw = (fetch or _get_page)(base.format(urllib.parse.urlencode({k1: v1, qk: query})))
     items = ordered_posts(raw)
     if not items:
+        if debug_dir is not None:
+            debug_dir.mkdir(parents=True, exist_ok=True)
+            (debug_dir / f"search_{platform}.html").write_text(raw or "", encoding="utf-8")
         raise RuntimeError("검색 결과 화면에서 글 주소를 찾지 못했습니다(화면이 바뀌었을 수 있음)")
     return {"query": query, name: _position(items, url)}
 
 
 def check(entries: list[dict], platform: str, client_id: str, client_secret: str, today: str,
-          max_queries: int = 30, fetch=None, sleep=time.sleep) -> dict[str, dict]:
+          max_queries: int = 30, fetch=None, sleep=time.sleep, debug_dir=None) -> dict[str, dict]:
     """최근 글(45일 안)부터 검색 순위를 확인한다. {글 주소: {query, blog/web/daum: 순위}}
     키가 없으면 검색 결과 화면을 읽는다(하루 PAGE_MAX_QUERIES번까지, 사이사이 쉬며)."""
     from datetime import date
@@ -133,7 +137,7 @@ def check(entries: list[dict], platform: str, client_id: str, client_secret: str
             else:
                 if i:
                     sleep(PAGE_PAUSE_SEC)
-                out[post_key(e["url"])] = page_rank(keyword_for(e), e["url"], platform, fetch)
+                out[post_key(e["url"])] = page_rank(keyword_for(e), e["url"], platform, fetch, debug_dir)
         except Exception as e2:  # noqa: BLE001 - 검색어 하나 실패는 건너뛴다
             failures += 1
             log.warning("검색 순위 확인 실패(%s): %s", e.get("title", "")[:30], e2)
@@ -141,3 +145,26 @@ def check(entries: list[dict], platform: str, client_id: str, client_secret: str
                 log.warning("검색 결과 화면을 연달아 못 읽어 오늘 검색 순위 확인을 멈춥니다")
                 break
     return out
+
+
+def page_shape(page_html: str, idents: list[str]) -> dict:
+    """검색 결과 화면의 구조만(값 없이): 제목, 링크 수, 링크 모양(주소의 끝 두 단계 도메인만, 숫자→9).
+    글 주소가 어떤 모양으로 들어 있는지(바로 링크·이동 주소·스크립트 속 JSON) 보고 ordered_posts를 고친다."""
+    raw = page_html or ""
+    for i in idents:
+        if i:
+            raw = raw.replace(i, "<BLOG>")
+    title = re.search(r"<title[^>]*>(.*?)</title>", raw, re.S | re.I)
+
+    def shape(u: str) -> str:
+        u = re.sub(r"//(?:[^/\s\"']+\.)?([^./\s\"']+\.[^./\s\"']+)(?=[/:?\"']|$)", r"//*.\1", u)
+        return re.sub(r"\d", "9", re.sub(r"[가-힣]+|%[0-9A-Fa-f]{2}[^/&?\"']*", "<x>", u))[:90]
+    hrefs = re.findall(r"href=[\"']([^\"']+)", raw)
+    shapes: dict[str, int] = {}
+    for h in hrefs:
+        k = shape(h)
+        shapes[k] = shapes.get(k, 0) + 1
+    return {"title": shape(html.unescape(title.group(1).strip()))[:60] if title else None, "bytes": len(raw),
+            "anchors": len(hrefs), "tistory_mentions": raw.count("tistory.com"),
+            "blog_naver_mentions": raw.count("blog.naver.com"), "scripts": raw.lower().count("<script"),
+            "href_shapes": sorted(shapes.items(), key=lambda x: -x[1])[:40]}

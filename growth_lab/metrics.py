@@ -75,7 +75,7 @@ def collect(blog: str, cfg: LabConfig, today: str, capture_fn=None, rank_fetch=N
     snapshot["daily_days"] = len(cap.daily)
     try:
         ranks = rank.check(entries, spec.platform, cfg.naver_search_id, cfg.naver_search_secret, today,
-                           cfg.rank_max_queries, rank_fetch)
+                           cfg.rank_max_queries, rank_fetch, debug_dir=out_dir)
     except Exception as e:  # noqa: BLE001
         snapshot["errors"].append(f"검색 순위: {e}"[:300])
         ranks = {}

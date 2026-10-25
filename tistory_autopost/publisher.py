@@ -124,20 +124,65 @@ def _login_hint(url: str) -> str:
     return (urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("login_hint") or [""])[0]
 
 
-def _pick_saved_kakao_account(page: Page) -> bool:
-    """카카오 '간편 로그인'(저장된 계정을 한 번 눌러 고르는 화면)이면 그 계정을 누른다."""
+# 카카오 '계정 선택'(간편 로그인) 화면의 저장된 계정: 이메일·가린 이메일(ab***@…)·가린 전화번호
+_ACCOUNT_TEXT = re.compile(r"[\w.*+-]+@[\w*.-]+|01[0-9][-\s*]*[\d*]{3,4}[-\s*]*[\d*]{4}")
+_NOT_ACCOUNT = ("다른", "새로운", "추가", "사용", "관리")
+_CLICKABLE = "xpath=ancestor-or-self::*[self::a or self::button or @role='button' or @onclick or self::li][1]"
+
+
+def _account_candidates(page: Page, cfg: TistoryConfig | None) -> list[Locator]:
     hint = _login_hint(page.url)
-    candidates = [page.get_by_text(hint, exact=False)] if hint else []
-    candidates += [page.locator("button:has-text('계속하기')"), page.locator("a:has-text('계속하기')")]
-    for loc in candidates:
+    out = [page.get_by_text(t, exact=False) for t in (hint, getattr(cfg, "kakao_login_id", "")) if t]
+    out.append(page.get_by_text(_ACCOUNT_TEXT))
+    out += [page.locator("button:has-text('계속하기')"), page.locator("a:has-text('계속하기')")]
+    return out
+
+
+def _pick_saved_kakao_account(page: Page, cfg: TistoryConfig | None = None, skip: int = 0) -> bool:
+    """카카오 '간편 로그인'(저장된 계정을 한 번 눌러 고르는 화면)이면 그 계정을 누른다.
+    계정 글자(이메일 등)를 감싼 누를 수 있는 요소(링크·버튼·목록 칸)를 누르고, 다시 부르면(skip) 다음 후보를 누른다."""
+    tried = 0
+    for loc in _account_candidates(page, cfg):
         try:
-            if loc.count() and loc.first.is_visible():
-                log.info("카카오 간편 로그인: 저장된 계정 선택")
-                loc.first.click()
-                return True
+            n = loc.count()
         except Exception:  # noqa: BLE001 - 화면 전환 중
             continue
+        for i in range(min(n, 4)):
+            item = loc.nth(i)
+            try:
+                if not item.is_visible() or any(w in (item.inner_text(timeout=1000) or "") for w in _NOT_ACCOUNT):
+                    continue
+                if tried < skip:
+                    tried += 1
+                    continue
+                target = item.locator(_CLICKABLE)
+                (target.first if target.count() else item).click(timeout=4000)
+                log.info("카카오 간편 로그인: 저장된 계정 선택")
+                return True
+            except Exception:  # noqa: BLE001 - 화면 전환 중
+                continue
     return False
+
+
+def _mask(text: str) -> str:
+    return re.sub(r"\d", "9", _ACCOUNT_TEXT.sub("<계정>", str(text or "")))
+
+
+def _dump_login(page: Page, out_dir: Path) -> None:
+    """로그인 실패 화면의 누를 수 있는 요소 목록(계정·숫자는 가림) → login_failed.json. 화면이 바뀌면 이걸 보고 고친다."""
+    try:
+        items = page.evaluate(
+            """() => [...document.querySelectorAll('a, button, [role=button], li, input, label')]
+                .filter(e => e.offsetParent !== null).slice(0, 80)
+                .map(e => ({tag: e.tagName, id: e.id, cls: String(e.className).slice(0, 60),
+                            role: e.getAttribute('role'), type: e.getAttribute('type'),
+                            text: (e.innerText || e.value || '').trim().slice(0, 40)}))""")
+        data = {"url": page.url.split("?")[0], "title": page.title(),
+                "items": [{**i, "text": _mask(i.get("text", ""))} for i in items]}
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "login_failed.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception as e:  # noqa: BLE001
+        log.warning("로그인 화면 저장 실패: %s", e)
 
 
 APPROVAL_WAIT_SEC = 600
@@ -227,8 +272,12 @@ def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bo
                 except Exception:  # noqa: BLE001 - 화면 전환 중
                     pass
         elif "accounts.kakao.com" in url:
-            if picked < 1 and _pick_saved_kakao_account(page):
+            password = page.locator("input[type='password']")
+            on_password = password.count() and password.first.is_visible()
+            # 계정 선택 화면: 눌러도 넘어가지 않으면 다음 후보를 누른다(최대 3번)
+            if not on_password and picked < 3 and _pick_saved_kakao_account(page, cfg, skip=picked):
                 picked += 1
+                page.wait_for_timeout(2500)
                 continue
             password = page.locator("input[type='password']")
             if typed and _kakao_needs_approval(page):
@@ -246,6 +295,7 @@ def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bo
                 log.warning("카카오 비밀번호 입력 화면입니다(카카오 로그인 유지 기간이 끝남)")
                 break
     _shot(page, cfg.output_dir, "login_failed")
+    _dump_login(page, cfg.output_dir)
     return False
 
 

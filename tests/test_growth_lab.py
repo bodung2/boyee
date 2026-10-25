@@ -527,3 +527,50 @@ def test_cli_approve(cfg, monkeypatch, capsys):
     assert store.load_ledger(cfg, "tistory")["proposals"][0]["status"] == "approved"
     assert cli._decide(cfg, "티5", "승인", "", "2026-10-26") == 1          # 이미 정한 제안
     assert cli._decide(cfg, "5", "승인", "", "2026-10-26") == 1            # 블로그 글자 없음
+
+
+# ---------------------------------------------------------------- 묶기·보고·진단 보강
+
+def test_prelab_invest_posts_group_by_lane():
+    assert scoring.topic_of("invest", {"source": "autopost", "lane": "b", "topic": "청약 가점 계산"}, {}) == "(실험 전) 부동산"
+    assert scoring.topic_of("invest", {"source": "autopost", "lane": "B", "lab_topic": "청약 가점"}, {}) == "청약 가점"
+
+
+def test_stale_testing_topics_are_pruned():
+    led = store.empty_ledger()
+    led["topics"] = {"옛 글 하나": {"status": "testing"}, "키워드 있는 주제": {"status": "testing", "keywords": ["k"]}}
+    review.apply_verdicts(led, [{"topic": "(실험 전) 부동산", "status": "testing", "ratio": 1.0, "evaluated": 1,
+                                 "posts": 4, "best_rank": None}], "2026-10-26")
+    assert set(led["topics"]) == {"키워드 있는 주제", "(실험 전) 부동산"}
+
+
+def test_weekly_lists_notes_scrubbed(cfg):
+    out = review.write_weekly("invest", cfg, store.empty_ledger(), [], "정상", {}, "2026-10-26", ["연봉 5천, 실수령액 얼마일까?"],
+                              ["secretid"], ["⚠️ 진단·리서치 실패: 연봉 5천, 실수령액 얼마일까? 를 읽다 멈춤 (secretid)"])
+    text = out.read_text(encoding="utf-8")
+    assert "이번 주 알림" in text and "진단·리서치 실패" in text and "secretid" not in text and "실수령액 얼마일까" not in text
+
+
+def test_last_words_from_claude_log(tmp_path):
+    log_file = tmp_path / "claude_review.log"
+    log_file.write_text(json.dumps({"result": "Write 권한이 없어 저장하지 못했습니다"}, ensure_ascii=False)
+                        + "\n--- stderr ---\n", encoding="utf-8")
+    assert "Write 권한" in review._last_words(log_file)
+    assert review._last_words(tmp_path / "none.log") == "(기록 없음)"
+
+
+def test_search_page_shape_and_debug_file(tmp_path):
+    page = ('<title>연봉 – 다음 검색</title><a href="https://search.daum.net/redirect?u=abc123">x</a>'
+            '<script>var d={"url":"https://eskimo.tistory.com/77"}</script>')
+    with pytest.raises(RuntimeError):
+        rank.page_rank("q", "https://eskimo.tistory.com/77", "tistory", fetch=lambda u: "<html></html>", debug_dir=tmp_path)
+    assert (tmp_path / "search_tistory.html").exists()
+    shape = rank.page_shape(page, ["eskimo"])
+    assert shape["anchors"] == 1 and shape["tistory_mentions"] == 1
+    assert shape["href_shapes"][0][0].startswith("https://*.daum.net/redirect?u=abc999")
+    assert "eskimo" not in json.dumps(shape) and "연봉" not in json.dumps(shape, ensure_ascii=False)
+
+
+def test_ui_only_masks_names():
+    assert diagnose._ui_only("박보영 <계정> 계속하기") == "xxx <계정> 계속하기"
+    assert diagnose._ui_only("다른 계정으로 로그인") == "다른 계정으로 로그인"

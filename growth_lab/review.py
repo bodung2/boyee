@@ -33,6 +33,11 @@ def _rel(path: Path) -> str:
 
 def apply_verdicts(ledger: dict, verdicts: list[dict], today: str) -> list[str]:
     notes = []
+    # 이번 판정에 없는 '시험 중' 주제(예: 묶는 방식이 바뀐 옛 이름)는 장부에서 정리한다
+    current = {v["topic"] for v in verdicts}
+    for name in [n for n, t in ledger["topics"].items()
+                 if n not in current and t.get("status") == "testing" and not t.get("keywords")]:
+        del ledger["topics"][name]
     for v in verdicts:
         name = v["topic"]
         if name == scoring.OWN:
@@ -160,7 +165,7 @@ def scrub(text: str, titles: list[str], idents: list[str]) -> str:
 
 
 def write_weekly(blog: str, cfg: LabConfig, ledger: dict, verdicts: list[dict], channel: str, result: dict,
-                 today: str, titles: list[str], idents: list[str]) -> Path:
+                 today: str, titles: list[str], idents: list[str], notes: list[str] | None = None) -> Path:
     """GitHub에 올리는 주간 보고(diagnostics/growth/<블로그>/weekly.md). 주제 단위 숫자와 제안만, 글 제목·주소는 지운다."""
     spec = BLOGS[blog]
     s = lambda t: scrub(t, titles, idents)  # noqa: E731
@@ -188,6 +193,8 @@ def write_weekly(blog: str, cfg: LabConfig, ledger: dict, verdicts: list[dict], 
                                          for p in pend] or ["- (없음)"])
     if result.get("report"):
         lines += ["", "## 요약", s(str(result["report"])[:900])]
+    if notes:
+        lines += ["", "## 이번 주 알림(바뀐 상태·실패)"] + [f"- {s(str(n)[:300])}" for n in notes]
     out = cfg.diagnostics_dir / blog / "weekly.md"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -243,8 +250,18 @@ def run_claude(blog: str, cfg: LabConfig, work: Path, today: str) -> dict:
             log.warning("리뷰가 저장소 파일을 고쳐 되돌립니다: %s", sorted(touched))
             subprocess.run(["git", "checkout", "--", *sorted(touched)], cwd=ROOT, capture_output=True)
     if not out.exists():
-        raise generate.GenerationError("review.json이 만들어지지 않았습니다")
+        raise generate.GenerationError("review.json이 만들어지지 않았습니다 — Claude 마지막 말: "
+                                       + _last_words(work / "claude_review.log"))
     return json.loads(out.read_text(encoding="utf-8"))
+
+
+def _last_words(log_file: Path) -> str:
+    """Claude 실행 기록에서 마지막 응답(왜 결과 파일을 안 만들었는지)을 짧게."""
+    try:
+        raw = log_file.read_text(encoding="utf-8").split("\n--- stderr ---")[0]
+        return str(json.loads(raw).get("result", ""))[-300:].strip() or "(없음)"
+    except Exception:  # noqa: BLE001
+        return "(기록 없음)"
 
 
 def apply_review(blog: str, cfg: LabConfig, ledger: dict, result: dict, today: str, demand_post=None) -> list[str]:
@@ -351,7 +368,7 @@ def run(blog: str, cfg: LabConfig, today: str, use_claude: bool = True, demand_p
     if cfg.push_report:
         try:
             write_weekly(blog, cfg, ledger, verdicts, channel, result, today,
-                         [e.get("title", "") for e in entries], idents or [])
+                         [e.get("title", "") for e in entries], idents or [], notes)
         except Exception as e:  # noqa: BLE001 - 보고 파일 실패로 리뷰 결과를 잃지 않게
             log.warning("주간 보고 파일 실패: %s", e)
     text = report_text(blog, ledger, verdicts, channel, notes, result)
