@@ -9,6 +9,7 @@
   하루 몇십 번만, 사이사이 쉬어 가며 부른다(이웃 추천과 같은 방식). 화면이 바뀌면 순위만 비고 다른 일은 계속된다."""
 from __future__ import annotations
 
+import contextlib
 import html
 import json
 import logging
@@ -35,6 +36,8 @@ _POST_LINK = re.compile(
     r"|https?://brunch\.co\.kr/@[^/\"'\s<>]+/\d+")
 PAGE_PAUSE_SEC = 2.0
 PAGE_MAX_QUERIES = 20
+# 다음 검색은 일반 요청에 내용 없는 짧은 스크립트만 준다(2026-10 진단: 169바이트, 링크 0개) → 브라우저로 그린 뒤 읽는다
+BROWSER_PAGES = {"tistory"}
 
 
 def _get(url: str, headers: dict) -> str:
@@ -96,6 +99,30 @@ def _get_page(url: str) -> str:
         return resp.read().decode("utf-8", "replace")
 
 
+@contextlib.contextmanager
+def page_fetcher(platform: str):
+    """검색 결과 화면을 읽는 함수. 브라우저가 필요한 곳(다음)은 화면 없는 크롬을 한 번 띄워 여러 검색어에 같이 쓴다."""
+    if platform not in BROWSER_PAGES:
+        yield _get_page
+        return
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        try:
+            browser = p.chromium.launch(channel="chrome", headless=True)
+        except Exception:  # noqa: BLE001 - 크롬이 없으면 내장 Chromium
+            browser = p.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(user_agent=UA, locale="ko-KR")
+
+            def get(url: str) -> str:
+                page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                page.wait_for_timeout(2500)
+                return page.content()
+            yield get
+        finally:
+            browser.close()
+
+
 def page_rank(query: str, url: str, platform: str, fetch=None, debug_dir=None) -> dict:
     """키 없이: 검색 결과 첫 화면에서의 순위. {"query", "blog"|"daum": 순위|None(첫 화면 밖)}
     글 주소를 못 찾으면 그 화면을 debug_dir/search_<플랫폼>.html로 남긴다(diagnose가 구조를 본다)."""
@@ -128,9 +155,17 @@ def check(entries: list[dict], platform: str, client_id: str, client_secret: str
             continue
         if e.get("url") and 0 <= age <= 45 and keyword_for(e):
             recent.append((age, e))
+    todo = sorted(recent, key=lambda x: x[0])[:max_queries]
+    if not use_api and fetch is None and todo:
+        try:
+            with page_fetcher(platform) as get:
+                return check(entries, platform, client_id, client_secret, today, max_queries, get, sleep, debug_dir)
+        except Exception as e:  # noqa: BLE001 - 브라우저를 못 띄우면 오늘 순위만 건너뛴다
+            log.warning("검색 결과 화면을 열 브라우저를 띄우지 못했습니다: %s", e)
+            return {}
     out: dict[str, dict] = {}
     failures = 0
-    for i, (_, e) in enumerate(sorted(recent, key=lambda x: x[0])[:max_queries]):
+    for i, (_, e) in enumerate(todo):
         try:
             if use_api:
                 out[post_key(e["url"])] = search_rank(keyword_for(e), e["url"], platform, client_id, client_secret, fetch)

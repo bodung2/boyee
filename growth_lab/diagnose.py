@@ -72,7 +72,8 @@ def _search_page(blog: str, entries: list[dict], local: Path, ident: str) -> dic
     e = recent[0]
     platform = BLOGS[blog].platform
     try:
-        got = rank.page_rank(rank.keyword_for(e), e["url"], platform, debug_dir=local)
+        with rank.page_fetcher(platform) as get:
+            got = rank.page_rank(rank.keyword_for(e), e["url"], platform, get, debug_dir=local)
         return {"ok": True, "found_rank": {k: v for k, v in got.items() if k != "query"}}
     except Exception as err:  # noqa: BLE001
         path = local / f"search_{platform}.html"
