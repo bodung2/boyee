@@ -778,3 +778,49 @@ def test_kakao_password_login_waits_for_kakaotalk_approval(cfg, tmp_path, monkey
     assert ok                                            # 비밀번호 로그인 → 카카오톡 확인 대기 → 글쓰기 화면
     assert sent == [["me@example.com", "pw-123", True]]   # 아이디·비밀번호 입력, '로그인 상태 유지' 체크
     assert told and "카카오톡" in told[0]
+
+
+def test_kakao_account_picker_clicks_wrapping_item(cfg, tmp_path):
+    """계정 선택 화면: login_hint가 없어도 가린 이메일 글자를 감싼 목록 칸을 눌러 들어간다."""
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    cfg.output_dir = tmp_path / "out"
+    picker = ('<ul><li class="item_account" onclick="location.href=\'https://www.tistory.com/auth/kakao/redirect\'">'
+              '<strong>박보영</strong><span>bo***@gmail.com</span></li>'
+              '<li><a href="#">다른 계정으로 로그인</a></li></ul>')
+
+    def serve(route):
+        url = route.request.url
+        has = "TSSESSION=" in (route.request.headers.get("cookie") or "")
+        if "/manage/newpost" in url:
+            route.fulfill(status=200, content_type="text/html", body="<title>editor</title>" if has else
+                          "<script>location.href='https://accounts.kakao.com/login/simple'</script>")
+        elif "accounts.kakao.com" in url:
+            route.fulfill(status=200, content_type="text/html", body='<meta charset="utf-8">' + picker)
+        elif "/auth/kakao/redirect" in url:
+            route.fulfill(status=200, content_type="text/html", body=(
+                "<script>document.cookie='TSSESSION=abc; domain=.tistory.com; path=/; secure';"
+                "location.href='https://myblog.tistory.com/manage/newpost/'</script>"))
+        else:
+            route.fulfill(status=200, body="")
+
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        ctx = b.new_context()
+        ctx.route(re.compile(r"https://[^/]*(tistory|kakao)\.com/.*"), serve)
+        ok = publisher._ensure_logged_in(ctx.new_page(), cfg, timeout=15)
+        b.close()
+    assert ok
+
+
+def test_login_failure_dump_masks_accounts(cfg, tmp_path):
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        page = b.new_page()
+        page.set_content('<meta charset="utf-8"><button class="btn_g">bo***@gmail.com 010-1234-5678</button>')
+        publisher._dump_login(page, tmp_path)
+        b.close()
+    data = json.loads((tmp_path / "login_failed.json").read_text(encoding="utf-8"))
+    assert data["items"][0]["cls"] == "btn_g" and "gmail" not in data["items"][0]["text"] and "1234" not in data["items"][0]["text"]

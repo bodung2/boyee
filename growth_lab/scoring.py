@@ -33,6 +33,11 @@ def topic_maps(data_dir: Path) -> dict[str, str]:
     return out
 
 
+# 실험실 전에 쓴 투자 블로그 글은 글마다 주제 이름이 달라 묶이지 않는다 → 레인으로 묶는다(시험 글 3편 판정이 가능하게).
+INVEST_LANES = {"A": "내 위치(자산·소득)", "B": "부동산", "C": "일상 지출", "D": "일·직장", "E": "개미 vs 통계",
+                "F": "제도·세금·연금", "G": "시장·금리"}
+
+
 def topic_of(blog: str, entry: dict, maps: dict[str, str]) -> str:
     if entry.get("source") != "autopost":
         return OWN
@@ -42,7 +47,10 @@ def topic_of(blog: str, entry: dict, maps: dict[str, str]) -> str:
         if entry.get("lane") == "tip":
             return "화제 제보"
         return maps.get(entry.get("topic_id", ""), entry.get("topic_id") or "기타")
-    return str(entry.get("topic") or entry.get("cluster") or f"레인 {entry.get('lane') or '?'}").strip()
+    lane = str(entry.get("lane") or "").strip().upper()[:1]
+    if blog == "invest" and lane in INVEST_LANES:
+        return f"(실험 전) {INVEST_LANES[lane]}"
+    return str(entry.get("topic") or entry.get("cluster") or f"레인 {lane or '?'}").strip()
 
 
 def _series(rows: list[dict]) -> dict[str, list[tuple[date, int]]]:

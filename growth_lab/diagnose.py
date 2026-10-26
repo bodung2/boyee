@@ -11,8 +11,8 @@ from pathlib import Path
 
 from naver_autopost import history
 
-from . import stats
-from .config import LabConfig
+from . import rank, stats
+from .config import BLOGS, LabConfig
 from .metrics import blog_ident, capture, _platform_cfg
 
 
@@ -52,6 +52,36 @@ def _query_shape(query: str) -> dict[str, str]:
     return out
 
 
+_UI_WORDS = ("계정", "로그인", "계속", "비밀번호", "간편", "다른", "추가", "확인", "선택", "카카오", "취소", "다음",
+             "아이디", "이메일", "전화번호", "인증", "유지", "저장", "<계정>")
+
+
+def _ui_only(text: str) -> str:
+    """화면 글자에서 UI 단어(로그인·계정 등)만 남기고 나머지 단어(이름 등)는 가린다. 공개 저장소에 올라가므로."""
+    out = []
+    for tok in str(text or "").split():
+        out.append(tok if any(w in tok for w in _UI_WORDS) else re.sub(r"[^\W\d_]", "x", tok))
+    return " ".join(out)
+
+
+def _search_page(blog: str, entries: list[dict], local: Path, ident: str) -> dict:
+    """가장 최근 글 하나로 검색 결과 화면을 불러, 순위를 읽었는지와 화면 구조를 남긴다."""
+    recent = [e for e in entries if rank.keyword_for(e)][-1:]
+    if not recent:
+        return {"skipped": "검색어가 있는 글이 없음"}
+    e = recent[0]
+    platform = BLOGS[blog].platform
+    try:
+        got = rank.page_rank(rank.keyword_for(e), e["url"], platform, debug_dir=local)
+        return {"ok": True, "found_rank": {k: v for k, v in got.items() if k != "query"}}
+    except Exception as err:  # noqa: BLE001
+        path = local / f"search_{platform}.html"
+        out = {"ok": False, "error": str(err)[:200]}
+        if path.exists():
+            out["shape"] = rank.page_shape(path.read_text(encoding="utf-8"), [ident])
+        return out
+
+
 def run(blog: str, cfg: LabConfig, today: str) -> Path:
     pcfg = _platform_cfg(blog)
     ident = blog_ident(pcfg)
@@ -73,6 +103,13 @@ def run(blog: str, cfg: LabConfig, today: str) -> Path:
         "daily_days": len(cap.daily), "daily_posts_matched": len(stats.daily_views(cap, entries)),
         "matched_fields": sorted({c["field"] for m in matched.values() for c in m["candidates"]}),
     }
+    report["search_page"] = _search_page(blog, entries, local, ident)
+    login = pcfg.output_dir / "login_failed.json" if hasattr(pcfg, "output_dir") else None
+    if not cap.logged_in and login and login.exists():
+        page = json.loads(login.read_text(encoding="utf-8"))
+        page["title"] = _ui_only(page.get("title", ""))
+        page["items"] = [{**i, "text": _ui_only(i.get("text", ""))} for i in page.get("items", [])]
+        report["login_page"] = page
     out = cfg.diagnostics_dir / blog / "stat_structure.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
