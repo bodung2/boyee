@@ -139,12 +139,16 @@ def _walk(obj, visit) -> None:
             _walk(v, visit)
 
 
+_ID_KEY = re.compile(r"id$|no$|uri|url|link|permalink|slug", re.I)
+
+
 def _matches(d: dict, title: str, ids: set[str]) -> bool:
-    for v in d.values():
+    for k, v in d.items():
         if isinstance(v, (dict, list)):
             continue
         s = str(v)
-        if s in ids or any(i in s for i in ids if len(i) >= 6):
+        # 글 번호는 번호·주소 칸에서만 비교한다(조회수 칸의 숫자가 우연히 다른 글 번호와 같을 수 있다)
+        if _ID_KEY.search(str(k)) and (s in ids or any(i in s for i in ids if len(i) >= 6)):
             return True
         n = _norm(s)
         if len(title) >= 8 and n and (n == title or (len(n) >= 8 and (title in n or n in title))):
@@ -196,9 +200,10 @@ def daily_views(cap: Capture, posts: list[dict]) -> dict[str, dict[str, int]]:
     return out
 
 
-# 네이버 '조회수 순위' 화면이 부르는 요청(그날 글별 조회수). 화면이 실제로 보낸 요청을 날짜만 바꿔 다시 보낸다
-# (매개변수 이름·형식은 화면이 정한 그대로 따른다).
-NAVER_DAILY = "/api/blog/rank/cvContent"
+# 글별 '그날 조회수'를 주는 요청. 화면이 실제로 보낸 요청을 날짜만 바꿔 다시 보낸다
+# (매개변수 이름·형식은 화면이 정한 그대로 따른다). (주소 조각, 기간 매개변수, 일간 값)
+NAVER_DAILY = ("/api/blog/rank/cvContent", "timeDimension", "DATE")          # 네이버 '조회수 순위'
+TISTORY_DAILY = ("/manage/v2/statistics/blog/topEntry", "granularity", "day")  # 티스토리 '인기글'(2026-10 진단으로 확인)
 
 
 def _date_param(value: str, day: str) -> str | None:
@@ -210,31 +215,44 @@ def _date_param(value: str, day: str) -> str | None:
     return None
 
 
-def fetch_daily(ctx, cap: Capture, days: list[str], referer: str = "https://admin.blog.naver.com/") -> None:
-    """화면에서 본 '조회수 순위' 요청을 날짜별로 다시 보내 cap.daily에 담는다(로그인된 브라우저의 쿠키를 그대로 쓴다)."""
-    seen = next((r for r in cap.responses if NAVER_DAILY in r.get("url", "")), None)
+def _ok(data) -> bool:
+    """네이버 {statusCode, result} / 티스토리 {status, data} 응답이 정상인가."""
+    if not isinstance(data, dict):
+        return False
+    if "statusCode" in data:
+        return data["statusCode"] in (200, "200", 0) and "result" in data
+    return ("result" in data or "data" in data) and str(data.get("status", "ok")).lower() in ("ok", "200", "success")
+
+
+def fetch_daily(ctx, cap: Capture, days: list[str], referer: str = "https://admin.blog.naver.com/",
+                spec: tuple[str, str, str] = NAVER_DAILY) -> None:
+    """화면에서 본 '글별 조회수' 요청을 날짜별로 다시 보내 cap.daily에 담는다(로그인된 브라우저의 쿠키를 그대로 쓴다)."""
+    path, period_key, daily_value = spec
+    seen = next((r for r in cap.responses if path in r.get("url", "")), None)
     if not seen:
-        cap.errors.append("조회수 순위 화면의 데이터 요청을 찾지 못했습니다(일별 글 조회수 없음)")
+        cap.errors.append(f"통계 화면에서 글별 조회수 요청({path})을 찾지 못했습니다(일별 글 조회수 없음)")
         return
     params = dict(urllib.parse.parse_qsl(seen.get("query", ""), keep_blank_values=True))
     if _date_param(params.get("startDate", ""), "2000-01-01") is None:
-        cap.errors.append(f"조회수 순위 요청의 날짜 형식을 모릅니다: startDate={params.get('startDate', '')[:20]}")
+        cap.errors.append(f"글별 조회수 요청의 날짜 형식을 모릅니다: startDate={params.get('startDate', '')[:20]}")
         return
-    if params.get("timeDimension", "DATE").upper() != "DATE":
-        cap.errors.append(f"조회수 순위 화면이 일간이 아닙니다(timeDimension={params.get('timeDimension')}) — 일간으로 바꿔 받습니다")
-        params["timeDimension"] = "DATE"
+    if params.get(period_key, daily_value).lower() != daily_value.lower():
+        cap.errors.append(f"글별 조회수 화면이 일간이 아닙니다({period_key}={params.get(period_key)}) — 일간으로 바꿔 받습니다")
+        params[period_key] = daily_value
     for day in days:
-        q = {**params, "startDate": _date_param(params["startDate"], day), "_": str(int(time.time() * 1000))}
+        q = {**params, "startDate": _date_param(params["startDate"], day)}
+        if "_" in params or path == NAVER_DAILY[0]:
+            q["_"] = str(int(time.time() * 1000))
         try:
             resp = ctx.request.get(seen["url"] + "?" + urllib.parse.urlencode(q), headers={"Referer": referer})
             data = _loose_json(resp.text())
         except Exception as e:  # noqa: BLE001 - 하루치 실패는 다음 실행에서 다시 받는다
-            cap.errors.append(f"{day} 조회수 순위: {e}"[:200])
+            cap.errors.append(f"{day} 글별 조회수: {e}"[:200])
             continue
-        if isinstance(data, dict) and data.get("statusCode", 200) in (200, "200", 0) and "result" in data:
+        if _ok(data):
             cap.daily[day] = data
         else:
-            cap.errors.append(f"{day} 조회수 순위 응답이 예상과 다릅니다")
+            cap.errors.append(f"{day} 글별 조회수 응답이 예상과 다릅니다")
 
 
 def _text_candidates(cap: Capture, title: str, raw_title: str) -> list[dict]:
@@ -365,7 +383,7 @@ def capture_naver(cfg, override: list[str], shots: Path | None = None, days: lis
     return cap
 
 
-def capture_tistory(cfg, override: list[str], shots: Path | None = None) -> Capture:
+def capture_tistory(cfg, override: list[str], shots: Path | None = None, days: list[str] | None = None) -> Capture:
     """cfg: tistory_autopost.config.TistoryConfig — 발행용 크롬 프로필과 저장 쿠키를 그대로 쓴다."""
     from playwright.sync_api import sync_playwright
 
@@ -384,6 +402,8 @@ def capture_tistory(cfg, override: list[str], shots: Path | None = None) -> Capt
             _save_cookies(ctx, cfg)
             _browse(ctx, _start_urls("tistory", cfg.blog_name, cfg.blog_url, override), TISTORY_NAV, cap, shots,
                     ("accounts.kakao.com", "/auth/login", "logins.daum.net"))
+            if days and cap.logged_in:
+                fetch_daily(ctx, cap, days, f"{cfg.blog_url}/manage/statistics/blog", TISTORY_DAILY)
         finally:
             _close(ctx, cfg)
     return cap

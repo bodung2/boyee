@@ -358,14 +358,18 @@ def test_demand_compare_errors():
 def test_collect_writes_one_row_per_day(cfg):
     history.save(cfg.history_file("invest"), [{"date": "2026-10-15", "title": "연봉 5천, 실수령액 얼마일까?",
                                                "url": url(1), "tags": ["연봉실수령액"], "source": "autopost"}])
-    cap = stats.Capture(responses=[{"url": "u", "json": [{"logNo": "224000000001", "cv": 42}]}])
+    cap = stats.Capture(responses=[{"url": "u", "json": [{"logNo": "224000000001", "cv": 999}]}],   # 화면 숫자는 안 씀
+                        daily={"2026-10-19": [{"logNo": "224000000001", "cv": 40}], "2026-10-20": [{"logNo": "224000000001", "cv": 2}]})
     fetch = lambda u, h: json.dumps({"items": [{"link": url(1)}]})  # noqa: E731
     cfg2 = LabConfig(**{**cfg.__dict__, "naver_search_id": "id", "naver_search_secret": "sec"})
     for _ in range(2):
         snap = metrics.collect("invest", cfg2, "2026-10-20", capture_fn=lambda: cap, rank_fetch=fetch)
     rows = store.load_metrics(cfg2, "invest")
     assert len(rows) == 1 and snap["matched"] == 1
-    assert rows[0]["posts"][stats.post_key(url(1))] == {"views": 42, "src": "cv", "rank": {"blog": 1}, "query": "연봉실수령액"}
+    assert rows[0]["posts"][stats.post_key(url(1))] == {"views": 42, "src": "daily", "rank": {"blog": 1}, "query": "연봉실수령액"}
+    no_daily = metrics.collect("invest", cfg2, "2026-10-21", capture_fn=lambda: stats.Capture(
+        responses=[{"url": "u", "json": [{"logNo": "224000000001", "cv": 999}]}]), rank_fetch=fetch)
+    assert "views" not in no_daily["posts"][stats.post_key(url(1))] and any("날짜별" in e for e in no_daily["errors"])
 
 
 def test_diagnose_shape_hides_values():
@@ -574,3 +578,56 @@ def test_search_page_shape_and_debug_file(tmp_path):
 def test_ui_only_masks_names():
     assert diagnose._ui_only("박보영 <계정> 계속하기") == "xxx <계정> 계속하기"
     assert diagnose._ui_only("다른 계정으로 로그인") == "다른 계정으로 로그인"
+
+
+def test_tistory_daily_top_entries():
+    """티스토리 인기글 응답({status, data: {result: [{entryId, title, count, permalink}]}})을 날짜별로 다시 받는다."""
+    seen = {"url": "https://myblog.tistory.com/manage/v2/statistics/blog/topEntry",
+            "query": "metric=pv&startDate=2026-10-26&granularity=day", "json": {}}
+    cap = stats.Capture(responses=[seen])
+
+    def entries(n):
+        return {"status": "ok", "data": {"timestamp": "t", "result": [   # 앞 글의 조회수(123)가 우리 글 번호와 같아도 헷갈리지 않게
+            {"entryId": 9, "title": "다른 글", "comment": 1, "count": 123, "permalink": "https://myblog.tistory.com/9"},
+            {"entryId": 123, "title": "PowerShell 오류 해결", "comment": 5, "count": n, "permalink": "https://myblog.tistory.com/123"}]}}
+
+    class Ctx:
+        def __init__(self):
+            self.request, self.urls = self, []
+
+        def get(self, u, headers=None):
+            self.urls.append(u)
+            return _Resp(entries(7 if "2026-10-24" in u else 3))
+    ctx = Ctx()
+    stats.fetch_daily(ctx, cap, ["2026-10-24", "2026-10-25"], spec=stats.TISTORY_DAILY)
+    assert sorted(cap.daily) == ["2026-10-24", "2026-10-25"] and all("granularity=day" in u for u in ctx.urls)
+    assert all("_=" not in u for u in ctx.urls)                 # 화면 요청에 없던 매개변수는 붙이지 않는다
+    views = stats.daily_views(cap, [{"url": "https://myblog.tistory.com/123", "title": "PowerShell 오류 해결"}])
+    assert views == {"https://myblog.tistory.com/123": {"2026-10-24": 7, "2026-10-25": 3}}   # 댓글 수(comment)는 안 씀
+
+
+def test_daum_rank_goes_through_a_browser(monkeypatch):
+    """다음은 일반 요청에 빈 스크립트만 준다 → 키 없이 티스토리 순위는 브라우저 fetcher로 읽는다."""
+    import contextlib
+    used = []
+
+    @contextlib.contextmanager
+    def fake_fetcher(platform):
+        used.append(platform)
+        yield lambda u: '<a href="https://x.tistory.com/5">a</a><a href="https://eskimo.tistory.com/123">b</a>'
+    monkeypatch.setattr(rank, "page_fetcher", fake_fetcher)
+    entries = [{"date": "2026-10-25", "url": "https://eskimo.tistory.com/123", "tags": ["오류"]}]
+    got = rank.check(entries, "tistory", "", "", "2026-10-26", sleep=lambda s: None)
+    assert used == ["tistory"] and got == {"https://eskimo.tistory.com/123": {"query": "오류", "daum": 2}}
+
+
+def test_page_fetcher_renders_with_a_real_browser():
+    pytest.importorskip("playwright")
+    try:
+        with rank.page_fetcher("tistory") as get:
+            page = get("data:text/html,<script>document.write('<a href=\"https://x.tistory.com/5\">a</a>')</script>")
+    except Exception as e:  # noqa: BLE001
+        if "Executable doesn't exist" in str(e):
+            pytest.skip("브라우저 없음")
+        raise
+    assert [i["link"] for i in rank.ordered_posts(page)] == ["https://x.tistory.com/5"]   # 스크립트가 그린 링크도 읽는다

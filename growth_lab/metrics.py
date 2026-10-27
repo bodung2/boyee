@@ -46,7 +46,8 @@ def capture(blog: str, cfg: LabConfig, pcfg=None, shots: Path | None = None, tod
         return stats.capture_naver(pcfg, cfg.naver_stat_urls, shots, days)
     if not pcfg.blog_name:
         raise RuntimeError(".env에 TISTORY_BLOG가 없습니다")
-    return stats.capture_tistory(pcfg, cfg.tistory_stat_urls, shots)
+    return stats.capture_tistory(pcfg, cfg.tistory_stat_urls, shots,
+                                 days_to_fetch(cfg, blog, today) if today else None)
 
 
 def collect(blog: str, cfg: LabConfig, today: str, capture_fn=None, rank_fetch=None) -> dict:
@@ -59,13 +60,15 @@ def collect(blog: str, cfg: LabConfig, today: str, capture_fn=None, rank_fetch=N
     except Exception as e:  # noqa: BLE001 - 통계 화면을 못 읽어도 검색 순위는 모은다
         log.warning("[%s] 통계 화면 읽기 실패: %s", spec.label, e)
         cap = stats.Capture(errors=[str(e)[:300]])
-    matched = stats.match_posts(cap, entries)
-    daily = None
+    # 조회수는 날짜별 글 조회수를 발행일부터 더한 값만 쓴다. 통계 화면에 보이는 숫자는 그날·그 기간 값이거나
+    # 댓글 수일 수 있어(2026-10 진단) 누적 조회수로 쓰면 점수가 틀어진다 → 날짜별 값을 못 받은 날은 비워 둔다.
+    matched: dict = {}
     if cap.daily:
-        # 일별 글 조회수를 받았으면 그 합(발행 뒤 누적)을 조회수로 쓴다. 화면의 숫자는 그날·그 기간 값이라 누적이 아니다.
         daily = store.merge_daily(cfg, blog, stats.daily_views(cap, entries), sorted(cap.daily))
         matched = {k: {"views": sum(v.values()), "candidates": [{"field": "daily", "value": sum(v.values())}]}
                    for k, v in daily["posts"].items()}
+    elif cap.logged_in:
+        cap.errors.append("날짜별 글 조회수를 받지 못해 오늘은 조회수를 기록하지 않습니다")
     out_dir = cfg.output_dir / blog / today
     ident = blog_ident(pcfg) if pcfg else ""
     snapshot["capture_file"] = str(stats.save_capture(cap, out_dir, {ident: "<BLOG>"} if ident else None))
