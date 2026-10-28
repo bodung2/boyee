@@ -14,7 +14,7 @@ from datetime import date, timedelta
 
 log = logging.getLogger(__name__)
 API = "https://openapi.naver.com/v1/datalab/search"
-ANCHORS = {"invest": "연봉 실수령액", "tistory": "파이썬 오류"}
+ANCHORS = {"invest": "연봉 실수령액", "tistory": "파이썬 오류", "guide": "정보처리기사 시험일정"}
 
 
 def anchor_for(blog: str) -> str:

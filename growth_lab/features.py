@@ -43,10 +43,13 @@ def post_features(post: dict) -> dict:
         "h2": len(re.findall(r"<h2\b", body, re.I)),
         "tables": len(re.findall(r"<table\b", body, re.I)),
         "images": len(images),
+        "captures": sum(1 for n in images if n.startswith("cap")),     # 공식 화면 캡처(생활 절차 블로그)
+        "photos": sum(1 for n in images if n.startswith("photo")),     # 실제 사진(생활 절차 블로그)
         "faq": bool(re.search(r"자주 묻는|FAQ", body)),
         "first_para_chars": len(html_to_text(first.group(1))) if first else 0,
         "tags": len(post.get("tags") or []),
         "lane": str(post.get("lane") or ""),
+        "format": str(post.get("format") or ""),          # 글 모양(생활 절차: steps/table/cases)
         "image_style": str(post.get("image_style_id") or "base"),
     }
 

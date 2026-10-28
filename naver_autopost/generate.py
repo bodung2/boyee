@@ -166,7 +166,8 @@ def write_post(cfg: Config, out_dir: Path, today: str, feedback: str = "") -> Pa
         f"TODAY={today}\nOUTPUT_DIR={_rel(out_dir)}\nHISTORY_FILE={_rel(cfg.history_file)}\n"
         f"RELATED_HISTORY_FILES={','.join(str(_rel(p)) for p in related) or '(없음)'}\n"
         f"ILLUSTRATIONS={cfg.illustration_count if cfg.profile.illustrations else 0}\n"
-        f"{_persona_lines(cfg)}\n"
+        + (f"CAPTURES_MAX={cfg.capture_count}\nPHOTOS_MAX={cfg.photo_count}\n" if cfg.profile.real_images else "")
+        + f"{_persona_lines(cfg)}\n"
         f"스킬 지침대로 오늘의 {cfg.profile.label} 정보성 글 1편을 완성해 OUTPUT_DIR/post.json에 저장하라. "
         "사람 검토 없이 자동 발행되므로 사실 정확성이 최우선이다. 질문하지 말고 끝까지 진행하라. "
         "고른 주제의 원문(보도자료·PDF 등)을 열 수 없으면 사람에게 묻지 말고, 원문을 확인할 수 있는 다른 주제로 바꿔 끝까지 써라."
@@ -200,7 +201,9 @@ def factcheck(cfg: Config, out_dir: Path) -> dict:
     prompt = (
         f"/{cfg.profile.factcheck_skill}\n\n"
         f"OUTPUT_DIR={_rel(out_dir)}\nMODE=check\n{_persona_lines(cfg, recent=False)}\n"
-        "스킬 지침대로 post.json(과 일러스트가 있으면 그 이미지)을 검수하고 factcheck.json을 저장하라. "
+        + ("스킬 지침대로 post.json과 공식 화면 캡처(captures)·실제 사진 후보(photo_candidates) 이미지를 검수하고 "
+           "factcheck.json을 저장하라. " if cfg.profile.real_images else
+           "스킬 지침대로 post.json(과 일러스트가 있으면 그 이미지)을 검수하고 factcheck.json을 저장하라. ") +
         "질문하지 말고 끝까지 진행하라."
     )
     _run_claude(cfg, prompt, out_dir / "claude_factcheck.log")

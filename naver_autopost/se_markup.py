@@ -11,6 +11,8 @@
 - 비교 표: 가운데 정렬, 첫 줄 굵게 + 배경 #fafafa, 테두리 #ccc
 - 한 줄 요약(<div data-block="oneline">): 구분선 + 인용구 quotation_postit
 - 함께 보면 좋은 글(<div data-block="related">): 구분선 + 🔗 제목 + 글 소개 + 링크 카드(주소 입력 후 Enter)
+- 사진 캡션(<p data-block="caption">▲ …</p>): 가운데 정렬, 13pt 회색
+- 생활 절차 블로그(heading="plain"): 챕터 제목을 인용구 대신 굵은 19pt 글씨로, 첫 목록도 요약 상자로 바꾸지 않는다
 """
 from __future__ import annotations
 
@@ -121,10 +123,11 @@ def runs_of(node, bold: bool = False) -> list[list[Run]]:
 
 # ---------------------------------------------------------------- 문서 데이터(JSON) 조각
 
-def _node(text: str, bold: bool, size: str | None = "fs16", bg: str | None = None) -> dict:
+def _node(text: str, bold: bool, size: str | None = "fs16", bg: str | None = None,
+          color: str = "#000000") -> dict:
     style: dict = {"ctype": "nodeStyle"}
     if size:
-        style.update({"fontColor": "#000000", "fontSizeCode": size})
+        style.update({"fontColor": color, "fontSizeCode": size})
     if bg:
         style["backgroundColor"] = bg
     if bold:
@@ -133,8 +136,8 @@ def _node(text: str, bold: bool, size: str | None = "fs16", bg: str | None = Non
 
 
 def _para(runs: list[Run], align: str | None = None, size: str | None = "fs16", bg: str | None = None,
-          bullet: bool = False, line_height: float | None = 1.8) -> dict:
-    nodes = [_node(t, b, size, bg) for t, b in runs] or [_node("", False, size, bg)]
+          bullet: bool = False, line_height: float | None = 1.8, color: str = "#000000") -> dict:
+    nodes = [_node(t, b, size, bg, color) for t, b in runs] or [_node("", False, size, bg, color)]
     para: dict = {"id": "", "ctype": "paragraph", "nodes": nodes}
     style: dict = {"ctype": "paragraphStyle"}
     if line_height:
@@ -155,6 +158,19 @@ def text_component(paragraphs: list[dict]) -> dict:
 def chapter_quote(runs: list[Run]) -> dict:
     return {"id": "", "ctype": "quotation", "layout": "quotation_line",
             "value": [_para([(t, True) for t, _ in runs], size=None, line_height=None)], "source": None}
+
+
+CAPTION_COLOR = "#8a8a8a"
+
+
+def caption_paragraph(runs: list[Run]) -> dict:
+    """사진·캡처 바로 아래 '▲ 설명' 한 줄(가운데, 작고 흐리게)."""
+    return _para(runs, align="center", size="fs13", color=CAPTION_COLOR, line_height=1.6)
+
+
+def plain_heading(runs: list[Run]) -> dict:
+    """인용구 대신 굵은 큰 글씨 소제목(사람 블로거가 흔히 쓰는 방식)."""
+    return _para([(t, True) for t, _ in runs], size="fs19", line_height=1.6)
 
 
 def oneline_quote(lines: list[list[Run]]) -> dict:
@@ -274,8 +290,9 @@ def _list_items(node: Node) -> list[list[Run]]:
     return items
 
 
-def to_segments(body_html: str) -> list[Segment]:
-    """본문 HTML을 에디터에 넣을 순서대로: 서식 컴포넌트 묶음, 이미지, 링크 카드."""
+def to_segments(body_html: str, summary_box: bool = True, heading: str = "quote") -> list[Segment]:
+    """본문 HTML을 에디터에 넣을 순서대로: 서식 컴포넌트 묶음, 이미지, 링크 카드.
+    summary_box: 첫 챕터 앞 목록을 '3줄 핵심 요약' 상자로. heading: "quote"(인용구) | "plain"(굵은 큰 글씨)."""
     body = IMAGE_MARKER.sub(lambda m: f'<img data-marker="{m.group(1)}">', body_html)
     root = parse(body)
     segments: list[Segment] = []
@@ -321,11 +338,21 @@ def to_segments(body_html: str) -> list[Segment]:
             flush_text()
             pending.append(horizontal_line())
             add_paragraph([("🔗 함께 보면 좋은 글", True)])
+        elif tag == "h2" and heading == "plain":
+            seen_chapter = True
+            runs = [r for line in runs_of(node) for r in line]
+            if paragraphs:
+                paragraphs.extend([_para([]), _para([])])     # 챕터 앞은 두 줄 띄운다
+            paragraphs.append(plain_heading(runs))
         elif tag == "h2":
             seen_chapter = True
             flush_text()
             runs = [r for line in runs_of(node) for r in line]
             pending.append(chapter_quote(runs))
+        elif tag == "p" and node.attrs.get("data-block") == "caption":
+            runs = [r for line in runs_of(node) for r in line]
+            if runs:
+                paragraphs.append(caption_paragraph(runs))   # 이미지 바로 아래에 붙인다(빈 줄 없이)
         elif tag == "p" and ONELINE_HEAD.match(text_of(node)):
             # 예전 형식: '한 줄 요약: …' 문단 → 구분선 + 포스트잇
             flush_text()
@@ -334,7 +361,7 @@ def to_segments(body_html: str) -> list[Segment]:
             pending.append(oneline_quote([[(rest, False)]]))
         elif tag == "h3":
             add_paragraph([r for line in runs_of(node) for r in line], bold=True)
-        elif tag in ("ol", "ul") and not seen_chapter and not summary_done:
+        elif tag in ("ol", "ul") and summary_box and not seen_chapter and not summary_done:
             summary_done = True
             flush_text()
             pending.append(summary_table(_list_items(node)))

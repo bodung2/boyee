@@ -7,6 +7,8 @@ import re
 from .profiles import Profile
 
 IMAGE_MARKER = re.compile(r"(?:<p>\s*)?\[\[IMAGE:(\w+)\]\](?:\s*</p>)?")
+# 실제 이미지(캡처·사진) 바로 아래 '▲ 설명' 캡션. data-for로 어느 이미지의 캡션인지 남겨, 그림이 빠지면 같이 지운다.
+CAPTION = re.compile(r'<p\b[^>]*data-block=["\']caption["\'][^>]*data-for=["\'](\w+)["\'][^>]*>.*?</p>', re.I | re.S)
 
 # 자동 발행 글에 남아 있으면 안 되는 자리표시자·초안용 문구
 FORBIDDEN_PHRASES = [
@@ -98,8 +100,30 @@ def _affirmative_use(text: str, phrase: str) -> bool:
 
 
 def remove_markers(body_html: str, names: set[str]) -> str:
-    """빠진 이미지(생성 실패·검수 탈락)의 자리 표시를 본문에서 지운다."""
+    """빠진 이미지(생성 실패·검수 탈락)의 자리 표시와 그 캡션을 본문에서 지운다."""
+    body_html = CAPTION.sub(lambda m: "" if m.group(1) in names else m.group(0), body_html)
     return IMAGE_MARKER.sub(lambda m: "" if m.group(1) in names else m.group(0), body_html)
+
+
+def add_caption(body_html: str, name: str, text: str) -> str:
+    """[[IMAGE:name]] 바로 뒤에 '▲ 설명' 캡션 문단을 넣는다(이미 있으면 바꾼다)."""
+    body_html = CAPTION.sub(lambda m: "" if m.group(1) == name else m.group(0), body_html)
+    text = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not text:
+        return body_html
+    if not text.startswith("▲"):
+        text = "▲ " + text
+    cap = f'<p data-block="caption" data-for="{name}">{html.escape(text, quote=False)}</p>'
+    for m in IMAGE_MARKER.finditer(body_html):
+        if m.group(1) == name:
+            return body_html[:m.end()] + cap + body_html[m.end():]
+    return body_html
+
+
+def real_image_names(post: dict) -> set[str]:
+    """글쓴이가 정한 실제 이미지 자리(공식 화면 캡처·실제 사진) 이름."""
+    return {str(x.get("name")) for key in ("captures", "photos") for x in post.get(key) or []
+            if isinstance(x, dict) and x.get("name")}
 
 
 _H2 = re.compile(r"<h2\b", re.I)
@@ -133,7 +157,8 @@ def validate(post: dict, profile: Profile | None = None, after_factcheck: bool =
     after_factcheck: 팩트체크가 틀린 문장을 지운 뒤라 분량 기준은 기본값(MIN_BODY_CHARS)만 본다
     (분량 때문에 검수까지 끝난 글을 버리지 않게)."""
     errors: list[str] = []
-    for key in ("title", "body_html", "tags", "sources", "claims", "thumbnail", "card"):
+    with_card = profile.summary_card if profile else True
+    for key in ("title", "body_html", "tags", "sources", "claims", "thumbnail") + (("card",) if with_card else ()):
         if not post.get(key):
             errors.append(f"필수 항목 없음: {key}")
     if errors:
@@ -146,9 +171,11 @@ def validate(post: dict, profile: Profile | None = None, after_factcheck: bool =
 
     body = post["body_html"]
     markers = [m.group(1) for m in IMAGE_MARKER.finditer(body)]
-    if markers.count("card") != 1:
+    if with_card and markers.count("card") != 1:
         errors.append(f"[[IMAGE:card]] 표시는 정확히 1번이어야 합니다(현재 {markers.count('card')}번)")
-    illust_names = {i.get("name") for i in post.get("illustrations") or []}
+    if not with_card and "card" in markers:
+        errors.append("이 블로그는 요약 카드를 쓰지 않습니다. [[IMAGE:card]] 표시를 지우세요")
+    illust_names = {i.get("name") for i in post.get("illustrations") or []} | real_image_names(post)
     unknown = sorted(set(markers) - {"card", "infographic"} - illust_names)  # 인포그래픽은 발행 직전에 넣는다
     if unknown:
         errors.append(f"알 수 없는 이미지 표시: {unknown}")
@@ -157,7 +184,7 @@ def validate(post: dict, profile: Profile | None = None, after_factcheck: bool =
         errors.append(f"이미지 표시가 중복됩니다: {dupes}")
 
     text = html_to_text(IMAGE_MARKER.sub("", body))
-    everything = "\n".join([title, text, str(post["thumbnail"]), str(post["card"])])
+    everything = "\n".join([title, text, str(post["thumbnail"]), str(post.get("card", ""))])
     for phrase in FORBIDDEN_PHRASES:
         if phrase in everything:
             errors.append(f"자리표시자/초안 문구가 남아 있습니다: '{phrase}'")
@@ -178,7 +205,7 @@ def validate(post: dict, profile: Profile | None = None, after_factcheck: bool =
         errors.append(f"검증 대상 사실이 {MIN_CLAIMS}개 미만입니다")
 
     thumb = post["thumbnail"]
-    if profile and profile.thumbnail_style in ("childhood", "bold"):
+    if profile and profile.thumbnail_style in ("childhood", "bold", "photo"):
         lines = thumb.get("main_lines") or []
         if not 1 <= len(lines) <= 3:
             errors.append(f"썸네일 메인은 1~3줄이어야 합니다(현재 {len(lines)}줄)")
@@ -190,8 +217,8 @@ def validate(post: dict, profile: Profile | None = None, after_factcheck: bool =
         errors.append(f"썸네일 메인 문구가 깁니다({len(thumb['main'])}자)")
     if len(thumb.get("sub", "")) > 26:
         errors.append(f"썸네일 보조 문구가 깁니다({len(thumb['sub'])}자)")
-    bullets = post["card"].get("bullets") or []
-    if not 3 <= len(bullets) <= 6:
+    bullets = (post.get("card") or {}).get("bullets") or []
+    if with_card and not 3 <= len(bullets) <= 6:
         errors.append(f"카드 요점은 3~6개여야 합니다(현재 {len(bullets)}개)")
     if not post["tags"]:
         errors.append("태그가 없습니다")
@@ -203,7 +230,8 @@ _SOURCES_P = re.compile(r'<p>\s*(?:<strong>\s*)?(?:📚\s*)?(?:출처|참고 자
 
 
 def ensure_related(body_html: str, entries: list[dict], lane: str = "", title: str = "",
-                   count: int = 3) -> tuple[str, bool]:
+                   count: int = 3, notes: tuple[str, str] = ("같은 주제를 다른 숫자로 본 글이에요",
+                                                             "함께 읽으면 좋은 최근 글이에요")) -> tuple[str, bool]:
     """글 끝 '함께 보면 좋은 글'이 없으면 이 블로그의 발행 이력에서 골라 넣는다(교육·유아 글과 같은 서식).
     같은 레인 글 → 최근 글 순. 주소가 있는 이 블로그 글만 쓴다. (본문, 넣었는지)"""
     if _RELATED_DIV.search(body_html):
@@ -224,7 +252,7 @@ def ensure_related(body_html: str, entries: list[dict], lane: str = "", title: s
     if not picks:
         return body_html, False
     items = "".join(
-        f"<p>「{html.escape(e['title'])}」 — {'같은 주제를 다른 숫자로 본 글이에요' if same_lane else '함께 읽으면 좋은 최근 글이에요'}</p>"
+        f"<p>「{html.escape(e['title'])}」 — {notes[0] if same_lane else notes[1]}</p>"
         f"<p>{html.escape(e['url'])}</p>"
         for e, same_lane in picks)
     block = f'<div data-block="related">{items}</div>'

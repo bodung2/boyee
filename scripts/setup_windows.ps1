@@ -5,6 +5,7 @@
 #   교육: 블로그 06:00, 막힌 날 재시도 11:00, 인스타·쓰레드 20:00
 #   유아: 블로그 12:00, 막힌 날 재시도 15:00, 인스타·쓰레드 21:00
 #   투자: 블로그 07:00(출근길 홈피드), 막힌 날 재시도 10:00 (인스타·쓰레드 없음)
+#   생활 절차(guide): 블로그 14:30, 막힌 날 재시도 18:30 (인스타·쓰레드 없음)
 #   바꾸려면 -Time, -RetryTime, -SocialTime 을 주고, 끄려면 -RetryTime off / -SocialTime off
 #   (이미 발행한 날엔 재시도 실행이 바로 끝나고, 멈춘 날엔 멈춘 단계부터 이어서 한다)
 param([string]$Profile = "childhood", [string]$Time = "", [string]$SocialTime = "", [string]$RetryTime = "")
@@ -12,6 +13,7 @@ $Defaults = @{
     "edu"       = @{ Time = "06:00"; Retry = "11:00"; Social = "20:00" }
     "childhood" = @{ Time = "12:00"; Retry = "15:00"; Social = "21:00" }
     "invest"    = @{ Time = "07:00"; Retry = "10:00"; Social = "off" }
+    "guide"     = @{ Time = "14:30"; Retry = "18:30"; Social = "off" }
 }
 $D = if ($Defaults.ContainsKey($Profile)) { $Defaults[$Profile] } else { $Defaults["edu"] }
 if ($Time -eq "") { $Time = $D.Time }

@@ -327,6 +327,10 @@ def run(cfg: Config, force: bool = False, sheet=None, fetch=None) -> int:
     today = today_kst()
     setup_logging(cfg, f"neighbors-{cfg.profile.name}-{today}")
     label = cfg.profile.label
+    if not cfg.blog_id:
+        # 아직 만들지 않은 블로그(예: .env에 NAVER_BLOG_ID_GUIDE가 비어 있음)는 이웃 추천도 건너뛴다
+        log.info("[%s] 블로그 아이디가 없어 이웃 후보 추천을 건너뜁니다", label)
+        return 0
     settings = Settings.load(cfg)
     try:
         with _Lock(cfg.log_dir / f".neighbors-{cfg.profile.name}.lock"):
