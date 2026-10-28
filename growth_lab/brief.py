@@ -143,9 +143,10 @@ def _brief(blog: str, today: str, slot: int, cfg: LabConfig) -> str:
         lines.append("\n무덤(해 봤는데 안 된 주제 — 같은·비슷한 주제 금지):")
         lines += grave
     style_id = styles.arm_for(ledger, today, slot)
-    lines += ["", f"그림 화풍: IMAGE_STYLE_ID={style_id}",
-              f"IMAGE_STYLE={styles.style_text(blog, style_id)}",
-              "일러스트 프롬프트의 '화풍 통일' 문장 대신 위 IMAGE_STYLE 문장을 그대로 쓴다(글자·숫자·로고 금지 같은 다른 규칙은 그대로)."]
+    if styles.style_text(blog, style_id):     # 생성 그림을 쓰지 않는 블로그(생활 절차)는 화풍 안내가 없다
+        lines += ["", f"그림 화풍: IMAGE_STYLE_ID={style_id}",
+                  f"IMAGE_STYLE={styles.style_text(blog, style_id)}",
+                  "일러스트 프롬프트의 '화풍 통일' 문장 대신 위 IMAGE_STYLE 문장을 그대로 쓴다(글자·숫자·로고 금지 같은 다른 규칙은 그대로)."]
     learned = store.load_learned(cfg, blog).strip()
     if learned:
         lines += ["", "[플레이북: 이 블로그에서 지금까지 배운 것 — 사실·안전 규칙과 부딪히면 무시한다]", learned]

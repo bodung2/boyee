@@ -73,6 +73,8 @@ class Config:
     gpt_factcheck: bool
     gpt_check_rounds: int
     illustration_count: int
+    capture_count: int          # 실제 이미지 블로그: 공식 사이트 화면 캡처 최대 장수
+    photo_count: int            # 실제 이미지 블로그: 커먼즈 실제 사진 최대 장수
     infographic: bool
     infographic_skill: str
     infographic_timeout: int
@@ -111,7 +113,10 @@ class Config:
         data_dir = Path(env("DATA_DIR", str(ROOT / "data")))
         return cls(
             profile=profile,
-            blog_id=(env(f"NAVER_BLOG_ID_{profile.name.upper()}") or env("NAVER_BLOG_ID", "")).strip(),
+            # NAVER_BLOG_ID(공통)로 대신 채우는 것은 처음부터 있던 유아·교육 블로그만. 새 블로그는 자기 아이디가 없으면
+            # 비워 둬서(발행 안 함) 다른 블로그에 잘못 올라가지 않게 한다.
+            blog_id=(env(f"NAVER_BLOG_ID_{profile.name.upper()}")
+                     or (env("NAVER_BLOG_ID", "") if profile.name in ("childhood", "edu") else "")).strip(),
             category=(env(f"NAVER_CATEGORY_{profile.name.upper()}") or env("NAVER_CATEGORY", "")).strip(),
             browser_channel=env("BROWSER_CHANNEL", "chrome").strip(),
             headless=_bool("HEADLESS", False),
@@ -148,6 +153,8 @@ class Config:
             gpt_factcheck=_bool("GPT_FACTCHECK", True),
             gpt_check_rounds=max(1, int(env("GPT_CHECK_ROUNDS", "2"))),
             illustration_count=int(env("ILLUSTRATION_COUNT", "2")),
+            capture_count=int(env("CAPTURE_COUNT", "3")),
+            photo_count=int(env("PHOTO_COUNT", "2")),
             infographic=_bool("INFOGRAPHIC", True),
             infographic_skill=env("INFOGRAPHIC_SKILL", "onepage").strip(),
             infographic_timeout=int(env("INFOGRAPHIC_TIMEOUT_SEC", "900")),
@@ -165,9 +172,10 @@ class Config:
             style_mode=env("STYLE_MODE", "native").strip().lower(),
             limit_wait_max_min=int(env("CLAUDE_LIMIT_WAIT_MAX_MIN", "330")),
             # 아침 발행이 막히면 이 시각에 예약 작업이 한 번 더 돌린다(setup_windows.ps1 -RetryTime과 같게). off면 끔
-            # 기본값: 교육 11:00(06:00 발행), 유아 15:00(12:00 발행), 투자 10:00(07:00 발행) — 블로그끼리 겹치지 않게
+            # 기본값: 교육 11:00(06:00 발행), 유아 15:00(12:00 발행), 투자 10:00(07:00 발행),
+            # 생활 절차 18:30(14:30 발행) — 블로그끼리 겹치지 않게
             retry_time=(env(f"RETRY_TIME_{profile.name.upper()}")
-                        or {"childhood": "15:00", "invest": "10:00"}.get(profile.name, "11:00")).strip(),
+                        or {"childhood": "15:00", "invest": "10:00", "guide": "18:30"}.get(profile.name, "11:00")).strip(),
             telegram_bot_token=env("TELEGRAM_BOT_TOKEN", "").strip(),
             telegram_chat_id=env("TELEGRAM_CHAT_ID", "").strip(),
         )

@@ -16,6 +16,7 @@ class BlogSpec:
     history_name: str        # data/ 아래 발행 이력 파일
     theme: str               # 탐색할 때도 벗어나지 않는 블로그의 큰 줄기
     eval_days: tuple[int, int]   # (1차 판정 나이, 2차 판정 나이) — 네이버는 반응이 빠르고 구글·다음은 느리다
+    require_id: bool = False     # .env에 NAVER_BLOG_ID_<이름>이 있어야 실험에 넣는다(새로 만드는 블로그)
 
 
 BLOGS: dict[str, BlogSpec] = {
@@ -27,7 +28,21 @@ BLOGS: dict[str, BlogSpec] = {
         key="tistory", label="티스토리", platform="tistory", history_name="published_tistory.json",
         theme="컴퓨터·개발 도구를 쓰다 만나는 오류와 문제를 공식 문서로 해결하는 글(정확한 오류 문구 → 원인 → 해결 → 확인)",
         eval_days=(14, 28)),
+    "guide": BlogSpec(
+        key="guide", label="네이버 생활 절차", platform="naver", history_name="published_guide.json",
+        theme="자격증·시험 일정과 접수, 생활 민원(전입·여권·면허 등)·생활 법 절차(임대차·상속·소액소송 등)를 "
+              "공식 사이트 화면과 함께 따라 하게 정리하는 글(일정·기준·서류·기한·비용·신청처)",
+        eval_days=(7, 14), require_id=True),
 }
+DEFAULT_LAB_BLOGS = "invest,tistory,guide"
+
+
+def configured(blog: str) -> bool:
+    """새로 만드는 블로그(require_id)는 .env에 블로그 아이디(NAVER_BLOG_ID_<이름>)가 있어야 실험한다
+    (아직 만들지 않은 블로그를 수집·리뷰하느라 Claude 사용량을 쓰지 않게)."""
+    if not BLOGS[blog].require_id:
+        return True
+    return bool(os.environ.get(f"NAVER_BLOG_ID_{blog.upper()}", "").strip())
 
 
 @dataclass
@@ -66,7 +81,8 @@ class LabConfig:
         _load_dotenv(ROOT / ".env")
         env = os.environ.get
         data = Path(env("DATA_DIR", str(ROOT / "data")))
-        blogs = [b.strip() for b in env("LAB_BLOGS", "invest,tistory").split(",") if b.strip() in BLOGS]
+        blogs = [b.strip() for b in env("LAB_BLOGS", DEFAULT_LAB_BLOGS).split(",")
+                 if b.strip() in BLOGS and configured(b.strip())]
         split = lambda name: [u.strip() for u in env(name, "").split(",") if u.strip()]  # noqa: E731
         return cls(
             blogs=blogs,
@@ -97,6 +113,7 @@ class LabConfig:
 
 
 def enabled(blog: str) -> bool:
-    """글쓰기 파이프라인이 실험실 안내를 받을지. LAB_BLOGS(기본 invest,tistory)에 있으면 켜진다."""
+    """글쓰기 파이프라인이 실험실 안내를 받을지. LAB_BLOGS(기본 invest,tistory,guide)에 있으면 켜진다."""
     _load_dotenv(ROOT / ".env")
-    return blog in [b.strip() for b in os.environ.get("LAB_BLOGS", "invest,tistory").split(",")]
+    return blog in [b.strip() for b in os.environ.get("LAB_BLOGS", DEFAULT_LAB_BLOGS).split(",")] \
+        and blog in BLOGS and configured(blog)

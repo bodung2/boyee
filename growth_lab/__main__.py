@@ -5,7 +5,7 @@
   python -m growth_lab status [--blog invest]    장부 요약(주제 상태·무덤·탐색 후보·실험·제안)
   python -m growth_lab brief --blog invest       오늘 글쓰기에 넘길 안내문 미리 보기
   python -m growth_lab diagnose --blog invest [--no-push]   통계 화면 구조 진단(조회수를 못 찾을 때)
-  python -m growth_lab approve 투3 [--text "고친 문장"]   제안 승인(투=투자, 티=티스토리) / reject 투3: 거절
+  python -m growth_lab approve 투3 [--text "고친 문장"]   제안 승인(투=투자, 티=티스토리, 생=생활 절차) / reject 투3: 거절
 
 주간 보고는 diagnostics/growth/<블로그>/weekly.md로 GitHub에 올라간다(글 제목·주소 없이, LAB_PUSH_REPORT=false로 끔).
 Claude 대화에서 정한 승인·거절은 data/lab_decisions.json으로 들어와 다음 실행 때 반영된다.
@@ -26,7 +26,7 @@ from .config import BLOGS, LabConfig
 log = logging.getLogger("growth_lab")
 WEEKDAYS = {"월": 0, "화": 1, "수": 2, "목": 3, "금": 4, "토": 5, "일": 6}
 # 통계 화면은 발행과 같은 크롬 프로필을 쓴다 → 그 블로그가 발행 중이면 건너뛴다(프로필은 동시에 못 연다).
-BLOG_LOCK = {"invest": ".run-invest.lock", "tistory": ".run-tistory.lock"}
+BLOG_LOCK = {"invest": ".run-invest.lock", "tistory": ".run-tistory.lock", "guide": ".run-guide.lock"}
 
 
 def _setup_logging(cfg: LabConfig, today: str) -> None:
@@ -157,7 +157,7 @@ def _decide(cfg: LabConfig, proposal: str, verb: str, text: str, today: str) -> 
     m = re.fullmatch(r"\s*([가-힣])?\s*(\d+)\s*", proposal)
     blog = next((b for b, pre in review.PREFIX.items() if m and pre == m.group(1)), None)
     if not m or not blog:
-        print("제안 번호는 '투3'(투자)·'티2'(티스토리)처럼 적습니다")
+        print("제안 번호는 '투3'(투자)·'티2'(티스토리)·'생1'(생활 절차)처럼 적습니다")
         return 1
     led = store.load_ledger(cfg, blog)
     note = review.decide(blog, cfg, led, int(m.group(2)), verb, today, text)

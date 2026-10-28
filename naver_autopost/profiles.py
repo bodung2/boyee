@@ -10,7 +10,7 @@ class Profile:
     label: str
     write_skill: str
     factcheck_skill: str
-    thumbnail_style: str        # "edu"(가운데 정렬) | "childhood"·"bold"(질문형·다크, 좌상단 고정 레이아웃)
+    thumbnail_style: str        # "edu"(가운데 정렬) | "childhood"·"bold"(질문형·다크, 좌상단 고정 레이아웃) | "photo"(실제 사진·캡처 위 글씨)
     illustrations: bool         # AI 이미지(기본: Codex/ChatGPT 구독)로 본문 일러스트 생성
     extra_forbidden: tuple[str, ...] = ()
     # 레인별 블로그 카테고리(없으면 NAVER_CATEGORY_<프로필> 하나를 쓴다). 마지막 "*"는 나머지 레인.
@@ -27,6 +27,13 @@ class Profile:
     max_title: int = 100        # 구조 검증: 제목 최대 글자 수(모바일 홈피드에서 잘리지 않게 줄이는 블로그도 있다)
     use_persona: bool = True    # 교사 페르소나(꾸쓰) 파일을 글쓰기에 넘길지. 신원을 감추는 블로그는 False
     social: bool = True         # 블로그 발행 뒤 인스타·쓰레드 초안을 만들지
+    # 실제 이미지: 공식 사이트 화면 캡처(captures)·위키미디어 커먼즈 실제 사진(photos)을 본문에 넣는다
+    real_images: bool = False
+    summary_card: bool = True   # 프로그램이 그린 요약 카드([[IMAGE:card]])를 넣을지
+    infographic: bool = True    # Codex 인포그래픽을 넣을지(.env INFOGRAPHIC과 둘 다 켜져야 넣는다)
+    summary_box: bool = True    # 첫 챕터 앞 목록을 '3줄 핵심 요약' 상자로 바꿀지
+    heading_style: str = "quote"   # 챕터 제목(h2): "quote"(인용구) | "plain"(굵은 큰 글씨)
+    related_notes: tuple[str, str] = ("같은 주제를 다른 숫자로 본 글이에요", "함께 읽으면 좋은 최근 글이에요")
 
 
 PROFILES: dict[str, Profile] = {
@@ -70,6 +77,33 @@ PROFILES: dict[str, Profile] = {
         neighbor_audience="재테크·내집마련·연금에 관심 있는 직장인",
         neighbor_owner="블로그 주인",
         neighbor_exclude="리딩방·종목 추천·유료 회원 모집·코인 홍보·대출 중개 블로그",
+    ),
+    # 생활 절차 블로그: 자격증·시험 + 생활 민원·법 절차를 공식 사이트 화면과 함께 따라 하게 쓰는 글.
+    # 핵심은 'AI 티가 안 나는 글' — 생성 그림·요약 카드·인포그래픽 없이 공식 화면 캡처와 실제 사진만 쓰고,
+    # 템플릿 같은 요약 상자·포스트잇 대신 사람 블로거처럼 굵은 소제목과 '▲ 설명' 캡션으로 배치한다.
+    "guide": Profile(
+        name="guide", label="생활 절차",
+        write_skill="guide-auto-post", factcheck_skill="guide-auto-factcheck",
+        thumbnail_style="photo", illustrations=False,
+        lane_categories=(("A", "시험·자격증"), ("B", "생활 민원"), ("C", "생활 법률")),
+        extra_forbidden=(
+            # 기계가 쓴 티가 나는 상투어
+            "알아보겠습니다", "알아볼까요", "살펴보겠습니다", "이번 포스팅", "이번 글에서는", "도움이 되셨",
+            "총정리", "완벽 정리", "완벽 가이드", "결론적으로", "마무리하며", "정리해 보았습니다",
+            # 법률·합격 단정
+            "무조건 승소", "승소 보장", "합격 보장", "100% 합격", "무조건 합격",
+            # 신원 노출 방지(다른 블로그와 이어지지 않게)
+            "현직 교사", "교사인 제가", "저는 교사", "우리 반",
+        ),
+        min_sources=6, use_persona=False, social=False, max_title=30, auto_related=True, min_body_chars=2500,
+        real_images=True, summary_card=False, infographic=False, summary_box=False, heading_style="plain",
+        related_notes=("같은 분야 다른 절차를 정리한 글이에요", "함께 보면 좋은 최근 글이에요"),
+        neighbor_tab="생활 절차 이웃 후보",
+        neighbor_keywords=("자격증 시험일정", "정보처리기사", "공무원 시험", "한국사능력검정시험", "전입신고",
+                           "확정일자", "전세보증보험", "상속 절차", "운전면허 갱신", "여권 발급"),
+        neighbor_audience="자격증·시험 준비생과 이사·민원·생활 법 절차를 직접 처리하는 직장인",
+        neighbor_owner="블로그 주인",
+        neighbor_exclude="학원·강의 판매, 법률·행정사 사무소 광고, 대행 업체, 리딩방·대출 중개 블로그",
     ),
 }
 

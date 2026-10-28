@@ -12,8 +12,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import (codex_image, content, gemini_client, generate, history, images, infographic, notify,
-               openai_client, persona, social)
+from . import (captures, codex_image, content, gemini_client, generate, history, images, infographic, notify,
+               openai_client, persona, profiles, realphotos, social)
 from .config import Config
 from .errors import ExternalAccountError
 
@@ -112,11 +112,14 @@ def _save_json(path: Path, data: dict) -> None:
 def _drop_images(post: dict, names: set[str], out_dir: Path, why: str) -> None:
     if not names:
         return
-    log.warning("일러스트 %s 제외(%s)", sorted(names), why)
+    log.warning("이미지 %s 제외(%s)", sorted(names), why)
     post["body_html"] = content.remove_markers(post["body_html"], names)
-    post["illustrations"] = [i for i in post.get("illustrations") or [] if i.get("name") not in names]
+    for key in ("illustrations", "captures", "photos"):
+        if post.get(key):
+            post[key] = [i for i in post[key] if not isinstance(i, dict) or i.get("name") not in names]
     for name in names:
         (out_dir / f"{name}.png").unlink(missing_ok=True)
+        (out_dir / f"{name}.jpg").unlink(missing_ok=True)
 
 
 def image_generator(cfg: Config):
@@ -139,6 +142,34 @@ def _make_illustrations(cfg: Config, post: dict, out_dir: Path) -> None:
             log.warning("일러스트 %s 생성 실패: %s", name, e)
             failed.add(name)
     _drop_images(post, failed, out_dir, "생성 실패")
+
+
+def _make_real_images(cfg: Config, post: dict, out_dir: Path, today: str) -> list[str]:
+    """공식 사이트 화면 캡처 + 커먼즈 실제 사진 후보. 못 만든 자리는 빼고 계속한다(알림용 메모를 돌려준다)."""
+    post["captures"] = captures.capture_specs(post, cfg.capture_count)
+    post["photos"] = realphotos.photo_specs(post, cfg.photo_count)
+    keep = content.real_image_names(post) | {i.get("name") for i in post.get("illustrations") or []} | {"infographic"}
+    extra = {m.group(1) for m in content.IMAGE_MARKER.finditer(post["body_html"])} - keep
+    post["body_html"] = content.remove_markers(post["body_html"], extra)
+    notes: list[str] = []
+    try:
+        shot, cap_notes = captures.capture_all(cfg, post, out_dir, today)
+    except Exception as e:  # noqa: BLE001 - 브라우저 문제여도 글은 발행한다(캡처만 뺀다)
+        log.warning("화면 캡처 단계 실패: %s", e)
+        shot, cap_notes = set(), [f"캡처 단계 실패: {str(e)[:150]}"]
+    notes += cap_notes
+    _drop_images(post, {c["name"] for c in post["captures"]} - shot, out_dir, "캡처 실패")
+    for spec in post["captures"]:
+        post["body_html"] = content.add_caption(post["body_html"], spec["name"], captures.caption_text(spec))
+    try:
+        found, photo_notes = realphotos.find_candidates(cfg, post, out_dir)
+    except Exception as e:  # noqa: BLE001
+        log.warning("실제 사진 찾기 실패: %s", e)
+        found, photo_notes = set(), [f"사진 찾기 실패: {str(e)[:150]}"]
+    notes += photo_notes
+    _drop_images(post, {p["name"] for p in post["photos"]} - found, out_dir, "사진 후보 없음")
+    log.info("실제 이미지: 캡처 %d장, 사진 자리 %d곳(후보 검수 대기)", len(shot), len(found))
+    return notes
 
 
 def _published_issues(post: dict, issues: list[dict]) -> list[dict]:
@@ -208,24 +239,25 @@ def _mark(out_dir: Path, **flags) -> None:
     _save_json(out_dir / "stage.json", {**_stage(out_dir), **flags})
 
 
-def _load_fixed(post_path: Path) -> dict:
+def _load_fixed(post_path: Path, profile=None) -> dict:
     post = _load_post(post_path)
-    post["body_html"], moved = content.fix_card_marker(post["body_html"])
-    if moved:
-        log.info("요약 카드 자리([[IMAGE:card]])를 맞췄습니다")
+    if profile is None or profile.summary_card:
+        post["body_html"], moved = content.fix_card_marker(post["body_html"])
+        if moved:
+            log.info("요약 카드 자리([[IMAGE:card]])를 맞췄습니다")
     _save_json(post_path, post)
     return post
 
 
 def _fix_structure(cfg: Config, out_dir: Path, post_path: Path) -> dict:
     """구조 검사. 떨어지면 글을 버리기 전에 같은 글을 한 번 고치게 한다(출처 부족 같은 형식 문제로 주제를 날리지 않게)."""
-    post = _load_fixed(post_path)
+    post = _load_fixed(post_path, cfg.profile)
     errors = content.validate(post, cfg.profile)
     if not errors:
         return post
     log.warning("구조 검증 실패 → 같은 글을 고칩니다:\n- %s", "\n- ".join(errors))
     generate.repair_post(cfg, out_dir, errors)
-    post = _load_fixed(post_path)
+    post = _load_fixed(post_path, cfg.profile)
     errors = content.validate(post, cfg.profile)
     if errors:
         raise Rejected("구조 검증 실패:\n- " + "\n- ".join(errors))
@@ -283,11 +315,23 @@ def _attempt(cfg: Config, today: str, out_dir: Path, feedback: str, resume: bool
         _save_json(post_path, post)
         _mark(out_dir, illustrated=True)
 
+    if cfg.profile.real_images and not stage.get("visuals"):
+        notes = _make_real_images(cfg, post, out_dir, today)
+        _save_json(post_path, post)
+        _save_json(out_dir / "visuals.json", {"notes": notes})
+        _mark(out_dir, visuals=True)
+
     if not stage.get("claude_pass"):
         fc = generate.factcheck(cfg, out_dir)
         post = _load_post(post_path)
         bad = {name for name, verdict in (fc.get("images") or {}).items() if not str(verdict).startswith("ok")}
         _drop_images(post, bad, out_dir, "검수 탈락")
+        if cfg.profile.real_images:
+            # 실제 사진: 팩트체크가 후보 중에서 고른 것만 쓴다(고르지 않은 자리는 뺀다)
+            chosen, dropped = realphotos.apply_choice(post, out_dir, fc.get("photo_choice") or {})
+            _drop_images(post, dropped, out_dir, "맞는 사진 후보 없음")
+            if chosen:
+                log.info("실제 사진 확정: %s", sorted(chosen))
         _save_json(post_path, post)
         if fc.get("verdict") != "pass":
             raise Rejected(f"Claude 팩트체크 불합격: {fc.get('summary', '')}\n"
@@ -365,7 +409,7 @@ def produce(cfg: Config, today: str, out_dir: Path) -> dict:
 def add_infographic(cfg: Config, post: dict, out_dir: Path) -> bool:
     """팩트체크를 통과한 최종 글로 핵심 인포그래픽을 만들어 '한 줄 요약' 앞에 넣는다.
     만들지 못하면 인포그래픽만 빼고 발행은 계속한다(False)."""
-    if not cfg.infographic:
+    if not (cfg.infographic and cfg.profile.infographic):
         return True
     path = out_dir / f"{infographic.NAME}.png"
     if not path.exists():
@@ -387,7 +431,21 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
         stem = "".join(ch for ch in str(names.get(key) or default) if ch not in '\\/:*?"<>|').strip() or default
         return out_dir / f"{stem}.png"
 
-    if cfg.profile.thumbnail_style == "bold":
+    if cfg.profile.thumbnail_style == "photo":
+        tone = images.guide_tone(post.get("lane"))
+        # 실제 사진이 있으면 사진, 없으면 첫 공식 화면 캡처를 썸네일 배경으로. 둘 다 없으면 단색.
+        reals = [out_dir / f"{p.get('name')}.jpg" for p in post.get("photos") or []] + \
+                [out_dir / f"{c.get('name')}.png" for c in post.get("captures") or []]
+        scene = next((path for path in reals if path.exists()), None)
+        thumb_out = fname("thumbnail", "thumbnail")
+        imgs = {"thumbnail": (images.make_thumbnail_photo(post["thumbnail"], scene, thumb_out, tone) if scene
+                              else images.make_thumbnail_childhood(post["thumbnail"], None, thumb_out, tone=tone))}
+        for spec in (post.get("captures") or []) + (post.get("photos") or []):
+            name = spec.get("name")
+            path = next((out_dir / f"{name}{ext}" for ext in (".png", ".jpg") if (out_dir / f"{name}{ext}").exists()), None)
+            if path:
+                imgs[name] = path
+    elif cfg.profile.thumbnail_style == "bold":
         tone = images.invest_tone(post.get("lane"))
         # 홈피드용: 검수를 통과한 첫 일러스트 장면 위에 질문 글씨를 얹는다(새 그림을 만들지 않음). 없으면 단색.
         scene = next((out_dir / f"{i.get('name')}.png" for i in post.get("illustrations") or []
@@ -429,6 +487,19 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
     missing = {m.group(1) for m in content.IMAGE_MARKER.finditer(post["body_html"])} - set(imgs)
     post["body_html"] = content.remove_markers(post["body_html"], missing)
     return imgs
+
+
+def _real_image_note(post: dict, out_dir: Path) -> str:
+    caps = sum(1 for c in post.get("captures") or [] if (out_dir / f"{c.get('name')}.png").exists())
+    pics = sum(1 for p in post.get("photos") or [] if (out_dir / f"{p.get('name')}.jpg").exists())
+    note = f"🖼 공식 화면 캡처 {caps}장, 실제 사진 {pics}장"
+    try:
+        misses = json.loads((out_dir / "visuals.json").read_text(encoding="utf-8")).get("notes") or []
+    except (OSError, json.JSONDecodeError):
+        misses = []
+    if misses:
+        note += " (빠진 것: " + "; ".join(str(m)[:60] for m in misses[:3]) + ")"
+    return note
 
 
 def _social_drafts(cfg: Config, out_dir: Path, url: str) -> str:
@@ -481,6 +552,10 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
     today = today_kst()
     label = f"{cfg.profile.label}"
     setup_logging(cfg, f"{cfg.profile.name}-{today}")
+    if not cfg.blog_id and cfg.profile.name != profiles.DEFAULT_PROFILE:
+        # 예약 작업은 등록됐지만 아직 만들지 않은 블로그(.env에 NAVER_BLOG_ID_<프로필>이 비어 있음): 알림 없이 건너뛴다
+        log.info("[%s] .env에 NAVER_BLOG_ID_%s가 없어 오늘은 건너뜁니다", label, cfg.profile.name.upper())
+        return 0
     try:
         with _Lock(cfg.log_dir / f".run-{cfg.profile.name}.lock"):
             done = history.published_on(cfg.history_file, today)
@@ -513,7 +588,8 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
             post = produce(cfg, today, out_dir)
             if cfg.profile.auto_related:
                 post["body_html"], added = content.ensure_related(
-                    post["body_html"], history.load(cfg.history_file), post.get("lane", ""), post.get("title", ""))
+                    post["body_html"], history.load(cfg.history_file), post.get("lane", ""), post.get("title", ""),
+                    notes=cfg.profile.related_notes)
                 if added:
                     log.info("함께 보면 좋은 글을 발행 이력에서 채웠습니다")
                     _save_json(out_dir / "post.json", post)
@@ -541,6 +617,8 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
                 cat_note += " ⚠️ 이 카테고리를 찾지 못해 기본 카테고리로 들어갔습니다"
             if not info_ok:
                 cat_note += "\n⚠️ 인포그래픽을 만들지 못해 빼고 올렸습니다(로그 확인)"
+            if cfg.profile.real_images:
+                cat_note += "\n" + _real_image_note(post, out_dir)
             if dry_run:
                 notify.send(cfg, f"[{label} 자동발행 테스트] 최종 발행 직전까지 확인했습니다: {post['title']}\n{cat_note}")
                 return 0
@@ -549,6 +627,7 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
                 "category": post.get("blog_category", ""),
                 "lane": post.get("lane", ""), "cluster": post.get("cluster", ""), "domain": post.get("domain"),
                 "tags": post.get("tags", []), "source": "autopost",
+                **({"format": post["format"]} if post.get("format") else {}),     # 생활 절차: 글 모양(따라하기·표·상황별)
                 "persona_used": persona.clean_used(post.get("persona_used"), persona.load()),
                 **_lab_fields(post),
             })

@@ -362,3 +362,67 @@ def make_thumbnail_scene(thumb: dict, background: Path, out: Path, tone: str, si
     if thumb.get("sub"):
         draw.text((96, y + 34), thumb["sub"], font=sub_font, fill=WHITE, stroke_width=4, stroke_fill=edge)
     return _save_thumbnail(img, out, final_size)
+
+
+# 생활 절차 블로그(photo): 레인별 차분한 톤(칩·글씨 그림자). 실제 사진·캡처가 배경이라 색은 작게만 쓴다.
+GUIDE_TONES = {
+    "A": "#1d4e89",   # 시험·자격증 블루
+    "B": "#2f6b3f",   # 생활 민원 그린
+    "C": "#5a3a1e",   # 생활 법률 브라운
+}
+
+
+def guide_tone(lane: str | None) -> str:
+    letter = next((ch for ch in str(lane or "").upper() if ch.isalpha()), "")
+    return GUIDE_TONES.get(letter, GUIDE_TONES["A"])
+
+
+def make_thumbnail_photo(thumb: dict, background: Path, out: Path, tone: str, size: int = THUMBNAIL_SIZE) -> Path:
+    """실제 사진·공식 화면 캡처를 정사각형으로 깔고, 아래쪽만 어둡게 눌러 흰 글씨를 얹는다(사람이 만든 썸네일처럼
+    담백하게: 작은 칩 + 굵은 흰 글씨 + 얇은 보조 문구). 캡처는 위쪽(메뉴·제목)이 중요해 위에서부터 자른다.
+    그림을 열 수 없으면 단색 썸네일로 대신한다."""
+    try:
+        pic = Image.open(background).convert("RGB")
+    except (OSError, ValueError):
+        return make_thumbnail_childhood(thumb, None, out, size=size, tone=tone)
+    final_size, size = size, _DRAW_SIZE
+    w, h = pic.size
+    side = min(w, h)
+    is_capture = "cap" in background.stem
+    top = 0 if is_capture else (h - side) // 2
+    pic = pic.crop(((w - side) // 2, top, (w - side) // 2 + side, top + side)).resize((size, size), Image.LANCZOS)
+    if is_capture:
+        # 화면 캡처는 글자가 많아 제목과 겹쳐 보인다 → 살짝 흐리게(어떤 화면인지는 알아볼 정도로)
+        pic = pic.filter(ImageFilter.GaussianBlur(5))
+
+    # 아래쪽을 점점 어둡게(글씨 자리). 캡처는 더 위에서부터, 더 진하게
+    shade = Image.new("L", (size, size), 0)
+    sd = ImageDraw.Draw(shade)
+    start, peak = (int(size * 0.25), 238) if is_capture else (int(size * 0.42), 215)
+    for y in range(start, size):
+        sd.line([(0, y), (size, y)], fill=int(peak * ((y - start) / (size - start)) ** 0.7))
+    img = Image.composite(Image.new("RGB", (size, size), "#0b0f14"), pic, shade)
+    draw = ImageDraw.Draw(img)
+
+    lines = [line for line in (thumb.get("main_lines") or []) if line][:3]
+    font_size = 118
+    main_font = _font("bold", font_size)
+    while font_size > 80 and any(_width(draw, line, main_font) > size - 160 for line in lines):
+        font_size -= 6
+        main_font = _font("bold", font_size)
+    line_h = int(font_size * 1.22)
+    sub = thumb.get("sub", "")
+    sub_font = _font("regular", 46)
+    y = size - 90 - line_h * len(lines) - (80 if sub else 0)
+    chip = thumb.get("chip", "")
+    if chip:
+        chip_font = _font("bold", 38)
+        cy = y - 100
+        draw.rounded_rectangle([80, cy, 80 + _width(draw, chip, chip_font) + 48, cy + 70], radius=12, fill=tone)
+        draw.text((104, cy + 12), chip, font=chip_font, fill=WHITE)
+    for line in lines:
+        draw.text((80, y), line, font=main_font, fill=WHITE, stroke_width=3, stroke_fill="#0b0f14")
+        y += line_h
+    if sub:
+        draw.text((84, y + 14), sub, font=sub_font, fill="#e8e8e8")
+    return _save_thumbnail(img, out, final_size)

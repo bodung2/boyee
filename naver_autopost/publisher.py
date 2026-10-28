@@ -390,7 +390,8 @@ def _publish(page: Page, cfg: Config, post: dict, images: dict[str, Path], dry_r
     upload("thumbnail")
     if cfg.style_mode == "native":
         # SR 기존 글과 같은 서식(인용구 챕터·요약표·16pt 본문·포스트잇 한 줄 요약·링크 카드)
-        for kind, value in se_markup.to_segments(post["body_html"]):
+        for kind, value in se_markup.to_segments(post["body_html"], summary_box=cfg.profile.summary_box,
+                                                  heading=cfg.profile.heading_style):
             if kind == "se":
                 ed.paste_native(value)
                 ed.move_to_end()

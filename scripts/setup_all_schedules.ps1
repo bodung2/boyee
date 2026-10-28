@@ -23,11 +23,12 @@ $Schedule = @(
     @{ Name = "MarketDashboard";               Bat = "run_market_dashboard.bat"; Arg = "";                  Times = @("07:40"); Hours = 1;   Wake = $false; Days = @("Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"); Desc = "시장 대시보드(화~토)" }
     @{ Name = "TistoryAutoPost";               Bat = "run_tistory_daily.bat";    Arg = "";                  Times = @("08:30"); Hours = 8;   Wake = $true;  Desc = "티스토리 1편째" }
     @{ Name = "NaverAutoPost-childhood";       Bat = "run_daily.bat";            Arg = "--profile childhood"; Times = @("12:00", "15:00"); Hours = 9; Wake = $true; Desc = "네이버 유아 블로그(15:00은 막힌 날 재시도)" }
+    @{ Name = "NaverAutoPost-guide";           Bat = "run_daily.bat";            Arg = "--profile guide";   Times = @("14:30", "18:30"); Hours = 9; Wake = $true; Desc = "네이버 생활 절차 블로그(18:30은 막힌 날 재시도)" }
     @{ Name = "TistoryAutoPost2";              Bat = "run_tistory_daily.bat";    Arg = "--slot 2";          Times = @("17:00"); Hours = 8;   Wake = $true;  Desc = "티스토리 2편째" }
     @{ Name = "NaverNeighbors";                Bat = "run_neighbors.bat";        Arg = "";                  Times = @("19:00"); Hours = 2;   Wake = $true;  Desc = "네이버 이웃 후보 추천" }
     @{ Name = "NaverAutoPost-Social-edu";      Bat = "run_social.bat";           Arg = "--profile edu";     Times = @("20:00"); Hours = 2;   Wake = $true;  Desc = "교육 블로그 인스타·쓰레드" }
     @{ Name = "NaverAutoPost-Social-childhood"; Bat = "run_social.bat";          Arg = "--profile childhood"; Times = @("21:00"); Hours = 2; Wake = $true; Desc = "유아 블로그 인스타·쓰레드" }
-    @{ Name = "GrowthLab";                     Bat = "run_growth_lab.bat";       Arg = "";                  Times = @("22:30"); Hours = 3;   Wake = $true;  Desc = "성장 실험실: 투자·티스토리 통계 수집(일요일엔 주간 리뷰)" }
+    @{ Name = "GrowthLab";                     Bat = "run_growth_lab.bat";       Arg = "";                  Times = @("22:30"); Hours = 3;   Wake = $true;  Desc = "성장 실험실: 투자·티스토리·생활 절차 통계 수집(일요일엔 주간 리뷰)" }
 )
 
 # -File로 실행하면 "A,B"가 문자열 하나로 들어오므로 쉼표로 나눈다
@@ -126,6 +127,6 @@ Get-ScheduledTask | Where-Object { $AllNames -contains $_.TaskName } | ForEach-O
 Write-Host ""
 Write-Host "완료. 절전 중에도 깨워서 실행하려면 Windows 전원 옵션의 '절전 모드 해제 타이머 허용'이 켜져 있어야 합니다."
 Write-Host "각 블로그 로그인(최초 1회 또는 풀렸을 때):"
-Write-Host "   .venv\Scripts\python.exe -m naver_autopost login --profile edu      (childhood, invest도 같은 방법)"
+Write-Host "   .venv\Scripts\python.exe -m naver_autopost login --profile edu      (childhood, invest, guide도 같은 방법)"
 Write-Host "   .venv\Scripts\python.exe -m tistory_autopost login"
 Write-Host "   .venv\Scripts\python.exe -m blogger_autopost auth"

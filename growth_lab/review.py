@@ -19,7 +19,7 @@ from . import brief, demand, scoring, store, styles
 from .config import BLOGS, LabConfig
 
 log = logging.getLogger(__name__)
-PREFIX = {"invest": "투", "tistory": "티"}          # 텔레그램 답장에서 블로그를 가리는 글자("승인 투3")
+PREFIX = {"invest": "투", "tistory": "티", "guide": "생"}          # 텔레그램 답장에서 블로그를 가리는 글자("승인 투3")
 STATUS_KO = {"testing": "시험 중", "promising": "유망", "core": "주력", "neutral": "보통", "saturated": "포화",
              "dead": "중단(무덤)", "hold": "보류(채널 점검)"}
 MAX_PROPOSALS = 3
