@@ -72,6 +72,12 @@ def _queue(cfg: TistoryConfig) -> int:
 
     today = date.today()
     entries = history.load(cfg.history_file)
+    if cfg.mode == "scoop":
+        from . import radar
+        ranked = radar.collect(cfg.topics_file, radar.written_ids(entries))
+        print(f"레이더 후보 {len(ranked)}개 (선점형, {cfg.topics_file.name})")
+        print(radar.brief(ranked, inbox.pending(cfg), n=10))
+        return 0
     all_topics = topics.load(cfg.topics_file)
     ranked = topics.rank(all_topics, entries, today)
     print(f"남은 주제 {len(ranked)}개 / 전체 {len(all_topics)}개")
@@ -104,8 +110,14 @@ def _check(cfg: TistoryConfig) -> int:
         print("3) Codex CLI(ChatGPT 교차 팩트체크): " + ("✅" if has else "❌ 없음(TISTORY_GPT_FACTCHECK=false로 끌 수 있음)"))
         ok &= has
     try:
-        n = len(topics.load(cfg.topics_file))
-        print(f"4) 주제 큐: ✅ {n}개 ({cfg.topics_file})")
+        if cfg.mode == "scoop":
+            import json
+            conf = json.loads(cfg.topics_file.read_text(encoding="utf-8"))
+            on = [k for k, v in conf.items() if isinstance(v, dict) and v.get("enabled")]
+            print(f"4) 레이더 소스(선점형): ✅ {', '.join(on) or '켜진 소스 없음'} ({cfg.topics_file})")
+        else:
+            n = len(topics.load(cfg.topics_file))
+            print(f"4) 주제 큐: ✅ {n}개 ({cfg.topics_file})")
     except Exception as e:  # noqa: BLE001
         ok = False
         print(f"4) 주제 큐: ❌ {e}")

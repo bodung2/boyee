@@ -64,6 +64,8 @@ def _validate(cfg: TistoryConfig, post: dict) -> list[str]:
 
 def topic_brief(cfg: TistoryConfig, today: date, slot: int = 1) -> str:
     entries = history.load(cfg.history_file)
+    if cfg.mode == "scoop":
+        return _scoop_brief(cfg, today, slot, entries)
     ranked = topics.rank(topics.load(cfg.topics_file), entries, today)
     lab = _lab_brief(today.isoformat(), slot)
     if lab:
@@ -73,6 +75,19 @@ def topic_brief(cfg: TistoryConfig, today: date, slot: int = 1) -> str:
     if not ranked and not inbox.pending(cfg) and not lab:
         raise RuntimeError(f"주제 큐를 모두 썼습니다. {cfg.topics_file.name}에 주제를 추가하세요.")
     text = topics.brief(ranked, inbox.pending(cfg), mode=cfg.mode) if (ranked or inbox.pending(cfg)) else ""
+    return (text + "\n\n" + lab).strip() if lab else text
+
+
+def _scoop_brief(cfg: TistoryConfig, today: date, slot: int, entries: list[dict]) -> str:
+    """선점형: 레이더로 방금 나온 것을 모아 후보를 준다. 레이더가 비어도 글쓰기 단계가 직접 찾는다."""
+    from . import radar
+    try:
+        ranked = radar.collect(cfg.topics_file, radar.written_ids(entries))
+    except Exception as e:  # noqa: BLE001 - 레이더 문제로 그날 글이 멈추면 안 된다
+        log.warning("레이더 실패(글쓰기 단계가 직접 찾습니다): %s", e)
+        ranked = []
+    text = radar.brief(ranked, inbox.pending(cfg))
+    lab = _lab_brief(today.isoformat(), slot)
     return (text + "\n\n" + lab).strip() if lab else text
 
 

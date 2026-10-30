@@ -101,6 +101,25 @@ verdict: 문제 없음=pass, 고치면 되는 문제만=fix, 핵심 해결 명�
 """
 
 
+GPT_FACTCHECK_SCOOP = """너는 신작·새 버전·화제 소식 글 검수자다. 아래 블로그 글은 사람 검토 없이 티스토리에 자동 발행된다.
+나온 지 얼마 안 된 소식이라 소문과 확정 사실이 섞이기 쉽다. 웹 검색으로 공식 출처(스토어 페이지, 공식 사이트·공지,
+공식 GitHub 릴리스 노트, 정부·기관 발표, 주요 언론의 직접 확인 보도)를 찾아 아래를 하나씩 검증하라.
+- 출시일·출시 시각(시간대 변환 포함)·가격·지원 언어·플랫폼·사양·버전 번호·바뀐 기능이 공식 출처와 같은가
+- 공식 확인 안 된 내용(유출, 루머, 커뮤니티 추측)을 사실처럼 쓰지 않았는가
+- 실존 인물에 대한 논란·사생활·확인 안 된 주장이 있는가(있으면 삭제)
+- 출처로 단 링크가 실제로 그 내용을 담고 있는가
+규칙: 공식 출처로 확인되면 문제 없음. 다르면 올바른 내용과 근거 URL. 확인되지 않으면 삭제 권고.
+문체 지적 금지. 근거 URL 없는 지적 금지.
+웹 검색을 쓸 수 없으면 {"verdict": "error", "summary": "no web search"} 만 출력하라. 파일을 만들거나 명령을 실행하지 말 것.
+
+오직 JSON 하나만 출력하라(코드블록 없이):
+{"verdict": "pass" | "fix" | "fail", "checked": 검증한 항목 개수,
+ "issues": [{"text": "본문 속 문제 문장(그대로)", "problem": "무엇이 틀렸나", "correction": "고친 문장 또는 '삭제'", "evidence_url": "https://..."}],
+ "summary": "한 줄 요약"}
+verdict: 문제 없음=pass, 고치면 되는 문제만=fix, 제목·핵심 사실(출시일·가격·버전)이 틀렸거나 문제가 전체의 30% 초과=fail.
+"""
+
+
 def article(post: dict) -> str:
     sources = "\n".join(f"- {s.get('publisher', '')} | {s.get('title', '')} | {s.get('url', '')}"
                         for s in post.get("sources", []))
@@ -108,7 +127,7 @@ def article(post: dict) -> str:
 
 
 def gpt_factcheck(cfg: TistoryConfig, post: dict) -> dict:
-    prompt = GPT_FACTCHECK_FIX if getattr(cfg, "mode", "stats") == "fix" else GPT_FACTCHECK
+    prompt = {"fix": GPT_FACTCHECK_FIX, "scoop": GPT_FACTCHECK_SCOOP}.get(getattr(cfg, "mode", "stats"), GPT_FACTCHECK)
     result = _extract_json(run_codex(cfg, prompt + "\n\n" + article(post)))
     if result.get("verdict") == "error":
         raise CodexUnavailable(f"Codex에서 웹 검색을 쓸 수 없습니다: {result.get('summary', '')}")

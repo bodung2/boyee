@@ -10,6 +10,9 @@ from naver_autopost.config import ROOT, _bool, _load_dotenv
 
 # 글 종류별 기본값. .env의 TISTORY_* 값이 있으면 그것이 우선한다.
 MODES = {
+    # 선점형: 방금 나온 신작 게임·AI 도구 새 버전·급상승 화제를 경쟁 글이 생기기 전에 쓴다(topics = 레이더 소스 설정)
+    "scoop": {"topics": "tistory_scoop_sources.json", "write": "scoop-auto-post", "factcheck": "scoop-auto-factcheck",
+              "min_sources": "3", "min_points": "4", "infographic": False},
     "fix": {"topics": "tistory_fix_topics.json", "write": "fix-auto-post", "factcheck": "fix-auto-factcheck",
             "min_sources": "3", "min_points": "4", "infographic": False},   # 명령어가 그림에 잘못 찍히면 해롭다
     "stats": {"topics": "tistory_topics.json", "write": "stats-auto-post", "factcheck": "stats-auto-factcheck",
@@ -20,7 +23,7 @@ MODES = {
 @dataclass
 class TistoryConfig:
     blog_name: str                 # https://<blog_name>.tistory.com
-    mode: str                      # fix: 오류 해결 글(기본) / stats: 논쟁 × 공식 통계(예전 '숫자로 보는 한국')
+    mode: str                      # scoop: 선점형(기본) / fix: 오류 해결 / stats: 논쟁 × 공식 통계
     category: str                  # 발행할 카테고리 이름(비우면 카테고리 없음)
     browser_channel: str
     headless: bool
@@ -74,7 +77,7 @@ class TistoryConfig:
         env = os.environ.get
         data_dir = Path(env("DATA_DIR", str(ROOT / "data")))
         name = env("TISTORY_BLOG", "").strip()
-        mode = (env("TISTORY_MODE", "fix").strip().lower() or "fix")
+        mode = (env("TISTORY_MODE", "scoop").strip().lower() or "scoop")
         if mode not in MODES:
             raise SystemExit(f"TISTORY_MODE는 {', '.join(MODES)} 중 하나여야 합니다: {mode}")
         d = MODES[mode]
@@ -83,8 +86,8 @@ class TistoryConfig:
         return cls(
             blog_name=name,
             mode=mode,
-            # 오류 해결 글은 TISTORY_CATEGORY_FIX(없으면 카테고리 없이) — '숫자로 보는 한국' 카테고리에 섞이지 않게
-            category=(env("TISTORY_CATEGORY_FIX", "") if mode == "fix" else env("TISTORY_CATEGORY", "")).strip(),
+            # 글 종류마다 카테고리를 따로: TISTORY_CATEGORY_SCOOP / TISTORY_CATEGORY_FIX (통계 글만 TISTORY_CATEGORY)
+            category=(env("TISTORY_CATEGORY", "") if mode == "stats" else env(f"TISTORY_CATEGORY_{mode.upper()}", "")).strip(),
             browser_channel=env("BROWSER_CHANNEL", "chrome").strip(),
             headless=_bool("HEADLESS", False),
             profile_dir=Path(env("BROWSER_PROFILE_DIR_TISTORY", str(ROOT / ".browser-profile-tistory"))),

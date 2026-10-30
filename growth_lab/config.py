@@ -18,6 +18,24 @@ class BlogSpec:
     eval_days: tuple[int, int]   # (1차 판정 나이, 2차 판정 나이) — 네이버는 반응이 빠르고 구글·다음은 느리다
 
 
+# 티스토리는 글 종류(TISTORY_MODE)에 따라 큰 줄기가 달라진다
+TISTORY_THEMES = {
+    "scoop": "방금 나온 것(스팀 신작·출시 예정작, AI·개발 도구 새 버전, 급상승 화제)을 한국어 글이 쌓이기 전에 "
+             "공식 출처로 빠르게 정리하는 선점형 글(출시 시각·가격·사양·바뀐 점·초반에 알아야 할 것)",
+    "fix": "컴퓨터·개발 도구를 쓰다 만나는 오류와 문제를 공식 문서로 해결하는 글(정확한 오류 문구 → 원인 → 해결 → 확인)",
+    "stats": "사람들이 궁금해하거나 편이 갈리는 질문을 공식 통계로 답하는 글",
+}
+
+
+def theme_of(spec: "BlogSpec") -> str:
+    """블로그의 큰 줄기. 티스토리는 .env의 TISTORY_MODE(기본 scoop)를 따른다."""
+    if spec.key != "tistory":
+        return spec.theme
+    _load_dotenv(ROOT / ".env")
+    mode = (os.environ.get("TISTORY_MODE") or "scoop").strip().lower()
+    return TISTORY_THEMES.get(mode, spec.theme)
+
+
 BLOGS: dict[str, BlogSpec] = {
     "invest": BlogSpec(
         key="invest", label="네이버 투자", platform="naver", history_name="published_invest.json",

@@ -740,7 +740,8 @@ def _fill_editor(cfg: TistoryConfig, page: Page, post: dict, out_dir: Path,
         post["_images_ok"] = len(codes)
         _switch_to_html(page)
         captions = {i.get("name", ""): i.get("caption") or "" for i in post.get("illustrations") or []}
-        body = style.stylize(post["body_html"], codes, captions, getattr(cfg, "mode", "stats"))
+        body = style.stylize(post["body_html"], codes, captions, getattr(cfg, "mode", "stats"),
+                             str(post.get("checked_at") or "") if getattr(cfg, "mode", "") == "scoop" else "")
         post["_final_html"] = body
         _set_body(page, body)
         title_box = _find(page, "title")

@@ -1,0 +1,21 @@
+{
+  "_about": "선점형 티스토리(TISTORY_MODE=scoop) 레이더 소스. enabled로 켜고 끈다. 저장소·RSS는 자유롭게 더하거나 뺀다.",
+  "steam": {"enabled": true, "per_section": 8},
+  "github": {
+    "enabled": true,
+    "repos": [
+      "openai/codex",
+      "anthropics/claude-code",
+      "google-gemini/gemini-cli",
+      "ollama/ollama",
+      "microsoft/vscode",
+      "comfyanonymous/ComfyUI"
+    ]
+  },
+  "rss": {
+    "enabled": true,
+    "feeds": [
+      {"label": "구글 트렌드 한국 급상승", "url": "https://trends.google.com/trending/rss?geo=KR", "kind": "trend", "max": 15}
+    ]
+  }
+}

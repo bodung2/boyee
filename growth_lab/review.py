@@ -16,7 +16,7 @@ from naver_autopost.config import ROOT
 from naver_autopost.notify import send_text
 
 from . import brief, demand, scoring, store, styles
-from .config import BLOGS, LabConfig
+from .config import BLOGS, LabConfig, theme_of
 
 log = logging.getLogger(__name__)
 PREFIX = {"invest": "투", "tistory": "티"}          # 텔레그램 답장에서 블로그를 가리는 글자("승인 투3")
@@ -207,7 +207,7 @@ def review_input(blog: str, cfg: LabConfig, ledger: dict, table: list[dict], ver
     recent = sorted(table, key=lambda p: p["date"])[-60:]
     caps = sorted((cfg.output_dir / blog).glob("*/capture.json"))[-3:]
     return {
-        "blog": blog, "label": spec.label, "platform": spec.platform, "theme": spec.theme, "today": today,
+        "blog": blog, "label": spec.label, "platform": spec.platform, "theme": theme_of(spec), "today": today,
         "eval_days": spec.eval_days, "channel": channel, "views_gain_14d": gain,
         "baseline_v1": scoring.baseline(table, "v1", cfg.min_baseline_posts),
         "verdicts": verdicts,
