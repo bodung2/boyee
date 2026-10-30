@@ -635,7 +635,8 @@ FIX_POST = {
 }
 
 
-def test_fix_mode_is_default_with_its_own_skills_and_queue():
+def test_fix_mode_has_its_own_skills_and_queue(monkeypatch):
+    monkeypatch.setenv("TISTORY_MODE", "fix")
     c = TistoryConfig.load()
     assert c.mode == "fix" and c.write_skill == "fix-auto-post" and c.factcheck_skill == "fix-auto-factcheck"
     assert c.topics_file.name == "tistory_fix_topics.json" and c.infographic is False
@@ -824,3 +825,125 @@ def test_login_failure_dump_masks_accounts(cfg, tmp_path):
         b.close()
     data = json.loads((tmp_path / "login_failed.json").read_text(encoding="utf-8"))
     assert data["items"][0]["cls"] == "btn_g" and "gmail" not in data["items"][0]["text"] and "1234" not in data["items"][0]["text"]
+
+
+# ---------------------------------------------------------------- 선점형(TISTORY_MODE=scoop)
+
+from datetime import timezone  # noqa: E402
+
+from tistory_autopost import radar  # noqa: E402
+
+STEAM = {"new_releases": {"items": [{"id": 111, "name": "New Game", "final_price": 2150000, "discount_percent": 10}]},
+         "coming_soon": {"items": [{"id": 222, "name": "Soon Game", "final_price": 0}]},
+         "top_sellers": {"items": [{"id": 111, "name": "New Game", "final_price": 2150000}]}}
+RELEASES = [{"tag_name": "v1.2.0-beta", "prerelease": True, "published_at": "2026-10-30T10:00:00Z"},
+            {"tag_name": "v1.1.0", "html_url": "https://github.com/openai/codex/releases/tag/v1.1.0",
+             "published_at": "2026-10-30T06:00:00Z", "body": "New sandbox"}]
+TRENDS = ("<rss><channel><item><title>새 서비스 출시</title><link>https://trends.google.com/x</link>"
+          "<pubDate>Thu, 30 Oct 2026 05:00:00 +0000</pubDate><ht:approx_traffic>20000+</ht:approx_traffic></item>"
+          "</channel></rss>")
+
+
+def fake_fetch(url, timeout=15):
+    if "featuredcategories" in url:
+        return json.dumps(STEAM).encode()
+    if "api.github.com" in url:
+        return json.dumps(RELEASES).encode()
+    if "trends.google.com" in url:
+        return TRENDS.encode()
+    if "suggestqueries" in url:
+        return json.dumps(["q", ["new game 출시일", "new game 사양", "new game 한국어"]]).encode()
+    raise OSError("blocked")
+
+
+def _sources(tmp_path):
+    f = tmp_path / "sources.json"
+    f.write_text(json.dumps({"steam": {"enabled": True}, "github": {"enabled": True, "repos": ["openai/codex"]},
+                             "rss": {"enabled": True, "feeds": [{"label": "트렌드", "url": "https://trends.google.com/trending/rss?geo=KR"}]}}),
+                 encoding="utf-8")
+    return f
+
+
+def test_radar_collects_ranks_and_skips_written(tmp_path):
+    now = datetime(2026, 10, 30, 12, 0, tzinfo=timezone.utc)
+    got = radar.collect(_sources(tmp_path), {"game-222"}, now=now, fetch=fake_fetch)
+    ids = [s.id for s in got]
+    assert "game-111" in ids and "game-222" not in ids and ids.count("game-111") == 1     # 중복·이미 쓴 것 제외
+    ai = next(s for s in got if s.kind == "ai_tool")
+    assert ai.title.endswith("v1.1.0")                                                  # 사전 공개판은 건너뛴다
+    assert any(s.kind == "trend" and "20000+" in s.detail for s in got)
+    assert got[0].queries                                                               # 상위 후보는 자동완성 검색어
+    game = next(s for s in got if s.id == "game-111")
+    assert "21,500원" in game.detail and "할인 10%" in game.detail
+    text = radar.brief(got, [], now=now)
+    assert "선점 검사" in text and "구글 자동완성" in text and "topic_id=game-111" in text
+
+
+def test_radar_survives_blocked_network(tmp_path):
+    def blocked(url, timeout=15):
+        raise OSError("blocked")
+    assert radar.collect(_sources(tmp_path), set(), fetch=blocked) == []
+    assert "직접 찾기" in radar.brief([], [])
+
+
+def test_scoop_is_default_mode():
+    c = TistoryConfig.load()
+    assert c.mode == "scoop" and c.write_skill == "scoop-auto-post" and c.topics_file.name == "tistory_scoop_sources.json"
+
+
+SCOOP_BODY = (
+    '<div data-block="summary"><ul><li>언제</li><li>얼마</li><li>핵심</li></ul></div>'
+    "<p>New Game은 스팀에서 21,500원에 나왔어요.</p><p>[[IMAGE:illust_a]]</p>"
+    '<div data-block="highlight"><ul><li>한국어 자막 지원</li></ul></div>'
+    "<h2>new game 출시일은?</h2><p>" + "공식 스토어 기준으로 정리했어요. " * 75 + "</p>"
+    "<h2>new game 사양은?</h2><table><tr><th>구분</th><th>최소</th></tr><tr><td>CPU</td><td>i5</td></tr></table>"
+    "<h2>아직 정해지지 않은 것</h2><p>콘솔판은 미정이에요.</p><p>[[IMAGE:illust_b]]</p>"
+    '<div data-block="oneline"><p>정리 끝.</p></div>'
+    '<div data-block="sources"><ul><li><a href="https://store.steampowered.com/app/111/">Steam</a></li></ul></div>'
+)
+SCOOP_POST = {
+    "title": "New Game 출시일·가격·한국어 지원 정리", "topic_id": "game-111", "lane": "queue", "tip_id": "",
+    "kind": "game", "checked_at": "2026-10-30 21:40 KST", "official_domains": ["newgame.example.com"],
+    "body_html": SCOOP_BODY, "tags": ["New Game"], "illustrations": ILLUSTRATIONS,
+    "data_points": [{"value": "21,500원", "source_url": "https://store.steampowered.com/app/111/"}] * 4,
+    "sources": [{"title": "Steam", "publisher": "Valve", "url": "https://store.steampowered.com/app/111/"},
+                {"title": "공식", "publisher": "dev", "url": "https://newgame.example.com/news"},
+                {"title": "기사", "publisher": "x", "url": "https://news.example.com/a"}],
+}
+
+
+def test_scoop_validation():
+    ok = content.normalize(SCOOP_POST)
+    assert content.validate(ok, 3, 2, 4, 1500, "scoop") == []
+    no_time = content.normalize({**SCOOP_POST, "checked_at": ""})
+    assert any("checked_at" in e for e in content.validate(no_time, 3, 2, 4, 1500, "scoop"))
+    no_official = content.normalize({**SCOOP_POST, "official_domains": [],
+                                     "sources": [SCOOP_POST["sources"][1], SCOOP_POST["sources"][2]] * 2})
+    assert any("공식(1차) 출처" in e for e in content.validate(no_official, 3, 2, 4, 1500, "scoop"))
+    piracy = content.normalize({**SCOOP_POST, "body_html": SCOOP_BODY + "<p>토렌트로 받기</p>"})
+    assert any("토렌트" in e for e in content.validate(piracy, 3, 2, 4, 1500, "scoop"))
+
+
+def test_scoop_style_shows_last_checked_time():
+    from tistory_autopost import style
+    out = style.stylize(SCOOP_BODY, mode="scoop", checked_at="2026-10-30 21:40 KST")
+    assert out.index("최종 확인 2026-10-30 21:40 KST") < out.index("30초 요약")
+    assert "공식 출처" in out and "숫자로 박제" not in out
+
+
+def test_scoop_topic_brief_uses_radar(cfg, monkeypatch, tmp_path):
+    cfg.mode = "scoop"
+    cfg.topics_file = _sources(tmp_path)
+    monkeypatch.setattr(radar, "_get", fake_fetch)
+    monkeypatch.setattr(pipeline, "_lab_brief", lambda today, slot: "")
+    text = pipeline.topic_brief(cfg, date(2026, 10, 30))
+    assert "[레이더 후보]" in text and "topic_id=game-111" in text
+
+
+def test_growth_lab_theme_follows_tistory_mode(monkeypatch):
+    from growth_lab.config import BLOGS, theme_of
+    monkeypatch.setenv("TISTORY_MODE", "scoop")
+    assert "방금 나온 것" in theme_of(BLOGS["tistory"])
+    monkeypatch.setenv("TISTORY_MODE", "fix")
+    assert "오류" in theme_of(BLOGS["tistory"])
+    assert theme_of(BLOGS["invest"]) == BLOGS["invest"].theme

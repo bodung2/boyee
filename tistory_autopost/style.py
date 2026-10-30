@@ -59,6 +59,8 @@ BLOCK = {
 BLOCK_TITLES = {
     "stats": {"summary": "📌 바쁜 사람용 3줄 요약", "highlight": "🔢 숫자로 박제", "oneline": "",
               "related": "🔗 함께 보면 좋은 글", "sources": "출처", "error": "오류 메시지"},
+    "scoop": {"summary": "⚡ 30초 요약", "highlight": "✅ 지금 알아야 할 것", "oneline": "",
+              "related": "🔗 함께 보면 좋은 글", "sources": "공식 출처", "error": "⚠️ 이런 메시지가 떴다면"},
     "fix": {"summary": "📌 3줄 요약", "highlight": "✅ 바로 해결", "oneline": "",
             "related": "🔗 함께 보면 좋은 글", "sources": "참고한 공식 문서", "error": "⚠️ 이런 메시지가 떴다면"},
 }
@@ -206,7 +208,7 @@ def _wrap_tables(body: str) -> str:
 
 
 def stylize(body_html: str, images: dict[str, str] | None = None, captions: dict[str, str] | None = None,
-            mode: str = "stats") -> str:
+            mode: str = "stats", checked_at: str = "") -> str:
     """의미 HTML → 네이버 블로그 서식이 입혀진 HTML. images는 그림 이름 → 티스토리 이미지 코드.
     올리지 못한 그림 자리는 지운다."""
     images, captions = images or {}, captions or {}
@@ -224,4 +226,9 @@ def stylize(body_html: str, images: dict[str, str] | None = None, captions: dict
         return code + (f'<p style="{CAPTION}">{html.escape(cap)}</p>' if cap else "")
     out = IMAGE_MARKER.sub(image, out)
     out = re.sub(r'<p style="[^"]*">\s*</p>', "", out)
+    if checked_at:
+        # 새로 나온 것을 다루는 글: 언제 기준 정보인지 맨 위에 밝힌다(최신성 신호, 독자 신뢰)
+        out = (f'<p style="font-size:13px;color:#666;background:#f1f3f5;border-radius:4px;padding:6px 12px;'
+               f'margin:0 0 18px;display:inline-block;">🕒 최종 확인 {html.escape(checked_at)} · 새 소식이 나오면 고칩니다</p>'
+               + out)
     return f'<div style="{FONT}">{out}</div>'

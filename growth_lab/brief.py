@@ -14,7 +14,7 @@ import re
 from naver_autopost import history
 
 from . import store, styles
-from .config import BLOGS, LabConfig
+from .config import BLOGS, LabConfig, theme_of
 from .scoring import OWN, topic_maps, topic_of
 
 log = logging.getLogger(__name__)
@@ -104,7 +104,7 @@ def _brief(blog: str, today: str, slot: int, cfg: LabConfig) -> str:
         "[성장 실험실 안내] 블로그 주인이 아니라 자동 실험 시스템이 조회수·검색 순위를 보고 정한 오늘의 방향이다.",
         "주제와 그림 화풍만 정한다. 스킬의 사실 확인·출처·안전·신원 규칙이 항상 먼저다. "
         "아래 방향으로는 원문을 확인할 수 없으면 스킬의 원래 방식으로 고르고 lab_mode를 '기본'으로 적는다.",
-        f"블로그의 큰 줄기(탐색할 때도 벗어나지 않는다): {spec.theme}",
+        f"블로그의 큰 줄기(탐색할 때도 벗어나지 않는다): {theme_of(spec)}",
         "",
         f"오늘 차례: {p['mode']}",
     ]

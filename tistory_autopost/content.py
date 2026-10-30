@@ -20,9 +20,16 @@ FIX_PRIMARY_DOMAINS = (
     "chromium.org", "developer.chrome.com", "tistory.github.io",
     "support.google.com", "developers.google.com", "core.telegram.org", "peps.python.org",
 )
+# 선점형 글(TISTORY_MODE=scoop)의 1차 출처: 스토어·공식 저장소·공식 발표. 글쓴이가 official_domains로 밝힌
+# 그 제품·게임의 공식 사이트도 1차 출처로 센다(팩트체크가 정말 공식인지 확인한다).
+SCOOP_PRIMARY_DOMAINS = FIX_PRIMARY_DOMAINS + PRIMARY_DOMAINS + (
+    "store.steampowered.com", "steamcommunity.com", "steampowered.com", "blog.google", "blog.youtube",
+    "apple.com", "samsung.com", "microsoft.com", "news.microsoft.com", "playstation.com", "nintendo.com",
+    "xbox.com", "epicgames.com",
+)
 # 계층·성별 갈등 소재라 평가·조롱으로 읽히는 말은 막는다(숫자와 해석만 쓴다).
 JUDGMENT_WORDS = ("흙수저는", "루저", "패배자", "한남", "김치녀", "개념녀", "거지들", "노력을 안", "노력 부족")
-EXTRA_FORBIDDEN = ("<!--", "이 글은 AI", "style=")
+EXTRA_FORBIDDEN = ("<!--", "이 글은 AI", "style=", "크랙 다운로드", "토렌트", "불법 다운로드 링크")
 # 도발적인 말투는 좋지만 욕설은 안 된다(애드센스·검색 품질)
 PROFANITY = ("씨발", "시발", "ㅅㅂ", "병신", "좆", "존나", "졸라", "개새", "미친놈", "꺼져")
 MAX_TAGS = 10
@@ -59,9 +66,10 @@ def normalize(post: dict) -> dict:
     return post
 
 
-def is_primary(url: str, mode: str = "stats") -> bool:
+def is_primary(url: str, mode: str = "stats", extra: tuple[str, ...] = ()) -> bool:
     host = (urlparse(url).hostname or "").lower()
-    for d in (FIX_PRIMARY_DOMAINS if mode == "fix" else PRIMARY_DOMAINS):
+    base = {"fix": FIX_PRIMARY_DOMAINS, "scoop": SCOOP_PRIMARY_DOMAINS}.get(mode, PRIMARY_DOMAINS)
+    for d in (*base, *extra):
         if host.endswith(d) if d.startswith(".") else (host == d or host.endswith("." + d)):
             return True
     return False
@@ -83,6 +91,9 @@ def validate(post: dict, min_sources: int = 4, min_primary: int = 2, min_data_po
             errors.append('오류 문구 상자(<div data-block="error">)가 없습니다(검색어가 되는 핵심)')
         if "<pre" not in body.lower():
             errors.append("명령어·설정 코드 블록(<pre><code>)이 없습니다")
+    elif mode == "scoop":
+        if not str(post.get("checked_at", "")).strip():
+            errors.append("checked_at(공식 출처를 마지막으로 확인한 시각)이 없습니다")
     elif "<table" not in body.lower():
         errors.append("본문에 표(<table>)가 없습니다(내 위치를 찾는 표가 핵심)")
     if len(re.findall(r"<h2\b", body, flags=re.I)) < 3:
@@ -90,13 +101,14 @@ def validate(post: dict, min_sources: int = 4, min_primary: int = 2, min_data_po
     sources = post.get("sources") or []
     if len(sources) < min_sources:
         errors.append(f"출처가 {len(sources)}개(최소 {min_sources}개)")
-    primary = [s for s in sources if is_primary(s.get("url", ""), mode)]
+    official = tuple(str(d).lower().strip() for d in post.get("official_domains") or [] if str(d).strip())
+    primary = [s for s in sources if is_primary(s.get("url", ""), mode, official)]
     if len(primary) < min_primary:
         errors.append(f"공식(1차) 출처가 {len(primary)}개(최소 {min_primary}개)")
     points = post.get("data_points") or []
     if len(points) < min_data_points:
         errors.append(f"검증용 사실(data_points)이 {len(points)}개(최소 {min_data_points}개)")
-    keys = ("value", "source_url") if mode == "fix" else ("value", "stat", "period", "source_url")
+    keys = ("value", "source_url") if mode in ("fix", "scoop") else ("value", "stat", "period", "source_url")
     for i, d in enumerate(points):
         missing = [k for k in keys if not str(d.get(k, "")).strip()]
         if missing:
@@ -115,7 +127,7 @@ def validate(post: dict, min_sources: int = 4, min_primary: int = 2, min_data_po
         if phrase in visible or phrase in body:
             errors.append(f"금지 문구: {phrase}")
     links = re.findall(r'<a\b[^>]*href="(https?://[^"]+)"', body, flags=re.I)
-    if not any(is_primary(u, mode) for u in links):
+    if not any(is_primary(u, mode, official) for u in links):
         errors.append("본문 출처 섹션에 공식 출처 링크가 없습니다")
     return errors
 

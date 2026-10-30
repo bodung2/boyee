@@ -219,7 +219,17 @@ Codex(ChatGPT 구독)에 설치된 `korea-explained-blogger` 스킬로 글을 �
 - 글 규칙은 Codex 스킬(`korea-explained-blogger`)을 그대로 따르고, 자동 발행에 필요한 규칙(질문 금지, 확인 못 한 사실 삭제, 경험 지어내기 금지, 출력 형식)만
   `blogger_autopost/writer.py`의 프롬프트로 덧붙입니다.
 
-## 티스토리 '오류 해결' (기본, TISTORY_MODE=fix)
+## 티스토리 '선점형' 실험장 (기본, TISTORY_MODE=scoop)
+
+방금 나온 것(스팀 신작·출시 예정작, AI·개발 도구 새 버전, 구글 트렌드 급상승)을 **한국어 글이 쌓이기 전에** 공식 출처로 정리합니다.
+- 레이더(`tistory_autopost/radar.py`, 소스 설정 `data/tistory_scoop_sources.json`): 스팀 공개 API, GitHub 릴리스, RSS에서 후보를 모아
+  새로움(출시 예정·48시간 이내 가산)으로 점수를 매기고, 상위 후보에는 구글 자동완성 검색어를 붙입니다. 소스가 막혀도 글쓰기 단계가 직접 찾습니다.
+- 스킬 `.claude/skills/scoop-auto-post`, `scoop-auto-factcheck`: 선점 검사(같은 대상의 한국어 정리 글이 5개 이상이면 건너뜀),
+  실험 기법(첫 문장 직답, 자동완성 검색어 소제목, 한영 병기 제목, 최종 확인 시각, 확정/미정 구분), 루머·인물 논란·불법 다운로드·지어낸 후기 차단.
+- 서식: 맨 위에 '🕒 최종 확인 시각' 줄. 카테고리는 `.env`의 `TISTORY_CATEGORY_SCOOP`.
+- `python -m tistory_autopost queue`로 지금 레이더 후보를 볼 수 있습니다. 성장 실험실도 티스토리의 큰 줄기를 이 주제로 봅니다.
+
+## 티스토리 '오류 해결' (TISTORY_MODE=fix)
 
 윈도우에서 AI 코딩 도구(Claude Code, Codex CLI)·Python·Playwright·PowerShell·Git·작업 스케줄러·서치콘솔을 쓰다 만나는 오류를
 **정확한 오류 문구 → 원인 → 해결 명령 → 확인 방법** 순서로 담백하게 정리합니다. 오류 메시지를 그대로 구글에 붙여 넣는 사람을 노립니다.
