@@ -158,15 +158,28 @@ def _lab_brief(cfg: Config, today: str) -> str:
         return ""
 
 
+def _market_brief(cfg: Config, out_dir: Path, today: str) -> str:
+    """시황 글이면 시장 대시보드의 오늘 요약을 OUTPUT_DIR/market_brief.json에 받아 두고 그 위치를 알려준다."""
+    if cfg.profile.name != "market":
+        return ""
+    from market_dashboard import brief
+
+    path = out_dir / "market_brief.json"
+    if not path.exists():
+        brief.for_post(today, path, site_url=os.environ.get("DASHBOARD_URL") or brief.DASHBOARD_URL)
+    return f"MARKET_BRIEF={_rel(path)}\nDASHBOARD_URL={os.environ.get('DASHBOARD_URL') or brief.DASHBOARD_URL}\n"
+
+
 def write_post(cfg: Config, out_dir: Path, today: str, feedback: str = "") -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
+    market = _market_brief(cfg, out_dir, today)
     related = [p for p in sorted(cfg.data_dir.glob("published_*.json")) if p != cfg.history_file]
     prompt = (
         f"/{cfg.profile.write_skill}\n\n"
         f"TODAY={today}\nOUTPUT_DIR={_rel(out_dir)}\nHISTORY_FILE={_rel(cfg.history_file)}\n"
         f"RELATED_HISTORY_FILES={','.join(str(_rel(p)) for p in related) or '(없음)'}\n"
         f"ILLUSTRATIONS={cfg.illustration_count if cfg.profile.illustrations else 0}\n"
-        f"{_persona_lines(cfg)}\n"
+        f"{market}{_persona_lines(cfg)}\n"
         f"스킬 지침대로 오늘의 {cfg.profile.label} 정보성 글 1편을 완성해 OUTPUT_DIR/post.json에 저장하라. "
         "사람 검토 없이 자동 발행되므로 사실 정확성이 최우선이다. 질문하지 말고 끝까지 진행하라. "
         "고른 주제의 원문(보도자료·PDF 등)을 열 수 없으면 사람에게 묻지 말고, 원문을 확인할 수 있는 다른 주제로 바꿔 끝까지 써라."

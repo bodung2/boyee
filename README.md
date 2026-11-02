@@ -128,6 +128,18 @@ notepad .env        # NAVER_BLOG_ID, NAVER_CATEGORY_CHILDHOOD 입력
 - 예약: `scripts\setup_windows.ps1 -Profile invest` (블로그 07:00 출근길 홈피드, 막힌 날 재시도 10:00)
 - 이웃 후보 추천도 투자 블로그 몫(시트 '투자 이웃 후보' 탭)을 매일 함께 만듭니다. 제목은 15~25자·답을 숨긴 질문형, 글 끝은 독자가 자기 구간을 댓글로 답하는 질문입니다.
 
+### 매일 시황 (같은 투자 블로그에 하루 한 편 더, `--profile market`)
+
+시장 대시보드(https://bodung2.github.io/boyee/)의 오늘 요약(`brief.json`) 숫자와 그날의 공식 발표·뉴스 2~3개로 시황 글을 씁니다.
+
+- 스킬: `.claude/skills/market-auto-post`(글쓰기), `market-auto-factcheck`(대시보드 숫자는 요약 파일과, 뉴스·일정은 공식 원문과 대조)
+- 제목은 항상 `M월 D일 시황 | …`. 대시보드 '시황 기록' 탭이 이 제목으로 날짜별 링크를 붙입니다(글이 올라온 다음 날 아침 갱신 때).
+- 게시된 요약이 오늘 것이 아니면(대시보드 갱신이 늦은 날) 이 PC에서 세 화면을 직접 계산해 씁니다.
+- 블로그 주소·로그인은 투자 블로그 것을 그대로 씁니다(`NAVER_BLOG_ID_MARKET`·`NAVER_CATEGORY_MARKET`로 바꿀 수 있음, 카테고리 기본 '매일 시황').
+- 예약: `scripts\setup_all_schedules.ps1 -Only NaverAutoPost-market` (화~토 13:30, 막힌 날 16:00 재시도)
+- 시험 실행: `python -m naver_autopost run --profile market --dry-run`
+- 대시보드 쪽: 저장소 Settings → Secrets and variables → Actions → **Variables**에 `NAVER_BLOG_ID_INVEST`(투자 블로그 아이디)를 넣으면 '시황 기록'에 글 링크가 붙습니다.
+
 ## 구글 블로거 (korea-explained-blogger, 하루 1편)
 
 Codex(ChatGPT 구독)에 설치된 `korea-explained-blogger` 스킬로 글을 쓰고, **구글 공식 Blogger API**로 발행합니다.

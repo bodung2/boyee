@@ -126,6 +126,12 @@ CHILDHOOD_EXTRA = """추가로 유아 발달 안전 기준을 점검하라: '정
 INVEST_EXTRA = """이 글은 돈·부동산·생활비 통계 글이다. 평균/중앙값, 가구/개인, 총자산/순자산, 명목/실질, %/%p, 기준 시점 혼동과
 직접 계산한 값(배수·증감률·상위 %)을 특히 확인하라. 특정 종목·상품·단지 매수/매도 권유, 수익·원금 보장, 집값 전망 단정 표현이 있으면 issues에 포함하라."""
 
+MARKET_EXTRA = """이 글은 매일 시황 글이다. 출처가 '시장 대시보드 오늘 요약'(brief.json)인 숫자(200일선 위 비율, 지도 칸별 종목 수,
+섹터 사분면, 자산군 비중, 거래대금 몇 배 등)는 블로그 주인이 공개 시세로 직접 계산한 값이라 Claude 검수가 그 파일과 따로 대조한다.
+그 숫자는 웹에서 같은 값을 못 찾았다는 이유로 지적하지 말고, 서로 모순될 때만 지적하라. 대신 지수 종가·등락률, 공식 발표·기업 실적 숫자,
+다가오는 일정(금통위·FOMC·CPI 등) 날짜, 근거 없는 인과 설명('A 때문에 B'), 종목 매수/매도 권유를 특히 확인하라."""
+
+
 def _output_text(resp: dict) -> str:
     if resp.get("output_text"):
         return resp["output_text"]
@@ -160,7 +166,7 @@ def _article(post: dict) -> str:
 
 
 def _instructions(cfg: Config) -> str:
-    extra = {"childhood": CHILDHOOD_EXTRA, "invest": INVEST_EXTRA}.get(cfg.profile.name, "")
+    extra = {"childhood": CHILDHOOD_EXTRA, "invest": INVEST_EXTRA, "market": MARKET_EXTRA}.get(cfg.profile.name, "")
     return FACTCHECK_INSTRUCTIONS.format(extra=extra)
 
 

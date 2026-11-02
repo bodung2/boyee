@@ -58,6 +58,14 @@ jobs:
           KRX_PW: ${{ secrets.KRX_PW }}
         run: python -m market_dashboard krstocks --out site
 
+      # 세 화면의 오늘 요약(brief.json) + 날짜별 기록(시황 기록 화면). 블로그 RSS에서 'M월 D일 시황' 글을 찾아 날짜에 링크를 붙인다.
+      # 블로그 아이디는 저장소 Settings → Secrets and variables → Actions → Variables 의 NAVER_BLOG_ID_INVEST(없으면 링크만 빠짐).
+      - name: 시황 요약·기록 — 실패해도 다른 화면은 그대로 게시
+        continue-on-error: true
+        env:
+          NAVER_BLOG_ID_INVEST: ${{ vars.NAVER_BLOG_ID_INVEST }}
+        run: python -m market_dashboard brief --out site
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

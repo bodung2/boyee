@@ -144,6 +144,9 @@ def validate(post: dict, profile: Profile | None = None, after_factcheck: bool =
     if len(title) > max_title:
         errors.append(f"제목이 너무 깁니다({len(title)}자 > {max_title}자). 검색어로 시작하는 짧은 질문으로 줄이세요")
 
+    if profile and profile.title_pattern and not re.search(profile.title_pattern, title):
+        errors.append(f"제목 형식이 다릅니다: '{title}' (이 블로그는 '{profile.title_pattern}' 형식으로 시작해야 합니다)")
+
     body = post["body_html"]
     markers = [m.group(1) for m in IMAGE_MARKER.finditer(body)]
     if markers.count("card") != 1:

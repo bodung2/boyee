@@ -22,6 +22,7 @@ $Schedule = @(
     @{ Name = "NaverAutoPost-invest";          Bat = "run_daily.bat";            Arg = "--profile invest";  Times = @("07:00", "10:00"); Hours = 9; Wake = $true; Desc = "네이버 투자 블로그(10:00은 막힌 날 재시도)" }
     @{ Name = "MarketDashboard";               Bat = "run_market_dashboard.bat"; Arg = "";                  Times = @("07:40"); Hours = 1;   Wake = $false; Days = @("Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"); Desc = "시장 대시보드(화~토)" }
     @{ Name = "TistoryAutoPost";               Bat = "run_tistory_daily.bat";    Arg = "";                  Times = @("08:30"); Hours = 8;   Wake = $true;  Desc = "티스토리 1편째" }
+    @{ Name = "NaverAutoPost-market";          Bat = "run_daily.bat";            Arg = "--profile market";  Times = @("13:30", "16:00"); Hours = 6; Wake = $true; Days = @("Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"); Desc = "네이버 투자 블로그 매일 시황(화~토, 16:00은 막힌 날 재시도)" }
     @{ Name = "NaverAutoPost-childhood";       Bat = "run_daily.bat";            Arg = "--profile childhood"; Times = @("12:00", "15:00"); Hours = 9; Wake = $true; Desc = "네이버 유아 블로그(15:00은 막힌 날 재시도)" }
     @{ Name = "TistoryAutoPost2";              Bat = "run_tistory_daily.bat";    Arg = "--slot 2";          Times = @("17:00"); Hours = 8;   Wake = $true;  Desc = "티스토리 2편째" }
     @{ Name = "NaverNeighbors";                Bat = "run_neighbors.bat";        Arg = "";                  Times = @("19:00"); Hours = 2;   Wake = $true;  Desc = "네이버 이웃 후보 추천" }

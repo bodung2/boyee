@@ -109,17 +109,24 @@ class Config:
         env = os.environ.get
         profile = profiles.get(profile_name)
         data_dir = Path(env("DATA_DIR", str(ROOT / "data")))
+        # 같은 블로그에 올리는 프로필(시황 → 투자): 따로 적지 않으면 그 블로그의 주소·로그인 브라우저를 쓴다
+        base = profile.same_blog_as.upper()
+        own = profile.name.upper()
+
+        def per_blog(key: str) -> str | None:
+            return env(f"{key}_{own}") or (env(f"{key}_{base}") if base else None)
         return cls(
             profile=profile,
-            blog_id=(env(f"NAVER_BLOG_ID_{profile.name.upper()}") or env("NAVER_BLOG_ID", "")).strip(),
-            category=(env(f"NAVER_CATEGORY_{profile.name.upper()}") or env("NAVER_CATEGORY", "")).strip(),
+            blog_id=(per_blog("NAVER_BLOG_ID") or env("NAVER_BLOG_ID", "")).strip(),
+            category=(env(f"NAVER_CATEGORY_{own}") or {"market": "매일 시황"}.get(profile.name)
+                      or env("NAVER_CATEGORY", "")).strip(),
             browser_channel=env("BROWSER_CHANNEL", "chrome").strip(),
             headless=_bool("HEADLESS", False),
             # 네이버 계정마다 자동화용 크롬 저장 공간을 따로 둔다(로그인 충돌 방지).
-            profile_dir=Path(env(f"BROWSER_PROFILE_DIR_{profile.name.upper()}")
+            profile_dir=Path(per_blog("BROWSER_PROFILE_DIR")
                              or (env("BROWSER_PROFILE_DIR") if profile.name == profiles.DEFAULT_PROFILE else None)
                              or str(ROOT / (".browser-profile" if profile.name == profiles.DEFAULT_PROFILE
-                                            else f".browser-profile-{profile.name}"))),
+                                            else f".browser-profile-{profile.same_blog_as or profile.name}"))),
             output_dir=Path(env("OUTPUT_DIR", str(ROOT / "output"))) / profile.name,
             history_file=data_dir / f"published_{profile.name}.json",
             data_dir=data_dir,
@@ -165,9 +172,9 @@ class Config:
             style_mode=env("STYLE_MODE", "native").strip().lower(),
             limit_wait_max_min=int(env("CLAUDE_LIMIT_WAIT_MAX_MIN", "330")),
             # 아침 발행이 막히면 이 시각에 예약 작업이 한 번 더 돌린다(setup_windows.ps1 -RetryTime과 같게). off면 끔
-            # 기본값: 교육 11:00(06:00 발행), 유아 15:00(12:00 발행), 투자 10:00(07:00 발행) — 블로그끼리 겹치지 않게
+            # 기본값: 교육 11:00(06:00 발행), 유아 15:00(12:00 발행), 투자 10:00(07:00 발행), 시황 16:00(13:30 발행)
             retry_time=(env(f"RETRY_TIME_{profile.name.upper()}")
-                        or {"childhood": "15:00", "invest": "10:00"}.get(profile.name, "11:00")).strip(),
+                        or {"childhood": "15:00", "invest": "10:00", "market": "16:00"}.get(profile.name, "11:00")).strip(),
             telegram_bot_token=env("TELEGRAM_BOT_TOKEN", "").strip(),
             telegram_chat_id=env("TELEGRAM_CHAT_ID", "").strip(),
         )

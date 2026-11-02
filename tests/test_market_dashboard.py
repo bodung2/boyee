@@ -1,4 +1,5 @@
 """자산군 모멘텀 대시보드: 신호가 미래 데이터를 안 쓰는지, 편입 규칙·비중·백테스트 계산이 맞는지 확인한다."""
+import json
 import numpy as np
 import pandas as pd
 import pytest
@@ -328,3 +329,79 @@ def test_kr_stock_map_builds_and_renders():
     assert "한국 종목 지도" in page and 'href="kr.html" class="on"' in page
     assert "고배당 30" in kr_stocks.summary(d)
     assert "한국 종목" in kr_html.render_error("x")
+
+
+def _three_screens():
+    from market_dashboard import kr_stocks, sectors
+    from market_dashboard.sector_universe import US
+    px = _prices(drifts={"SPY": 0.0008, "TLT": 0.0004})
+    close = pd.DataFrame({a.ticker: px[a.key] for a in universe.ASSETS})
+    close["^IRX"] = 2.0
+    close[universe.FX_TICKER] = 1200.0
+    dash = json.loads(json.dumps(report.build(close, pd.DataFrame(), Params())))
+    sec = json.loads(json.dumps(sectors.build({"US": _fake_country(US)})))
+    kr = json.loads(json.dumps(kr_stocks.build(*_kr_stock_data(n=60))))
+    return dash, sec, kr
+
+
+def test_brief_summarises_three_screens_and_compares_with_yesterday():
+    from datetime import datetime
+    from market_dashboard import brief
+    dash, sec, kr = _three_screens()
+    mk = [{"ticker": "^KS11", "name": "코스피", "date": "2026-11-02", "close": 2500.0, "d1": 0.012, "w1": -0.02, "unit": "%"}]
+    y = brief.build(dash, sec, kr, mk, now=datetime(2026, 11, 2, 9, tzinfo=brief.KST))
+    assert y["kr"]["n"] == 59 and len(y["kr"]["div30"]) == 30 and y["us"]["rank"] and y["assets"] is not None
+    assert y["changes"] == {}
+    prev = json.loads(json.dumps(y))
+    prev["kr"]["above_sma"] = y["kr"]["above_sma"] - 0.05
+    prev["kr"]["div30"] = prev["kr"]["div30"][1:] + [{"code": "999990", "name": "빠진종목", "div": 9.0}]
+    prev["us"]["rank"][0]["quadrant"] = "회피" if y["us"]["rank"][0]["quadrant"] != "회피" else "주도"
+    t = brief.build(dash, sec, kr, mk, prev=prev, now=datetime(2026, 11, 3, 9, tzinfo=brief.KST))
+    c = t["changes"]
+    assert c["since"] == "2026-11-02" and c["kr_above_sma_pp"] == 5.0
+    assert c["div30_in"] == [y["kr"]["div30"][0]["name"]] and c["div30_out"] == ["빠진종목"]
+    assert c["us_moves"]
+    assert any("200일선 위" in h and "(+5%p)" in h for h in t["headline"])
+    assert any(h.startswith("코스피 +1.2%") for h in t["headline"])
+    assert brief.build(None, None, None)["headline"] == []      # 아무것도 못 받은 날에도 멈추지 않음
+
+
+def test_brief_matches_sihwang_posts_by_title_date():
+    from market_dashboard import brief
+    items = [
+        {"title": "11월 3일 시황 | 200일선 위 21%", "url": "https://blog.naver.com/b/1", "pub_date": "Tue, 03 Nov 2026 14:02:00 +0900"},
+        {"title": "12월 31일 시황 | 한 해 정리", "url": "https://blog.naver.com/b/2", "pub_date": "Fri, 01 Jan 2027 09:00:00 +0900"},
+        {"title": "연봉 4천, 상위 몇 %일까?", "url": "https://blog.naver.com/b/3", "pub_date": "Tue, 03 Nov 2026 07:00:00 +0900"},
+    ]
+    got = brief.match_posts(items, {"2026-11-02": {"title": "old", "url": "u"}})
+    assert set(got) == {"2026-11-02", "2026-11-03", "2026-12-31"}
+    assert got["2026-11-03"]["url"].endswith("/1")
+
+
+def test_brief_cli_archives_and_renders_history(tmp_path, monkeypatch):
+    import market_dashboard.__main__ as cli
+    from market_dashboard import brief, kr_html, sector_html
+    dash, sec, kr = _three_screens()
+    site = tmp_path / "site"
+    site.mkdir()
+    for name, d in (("dashboard.json", dash), ("sectors.json", sec), ("kr.json", kr)):
+        (site / name).write_text(json.dumps(d), encoding="utf-8")
+    monkeypatch.setattr(cli, "CACHE", tmp_path / "cache")
+    monkeypatch.setattr(brief, "fetch_markets", lambda: [])
+    monkeypatch.delenv("NAVER_BLOG_ID_INVEST", raising=False)
+    monkeypatch.delenv("NAVER_BLOG_ID_MARKET", raising=False)
+    (tmp_path / "cache" / "briefs").mkdir(parents=True)
+    (tmp_path / "cache" / "briefs" / "posts.json").write_text(json.dumps(
+        {"2000-01-03": {"title": "1월 3일 시황 | 옛날", "url": "https://blog.naver.com/x/9"}}), encoding="utf-8")
+    old = brief.build(dash, sec, kr)
+    old["date"] = "2000-01-03"
+    brief.save_archive(tmp_path / "cache" / "briefs", old)
+    assert cli.main(["brief", "--out", str(site)]) == 0
+    b = json.loads((site / "brief.json").read_text(encoding="utf-8"))
+    assert b["changes"]["since"] == "2000-01-03" and b["latest_post"]["url"].endswith("/9")
+    page = (site / "history.html").read_text(encoding="utf-8")
+    assert "시황 기록" in page and "1월 3일 시황 | 옛날" in page and b["date"] in page
+    assert len(list((tmp_path / "cache" / "briefs").glob("????-??-??.json"))) == 2
+    # 모든 화면 위쪽 탭에 '시황 기록'과 요약 줄 자리가 있다
+    for html_page in (kr_html.render(kr), sector_html.render(sec)):
+        assert 'href="history.html"' in html_page and 'id="briefStrip"' in html_page

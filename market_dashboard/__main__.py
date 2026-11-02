@@ -7,6 +7,7 @@
   python -m market_dashboard analyze          자산군별 경향·'어느 구간에서 사면 좋았나' 표를 출력
   python -m market_dashboard sectors --out site   미국 주식 섹터 지도 → site/sectors.html (--country US KR 로 한국 섹터도)
   python -m market_dashboard krstocks --out site  한국 시가총액 상위 200종목 지도(추세 × 거래대금) → site/kr.html
+  python -m market_dashboard brief --out site     세 화면의 오늘 요약 → site/brief.json + 시황 기록(site/history.html)
   python -m market_dashboard krfactors        한국 주식 종목 선정 방식(가치·수익성·저변동·모멘텀·수급 등) 비교
   python -m market_dashboard krcombo          기준 섞기 비교 + 고배당이 왜 잘됐나 분해
 """
@@ -73,6 +74,10 @@ def main(argv: list[str] | None = None) -> int:
     se.add_argument("--out", help="이 폴더에 sectors.html로 저장(기본: output/market/)")
     se.add_argument("--check-names", action="store_true", help="티커가 맞는 종목인지 Yahoo 이름과 나란히 출력")
     se.add_argument("--country", nargs="+", default=["US"], choices=["US", "KR"], help="지도에 넣을 나라(기본 미국만)")
+    br = sub.add_parser("brief")
+    br.add_argument("--out", help="brief.json·history.html을 저장할 폴더(기본: output/market/)")
+    br.add_argument("--src", help="dashboard·sectors·kr.json이 있는 폴더(기본: --out)")
+    br.add_argument("--no-archive", action="store_true", help="날짜별 기록·블로그 링크를 건드리지 않음")
     ks = sub.add_parser("krstocks")
     ks.add_argument("--offline", action="store_true")
     ks.add_argument("--out", help="이 폴더에 kr.html로 저장(기본: output/market/)")
@@ -162,6 +167,38 @@ def main(argv: list[str] | None = None) -> int:
         (out / "sectors.html").write_text(sector_html.render(d), encoding="utf-8")
         print(sectors.summary(d))
         print(f"섹터 지도: {out / 'sectors.html'}")
+        return 0
+
+    if args.cmd == "brief":
+        from . import brief, history_html
+
+        out = Path(args.out) if args.out else OUT
+        src = Path(args.src) if args.src else out
+        out.mkdir(parents=True, exist_ok=True)
+
+        def read(name):
+            f = src / name
+            return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
+
+        arch = CACHE / "briefs"
+        archive = [] if args.no_archive else brief.load_archive(arch)
+        today = datetime.now(KST).strftime("%Y-%m-%d")
+        b = brief.build(read("dashboard.json"), read("sectors.json"), read("kr.json"), brief.fetch_markets(),
+                        prev=brief.previous(archive, today))
+        blog_id = (os.environ.get("NAVER_BLOG_ID_MARKET") or os.environ.get("NAVER_BLOG_ID_INVEST") or "").strip()
+        if not args.no_archive:
+            brief.save_archive(arch, b)
+            posts = brief.sync_posts(arch, blog_id)
+            if posts:
+                d = max(posts)
+                b["latest_post"] = {"date": d, **posts[d]}
+            rows = brief.history_rows(brief.load_archive(arch), posts)
+            (out / "history.html").write_text(
+                history_html.render(rows, f"https://blog.naver.com/{blog_id}" if blog_id else ""), encoding="utf-8")
+        (out / "brief.json").write_text(json.dumps(b, ensure_ascii=False, indent=1), encoding="utf-8")
+        print(f"[시황 요약] {b['date']}")
+        for line in b["headline"]:
+            print("  " + line)
         return 0
 
     if args.cmd == "krstocks":
