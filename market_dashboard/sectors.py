@@ -56,6 +56,7 @@ def fetch(c: Country, cache_dir: Path, start: str = START) -> tuple[pd.DataFrame
         close, vol = raw["Close"].dropna(how="all"), raw["Volume"]
         if close.empty:
             raise RuntimeError("빈 시세")
+        close, vol = _fill_missing(c, close, vol, start, path)
         close.index = pd.to_datetime(close.index).tz_localize(None)
         vol.index = pd.to_datetime(vol.index).tz_localize(None)
         cache_dir.mkdir(parents=True, exist_ok=True)
@@ -66,6 +67,34 @@ def fetch(c: Country, cache_dir: Path, start: str = START) -> tuple[pd.DataFrame
             log.warning("%s 시세 받기 실패(%s), 저장본 사용", c.name, e)
             return pd.read_pickle(path)
         raise
+
+
+def _fill_missing(c: Country, close: pd.DataFrame, vol: pd.DataFrame, start: str, path: Path):
+    """여러 종목을 한꺼번에 받다 몇 개만 빠지는 날(yfinance 'database is locked' 등)이 있다. 빠진 종목은 하나씩 다시 받고,
+    그래도 없으면 저장본 값으로 채운다. 지수 대용 ETF(예: SPY)가 빠지면 섹터 지도 전체가 멈추기 때문이다."""
+    import yfinance as yf
+
+    missing = [t for t in tickers(c) if t not in close or close[t].notna().sum() == 0]
+    if not missing:
+        return close, vol
+    old = pd.read_pickle(path) if path.exists() else None
+    close, vol = close.copy(), vol.copy()
+    for t in missing:
+        try:
+            r = yf.download(t, start=start, auto_adjust=True, progress=False, threads=False)
+            cl, vo = r["Close"].squeeze(), r["Volume"].squeeze()
+            if cl.notna().sum() > 0:
+                cl.index = pd.to_datetime(cl.index).tz_localize(None)
+                vo.index = cl.index
+                close[t], vol[t] = cl.reindex(close.index), vo.reindex(close.index)
+                continue
+        except Exception as e:  # noqa: BLE001
+            log.warning("%s 다시 받기 실패: %s", t, e)
+        if old is not None and t in old[0]:
+            log.warning("%s 시세를 받지 못해 저장본 값으로 채웁니다", t)
+            close[t] = old[0][t].reindex(close.index).ffill()
+            vol[t] = old[1][t].reindex(close.index) if t in old[1] else float("nan")
+    return close, vol
 
 
 def cash_index(c: Country, close: pd.DataFrame, idx: pd.DatetimeIndex) -> pd.Series:
