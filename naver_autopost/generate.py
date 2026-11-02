@@ -166,6 +166,13 @@ def _market_brief(cfg: Config, out_dir: Path, today: str) -> str:
 
     path = out_dir / "market_brief.json"
     site = os.environ.get("DASHBOARD_URL") or brief.DASHBOARD_URL
+    if path.exists():   # 예전에 받아 둔 요약에 미국 섹터·한국 종목이 빠져 있으면 다시 받는다
+        try:
+            old = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            old = {}
+        if old.get("date") != today or not all(old.get(k) for k in brief.REQUIRED):
+            path.unlink()
     if not path.exists():
         brief.for_post(today, path, site_url=site)
     try:   # 대시보드가 새 주소(내 도메인)로 옮겼으면 요약에 적힌 주소를 쓴다

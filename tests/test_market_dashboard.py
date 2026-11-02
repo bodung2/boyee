@@ -1,5 +1,6 @@
 """자산군 모멘텀 대시보드: 신호가 미래 데이터를 안 쓰는지, 편입 규칙·비중·백테스트 계산이 맞는지 확인한다."""
 import json
+import pathlib
 import numpy as np
 import pandas as pd
 import pytest
@@ -598,3 +599,36 @@ def test_indicator_now_ignores_month_without_us_price():
     sig = indicators.signals(px, fred)
     assert sig["us_mom12"].dropna().iloc[-1] == True          # noqa: E712 - 10월 말 기준 플러스
     assert brief.risk_states(spx, None)["us_mom12"]["risk"] is False
+
+
+def test_for_post_waits_retries_and_falls_back_to_site_files(tmp_path, monkeypatch):
+    """게시된 요약이 오늘 것이 아니면 기다렸다가 PC에서 계산하고, 미국 섹터 계산이 두 번 다 실패하면 게시된 섹터 파일을 쓴다."""
+    import subprocess
+    from market_dashboard import brief
+    dash, sec, kr = _three_screens()
+    site = {"brief.json": {"date": "2026-11-01", "us": {"x": 1}, "kr": {"x": 1}}, "sectors.json": sec}
+    monkeypatch.setattr(brief, "_get_json", lambda url: site.get(url.rsplit("/", 1)[-1]))
+    monkeypatch.setattr(brief, "fetch_markets", lambda: [])
+    monkeypatch.setattr(brief, "fetch_risk", lambda: None)
+    runs = []
+
+    def fake_run(cmd, cwd, timeout, check, stdout, stderr):
+        name = {"run": "dashboard.json", "sectors": "sectors.json", "krstocks": "kr.json"}[cmd[3]]
+        runs.append(cmd[3])
+        if cmd[3] != "sectors":                       # 미국 섹터만 계속 실패
+            (pathlib.Path(cmd[5]) / name).write_text(json.dumps({"run": dash, "krstocks": kr}[cmd[3]]), encoding="utf-8")
+        return subprocess.CompletedProcess(cmd, 1 if cmd[3] == "sectors" else 0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    slept = []
+    out = tmp_path / "out" / "market_brief.json"
+    brief.for_post("2026-11-02", out, sleep=slept.append)
+    b = json.loads(out.read_text(encoding="utf-8"))
+    assert slept == [15 * 60] and runs.count("sectors") == 2 and runs.count("run") == 1
+    assert b["us"]["leaders"] is not None and b["from_site"] == ["sectors.json"] and b["kr"]["n"] > 0
+    assert (tmp_path / "out" / "dashboard" / "sectors.log").exists()
+    # 게시된 섹터 파일도 없으면 빠진 채로 쓰지 않고 멈춘다
+    site.pop("sectors.json")
+    out2 = tmp_path / "out2" / "market_brief.json"
+    with pytest.raises(RuntimeError, match="미국 섹터"):
+        brief.for_post("2026-11-02", out2, sleep=lambda s: None)

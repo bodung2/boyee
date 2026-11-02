@@ -339,35 +339,74 @@ def _get_json(url: str, timeout: int = 20) -> dict | None:
         return None
 
 
-def for_post(today: str, out_path: Path, site_url: str = DASHBOARD_URL, build_dir: Path | None = None) -> Path:
+REQUIRED = ("us", "kr")       # 이 둘이 없으면 시황 글을 쓰지 않는다(16:00 재시도)
+SITE_FILES = {"dashboard.json": "assets", "sectors.json": "us", "kr.json": "kr"}
+
+
+def for_post(today: str, out_path: Path, site_url: str = DASHBOARD_URL, build_dir: Path | None = None,
+             wait_min: int = 15, sleep=None) -> Path:
     """오늘 시황 글의 글감(brief)을 out_path에 저장한다.
 
     1) 게시된 대시보드의 brief.json이 오늘 것이면 그대로 쓴다(블로그 글과 대시보드 숫자가 같아진다).
-    2) 아니면(대시보드 갱신이 늦은 날) 이 PC에서 세 화면을 직접 계산해 만들고, 게시된 요약을 어제 값으로 비교한다.
+       아직 아니면 wait_min분 기다렸다가 한 번 더 본다(GitHub 갱신이 늦게 도는 날).
+    2) 그래도 아니면 이 PC에서 세 화면을 직접 계산한다. 화면마다 기록을 남기고(dashboard/<화면>.log), 실패하면 한 번 더,
+       그래도 안 되면 게시된 그 화면 파일(어제 것일 수 있음)을 쓴다.
+    3) 미국 섹터·한국 종목 중 하나라도 끝내 없으면 멈춘다(빠진 채로 글을 쓰지 않는다).
     """
     import subprocess
     import sys
+    import time as _time
 
-    site = _get_json(site_url.rstrip("/") + "/brief.json")
-    if site and site.get("date") == today:
+    sleep = sleep or _time.sleep
+    base = site_url.rstrip("/") + "/"
+    site = _get_json(base + "brief.json")
+    if not (site and site.get("date") == today) and wait_min > 0:
+        log.info("게시된 요약이 아직 오늘 것이 아니라(%s) %d분 기다립니다", (site or {}).get("date"), wait_min)
+        sleep(wait_min * 60)
+        site = _get_json(base + "brief.json") or site
+    if site and site.get("date") == today and all(site.get(k) for k in REQUIRED):
         b = site
     else:
-        log.info("게시된 요약이 오늘 것이 아니라(%s) 이 PC에서 계산합니다", (site or {}).get("date"))
+        log.info("게시된 요약을 쓸 수 없어(%s) 이 PC에서 계산합니다", (site or {}).get("date"))
         build_dir = build_dir or out_path.parent / "dashboard"
         build_dir.mkdir(parents=True, exist_ok=True)
-        for cmd in ("run", "sectors", "krstocks"):
-            subprocess.run([sys.executable, "-m", "market_dashboard", cmd, "--out", str(build_dir)],
-                           cwd=Path(__file__).resolve().parent.parent, timeout=1800, check=False)
+        root = Path(__file__).resolve().parent.parent
+        commands = {"dashboard.json": "run", "sectors.json": "sectors", "kr.json": "krstocks"}
+        for attempt in (1, 2):
+            for name, cmd in commands.items():
+                if (build_dir / name).exists():
+                    continue
+                with open(build_dir / f"{cmd}.log", "a", encoding="utf-8") as fh:
+                    fh.write(f"\n=== {attempt}회째 ===\n")
+                    fh.flush()
+                    r = subprocess.run([sys.executable, "-m", "market_dashboard", cmd, "--out", str(build_dir)],
+                                       cwd=root, timeout=1800, check=False, stdout=fh, stderr=subprocess.STDOUT)
+                if not (build_dir / name).exists():
+                    log.warning("%s 계산 실패(%d회째, 종료 코드 %s) — 기록: %s", cmd, attempt, r.returncode,
+                                build_dir / f"{cmd}.log")
+
+        used_site = []
 
         def read(name):
             f = build_dir / name
-            return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
+            if f.exists():
+                return json.loads(f.read_text(encoding="utf-8"))
+            d = _get_json(base + name)          # 게시된 화면 파일(마지막 갱신분)
+            if d:
+                used_site.append(name)
+            return d
 
         b = build(read("dashboard.json"), read("sectors.json"), read("kr.json"), fetch_markets(),
                   prev=site if site and site.get("date", "") < today else None, risk=fetch_risk())
-        if not (b.get("kr") or b.get("us") or b.get("assets")):
-            raise RuntimeError("대시보드 숫자를 하나도 만들지 못했습니다(시세 받기 실패)")
         b["source"] = "local"
+        if used_site:
+            b["from_site"] = used_site
+            log.warning("이 PC에서 못 만든 화면은 게시된 파일을 썼습니다: %s", ", ".join(used_site))
+    missing = [k for k in REQUIRED if not b.get(k)]
+    if missing:
+        names = {"us": "미국 섹터", "kr": "한국 종목"}
+        raise RuntimeError(f"{'·'.join(names[k] for k in missing)} 숫자를 받지 못해 시황 글을 쓰지 않습니다"
+                           f"(기록: {out_path.parent / 'dashboard'})")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(b, ensure_ascii=False, indent=1), encoding="utf-8")
     return out_path
