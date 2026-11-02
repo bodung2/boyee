@@ -3,12 +3,22 @@ from __future__ import annotations
 
 import json
 
-from . import nav
+from . import nav, public
 
 
 def render(data: dict) -> str:
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    return TEMPLATE.replace("__NAV__", nav.bar("kr.html")).replace("__DATA__", payload)
+    page = TEMPLATE.replace("__NAV__", nav.bar("kr.html"))
+    if data.get("public"):
+        for a, b in PUBLIC_TEXT.items():
+            page = page.replace(a, b)
+    return public.strip_private(page, bool(data.get("public"))).replace("__DATA__", payload)
+
+
+# 공개 화면: '고배당 30을 담는 방식' 같은 전략 소개는 빼고 지도·표만
+PUBLIC_TEXT = {
+    " 검증된 규칙에 가까운 것은 고배당 30뿐이고, 그것도 확실하다고 할 수준은 아니다.": "",
+}
 
 
 def render_error(msg: str) -> str:
@@ -88,7 +98,7 @@ svg{display:block;width:100%;height:auto;fill:var(--ink2);font-size:12px}
 
   <section class="card">
     <h2>추세 강도 × 거래대금 변화 (시가총액 상위 200)</h2>
-    <div class="sub">오른쪽일수록 현금보다 강한 추세(자산군 대시보드와 같은 계산), 위쪽일수록 최근 20일 거래대금이 평소(그 앞 100일)보다 많다. +1 = 2배, −1 = 절반. 점 크기 = 시가총액, 노란 테두리 = 고배당 30, 흰 마름모 = KOSPI200. 점·행을 누르면 8주 꼬리가 나온다.</div>
+    <div class="sub">오른쪽일수록 현금보다 강한 추세(자산군 대시보드와 같은 계산), 위쪽일수록 최근 20일 거래대금이 평소(그 앞 100일)보다 많다. +1 = 2배, −1 = 절반. 점 크기 = 시가총액, 노란 테두리 = 배당수익률 상위 30, 흰 마름모 = 비교 지수. 점·행을 누르면 8주 꼬리가 나온다.</div>
     <div class="filters" id="filters"></div>
     <div class="timebar">
       <button class="play" id="tbPlay" aria-label="재생">▶</button>
@@ -102,14 +112,14 @@ svg{display:block;width:100%;height:auto;fill:var(--ink2);font-size:12px}
     <div class="legend"><span><i style="background:var(--red)"></i>거래 늘며 강세</span><span><i style="background:var(--yellow)"></i>강세·거래 식음</span><span><i style="background:var(--gray)"></i>약세에 거래 몰림</span><span><i style="background:var(--blue)"></i>소외</span></div>
   </section>
 
-  <section class="card">
+  <!--private--><section class="card">
     <h2>고배당 30 <span class="sub">· 이번 연구에서 가장 나았던 방식</span></h2>
     <div class="sub">이 200종목 중 배당수익률(최근 배당 ÷ 주가) 상위 30개를 같은 비중으로 담고 매달 바꾸는 방식. 2010~2026 한국거래소 월말 데이터로 검증(비용·배당·상장폐지 반영).</div>
     <div class="scroll"><table class="tbl" id="proof"></table></div>
     <div class="warnbox">연수익만 보면 KODEX 200이 더 높았다(최근 반도체 급등). 고배당 30의 장점은 '덜 흔들리면서 비슷하게 버는 것' — 시장이 내린 달 평균 −2.2%(시장 −4.1%), 오른 달 +3.9%(시장 +4.5%).
       초과수익의 75%는 '싸고(저PBR) 덜 흔들리는(저변동)' 성질로 설명되고, 46가지 방식 중 1등이라 운이 섞였을 수 있다(t 1.3). 최대 낙폭 −33%라 빚을 내서 담을 방식은 아니다.</div>
     <div class="scroll" style="margin-top:12px"><table class="tbl" id="divtbl"></table></div>
-  </section>
+  </section><!--/private-->
 
   <section class="card">
     <h2>전체 종목</h2>
@@ -151,18 +161,19 @@ const QC={"거래 늘며 강세":"var(--red)","강세·거래 식음":"var(--yel
 const quadOf=(x,v)=>x==null||v==null?null:x>=0?(v>=0?QN[0]:QN[1]):(v>=0?QN[2]:QN[3]);
 const lerp=(p,q,f)=>p==null?q:q==null?p:p+(q-p)*f;
 const S=D.stocks.filter(s=>!s.bench), B=D.stocks.find(s=>s.bench);
+const BN=B?(B.short||"KOSPI200"):"", HAS_DIV=S.some(s=>s.div!=null);   // 배당 자료가 없는 출처(공공데이터)면 배당 열·필터를 숨긴다
 const tagHtml = s => (s.tags||[]).map(t=>t==="과열"?" 🔥":`<span class="tag ${t==="고배당30"?"div":"spike"}">${esc(t)}</span>`).join("");
 
 $("asof").textContent=`시세 ${D.asof} · 종목 목록 ${D.universe_date||"–"}`+(D.generated?` · 갱신 ${D.generated}`:"");
 (function stats(){
   const b=D.breadth, items=[[b.n+"종목","대상"],[pct(b.above_sma,0),"200일선 위 비율"],[num(b.median_x),"추세 강도 중앙값"]]
     .concat(QN.map(q=>[D.counts[q]+"개",q]));
-  if(B) items.splice(1,0,[num(B.x),"KOSPI200 추세 강도"]);
+  if(B) items.splice(1,0,[num(B.x),`${BN} 추세 강도`]);
   $("stats").innerHTML=items.map(([v,l],i)=>`<div class="stat"><b style="${i>=items.length-4?`color:${QC[l]}`:""}">${v}</b><span>${esc(l)}</span></div>`).join("");
 })();
 
 // ---------- 필터 ----------
-const FILTERS=[["all","전체",()=>true],["div","고배당 30",s=>s.tags.includes("고배당30")],["spike","거래만 급증",s=>s.tags.includes("거래만 급증")]]
+const FILTERS=[["all","전체",()=>true]].concat(HAS_DIV?[["div","배당 상위 30",s=>s.tags.includes("고배당30")]]:[]).concat([["spike","거래만 급증",s=>s.tags.includes("거래만 급증")]])
   .concat(QN.map(q=>["q:"+q,q,s=>s.quad===q])).concat([["KOSPI","코스피",s=>s.market==="KOSPI"],["KOSDAQ","코스닥",s=>s.market==="KOSDAQ"]]);
 let filt="all", query="", selected=null;
 const pass = s => FILTERS.find(f=>f[0]===filt)[2](s) && (!query || s.name.includes(query) || s.code.includes(query));
@@ -227,7 +238,7 @@ function drawDyn(){
       el("circle",{cx:x,cy:y,r,fill:QC[q]||"var(--muted)","fill-opacity":p.x<0?.45:.85,stroke:selected===s.code?"#fff":"var(--page)","stroke-width":selected===s.code?2:1},g);
     }
     if(on&&(s.bench||selected===s.code||(fewOn?true:LABEL.has(s.code)))){
-      const name=s.bench?"KOSPI200":s.name, w=name.length*12; let lx=x+10, anchor="start"; if(lx+w>W-P.r){lx=x-10;anchor="end";}
+      const name=s.bench?BN:s.name, w=name.length*12; let lx=x+10, anchor="start"; if(lx+w>W-P.r){lx=x-10;anchor="end";}
       const left=anchor==="end"?lx-w:lx; let dy=0; for(const t of [0,-13,13,-26,26]){ if(free(left,y+4+t,w)){dy=t;break;} } boxes.push([left,y+4+dy,w]);
       const t=el("text",{x:lx,y:y+4+dy,"text-anchor":anchor,"font-weight":selected===s.code||s.bench?700:400,fill:selected===s.code?"var(--yellow)":"var(--ink)"},g); t.textContent=name;
     }
@@ -254,12 +265,12 @@ function select(code, scroll){
   if(scroll&&selected) $("map").scrollIntoView({behavior:"smooth",block:"center"});
 }
 
-// ---------- 고배당 30 ----------
-$("proof").innerHTML=`<thead><tr><th class="l">2018~2026 (처음 보는 기간)</th><th>연 수익</th><th>샤프</th><th>최대 낙폭</th></tr></thead><tbody>
+// ---------- 고배당 30(집 PC 화면만) ----------
+if($("proof")) $("proof").innerHTML=`<thead><tr><th class="l">2018~2026 (처음 보는 기간)</th><th>연 수익</th><th>샤프</th><th>최대 낙폭</th></tr></thead><tbody>
   <tr class="sel"><td>대형주 200 안 고배당 30종목</td><td class="up">+15.0%</td><td>0.83</td><td class="down">−32.7%</td></tr>
   <tr><td>KODEX 200 보유</td><td class="up">+16.9%</td><td>0.66</td><td class="down">−34.3%</td></tr>
   <tr><td>시장 평균(같은 비중)</td><td class="up">+5.6%</td><td>0.35</td><td class="down">−35.3%</td></tr></tbody>`;
-const cols=[["name","종목","l"],["div","배당","n"],["pbr","PBR","n"],["per","PER","n"],["cap","시총","n"],["x","추세","n"],["vchg","거래대금","n"],["r1w","1주","n"],["r1m","1개월","n"],["r3m","3개월","n"],["r12m","12개월","n"],["vol","변동성","n"],["quad","지도 위치","l"]];
+const cols=[["name","종목","l"]].concat(HAS_DIV?[["div","배당","n"],["pbr","PBR","n"],["per","PER","n"]]:[]).concat([["cap","시총","n"],["x","추세","n"],["vchg","거래대금","n"],["r1w","1주","n"],["r1m","1개월","n"],["r3m","3개월","n"],["r12m","12개월","n"],["vol","변동성","n"],["quad","지도 위치","l"]]);
 function cell(s,k){
   switch(k){
     case "name": return `<td>${esc(s.name)} <span class="sub">${esc(s.code)}</span>${tagHtml(s)}</td>`;
@@ -280,7 +291,7 @@ function table(id, rows, sortKey, desc, onSort){
   t.querySelectorAll("tbody tr").forEach(tr=>tr.addEventListener("click",()=>select(tr.dataset.c,true)));
   if(onSort) t.querySelectorAll("th.sort").forEach(th=>th.addEventListener("click",()=>onSort(th.dataset.k)));
 }
-table("divtbl", S.filter(s=>s.tags.includes("고배당30")).sort((a,b)=>(a.div_rank||99)-(b.div_rank||99)), "div", true, null);
+if($("divtbl")) table("divtbl", S.filter(s=>s.tags.includes("고배당30")).sort((a,b)=>(a.div_rank||99)-(b.div_rank||99)), "div", true, null);
 
 // ---------- 전체 표 ----------
 let sortKey="cap", desc=true;

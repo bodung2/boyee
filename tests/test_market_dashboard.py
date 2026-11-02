@@ -487,3 +487,22 @@ def test_kr_snapshot_load_retries_failed_months(tmp_path, monkeypatch):
     # 다음 실행은 저장본만 읽고 한국거래소에 묻지 않는다
     calls.clear()
     assert len(kr_factors.load(tmp_path, start="2024-01", pause=0)) == 3 and not calls
+
+
+def test_public_pages_drop_allocation_and_buy_wording():
+    from market_dashboard import kr_html, public, sector_html
+    dash, sec, kr = _three_screens()
+    assert any(a["weight"] > 0 for a in dash["assets"])            # 집 PC 화면에는 있다
+    pd_, ps, pk = public.assets(dash), public.sectors(sec), public.kr(kr)
+    assert all(a["weight"] == 0 for a in pd_["assets"]) and pd_["backtest"] is None and not pd_["products"]
+    assert all(s["weight"] == 0 for c in ps["countries"] for s in c["sectors"])
+    assert all(r["status"] != "후보" for c in ps["countries"] for s in c["sectors"] for r in s["stocks"])
+    pages = {"asset": html.render(pd_), "sector": sector_html.render(ps), "kr": kr_html.render(pk)}
+    for name, page in pages.items():
+        # 화면 구간(HTML)이 빠졌는지만 본다 — 화면에 실제로 보이는 글은 브라우저 점검으로 확인
+        for word in ("<h2>이 자산군 사려면</h2>", "<h2>백테스트(원화 기준)</h2>", "<h2>규칙</h2>", "이번 연구에서 가장 나았던 방식",
+                     "매수 후보\"", "<!--private-->"):
+            assert word not in page, (name, word)
+        assert "참고 자료" in page or "매매 신호" in page
+    # 집 PC 화면은 그대로
+    assert "이 자산군 사려면" in html.render(dash) and "고배당 30" in kr_html.render(kr)

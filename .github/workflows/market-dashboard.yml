@@ -44,11 +44,11 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           DASHBOARD_URL: https://bodung2.github.io/boyee/
-        run: python -m market_dashboard run --out site --notify
+        run: python -m market_dashboard run --out site --notify --public
 
       - name: 미국 섹터 지도 — 실패해도 자산군 대시보드는 그대로 게시
         continue-on-error: true
-        run: python -m market_dashboard sectors --out site
+        run: python -m market_dashboard sectors --out site --public
 
       # 종목 목록·배당은 한국거래소(KRX_ID·KRX_PW 비밀값), 시세는 Yahoo. 한국거래소가 막히면 지난번 목록을 쓴다.
       - name: 한국 종목 지도(시가총액 상위 200) — 실패해도 다른 화면은 그대로 게시
@@ -56,7 +56,7 @@ jobs:
         env:
           KRX_ID: ${{ secrets.KRX_ID }}
           KRX_PW: ${{ secrets.KRX_PW }}
-        run: python -m market_dashboard krstocks --out site
+        run: python -m market_dashboard krstocks --out site --public
 
       # 세 화면의 오늘 요약(brief.json) + 날짜별 기록(시황 기록 화면). 블로그 RSS에서 'M월 D일 시황' 글을 찾아 날짜에 링크를 붙인다.
       # 블로그 아이디는 저장소 Settings → Secrets and variables → Actions → Variables 의 NAVER_BLOG_ID_INVEST(없으면 링크만 빠짐).

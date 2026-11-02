@@ -66,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--notify", action="store_true")
     r.add_argument("--base", choices=["KRW", "USD"], default="KRW")
     r.add_argument("--out", help="이 폴더에 index.html로 저장(기본: output/market/dashboard.html)")
+    r.add_argument("--public", action="store_true", help="공개용: 규칙상 편입·목표 비중·살 상품·전략 백테스트를 빼고 저장")
     an = sub.add_parser("analyze")
     an.add_argument("--offline", action="store_true")
     sub.add_parser("krfactors")
@@ -76,6 +77,7 @@ def main(argv: list[str] | None = None) -> int:
     se.add_argument("--out", help="이 폴더에 sectors.html로 저장(기본: output/market/)")
     se.add_argument("--check-names", action="store_true", help="티커가 맞는 종목인지 Yahoo 이름과 나란히 출력")
     se.add_argument("--country", nargs="+", default=["US"], choices=["US", "KR"], help="지도에 넣을 나라(기본 미국만)")
+    se.add_argument("--public", action="store_true", help="공개용: 규칙상 편입·비중·전략 백테스트를 빼고 저장")
     br = sub.add_parser("brief")
     br.add_argument("--out", help="brief.json·history.html을 저장할 폴더(기본: output/market/)")
     br.add_argument("--src", help="dashboard·sectors·kr.json이 있는 폴더(기본: --out)")
@@ -83,6 +85,7 @@ def main(argv: list[str] | None = None) -> int:
     ks = sub.add_parser("krstocks")
     ks.add_argument("--offline", action="store_true")
     ks.add_argument("--out", help="이 폴더에 kr.html로 저장(기본: output/market/)")
+    ks.add_argument("--public", action="store_true", help="공개용: 고배당 30 전략 소개를 빼고 저장")
     args = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -176,11 +179,14 @@ def main(argv: list[str] | None = None) -> int:
                 log.warning("%s 섹터 시세 없음: %s", c.name, e)
         d = sectors.build(got)
         d["generated"] = datetime.now(KST).strftime("%Y-%m-%d %H:%M KST")
+        print(sectors.summary(d))
+        if args.public:
+            from . import public
+            d = public.sectors(d)
         out = Path(args.out) if args.out else OUT
         out.mkdir(parents=True, exist_ok=True)
         (out / "sectors.json").write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
         (out / "sectors.html").write_text(sector_html.render(d), encoding="utf-8")
-        print(sectors.summary(d))
         print(f"섹터 지도: {out / 'sectors.html'}")
         return 0
 
@@ -234,6 +240,9 @@ def main(argv: list[str] | None = None) -> int:
             (out / "kr.html").write_text(kr_html.render_error(str(e)), encoding="utf-8")
             return 1
         d["generated"] = datetime.now(KST).strftime("%Y-%m-%d %H:%M KST")
+        if args.public:
+            from . import public
+            d = public.kr(d)
         (out / "kr.json").write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
         (out / "kr.html").write_text(kr_html.render(d), encoding="utf-8")
         print(kr_stocks.summary(d))
@@ -272,12 +281,15 @@ def main(argv: list[str] | None = None) -> int:
 
     d = report.build(close, fred, Params(), base=args.base, products_live=live)
     d["generated"] = datetime.now(KST).strftime("%Y-%m-%d %H:%M KST")
+    text = summary(d)          # 텔레그램(나만 보는 알림)은 규칙상 비중까지
+    if args.public:
+        from . import public
+        d = public.assets(d)
     out = Path(args.out) if args.out else OUT
     out.mkdir(parents=True, exist_ok=True)
     (out / "dashboard.json").write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
     page = out / ("index.html" if args.out else "dashboard.html")
     page.write_text(html.render(d), encoding="utf-8")
-    text = summary(d)
     if os.environ.get("DASHBOARD_URL"):
         text += "\n" + os.environ["DASHBOARD_URL"]
     print(text)
