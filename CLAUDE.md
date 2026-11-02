@@ -16,3 +16,5 @@
   본 작업 전에 `scripts\self_update.py`를 부른다.
 - 새 예약 작업은 `scripts/setup_all_schedules.ps1`의 `$Schedule` 표에 넣는다(퀘스트 보드가 이 표로 목록을 만든다).
   글·게시물을 발행하는 작업이면 `quest_board/checks.py`의 `KINDS`에 발행 기록 확인 함수도 추가한다.
+- 매시간처럼 자주 도는 예약 작업은 표에 `Hidden = $true`를 붙여 까만 창 없이 돌리고(`scripts/run_hidden.vbs`),
+  bat에서 `set AUTOPOST_UPDATE_QUIET=1`로 코드 업데이트 문제 알림이 매번 오지 않게 한다.

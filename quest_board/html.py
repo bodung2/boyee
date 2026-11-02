@@ -53,6 +53,7 @@ footer{margin-top:28px;color:var(--mute);font-size:12px}
 @media (max-width:560px){.q{grid-template-columns:46px 1fr}.q .badge{grid-column:2;justify-self:start;margin-top:2px}
 .q .d,.q .nx{grid-column:2}}
 """
+REFRESH_SEC = 300              # 열어 둔 탭이 5분마다 파일을 다시 읽는다(파일은 매시간 새로 만든다)
 CELL_MARK = {"done": "✓", "ran": "✓", "fail": "✕", "skip": "–", "unknown": "?", "running": "…", "waiting": "",
              "retry": "!", "missed": "!", "none": "", "off": "", "na": ""}
 
@@ -144,10 +145,11 @@ def render(b: Board) -> str:
     note_html = "".join(f'<div class="note">{n}</div>' for n in notes)
 
     return f"""<!doctype html><html lang="ko"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>퀘스트 보드</title><style>{CSS}</style></head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="{REFRESH_SEC}"><title>퀘스트 보드</title><style>{CSS}</style></head>
 <body><main>
 <div class="top"><h1>오늘의 퀘스트 · {label_day(today)}</h1>
-<span class="stamp">{b.now.strftime('%Y-%m-%d %H:%M')} 기준 · 새로 보려면 <code>scripts\\quest_board.bat</code></span></div>
+<span class="stamp">{b.now.strftime('%Y-%m-%d %H:%M')} 기준 · 매시간 자동 갱신, 이 탭은 {REFRESH_SEC // 60}분마다 새로고침 · 지금 바로: <code>scripts\\quest_board.bat</code></span></div>
 <div class="tally">{"".join(tally)}</div><div class="bar">{"".join(bar)}</div>
 {note_html}
 <h2>오늘 일정</h2><div class="list">{"".join(_card(r) for r in sorted(b.rows, key=_first_time))}</div>

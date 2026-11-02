@@ -99,3 +99,12 @@ def test_main_never_fails(monkeypatch):
     sent = []
     monkeypatch.setattr(su, "notify", lambda env, text: sent.append(text))
     assert su.main() == 0 and "git not found" in sent[0]
+
+
+def test_quiet_mode_skips_telegram(monkeypatch):
+    """매시간 도는 퀘스트 보드 갱신은 같은 문제를 매시간 알리지 않는다."""
+    monkeypatch.setattr(su, "update", lambda env: ["⚠️ GitHub에서 받아 오지 못해 지금 코드로 실행합니다"])
+    monkeypatch.setenv("AUTOPOST_UPDATE_QUIET", "1")
+    sent = []
+    monkeypatch.setattr(su, "notify", lambda env, text: sent.append(text))
+    assert su.main() == 0 and sent == []
