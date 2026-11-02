@@ -205,7 +205,7 @@ def main(argv: list[str] | None = None) -> int:
         archive = [] if args.no_archive else brief.load_archive(arch)
         today = datetime.now(KST).strftime("%Y-%m-%d")
         b = brief.build(read("dashboard.json"), read("sectors.json"), read("kr.json"), brief.fetch_markets(),
-                        prev=brief.previous(archive, today))
+                        prev=brief.previous(archive, today), risk=brief.fetch_risk())
         blog_id = (os.environ.get("NAVER_BLOG_ID_MARKET") or os.environ.get("NAVER_BLOG_ID_INVEST") or "").strip()
         if not args.no_archive:
             brief.save_archive(arch, b)

@@ -71,6 +71,78 @@ def fetch_markets() -> list[dict]:
     return out
 
 
+# ---------------- 하락 위험 신호(백테스트로 고른 미국 지표 3개) ----------------
+# market_dashboard indicators(1990~2026 월말)에서 두 기간(~2007 / 2008~) 모두 같은 방향이던 지표만.
+# 값: (위험 쪽 이름, 안전 쪽 이름, 위험일 때 6개월 안 −10% 하락 비율, 안전일 때 비율)
+RISK_SPECS = {
+    "us_trend": ("S&P500이 10개월 평균 아래", "S&P500이 10개월 평균 위", 0.44, 0.14),
+    "us_mom12": ("S&P500 12개월 수익 마이너스", "S&P500 12개월 수익 플러스", 0.42, 0.16),
+    "credit": ("신용 스프레드가 3개월 새 크게 벌어짐", "신용 스프레드가 3개월 새 좁아지는 쪽", 0.35, 0.14),
+}
+RISK_BASIS = "1990~2026년 월말 기준, 그 뒤 6개월 안에 S&P500이 −10% 넘게 빠진 적이 있었던 비율"
+
+
+def _fred(sid: str) -> pd.Series:
+    import io
+    import urllib.request
+
+    with urllib.request.urlopen(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}&cosd=1986-01-01", timeout=60) as r:
+        df = pd.read_csv(io.BytesIO(r.read()), index_col=0, parse_dates=True, na_values=".")
+    return df.iloc[:, 0].dropna()
+
+
+def risk_states(spx: pd.Series, credit: pd.Series | None) -> dict:
+    """오늘 기준 상태. spx = S&P500 일별 종가, credit = Baa−10년물 스프레드(일별). 판단 방식은 백테스트와 같게."""
+    spx = spx.dropna()
+    out = {}
+    m = spx.resample("ME").last()
+    m.iloc[-1] = spx.iloc[-1]                    # 이번 달은 오늘 값으로
+    sma10 = m.rolling(10).mean().iloc[-1]
+    out["us_trend"] = {"risk": bool(spx.iloc[-1] < sma10), "value": _num(spx.iloc[-1] / sma10 - 1, 4)}
+    if len(m) > 12:
+        r12 = m.iloc[-1] / m.iloc[-13] - 1
+        out["us_mom12"] = {"risk": bool(r12 < 0), "value": _num(r12, 4)}
+    if credit is not None and len(credit) > 400:
+        cm = credit.resample("ME").last()
+        cm.iloc[-1] = credit.iloc[-1]
+        chg = (cm - cm.shift(3)).dropna()
+        past, now = chg.iloc[:-1], chg.iloc[-1]
+        rank = float((past <= now).mean())            # 과거 값만으로 매긴 백분위(백테스트와 같은 방식)
+        state = True if rank >= 2 / 3 else False if rank <= 1 / 3 else None
+        out["credit"] = {"risk": state, "value": None}   # 무디스 자료라 값은 싣지 않고 상태만
+    return out
+
+
+def fetch_risk() -> dict | None:
+    try:
+        import yfinance as yf
+
+        spx = yf.download("^GSPC", period="2y", auto_adjust=True, progress=False)["Close"].squeeze()
+        spx.index = pd.to_datetime(spx.index).tz_localize(None)
+    except Exception as e:  # noqa: BLE001
+        log.warning("S&P500 받기 실패: %s", e)
+        return None
+    try:
+        credit = _fred("BAA10Y")
+    except Exception as e:  # noqa: BLE001
+        log.warning("신용 스프레드 받기 실패: %s", e)
+        credit = None
+    return risk_block(risk_states(spx, credit))
+
+
+def risk_block(states: dict) -> dict:
+    sigs = []
+    for k, (risk_name, safe_name, p_risk, p_safe) in RISK_SPECS.items():
+        st = states.get(k)
+        if not st:
+            continue
+        r = st["risk"]
+        sigs.append({"key": k, "state": "위험" if r else "안전" if r is False else "중간",
+                     "label": risk_name if r else safe_name if r is False else risk_name.replace("크게 벌어짐", "중간쯤 변함"),
+                     "value": st.get("value"), "p_if_risk": p_risk, "p_if_safe": p_safe})
+    return {"signals": sigs, "on": sum(s["state"] == "위험" for s in sigs), "of": len(sigs), "basis": RISK_BASIS}
+
+
 # ---------------- 요약 만들기 ----------------
 def _assets(dash: dict | None) -> dict | None:
     """자산군은 '어디 추세가 강한가'만 적는다. 규칙상 편입·비중은 매수 권유로 읽힐 수 있어 요약에 넣지 않는다."""
@@ -125,6 +197,11 @@ def _changes(cur: dict, prev: dict | None) -> dict:
     if not prev:
         return {}
     out: dict = {"since": prev.get("date")}
+    r, pr = cur.get("risk"), prev.get("risk")
+    if r and pr:
+        was = {s["key"]: s["state"] for s in pr.get("signals", [])}
+        out["risk_moves"] = [f"{s['label']}({was[s['key']]}→{s['state']})" for s in r["signals"]
+                             if s["key"] in was and was[s["key"]] != s["state"]]
     k, pk = cur.get("kr"), prev.get("kr")
     if k and pk:
         if k.get("above_sma") is not None and pk.get("above_sma") is not None:
@@ -144,6 +221,9 @@ def _changes(cur: dict, prev: dict | None) -> dict:
 def headline(b: dict) -> list[str]:
     """요약 줄에 쓰는 짧은 문장 3~5개(숫자는 모두 요약 값 그대로)."""
     out = []
+    r = b.get("risk")
+    if r and r["of"]:
+        out.append(f"미국 하락 위험 신호 {r['on']}/{r['of']}개 켜짐")
     k = b.get("kr")
     if k:
         pp = (b.get("changes") or {}).get("kr_above_sma_pp")
@@ -162,11 +242,11 @@ def headline(b: dict) -> list[str]:
 
 
 def build(dash: dict | None, sec: dict | None, kr: dict | None, markets: list[dict] | None = None,
-          prev: dict | None = None, now: datetime | None = None) -> dict:
+          prev: dict | None = None, now: datetime | None = None, risk: dict | None = None) -> dict:
     now = now or datetime.now(KST)
     b = {"date": now.strftime("%Y-%m-%d"), "generated": now.strftime("%Y-%m-%d %H:%M KST"),
          "dashboard_url": DASHBOARD_URL, "markets": markets or [],
-         "assets": _assets(dash), "us": _us(sec), "kr": _kr(kr)}
+         "assets": _assets(dash), "us": _us(sec), "kr": _kr(kr), "risk": risk}
     b["changes"] = _changes(b, prev)
     b["headline"] = headline(b)
     return b
@@ -283,7 +363,7 @@ def for_post(today: str, out_path: Path, site_url: str = DASHBOARD_URL, build_di
             return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
 
         b = build(read("dashboard.json"), read("sectors.json"), read("kr.json"), fetch_markets(),
-                  prev=site if site and site.get("date", "") < today else None)
+                  prev=site if site and site.get("date", "") < today else None, risk=fetch_risk())
         if not (b.get("kr") or b.get("us") or b.get("assets")):
             raise RuntimeError("대시보드 숫자를 하나도 만들지 못했습니다(시세 받기 실패)")
         b["source"] = "local"

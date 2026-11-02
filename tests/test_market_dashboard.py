@@ -390,6 +390,7 @@ def test_brief_cli_archives_and_renders_history(tmp_path, monkeypatch):
         (site / name).write_text(json.dumps(d), encoding="utf-8")
     monkeypatch.setattr(cli, "CACHE", tmp_path / "cache")
     monkeypatch.setattr(brief, "fetch_markets", lambda: [])
+    monkeypatch.setattr(brief, "fetch_risk", lambda: None)
     monkeypatch.delenv("NAVER_BLOG_ID_INVEST", raising=False)
     monkeypatch.delenv("NAVER_BLOG_ID_MARKET", raising=False)
     (tmp_path / "cache" / "briefs").mkdir(parents=True)
@@ -506,3 +507,26 @@ def test_public_pages_drop_allocation_and_buy_wording():
         assert "참고 자료" in page or "매매 신호" in page
     # 집 PC 화면은 그대로
     assert "이 자산군 사려면" in html.render(dash) and "고배당 30" in kr_html.render(kr)
+
+
+def test_risk_signals_follow_backtest_rules():
+    from market_dashboard import brief
+    idx = pd.bdate_range("2023-01-02", "2026-10-30")
+    up = pd.Series(np.linspace(100, 200, len(idx)), index=idx)
+    down = up.copy()
+    down.iloc[-120:] = np.linspace(200, 120, 120)                 # 최근 반년 급락
+    cidx = pd.bdate_range("1990-01-01", "2026-10-30")
+    calm = pd.Series(2.0 + 0.3 * np.sin(np.arange(len(cidx)) / 200), index=cidx)
+    wide = calm.copy()
+    wide.iloc[-60:] += np.linspace(0, 3, 60)                      # 최근 3개월 스프레드 급확대
+    safe = brief.risk_block(brief.risk_states(up, calm))
+    risky = brief.risk_block(brief.risk_states(down, wide))
+    st = {s["key"]: s["state"] for s in risky["signals"]}
+    assert st == {"us_trend": "위험", "us_mom12": "위험", "credit": "위험"} and risky["on"] == 3
+    assert {s["key"]: s["state"] for s in safe["signals"]}["us_trend"] == "안전"
+    # 무디스 자료(신용 스프레드)는 값 없이 상태만
+    assert next(s for s in risky["signals"] if s["key"] == "credit")["value"] is None
+    b = brief.build(None, None, None, risk=risky)
+    assert b["headline"][0] == "미국 하락 위험 신호 3/3개 켜짐"
+    prev = brief.build(None, None, None, risk=safe)
+    assert brief.build(None, None, None, prev=prev, risk=risky)["changes"]["risk_moves"]

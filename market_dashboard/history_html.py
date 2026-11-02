@@ -11,6 +11,8 @@ def _changes(c: dict) -> str:
     bits = []
     if c.get("kr_above_sma_pp") is not None and round(c["kr_above_sma_pp"]) != 0:
         bits.append(f"200일선 위 {c['kr_above_sma_pp']:+.0f}%p")
+    if c.get("risk_moves"):
+        bits.append("위험 신호 " + ", ".join(c["risk_moves"]))
     if c.get("us_moves"):
         bits.append("미국 섹터 " + ", ".join(c["us_moves"][:3]))
     if c.get("div30_in"):
