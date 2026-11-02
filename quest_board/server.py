@@ -12,7 +12,9 @@ from __future__ import annotations
 import json
 import logging
 import secrets
+import sys
 import threading
+import time
 import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -140,35 +142,86 @@ def handler_for(app: App, port: int):
     return Handler
 
 
+# 이 PC 안 주소로만 묻는다(윈도우의 시스템 프록시 설정을 타지 않게)
+_LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+class _Server(ThreadingHTTPServer):
+    # 윈도우에서 SO_REUSEADDR은 이미 쓰는 포트에도 또 붙게 해 두 프로그램이 한 주소를 나눠 가진다 → 끈다
+    allow_reuse_address = sys.platform != "win32"
+    daemon_threads = True
+
+
 def _already_running(port: int) -> bool:
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2) as r:
+        with _LOCAL.open(f"http://127.0.0.1:{port}/health", timeout=2) as r:
             return r.read().decode() == SIGNATURE
     except Exception:  # noqa: BLE001
         return False
 
 
+def start(app: App, port: int = PORT, tries: int = 10):
+    """(서버 또는 None, 주소). 이미 켜진 보드가 있으면 (None, 그 주소). 포트가 다른 프로그램 차지면 다음 번호."""
+    last: Exception | None = None
+    for p in range(port, port + tries):
+        if _already_running(p):
+            return None, f"http://127.0.0.1:{p}/"
+        try:
+            srv = _Server(("127.0.0.1", p), handler_for(app, p))
+            return srv, f"http://127.0.0.1:{p}/"
+        except OSError as e:
+            last = e
+            log.info("%d번 포트를 쓸 수 없음: %s", p, e)
+    raise OSError(f"{port}~{port + tries - 1}번 포트를 모두 쓸 수 없습니다: {last}")
+
+
+def _open_when_ready(url: str, port: int, wait: float = 10) -> None:
+    deadline = time.time() + wait
+    while time.time() < deadline and not _already_running(port):
+        time.sleep(0.3)
+    webbrowser.open(url)
+
+
+def _setup_logging(paths: Paths) -> None:
+    try:
+        paths.logs.mkdir(parents=True, exist_ok=True)
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+                            handlers=[logging.FileHandler(paths.logs / "quest_board_server.log", encoding="utf-8")])
+    except OSError:
+        pass
+
+
 def serve(port: int = PORT, open_browser: bool = True) -> int:
-    url = f"http://127.0.0.1:{port}/"
-    if _already_running(port):
-        print(f"퀘스트 보드가 이미 켜져 있어 그 창을 엽니다: {url}")
+    """창(bat)이 바로 닫혀 오류를 못 보는 일이 없게, 실패하면 이유를 출력하고 1을 돌려준다(bat이 멈춰 보여 줌)."""
+    paths = Paths.load()
+    _setup_logging(paths)
+    try:
+        app = App(paths=paths)
+        server, url = start(app, port)
+    except Exception as e:  # noqa: BLE001
+        log.exception("퀘스트 보드를 켜지 못함")
+        print(f"\n⚠️ 퀘스트 보드를 켜지 못했습니다: {e}\n자세한 기록: {paths.logs / 'quest_board_server.log'}")
+        return 1
+    if server is None:
+        print(f"퀘스트 보드가 이미 켜져 있어 그 화면을 엽니다: {url}")
         if open_browser:
             webbrowser.open(url)
         return 0
-    app = App()
-    try:
-        server = ThreadingHTTPServer(("127.0.0.1", port), handler_for(app, port))
-    except OSError as e:
-        print(f"{port}번 포트를 쓸 수 없습니다({e}). `python -m quest_board serve --port 8766`처럼 다른 번호로 실행하세요.")
-        return 1
+    port = server.server_address[1]
+    log.info("퀘스트 보드 시작: %s", url)
     print(f"퀘스트 보드: {url}")
-    print("이 창을 닫으면 보드의 버튼(시각 바꾸기·끄기·지금 실행)이 동작하지 않습니다. 다 봤으면 닫아도 됩니다.")
+    print("브라우저가 안 열리면 위 주소를 주소창에 붙여 넣으세요.")
+    print("이 창이 열려 있는 동안 보드의 버튼(시각 바꾸기·끄기·지금 실행)이 동작합니다. 다 봤으면 닫아도 됩니다.")
     if open_browser:
-        threading.Timer(0.5, lambda: webbrowser.open(url)).start()
+        threading.Thread(target=_open_when_ready, args=(url, port), daemon=True).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
+    except Exception as e:  # noqa: BLE001
+        log.exception("퀘스트 보드가 멈춤")
+        print(f"\n⚠️ 퀘스트 보드가 멈췄습니다: {e}")
+        return 1
     finally:
         server.server_close()
     return 0
