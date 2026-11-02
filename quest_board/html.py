@@ -83,7 +83,7 @@ async function send(act, name, extra) {
     const j = await r.json().catch(() => ({ok: false, message: "응답을 읽지 못했습니다(" + r.status + ")"}));
     toast(j.message, j.ok);
     if (j.ok) setTimeout(() => location.reload(), 1200);
-  } catch (e) { toast("보드 프로그램에 연결하지 못했습니다. scripts\\quest_board.bat을 다시 실행하세요", false); }
+  } catch (e) { toast("보드 프로그램에 연결하지 못했습니다. scripts\\\\quest_board.bat을 다시 실행하세요", false); }
   busy = false;
 }
 const ASK = {disable: "이 예약을 끌까요? (언제든 '다시 켜기'로 되살릴 수 있습니다)",
@@ -102,8 +102,18 @@ document.addEventListener("submit", e => {
   const f = e.target.closest("form.edit"); if (!f) return; e.preventDefault();
   send("times", f.dataset.name, {times: f.times.value});
 });
-/* 1분마다 새로고침(시각을 고치는 중이면 미룬다) */
-setInterval(() => { if (!busy && !document.querySelector("form.edit:not([hidden])")) location.reload(); }, 60000);
+/* 1분마다 새로고침(시각을 고치는 중이면 미룬다). 보드 프로그램이 꺼졌으면 오류 화면으로 넘어가지 않고 안내만 띄운다 */
+let down = false;
+setInterval(async () => {
+  if (busy || document.querySelector("form.edit:not([hidden])")) return;
+  try { const r = await fetch("/health", {cache: "no-store"}); if (!r.ok) throw 0; location.reload(); }
+  catch (e) {
+    if (down) return; down = true;
+    const n = document.createElement("div"); n.className = "note";
+    n.textContent = "보드 프로그램(까만 창)이 꺼져 있어 버튼이 동작하지 않습니다. scripts\\\\quest_board.bat을 다시 실행하세요.";
+    document.querySelector("main").prepend(n);
+  }
+}, 60000);
 </script>"""
 CELL_MARK = {"done": "✓", "ran": "✓", "fail": "✕", "skip": "–", "unknown": "?", "running": "…", "waiting": "",
              "retry": "!", "missed": "!", "none": "", "off": "", "na": ""}

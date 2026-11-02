@@ -157,3 +157,35 @@ def test_setup_script_keeps_pc_overrides():
     assert "data\\schedule_overrides.json" in text and "Disable-ScheduledTask" in text
     gi = (schedule.ROOT / ".gitignore").read_text(encoding="utf-8")
     assert "data/schedule_overrides.json" in gi
+
+
+def test_start_skips_port_used_by_other_program_and_reuses_running_board(app):
+    import socket
+    other = socket.socket()
+    other.bind(("127.0.0.1", 0))
+    other.listen()
+    busy = other.getsockname()[1]
+    try:
+        srv, url = server.start(app, busy, tries=5)   # 다른 프로그램이 쓰는 포트 → 다음 번호
+        assert srv is not None and url != f"http://127.0.0.1:{busy}/"
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        port = srv.server_address[1]
+        try:
+            again, url2 = server.start(app, port, tries=1)   # 이미 켜진 보드 → 새로 켜지 않고 그 주소
+            assert again is None and url2 == f"http://127.0.0.1:{port}/"
+        finally:
+            srv.shutdown()
+            srv.server_close()
+    finally:
+        other.close()
+
+
+def test_windows_does_not_share_ports_and_bat_pauses_on_error():
+    import sys
+    assert server._Server.allow_reuse_address == (sys.platform != "win32")
+    bat = (schedule.ROOT / "scripts" / "quest_board.bat").read_bytes().decode("ascii")
+    assert "-m quest_board serve %*\r\nif errorlevel 1 pause\r\nexit /b" in bat
+
+
+def test_page_shows_notice_instead_of_error_page_when_board_stops():
+    assert 'fetch("/health"' in html.SCRIPT and "까만 창)이 꺼져" in html.SCRIPT

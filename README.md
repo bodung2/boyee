@@ -440,6 +440,8 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_all_schedules.ps1 -Skip P
 - 바꾼 작업에는 'PC에서 바꿈' 표시가 붙고, 매일 밤 텔레그램 요약에도 '꺼 둔 예약'·'PC에서 바꾼 시각'이 나옵니다.
   GitHub 쪽(Claude가 보는 코드)은 원래 시각 그대로이니, 오래 쓸 시각이면 Claude에게 표를 바꿔 달라고 하면 됩니다.
 - 버튼은 bat을 실행해 뜬 까만 창이 열려 있는 동안만 동작합니다. 즐겨찾기한 `output/quest_board.html`은 보기 전용입니다.
+- PowerShell에서 bat을 실행하면 그 창은 보드가 쓰므로, 탐색기에서 더블클릭하거나 `Start-Process scripts\quest_board.bat`으로 따로 띄우세요.
+- 켜지 못하면 까만 창이 닫히지 않고 이유를 보여 줍니다(기록: `logs/quest_board_server.log`). 8765번 포트를 다른 프로그램이 쓰면 8766, 8767…을 씁니다.
 
 ```powershell
 scripts\quest_board.bat                              # 버튼이 있는 보드 열기(더블클릭 가능, = python -m quest_board serve)
