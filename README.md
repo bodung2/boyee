@@ -413,6 +413,7 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_all_schedules.ps1 -Skip P
 | 20:00 / 21:00 | 교육 / 유아 인스타·쓰레드 |
 | 22:30 | 성장 실험실 수집(일요일엔 주간 리뷰) |
 | 23:40 | 퀘스트 보드 요약 → 텔레그램(QuestBoard) |
+| 00:05부터 매시간 | 퀘스트 보드 화면 갱신(QuestBoardRefresh, 창 없이) |
 
 시각을 바꾸려면 `scripts/setup_all_schedules.ps1`의 `$Schedule` 표만 고친 뒤 다시 실행합니다.
 예전 이름(`NaverEduAutoPost`)으로 남은 작업은 자동으로 지우고, 이 폴더의 실행 파일을 돌리는데 표에 없는 작업(손으로 만든 작업 등)은 목록으로 보여 줍니다. 그것도 지우려면 `-RemoveOld`를 붙입니다.
@@ -421,12 +422,14 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_all_schedules.ps1 -Skip P
 
 매일 도는 작업(블로그 발행·인스타/쓰레드·이웃 추천·대시보드·성장 실험실 등)이 **오늘 어떻게 됐는지**와 **최근 14일 발행 기록**을
 한 페이지(`output/quest_board.html`)로 보여 줍니다. 글 제목을 누르면 발행된 글이 열립니다.
+화면 파일은 **매시간 자동으로 새로 만들어지고**(예약 작업 QuestBoardRefresh, 까만 창 없이), 열어 둔 브라우저 탭은 **5분마다 저절로 새로고침**되므로
+탭을 띄워 두기만 하면 됩니다. 지금 바로 최신으로 보고 싶을 때만 `scripts\quest_board.bat`을 실행합니다.
 
 ```powershell
 scripts\quest_board.bat                              # 최신 기록으로 다시 만들고 브라우저로 열기(더블클릭 가능)
 .venv\Scripts\python.exe -m quest_board --text        # 요약만 화면에
 .venv\Scripts\python.exe -m quest_board --notify      # 요약을 텔레그램으로(예약 작업 QuestBoard가 매일 23:40에 실행)
-powershell -ExecutionPolicy Bypass -File scripts\setup_all_schedules.ps1 -Only QuestBoard -NoInstall   # 23:40 예약 등록(최초 1회)
+powershell -ExecutionPolicy Bypass -File scripts\setup_all_schedules.ps1 -Only QuestBoard,QuestBoardRefresh -NoInstall   # 23:40 요약·매시간 갱신 예약 등록(최초 1회)
 ```
 
 | 상태 | 뜻 |

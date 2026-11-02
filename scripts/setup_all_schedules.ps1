@@ -15,6 +15,7 @@ Set-Location $Root
 
 # Name: 작업 이름 / Bat: scripts 폴더의 실행 파일 / Arg: 넘길 옵션 / Times: 매일 실행 시각(여러 개면 재시도 포함)
 # Hours: 최대 실행 시간 / Wake: 절전 중이면 깨워서 실행 / Days: 요일 지정(비우면 매일) / Every: 반복 간격(시간)
+# Hidden: 까만 창 없이 실행(자주 도는 작업용, scripts\run_hidden.vbs로 감싼다)
 $Schedule = @(
     @{ Name = "PerpBotPaper";                  Bat = "run_perp_paper.bat";       Arg = "";                  Times = @("01:05"); Hours = 0.5; Wake = $false; Every = 4; Desc = "무기한 선물 봇 모의투자(4시간마다)" }
     @{ Name = "BloggerAutoPost";               Bat = "run_blogger_daily.bat";    Arg = "";                  Times = @("03:00"); Hours = 6;   Wake = $true;  Desc = "구글 블로거" }
@@ -30,6 +31,7 @@ $Schedule = @(
     @{ Name = "NaverAutoPost-Social-childhood"; Bat = "run_social.bat";          Arg = "--profile childhood"; Times = @("21:00"); Hours = 2; Wake = $true; Desc = "유아 블로그 인스타·쓰레드" }
     @{ Name = "GrowthLab";                     Bat = "run_growth_lab.bat";       Arg = "";                  Times = @("22:30"); Hours = 3;   Wake = $true;  Desc = "성장 실험실: 투자·티스토리 통계 수집(일요일엔 주간 리뷰)" }
     @{ Name = "QuestBoard";                    Bat = "run_quest_board.bat";      Arg = "--notify";          Times = @("23:40"); Hours = 0.5; Wake = $false; Desc = "퀘스트 보드: 오늘 작업 결과 정리·텔레그램 요약" }
+    @{ Name = "QuestBoardRefresh";             Bat = "run_quest_board_refresh.bat"; Arg = "";             Times = @("00:05"); Hours = 0.25; Wake = $false; Every = 1; Hidden = $true; Desc = "퀘스트 보드 화면 매시간 갱신(창 없이)" }
 )
 
 # -File로 실행하면 "A,B"가 문자열 하나로 들어오므로 쉼표로 나눈다
@@ -54,7 +56,7 @@ if (Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue) {
     $Others = @(Get-ScheduledTask | Where-Object {
         -not ($AllNames -contains $_.TaskName) -and (
             ($Legacy -contains $_.TaskName) -or
-            (@($_.Actions | Where-Object { $_.Execute -like "$Root\scripts\*" }).Count -gt 0))
+            (@($_.Actions | Where-Object { $_.Execute -like "$Root\scripts\*" -or $_.Arguments -like "*$Root\scripts\*" }).Count -gt 0))
     })
 }
 if ($Others.Count) {
@@ -70,7 +72,7 @@ if ($Others.Count) {
 
 if ($WhatIf) { Write-Host "`n-WhatIf: 미리 보기만 했습니다. 실제로 등록하려면 -WhatIf 없이 실행하세요."; exit 0 }
 
-$Missing = $Selected | Where-Object { -not (Test-Path "$Root\scripts\$($_.Bat)") }
+$Missing = $Selected | Where-Object { -not (Test-Path "$Root\scripts\$($_.Bat)") -or ($_.Hidden -and -not (Test-Path "$Root\scripts\run_hidden.vbs")) }
 if ($Missing) { throw "실행 파일이 없습니다: $(($Missing | ForEach-Object { $_.Bat }) -join ', ')  →  git pull 로 최신 코드를 받은 뒤 다시 실행하세요" }
 
 if (-not $NoInstall) {
@@ -88,7 +90,9 @@ if (-not (Test-Path ".env")) {
 Write-Host "`n2) 작업 스케줄러 등록"
 $Principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
 foreach ($t in $Selected) {
-    $Action = if ($t.Arg) {
+    $Action = if ($t.Hidden) {
+        New-ScheduledTaskAction -Execute "wscript.exe" -Argument ("`"$Root\scripts\run_hidden.vbs`" `"$Root\scripts\$($t.Bat)`" " + $t.Arg).Trim() -WorkingDirectory $Root
+    } elseif ($t.Arg) {
         New-ScheduledTaskAction -Execute "$Root\scripts\$($t.Bat)" -Argument $t.Arg -WorkingDirectory $Root
     } else {
         New-ScheduledTaskAction -Execute "$Root\scripts\$($t.Bat)" -WorkingDirectory $Root
