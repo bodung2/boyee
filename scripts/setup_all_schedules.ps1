@@ -42,6 +42,22 @@ $Selected = $Schedule | Where-Object { ($Only.Count -eq 0 -or $Only -contains $_
 $Unknown = @($Only + $Skip) | Where-Object { $_ -and -not ($AllNames -contains $_) }
 if ($Unknown) { throw "모르는 작업 이름: $($Unknown -join ', ')  (가능: $($AllNames -join ', '))" }
 
+# 퀘스트 보드에서 PC에서만 바꾼 시간·끈 작업(data\schedule_overrides.json, GitHub에 올라가지 않음)을 다시 등록할 때도 지킨다
+$OverrideFile = Join-Path $Root "data\schedule_overrides.json"
+$Overrides = @{}
+if (Test-Path $OverrideFile) {
+    try {
+        $raw = Get-Content $OverrideFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        foreach ($p in $raw.PSObject.Properties) { $Overrides[$p.Name] = $p.Value }
+    } catch { Write-Host "퀘스트 보드 설정 파일을 읽지 못해 기본 시각으로 등록합니다: $_" }
+}
+foreach ($t in $Selected) {
+    $ov = $Overrides[$t.Name]
+    if (-not $ov) { continue }
+    if ($ov.times) { $t.Times = @($ov.times); $t.Desc = "$($t.Desc) [PC에서 바꾼 시각]" }
+    if ($ov.enabled -eq $false) { $t.Disabled = $true; $t.Desc = "$($t.Desc) [PC에서 꺼 둠]" }
+}
+
 Write-Host "등록할 예약 작업:"
 foreach ($t in $Selected) {
     $when = if ($t.Every) { "$($t.Times[0])부터 $($t.Every)시간마다" } elseif ($t.Days) { "$($t.Times -join ', ') (화~토)" } else { "매일 $($t.Times -join ', ')" }
@@ -112,7 +128,12 @@ foreach ($t in $Selected) {
         New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit $Limit -MultipleInstances IgnoreNew
     }
     Register-ScheduledTask -TaskName $t.Name -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal -Force | Out-Null
-    Write-Host "   등록: $($t.Name)"
+    if ($t.Disabled) {
+        Disable-ScheduledTask -TaskName $t.Name | Out-Null
+        Write-Host "   등록(꺼 둔 상태 유지): $($t.Name)"
+    } else {
+        Write-Host "   등록: $($t.Name)"
+    }
 }
 
 foreach ($o in $Others) {

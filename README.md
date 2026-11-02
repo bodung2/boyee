@@ -73,6 +73,7 @@ notepad .env        # NAVER_BLOG_ID, NAVER_CATEGORY_CHILDHOOD 입력
 
 - 할 일이 없습니다. PC가 켜져 있거나 절전 상태면 됩니다. 절전 상태면 깨워서 실행하고, 꺼져 있었다면 켜지는 즉시 밀린 실행을 합니다.
 - **한눈에 보기: `scripts\quest_board.bat` 더블클릭** → 퀘스트 보드가 브라우저로 열립니다([아래](#퀘스트-보드-매일-예약-작업-한-화면에)).
+  보드의 버튼으로 예약 시각 바꾸기·끄기·지금 실행도 할 수 있습니다.
   매일 23:40에는 오늘 결과 요약이 텔레그램으로 옵니다.
 - 결과 확인 위치:
   - `logs/childhood-날짜.log`: 진행 기록
@@ -425,8 +426,24 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_all_schedules.ps1 -Skip P
 화면 파일은 **매시간 자동으로 새로 만들어지고**(예약 작업 QuestBoardRefresh, 까만 창 없이), 열어 둔 브라우저 탭은 **5분마다 저절로 새로고침**되므로
 탭을 띄워 두기만 하면 됩니다. 지금 바로 최신으로 보고 싶을 때만 `scripts\quest_board.bat`을 실행합니다.
 
+`scripts\quest_board.bat`으로 열면(주소 `http://127.0.0.1:8765/`, 이 PC 안에서만 열림) 카드마다 **버튼**이 붙습니다.
+
+| 버튼 | 하는 일 |
+|---|---|
+| ⏱ 시각 바꾸기 | `07:00, 11:00`처럼 쉼표로 적고 저장(뒤 시각은 막힌 날 재시도). 반복 작업은 시작 시각 하나 |
+| ⏸ 끄기 / ▶ 다시 켜기 | 예약을 멈추고 되살림(지우지 않으므로 언제든 되돌릴 수 있음) |
+| ⚡ 지금 실행 | 예약 시각을 기다리지 않고 바로 한 번 실행(오늘 이미 발행했으면 각 작업이 알아서 건너뜀) |
+| ↺ 기본값으로 | 예약 표(`setup_all_schedules.ps1`)의 원래 시각으로 되돌리고 켬 |
+
+- 바꾼 내용은 작업 스케줄러에 바로 반영되고, **이 PC의 `data/schedule_overrides.json`에만** 저장됩니다(GitHub에 올라가지 않음).
+  코드 자동 업데이트와 충돌하지 않고, `setup_all_schedules.ps1`을 다시 실행해도 바꾼 시각·끈 상태가 유지됩니다.
+- 바꾼 작업에는 'PC에서 바꿈' 표시가 붙고, 매일 밤 텔레그램 요약에도 '꺼 둔 예약'·'PC에서 바꾼 시각'이 나옵니다.
+  GitHub 쪽(Claude가 보는 코드)은 원래 시각 그대로이니, 오래 쓸 시각이면 Claude에게 표를 바꿔 달라고 하면 됩니다.
+- 버튼은 bat을 실행해 뜬 까만 창이 열려 있는 동안만 동작합니다. 즐겨찾기한 `output/quest_board.html`은 보기 전용입니다.
+
 ```powershell
-scripts\quest_board.bat                              # 최신 기록으로 다시 만들고 브라우저로 열기(더블클릭 가능)
+scripts\quest_board.bat                              # 버튼이 있는 보드 열기(더블클릭 가능, = python -m quest_board serve)
+.venv\Scripts\python.exe -m quest_board --open        # 보기 전용 파일만 새로 만들어 열기
 .venv\Scripts\python.exe -m quest_board --text        # 요약만 화면에
 .venv\Scripts\python.exe -m quest_board --notify      # 요약을 텔레그램으로(예약 작업 QuestBoard가 매일 23:40에 실행)
 powershell -ExecutionPolicy Bypass -File scripts\setup_all_schedules.ps1 -Only QuestBoard,QuestBoardRefresh -NoInstall   # 23:40 요약·매시간 갱신 예약 등록(최초 1회)
@@ -441,6 +458,7 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_all_schedules.ps1 -Only Q
 | ⚠️ 실행 안 됨 | 예약 시각이 지났는데 실행 흔적이 없음(PC가 꺼져 있었거나 예약 미등록) |
 | ❔ 확인 필요 | 실행은 했는데 발행 기록이 없음 → 블로그에서 확인, 발행됐다면 `naver_autopost record 주소` |
 | 💤 쉬는 날 | 그 요일엔 예약 없음(예: 시황·대시보드는 화~토) |
+| ⏸️ 꺼 둠 | 보드의 '끄기'나 작업 스케줄러에서 사용 안 함으로 둔 예약 |
 
 - **새 퀘스트는 자동으로 보드에 나타납니다.** 목록을 `scripts/setup_all_schedules.ps1`의 `$Schedule` 표와 작업 스케줄러(이 폴더의
   `scripts\*.bat`을 실행하는 작업, 손으로 만든 것 포함)에서 읽기 때문입니다. 표에는 있는데 작업 스케줄러에 없는 예약은 경고로 보여 줍니다.
