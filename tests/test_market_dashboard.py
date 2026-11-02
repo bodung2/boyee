@@ -464,3 +464,26 @@ def test_one_missing_ticker_is_refetched_or_filled_from_cache(tmp_path):
         raise RuntimeError("database is locked")
     got = data.fill_missing(close, ["SPY", "GLD", "TLT", "QQQ"], cache, fail)
     assert (got["GLD"] == 9.0).all() and (got["TLT"] == 7.0).all() and "QQQ" not in got
+
+
+def test_kr_snapshot_load_retries_failed_months(tmp_path, monkeypatch):
+    from market_dashboard import kr_factors
+    months = list(pd.period_range("2024-01", "2024-03", freq="M"))
+    monkeypatch.setattr(kr_factors.pd.Timestamp, "today", classmethod(lambda cls: pd.Timestamp("2024-04-15")))
+    monkeypatch.setattr(kr_factors, "trading_month_ends", lambda start: {m: m.end_time.normalize() - pd.Timedelta(days=1) for m in months})
+    calls = {}
+
+    def fake_snapshot(day, cache_dir):
+        calls[day] = calls.get(day, 0) + 1
+        if day.startswith("202402") and calls[day] == 1:      # 2월은 처음 한 번 빈 응답
+            raise KeyError("종가")
+        df = pd.DataFrame({"종가": [1.0], "시가총액": [10.0]}, index=["000010"])
+        df.to_pickle(cache_dir / f"krx_{day}.pkl")
+        return df
+
+    monkeypatch.setattr(kr_factors, "snapshot", fake_snapshot)
+    snaps = kr_factors.load(tmp_path, start="2024-01", pause=0)
+    assert len(snaps) == 3 and calls["20240228"] == 2
+    # 다음 실행은 저장본만 읽고 한국거래소에 묻지 않는다
+    calls.clear()
+    assert len(kr_factors.load(tmp_path, start="2024-01", pause=0)) == 3 and not calls
