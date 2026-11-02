@@ -1,4 +1,4 @@
-"""python -m quest_board [--open] [--notify] [--text] [--days 14] [--out 경로]"""
+"""python -m quest_board [build|serve] [--open] [--notify] [--text] [--days 14] [--out 경로] [--port 8765]"""
 from __future__ import annotations
 
 import argparse
@@ -18,7 +18,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--text", action="store_true", help="요약을 화면에 출력한다")
     ap.add_argument("--days", type=int, default=14, help="기록 표에 보일 날짜 수(기본 14)")
     ap.add_argument("--out", type=Path, help="저장할 파일(기본: output/quest_board.html)")
+    ap.add_argument("cmd", nargs="?", choices=["build", "serve"], default="build",
+                    help="build: 보기 전용 파일 만들기(기본) / serve: 버튼이 있는 보드를 이 PC 안에서 열기")
+    ap.add_argument("--port", type=int, default=8765, help="serve 포트(기본 8765)")
     args = ap.parse_args(argv)
+    if args.cmd == "serve":
+        from .server import serve
+        return serve(args.port)
 
     paths = Paths.load()
     quests, has_live, missing = schedule.load(live=schedule.read_scheduler())

@@ -30,6 +30,9 @@ class Quest:
     hours: float = 0                                   # 최대 실행 시간
     source: str = "table"                              # table / scheduler(표에 없이 직접 등록)
     live: dict | None = None                           # 작업 스케줄러 정보(없으면 None)
+    default_times: list[str] = field(default_factory=list)   # 예약 표의 원래 시각(PC에서 바꿨을 때 비교용)
+    paused: bool = False                               # 꺼 둔 작업(PC 설정 또는 작업 스케줄러에서 사용 안 함)
+    overridden: bool = False                           # PC에서 시각을 바꿨거나 껐음(data/schedule_overrides.json)
 
     @property
     def label(self) -> str:

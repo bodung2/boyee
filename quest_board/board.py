@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from . import checks
+from . import checks, overrides
 from .checks import KST, Paths, Result
 from .schedule import NOT_YET, RUNNING, Quest
 
@@ -15,7 +15,7 @@ STATES = {
     "done": ("✅", "완료"), "ran": ("☑️", "실행됨"), "skip": ("⏭️", "건너뜀"), "running": ("🔄", "진행 중"),
     "waiting": ("⏳", "예정"), "retry": ("🔁", "재시도 예정"), "fail": ("❌", "실패"),
     "missed": ("⚠️", "실행 안 됨"), "unknown": ("❔", "확인 필요"), "off": ("💤", "쉬는 날"),
-    "none": ("·", "기록 없음"), "na": ("", ""),
+    "none": ("·", "기록 없음"), "na": ("", ""), "paused": ("⏸️", "꺼 둠"),
 }
 GROUP_ORDER = {"발행": 0, "SNS": 1, "보조": 2}
 KO_DAYS = "월화수목금토일"
@@ -90,6 +90,8 @@ def _slots(q: Quest, day: str) -> list[datetime]:
 
 
 def next_run(q: Quest, now: datetime) -> str:
+    if q.paused:
+        return ""
     nxt = str((q.live or {}).get("NextRun") or "")
     if nxt and not nxt.startswith("1999"):
         try:
@@ -109,6 +111,11 @@ def next_run(q: Quest, now: datetime) -> str:
 
 def today_status(p: Paths, q: Quest, now: datetime) -> Status:
     day = now.strftime("%Y-%m-%d")
+    if q.paused:
+        r = checks.check(p, q, day)
+        if r.state == "done":                  # 끄기 전에 이미 끝난 오늘 결과는 보여 준다
+            return Status("done", r, r.note)
+        return Status("paused", r, "꺼 둔 예약입니다('다시 켜기'를 누르면 다시 돕니다)")
     if not q.runs_on(now.weekday()):
         return Status("off", detail="오늘은 예약이 없는 요일")
     r = checks.check(p, q, day)
@@ -165,6 +172,7 @@ def build(quests: list[Quest], scheduler: bool, unregistered: list[str], now: da
           days: int = 14, paths: Paths | None = None) -> Board:
     now = now or datetime.now(KST)
     p = paths or Paths.load()
+    overrides.apply(quests, overrides.load(p.data))
     day_list = [(now - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days - 1, -1, -1)]
     rows = []
     for q in quests:
@@ -184,7 +192,7 @@ def build(quests: list[Quest], scheduler: bool, unregistered: list[str], now: da
 
 def summary_text(b: Board) -> str:
     """텔레그램·터미널용 요약."""
-    active = [r for r in b.rows if r.today.state != "off"]
+    active = [r for r in b.rows if r.today.state not in ("off", "paused")]
     done = sum(1 for r in active if r.today.state in ("done", "ran", "skip"))
     lines = [f"[퀘스트 보드] {label_day(b.days[-1])} {done}/{len(active)} 완료"]
     for r in sorted(active, key=lambda r: min(r.quest.times) if r.quest.times else "99:99"):
@@ -192,6 +200,13 @@ def summary_text(b: Board) -> str:
         when = min(r.quest.times) if r.quest.times else "--:--"
         what = r.today.result.title if r.today.state == "done" else (r.today.detail or name)
         lines.append(f"{icon} {when} {r.quest.label} — {what[:70]}")
+    paused = [r.quest.label for r in b.rows if r.quest.paused]
+    if paused:
+        lines.append("⏸️ 꺼 둔 예약: " + ", ".join(paused))
+    moved = [f"{r.quest.label} {'·'.join(r.quest.times)}(원래 {'·'.join(r.quest.default_times)})"
+             for r in b.rows if r.quest.times != r.quest.default_times]
+    if moved:
+        lines.append("⚙️ PC에서 바꾼 시각: " + ", ".join(moved))
     if b.unregistered:
         lines.append("⚠️ 작업 스케줄러에 없는 예약: " + ", ".join(b.unregistered))
     return "\n".join(lines)
