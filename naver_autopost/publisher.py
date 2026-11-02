@@ -36,8 +36,10 @@ SELECTORS = {
     "tag_input": ["input#tag-input", "input[placeholder*='태그']"],
     "category_open": ["button[class*='selectbox_button']", "button[aria-label*='카테고리']"],
     "publish_confirm": ["button[data-testid='seOnePublishBtn']", "button[class*='confirm_btn']"],
+    "popup_confirm": [".se-popup-button-confirm", "[role='alertdialog'] button:has-text('확인')"],
 }
 
+PUBLISH_WAIT_SEC = 60   # 발행 버튼을 누른 뒤 글 주소로 넘어가길 기다리는 시간
 POST_URL = re.compile(r"blog\.naver\.com/(?:[^\s\"']*?[?&]logNo=(\d{6,})|(?!PostWriteForm|PostUpdateForm)[^/?#]+/(\d{6,}))")
 
 
@@ -457,16 +459,43 @@ def _publish(page: Page, cfg: Config, post: dict, images: dict[str, Path], dry_r
         page.wait_for_timeout(60_000)
         return ""
 
+    # 발행 버튼 뒤에 네이버가 확인창을 띄우는 경우가 있다. 처리기를 두지 않으면 자동화 도구가 '취소'를 눌러
+    # 발행이 조용히 멈춘다(편집 화면에 그대로 남음). 문구를 기록하고, 발행을 계속하는 쪽(확인)을 누른다.
+    dialogs: list[str] = []
+
+    def on_dialog(d):
+        dialogs.append(f"{d.type}: {d.message}")
+        log.warning("발행 중 네이버 확인창: [%s] %s → 확인", d.type, d.message)
+        try:
+            d.accept()
+        except Exception as e:  # noqa: BLE001
+            log.warning("확인창 처리 실패: %s", e)
+
+    page.on("dialog", on_dialog)
     ed.find("publish_confirm").first.click()
     # 여기부터는 이미 발행됐을 수 있으므로, 실패해도 절대 재시도하지 않는다(중복 발행 방지).
-    deadline = time.time() + 60
+    deadline = time.time() + PUBLISH_WAIT_SEC
+    popups_seen: list[str] = []
     while time.time() < deadline:
         for url in [page.url] + [f.url for f in page.frames]:
             m = POST_URL.search(url)
             if m:
                 return f"https://blog.naver.com/{cfg.blog_id}/{m.group(1) or m.group(2)}"
+        text = _editor_popup(ed)       # 편집기 안에 뜨는 알림·확인 창(자바스크립트 창이 아닌 것)
+        if text and text not in popups_seen:
+            popups_seen.append(text)
+            log.warning("발행 중 네이버 알림: %s", text)
+            ed.try_click("popup_confirm", timeout=1_000)
         time.sleep(1)
     _shot(page, cfg, "after-publish")
+    notes = dialogs + popups_seen
+    try:
+        still_editing = bool(ed.find("title", timeout=2_000).count())
+    except PublishError:
+        still_editing = False
+    if notes and still_editing:
+        # 편집 화면이 그대로 남아 있고 네이버가 무언가를 알렸다 → 발행되지 않은 것(임시저장에 남는다)
+        raise PublishError("네이버가 발행을 멈췄습니다: " + " / ".join(notes)[:400])
     # 화면 주소로 못 찾으면 블로그 RSS에서 방금 올린 글을 제목으로 찾는다.
     for _ in range(6):
         url = find_post_url_by_title(page, cfg.blog_id, post["title"])
@@ -475,6 +504,22 @@ def _publish(page: Page, cfg: Config, post: dict, images: dict[str, Path], dry_r
             return url
         time.sleep(10)
     raise PublishUncertain("발행 버튼은 눌렀지만 글 주소를 확인하지 못했습니다. 블로그에서 직접 확인하세요.")
+
+
+def _editor_popup(ed) -> str:
+    """편집기 위에 떠 있는 알림·확인 창의 글자(없으면 빈 문자열)."""
+    for scope in ed.scopes:
+        try:
+            loc = scope.locator(".se-popup-alert, .se-popup-container, [role='alertdialog']")
+            for i in range(min(loc.count(), 3)):
+                el = loc.nth(i)
+                if el.is_visible():
+                    t = " ".join(el.inner_text(timeout=1_000).split())
+                    if t:
+                        return t[:300]
+        except Exception:  # noqa: BLE001
+            continue
+    return ""
 
 
 def _norm_title(text: str) -> str:
