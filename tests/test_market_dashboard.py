@@ -632,3 +632,39 @@ def test_for_post_waits_retries_and_falls_back_to_site_files(tmp_path, monkeypat
     out2 = tmp_path / "out2" / "market_brief.json"
     with pytest.raises(RuntimeError, match="미국 섹터"):
         brief.for_post("2026-11-02", out2, sleep=lambda s: None)
+
+
+def _fake_ohlc(days=520, seed=11):
+    rng = np.random.default_rng(seed)
+    idx = pd.bdate_range("2024-10-01", periods=days)
+    out = {}
+    for k, base in (("KS11", 2500), ("GSPC", 5000), ("IXIC", 16000)):
+        c = base * np.exp(np.cumsum(rng.normal(0.0003, 0.01, days)))
+        o = c * (1 + rng.normal(0, 0.003, days))
+        out[k] = pd.DataFrame({"Open": o, "High": np.maximum(o, c) * 1.004, "Low": np.minimum(o, c) * 0.996, "Close": c},
+                              index=idx)
+    return out
+
+
+def test_market_chart_builds_with_risk_band_marks_and_posts():
+    from market_dashboard import chart
+    ohlc = _fake_ohlc()
+    last = ohlc["GSPC"].index[-1].strftime("%Y-%m-%d")
+    prev = ohlc["GSPC"].index[-2].strftime("%Y-%m-%d")
+    archive = [{"date": prev, "kr": {"above_sma": 0.22, "counts": {"소외": 96}}, "us": {"leaders": ["에너지"]},
+                "risk": {"on": 1, "of": 3}, "changes": {"kr_above_sma_pp": -2.0}, "headline": ["h"]},
+               {"date": last, "kr": {"above_sma": 0.25}, "headline": []}]
+    posts = {prev: {"title": "시황", "url": "https://blog.naver.com/x/1"}}
+    risk = chart.risk_history(ohlc["GSPC"]["Close"], None, days=30)
+    d = chart.build(ohlc, archive, posts, risk)
+    assert set(d["series"]) == {"KS11", "GSPC", "IXIC"} and len(d["series"]["KS11"]["d"]) == 520
+    o, h, lo, c = d["series"]["GSPC"]["d"][-1][1:]
+    assert lo <= min(o, c) and h >= max(o, c)
+    assert len(d["risk"]) == 30 and all(0 <= r["on"] <= r["of"] for r in d["risk"].values())
+    assert d["marks"][prev]["post"].endswith("/1") and d["marks"][prev]["kr_above_pp"] == -2.0
+    assert "post" not in d["marks"][last]
+    # 그날까지의 값만: 마지막 날의 띠는 오늘 시황 요약의 위험 신호 계산과 같다
+    from market_dashboard import brief
+    assert risk[last]["on"] == brief.risk_block(brief.risk_states(ohlc["GSPC"]["Close"], None))["on"]
+    page = html.render(_three_screens()[0])
+    assert 'id="mktCard"' in page and "chart.json" in page

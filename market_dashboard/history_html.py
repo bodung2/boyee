@@ -26,7 +26,7 @@ def render(rows: list[dict], blog_url: str = "") -> str:
         post = r.get("post")
         link = (f'<a href="{html.escape(post["url"])}" target="_blank" rel="noopener">{html.escape(post["title"])}</a>'
                 if post else '<span class="muted">글 없음</span>')
-        body.append(f'<tr><td class="d">{html.escape(r["date"])}</td>'
+        body.append(f'<tr id="d-{html.escape(r["date"])}"><td class="d">{html.escape(r["date"])}</td>'
                     f'<td>{"<br>".join(html.escape(t) for t in r["headline"]) or "–"}</td>'
                     f'<td>{html.escape(_changes(r.get("changes") or {}))}</td><td>{link}</td></tr>')
     table = ("<table><thead><tr><th>날짜</th><th>그날의 요약</th><th>전날 대비 바뀐 것</th><th>시황 글</th></tr></thead><tbody>"
@@ -60,6 +60,7 @@ h1{font-size:22px;margin:0 0 4px}
 table{border-collapse:collapse;width:100%;font-size:13px}
 th,td{padding:8px;border-bottom:1px solid var(--grid);text-align:left;vertical-align:top}
 th{color:var(--muted);font-weight:500;white-space:nowrap}
+tr:target{background:#1c1a08}
 td.d{white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--yellow);font-weight:700}
 @media (max-width:640px){ thead{display:none} tr{display:block;border-bottom:1px solid var(--grid);padding:8px 0} td{display:block;border:0;padding:3px 0} }
 </style>

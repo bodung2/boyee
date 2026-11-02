@@ -8,6 +8,7 @@
   python -m market_dashboard sectors --out site   미국 주식 섹터 지도 → site/sectors.html (--country US KR 로 한국 섹터도)
   python -m market_dashboard krstocks --out site  한국 시가총액 상위 200종목 지도(추세 × 거래대금) → site/kr.html
   python -m market_dashboard brief --out site     세 화면의 오늘 요약 → site/brief.json + 시황 기록(site/history.html)
+  python -m market_dashboard chart --out site     시장 차트(지수 일봉·위험 신호 띠·시황 점) → site/chart.json
   python -m market_dashboard krfactors        한국 주식 종목 선정 방식(가치·수익성·저변동·모멘텀·수급 등) 비교
   python -m market_dashboard krcombo          기준 섞기 비교 + 고배당이 왜 잘됐나 분해
   python -m market_dashboard indicators       시황에서 추적할 지표 고르기(지표 상태별 그다음 시장 백테스트)
@@ -78,6 +79,8 @@ def main(argv: list[str] | None = None) -> int:
     se.add_argument("--check-names", action="store_true", help="티커가 맞는 종목인지 Yahoo 이름과 나란히 출력")
     se.add_argument("--country", nargs="+", default=["US"], choices=["US", "KR"], help="지도에 넣을 나라(기본 미국만)")
     se.add_argument("--public", action="store_true", help="공개용: 규칙상 편입·비중·전략 백테스트를 빼고 저장")
+    ch = sub.add_parser("chart")
+    ch.add_argument("--out", help="chart.json을 저장할 폴더(기본: output/market/)")
     br = sub.add_parser("brief")
     br.add_argument("--out", help="brief.json·history.html을 저장할 폴더(기본: output/market/)")
     br.add_argument("--src", help="dashboard·sectors·kr.json이 있는 폴더(기본: --out)")
@@ -188,6 +191,27 @@ def main(argv: list[str] | None = None) -> int:
         (out / "sectors.json").write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
         (out / "sectors.html").write_text(sector_html.render(d), encoding="utf-8")
         print(f"섹터 지도: {out / 'sectors.html'}")
+        return 0
+
+    if args.cmd == "chart":
+        from . import brief, chart
+
+        out = Path(args.out) if args.out else OUT
+        out.mkdir(parents=True, exist_ok=True)
+        ohlc = chart.fetch_ohlc(CACHE)
+        try:
+            credit = brief._fred("BAA10Y")
+        except Exception as e:  # noqa: BLE001
+            log.warning("신용 스프레드 받기 실패(띠는 지수 두 신호로만): %s", e)
+            credit = None
+        arch = CACHE / "briefs"
+        posts_path = arch / "posts.json"
+        posts = json.loads(posts_path.read_text(encoding="utf-8")) if posts_path.exists() else {}
+        d = chart.build(ohlc, brief.load_archive(arch), posts, chart.risk_history(ohlc["GSPC"]["Close"], credit))
+        (out / "chart.json").write_text(json.dumps(d, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        on_days = sum(1 for r in d["risk"].values() if r["on"])
+        print(f"[시장 차트] {d['asof']} · 지수 {len(d['series'])}개 · 위험 신호 띠 {len(d['risk'])}일(켜진 날 {on_days}일)"
+              f" · 시황 기록 점 {len(d['marks'])}개")
         return 0
 
     if args.cmd == "brief":

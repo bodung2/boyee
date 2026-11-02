@@ -3,12 +3,12 @@ from __future__ import annotations
 
 import json
 
-from . import nav, public
+from . import chart, nav, public
 
 
 def render(data: dict) -> str:
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    page = TEMPLATE.replace("__NAV__", nav.bar("index.html"))
+    page = TEMPLATE.replace("__NAV__", nav.bar("index.html")).replace("__MARKET_CHART__", chart.SECTION)
     if data.get("public"):
         for a, b in PUBLIC_TEXT.items():
             page = page.replace(a, b)
@@ -124,6 +124,7 @@ svg{fill:var(--ink2)} svg text{font-size:12px}
   <h1>자산군 모멘텀 대시보드</h1>
   <div class="sub" id="asof"></div>
   <div class="chips" id="chips"></div>
+  __MARKET_CHART__
 
   <section class="card">
     <h2>추세 강도 × 가속도</h2>
