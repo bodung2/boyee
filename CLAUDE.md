@@ -14,3 +14,5 @@
 - 비밀 정보(`secrets/`, `.env`, `persona/`, 페르소나 답변 파일)는 절대 커밋하지 않는다.
 - 새 예약 작업용 `.bat`을 만들면 기존 `scripts/run_*.bat`처럼 전체를 `( ... exit /b )` 한 블록으로 감싸고
   본 작업 전에 `scripts\self_update.py`를 부른다.
+- 새 예약 작업은 `scripts/setup_all_schedules.ps1`의 `$Schedule` 표에 넣는다(퀘스트 보드가 이 표로 목록을 만든다).
+  글·게시물을 발행하는 작업이면 `quest_board/checks.py`의 `KINDS`에 발행 기록 확인 함수도 추가한다.

@@ -72,6 +72,8 @@ notepad .env        # NAVER_BLOG_ID, NAVER_CATEGORY_CHILDHOOD 입력
 ## 매일 운영
 
 - 할 일이 없습니다. PC가 켜져 있거나 절전 상태면 됩니다. 절전 상태면 깨워서 실행하고, 꺼져 있었다면 켜지는 즉시 밀린 실행을 합니다.
+- **한눈에 보기: `scripts\quest_board.bat` 더블클릭** → 퀘스트 보드가 브라우저로 열립니다([아래](#퀘스트-보드-매일-예약-작업-한-화면에)).
+  매일 23:40에는 오늘 결과 요약이 텔레그램으로 옵니다.
 - 결과 확인 위치:
   - `logs/childhood-날짜.log`: 진행 기록
   - `output/childhood/날짜/`: post.json, factcheck.json, gpt_factcheck_*.json, 이미지
@@ -410,9 +412,38 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_all_schedules.ps1 -Skip P
 | 19:00 | 네이버 이웃 후보 추천 |
 | 20:00 / 21:00 | 교육 / 유아 인스타·쓰레드 |
 | 22:30 | 성장 실험실 수집(일요일엔 주간 리뷰) |
+| 23:40 | 퀘스트 보드 요약 → 텔레그램(QuestBoard) |
 
 시각을 바꾸려면 `scripts/setup_all_schedules.ps1`의 `$Schedule` 표만 고친 뒤 다시 실행합니다.
 예전 이름(`NaverEduAutoPost`)으로 남은 작업은 자동으로 지우고, 이 폴더의 실행 파일을 돌리는데 표에 없는 작업(손으로 만든 작업 등)은 목록으로 보여 줍니다. 그것도 지우려면 `-RemoveOld`를 붙입니다.
+
+## 퀘스트 보드 (매일 예약 작업 한 화면에)
+
+매일 도는 작업(블로그 발행·인스타/쓰레드·이웃 추천·대시보드·성장 실험실 등)이 **오늘 어떻게 됐는지**와 **최근 14일 발행 기록**을
+한 페이지(`output/quest_board.html`)로 보여 줍니다. 글 제목을 누르면 발행된 글이 열립니다.
+
+```powershell
+scripts\quest_board.bat                              # 최신 기록으로 다시 만들고 브라우저로 열기(더블클릭 가능)
+.venv\Scripts\python.exe -m quest_board --text        # 요약만 화면에
+.venv\Scripts\python.exe -m quest_board --notify      # 요약을 텔레그램으로(예약 작업 QuestBoard가 매일 23:40에 실행)
+powershell -ExecutionPolicy Bypass -File scripts\setup_all_schedules.ps1 -Only QuestBoard -NoInstall   # 23:40 예약 등록(최초 1회)
+```
+
+| 상태 | 뜻 |
+|---|---|
+| ✅ 완료 | 발행 기록이 있음(네이버·티스토리·블로거: `data/published_*.json`, SNS: `social_state.json`, 이웃: `data/neighbors_*.json`, 대시보드·선물 봇: 결과 파일이 오늘 갱신됨) |
+| 🔄 진행 중 | 잠금 파일이 살아 있거나 로그가 방금 바뀜(Claude 한도로 기다리는 중 포함) |
+| ⏳ 예정 / 🔁 재시도 예정 | 아직 예약 시각 전 / 실패했지만 재시도 시각이 남음 |
+| ❌ 실패 | 로그의 마지막 오류 원인(예: '네이버 로그인이 풀려 있습니다') 또는 작업 스케줄러 종료 코드 |
+| ⚠️ 실행 안 됨 | 예약 시각이 지났는데 실행 흔적이 없음(PC가 꺼져 있었거나 예약 미등록) |
+| ❔ 확인 필요 | 실행은 했는데 발행 기록이 없음 → 블로그에서 확인, 발행됐다면 `naver_autopost record 주소` |
+| 💤 쉬는 날 | 그 요일엔 예약 없음(예: 시황·대시보드는 화~토) |
+
+- **새 퀘스트는 자동으로 보드에 나타납니다.** 목록을 `scripts/setup_all_schedules.ps1`의 `$Schedule` 표와 작업 스케줄러(이 폴더의
+  `scripts\*.bat`을 실행하는 작업, 손으로 만든 것 포함)에서 읽기 때문입니다. 표에는 있는데 작업 스케줄러에 없는 예약은 경고로 보여 줍니다.
+- 새 작업이 글·게시물을 발행한다면 `quest_board/checks.py`의 `KINDS`에 bat 이름으로 '발행 기록 확인 함수'를 하나 추가하면
+  제목·링크·14일 기록까지 나옵니다. 추가하지 않아도 작업 스케줄러의 실행 결과(성공·실패·실행 안 됨)는 보입니다.
+- 보드는 기록을 읽기만 하고 아무것도 고치거나 다시 실행하지 않습니다.
 
 ## 코드 자동 업데이트(브랜치 고정)
 
