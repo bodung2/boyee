@@ -224,3 +224,50 @@ def test_thumbnail_align_failure_leaves_debug(tmp_path):
         assert "se-section-image" in ed.image_debug["component"]
         assert any(b[0] == "x" for b in ed.image_debug["visible_buttons"])
         browser.close()
+
+
+def _plain_images(tmp_path):
+    from PIL import Image
+    out = {}
+    for k in ("thumbnail", "card"):
+        Image.new("RGB", (40, 40), "navy").save(tmp_path / f"{k}.png")
+        out[k] = tmp_path / f"{k}.png"
+    return out
+
+
+@pytest.mark.parametrize("script, ok", [
+    # 네이버가 '발행할까요?' 확인창을 띄우는 경우 → 확인을 눌러 발행이 이어져야 한다(예전엔 자동으로 '취소'됨)
+    ("if(confirm('외부 링크가 포함되어 있어요. 발행할까요?')) location.href='/testblog/223456789'", True),
+    # 알림만 띄우고 발행하지 않는 경우 → 문구를 담아 '발행되지 않음'으로 실패해야 한다
+    ("alert('발행할 수 없는 내용이 있어요')", False),
+])
+def test_publish_handles_naver_dialogs(tmp_path, monkeypatch, script, ok):
+    cfg = Config.load()
+    cfg.blog_id = "testblog"
+    cfg.category = ""
+    cfg.headless = True
+    cfg.browser_channel = ""
+    cfg.log_dir = tmp_path / "logs"
+    cfg.style_mode = "plain"
+    monkeypatch.setattr(publisher, "PUBLISH_WAIT_SEC", 4)
+    post = make_post()
+    page_html = MOCK.replace("onclick=\"location.href='/testblog/223456789'\"", f'onclick="{script}"')
+    with sync_playwright() as p:
+        try:
+            browser = p.chromium.launch()
+        except Exception as e:
+            pytest.skip(f"Chromium 없음: {e}")
+        ctx = browser.new_context(permissions=["clipboard-read", "clipboard-write"])
+        ctx.route("https://blog.naver.com/testblog?Redirect=Write&",
+                  lambda r: r.fulfill(body=page_html, content_type="text/html; charset=utf-8"))
+        ctx.route("https://blog.naver.com/testblog/223456789",
+                  lambda r: r.fulfill(body="<p>ok</p>", content_type="text/html"))
+        page = ctx.new_page()
+        if ok:
+            url = publisher._publish(page, cfg, post, _plain_images(tmp_path), dry_run=False)
+            assert url == "https://blog.naver.com/testblog/223456789"
+        else:
+            with pytest.raises(publisher.PublishError) as e:
+                publisher._publish(page, cfg, post, _plain_images(tmp_path), dry_run=False)
+            assert "발행할 수 없는 내용" in str(e.value) and not isinstance(e.value, publisher.PublishUncertain)
+        browser.close()
