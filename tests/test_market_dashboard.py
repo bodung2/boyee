@@ -352,6 +352,8 @@ def test_brief_summarises_three_screens_and_compares_with_yesterday():
     y = brief.build(dash, sec, kr, mk, now=datetime(2026, 11, 2, 9, tzinfo=brief.KST))
     assert y["kr"]["n"] == 59 and len(y["kr"]["div30"]) == 30 and y["us"]["rank"] and y["assets"] is not None
     assert y["changes"] == {}
+    # 배분(편입·비중)은 요약에 넣지 않는다
+    assert "weight" not in json.dumps(y) and "picks" not in json.dumps(y)
     prev = json.loads(json.dumps(y))
     prev["kr"]["above_sma"] = y["kr"]["above_sma"] - 0.05
     prev["kr"]["div30"] = prev["kr"]["div30"][1:] + [{"code": "999990", "name": "빠진종목", "div": 9.0}]

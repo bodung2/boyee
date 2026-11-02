@@ -13,10 +13,6 @@ def _changes(c: dict) -> str:
         bits.append(f"200일선 위 {c['kr_above_sma_pp']:+.0f}%p")
     if c.get("us_moves"):
         bits.append("미국 섹터 " + ", ".join(c["us_moves"][:3]))
-    if c.get("asset_in"):
-        bits.append("자산군 편입 " + ", ".join(c["asset_in"]))
-    if c.get("asset_out"):
-        bits.append("자산군 제외 " + ", ".join(c["asset_out"]))
     if c.get("div30_in"):
         bits.append("고배당 30 신규 " + ", ".join(c["div30_in"][:3]))
     return " · ".join(bits) or "–"

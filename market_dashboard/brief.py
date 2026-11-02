@@ -73,16 +73,14 @@ def fetch_markets() -> list[dict]:
 
 # ---------------- 요약 만들기 ----------------
 def _assets(dash: dict | None) -> dict | None:
+    """자산군은 '어디 추세가 강한가'만 적는다. 규칙상 편입·비중은 매수 권유로 읽힐 수 있어 요약에 넣지 않는다."""
     if not dash or not dash.get("assets"):
         return None
     a = dash["assets"]
-    picks = [{"name": r["name"], "weight": r["weight"]} for r in a if (r.get("weight") or 0) > 0]
     strong = [{"name": r["name"], "x": r["x"], "quadrant": r["quadrant"]} for r in a if r.get("x") is not None][:3]
     turning = [r["name"] for r in a if r.get("quadrant") == "회복" and (r.get("x") or -9) > -0.3]
-    return {"asof": dash.get("asof"), "picks": picks, "cash": _num(1 - sum(p["weight"] for p in picks), 4),
-            "strongest": strong, "turning": turning,
-            "liquidity": _num((dash.get("liquidity") or {}).get("temp"), 2),
-            "next_rebalance": dash.get("next_rebalance")}
+    return {"asof": dash.get("asof"), "strongest": strong, "turning": turning,
+            "liquidity": _num((dash.get("liquidity") or {}).get("temp"), 2)}
 
 
 def _us(sec: dict | None) -> dict | None:
@@ -95,8 +93,7 @@ def _us(sec: dict | None) -> dict | None:
     return {"asof": c.get("asof"), "rank": rank,
             "leaders": [r["name"] for r in rank if r["quadrant"] == "주도"][:3],
             "weakening": [r["name"] for r in rank if r["quadrant"] == "둔화"][:3],
-            "laggards": [r["name"] for r in rank[-2:]],
-            "picks": [s["name"] for s in c["sectors"] if (s.get("weight") or 0) > 0]}
+            "laggards": [r["name"] for r in rank[-2:]]}
 
 
 def _kr(kr: dict | None) -> dict | None:
@@ -141,10 +138,6 @@ def _changes(cur: dict, prev: dict | None) -> dict:
         was = {r["name"]: r["quadrant"] for r in pu.get("rank", [])}
         out["us_moves"] = [f"{r['name']} {was[r['name']]}→{r['quadrant']}" for r in u["rank"]
                            if r["name"] in was and was[r["name"]] != r["quadrant"]]
-    a, pa = cur.get("assets"), prev.get("assets")
-    if a and pa:
-        now, before = {p["name"] for p in a["picks"]}, {p["name"] for p in pa["picks"]}
-        out["asset_in"], out["asset_out"] = sorted(now - before), sorted(before - now)
     return out
 
 
@@ -160,9 +153,8 @@ def headline(b: dict) -> list[str]:
     if u and u["leaders"]:
         out.append("미국 주도 섹터: " + "·".join(u["leaders"]))
     a = b.get("assets")
-    if a:
-        out.append("자산군 규칙 편입: " + (", ".join(f"{p['name']} {p['weight'] * 100:.0f}%" for p in a["picks"])
-                                      or "전부 현금"))
+    if a and a["strongest"]:
+        out.append("추세 강한 자산: " + "·".join(r["name"] for r in a["strongest"]))
     for m in b.get("markets") or []:
         if m["ticker"] in ("^KS11", "^GSPC") and m.get("d1") is not None:
             out.append(f"{m['name']} {m['d1'] * 100:+.1f}%")
