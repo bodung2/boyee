@@ -57,10 +57,10 @@ def test_real_schedule_table_parses():
 
 
 def test_scheduler_entries_find_bat_even_when_run_hidden():
-    plain = schedule._with_bat({"Execute": r"C:\Users\박보영\boyee\scripts\run_daily.bat", "Arguments": "--profile edu"})
+    plain = schedule._with_bat({"Execute": r"C:\Users\홍길동\boyee\scripts\run_daily.bat", "Arguments": "--profile edu"})
     assert (plain["Bat"], plain["Arg"]) == ("run_daily.bat", "--profile edu")
     hidden = schedule._with_bat({"Execute": "wscript.exe", "Arguments":
-                                 r'"C:\Users\박 보영\boyee\scripts\run_hidden.vbs" "C:\Users\박 보영\boyee\scripts\run_tistory_daily.bat" --slot 2'})
+                                 r'"C:\Users\홍 길동\boyee\scripts\run_hidden.vbs" "C:\Users\홍 길동\boyee\scripts\run_tistory_daily.bat" --slot 2'})
     assert (hidden["Bat"], hidden["Arg"]) == ("run_tistory_daily.bat", "--slot 2")
     quests, _, _ = schedule.load(live={"QuestBoardRefresh": schedule._with_bat({
         "Name": "QuestBoardRefresh", "Execute": "wscript.exe",

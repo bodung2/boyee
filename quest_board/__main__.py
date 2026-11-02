@@ -21,6 +21,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("cmd", nargs="?", choices=["build", "serve"], default="build",
                     help="build: 보기 전용 파일 만들기(기본) / serve: 버튼이 있는 보드를 이 PC 안에서 열기")
     ap.add_argument("--port", type=int, default=8765, help="serve 포트(기본 8765)")
+    ap.add_argument("--upload", action="store_true",
+                    help="보기 전용 화면을 구글 드라이브에 올린다(휴대폰 웹앱용, docs/QUEST_BOARD_WEBAPP.md)")
     args = ap.parse_args(argv)
     if args.cmd == "serve":
         from .server import serve
@@ -36,6 +38,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.text or not (args.open or args.notify):
         print(text)
     print(f"퀘스트 보드: {out}")
+    if args.upload:
+        from .drive import upload
+        try:
+            upload(html.render(b, remote=True), paths.data / "quest_board_drive.json")
+            print("휴대폰 웹앱용 화면을 구글 드라이브에 올렸습니다(quest_board.html)")
+        except Exception as e:  # noqa: BLE001 - 올리지 못해도 PC 화면·요약은 그대로
+            print(f"⚠️ 구글 드라이브에 올리지 못했습니다: {e}")
+            text += f"\n⚠️ 휴대폰 웹앱 화면을 올리지 못했습니다: {str(e)[:150]}"
     if args.notify:
         from naver_autopost.notify import send_text
         send_text(os.environ.get("TELEGRAM_BOT_TOKEN", ""), os.environ.get("TELEGRAM_CHAT_ID", ""), text)

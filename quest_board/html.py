@@ -67,6 +67,14 @@ REFRESH_SEC = 300              # 열어 둔 탭이 5분마다 파일을 다시 �
 STAMP_FILE = (f"매시간 자동 갱신, 이 탭은 {REFRESH_SEC // 60}분마다 새로고침 · "
               "예약을 바꾸려면 <code>scripts\\quest_board.bat</code>으로 여세요")
 STAMP_LIVE = "버튼으로 예약 조정 가능 · 1분마다 새로고침"
+STAMP_REMOTE = "집 PC가 매시간 올리는 보기 전용 화면 · 최신으로 보려면 새로고침"
+FOOT_REMOTE = "<br>보기 전용 화면입니다. 이 화면은 블로그 주인 구글 계정으로 로그인해야 열립니다."
+STALE_HOURS = 2.5
+# 휴대폰 웹앱: 마지막으로 올린 시각이 오래됐으면(PC가 꺼짐·절전) 위에 알린다
+SCRIPT_REMOTE = """<script>(function(){var t=Date.parse(document.body.dataset.generated);if(!t)return;
+var h=(Date.now()-t)/36e5;if(h<__STALE__)return;var n=document.createElement("div");n.className="note";
+n.textContent="집 PC가 "+Math.floor(h)+"시간째 새 화면을 올리지 않았습니다(PC가 꺼져 있거나 절전 중일 수 있어요). 아래는 마지막으로 올린 내용입니다.";
+document.querySelector("main").prepend(n);})();</script>"""
 FOOT_FILE = "<br>보기 전용 화면입니다. 시각 바꾸기·끄기·지금 실행 버튼은 scripts\\quest_board.bat으로 연 창에 나옵니다."
 FOOT_LIVE = ("<br>바꾼 시각·끈 작업은 이 PC의 data/schedule_overrides.json에만 저장됩니다(GitHub에 올라가지 않고, "
              "setup_all_schedules.ps1을 다시 실행해도 유지). 이 창을 띄운 까만 창을 닫으면 버튼이 동작하지 않습니다.")
@@ -199,9 +207,14 @@ def _first_time(r: Row) -> str:
     return min(r.quest.times) if r.quest.times else "99:99"
 
 
-def render(b: Board, token: str = "") -> str:
+def render(b: Board, token: str = "", remote: bool = False) -> str:
     """token이 있으면 버튼이 있는 화면(python -m quest_board serve), 없으면 보기 전용 파일."""
-    interactive = bool(token)
+    interactive = bool(token) and not remote
+    stamp = STAMP_REMOTE if remote else STAMP_LIVE if interactive else STAMP_FILE
+    foot = FOOT_REMOTE if remote else FOOT_LIVE if interactive else FOOT_FILE
+    script = (SCRIPT.replace("__TOKEN__", token) if interactive
+              else SCRIPT_REMOTE.replace("__STALE__", str(STALE_HOURS)) if remote else "")
+    refresh = "" if interactive or remote else f'<meta http-equiv="refresh" content="{REFRESH_SEC}">'
     today = b.days[-1]
     active = [r for r in b.rows if r.today.state not in ("off", "paused")]
     groups = [("done", ("done", "ran", "skip")), ("running", ("running",)), ("waiting", ("waiting", "retry")),
@@ -235,10 +248,10 @@ def render(b: Board, token: str = "") -> str:
 
     return f"""<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-{"" if interactive else f'<meta http-equiv="refresh" content="{REFRESH_SEC}">'}<title>퀘스트 보드</title><style>{CSS}</style></head>
-<body><main>
+{refresh}<title>퀘스트 보드</title><style>{CSS}</style></head>
+<body data-generated="{b.now.isoformat(timespec='seconds')}"><main>
 <div class="top"><h1>오늘의 퀘스트 · {label_day(today)}</h1>
-<span class="stamp">{b.now.strftime('%Y-%m-%d %H:%M')} 기준 · {STAMP_LIVE if interactive else STAMP_FILE}</span></div>
+<span class="stamp">{b.now.strftime('%Y-%m-%d %H:%M')} 기준 · {stamp}</span></div>
 <div class="tally">{"".join(tally)}</div><div class="bar">{"".join(bar)}</div>
 {note_html}
 <h2>오늘 일정</h2><div class="list">{"".join(_card(r, interactive) for r in sorted(b.rows, key=_first_time))}</div>
@@ -246,7 +259,7 @@ def render(b: Board, token: str = "") -> str:
 <div class="grid"><table><thead><tr><th>퀘스트</th>{head}<th>성공</th></tr></thead><tbody>{"".join(body)}</tbody></table></div>
 <div class="legend">{legend}<span>칸을 누르면 그날 글이 열립니다 · 성공 = 오늘을 뺀 기간의 완료/예정 일수</span></div>
 <footer>퀘스트 목록: scripts/setup_all_schedules.ps1의 예약 표 + 작업 스케줄러 · 발행 여부: data/published_*.json·SNS 기록·로그
-{FOOT_LIVE if interactive else FOOT_FILE}</footer>
+{foot}</footer>
 </main><div id="toast" role="status"></div><script>/* 좁은 화면에서는 기록 표를 최근 날짜(오른쪽)부터 보이게 */
 var g=document.querySelector(".grid");if(g)g.scrollLeft=g.scrollWidth;</script>
-{SCRIPT.replace("__TOKEN__", token) if interactive else ""}</body></html>"""
+{script}</body></html>"""
