@@ -417,3 +417,29 @@ def test_kr_unfinished_daily_bar_is_dropped_during_market_hours():
     assert len(kr_stocks.drop_unfinished(df, at(10, 0))) == 2       # 장중: 오늘 값 뺌
     assert len(kr_stocks.drop_unfinished(df, at(16, 0))) == 3       # 마감 뒤: 그대로
     assert len(kr_stocks.drop_unfinished(df.iloc[:2], at(10, 0))) == 2   # 오늘 값이 없으면 그대로
+
+
+def test_indicator_study_finds_planted_risk_signal():
+    """합성 시장: VIX가 높은 달 다음에는 변동성이 크고 크게 빠진다 → '위험 신호'로 골라야 한다."""
+    from market_dashboard import indicators
+    rng = np.random.default_rng(5)
+    idx = pd.bdate_range("1995-01-02", "2024-12-31")
+    regime = np.repeat(rng.random(len(idx) // 21 + 1) < 0.3, 21)[:len(idx)]   # 달마다 위험한 시기 30%
+    vol = np.where(regime, 0.03, 0.008)
+    ret = rng.normal(np.where(regime, -0.002, 0.0006), vol)
+    spx = pd.Series(100 * np.exp(np.cumsum(ret)), index=idx)
+    vix = pd.Series(np.where(np.roll(regime, -21), 35.0, 14.0) + rng.normal(0, 1, len(idx)), index=idx)  # 다음 달 위험을 미리 반영
+    px = pd.DataFrame({"^GSPC": spx, "^VIX": vix, "^KS11": spx * 0.5, "KRW=X": 1200.0}, index=idx)
+    for t in indicators.SECTORS9:
+        px[t] = spx * (1 + rng.normal(0, 0.01, len(idx)))
+    fidx = pd.date_range("1995-01-01", "2024-12-01", freq="MS")
+    fred = pd.DataFrame({"T10Y3M": 1.0, "BAMLH0A0HYM2": rng.uniform(3, 8, len(fidx)), "UNRATE": 5.0}, index=fidx)
+    res = indicators.run(px, fred)
+    vix_row = next(r for r in res if r["spec"].key == "vix")
+    assert indicators.verdict(vix_row)[0].startswith("추적 추천")
+    assert vix_row["all"]["vol"][0] > vix_row["all"]["vol"][1]
+    text = indicators.report(res)
+    assert "VIX" in text and "== 추적 추천 ==" in text
+    # 미래 정보 없음: 백분위는 그때까지 값만으로
+    r = indicators.expanding_rank(pd.Series(np.arange(40, dtype=float)))
+    assert np.isnan(r.iloc[34]) and r.iloc[39] == 1.0

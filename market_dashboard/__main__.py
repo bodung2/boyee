@@ -10,6 +10,7 @@
   python -m market_dashboard brief --out site     세 화면의 오늘 요약 → site/brief.json + 시황 기록(site/history.html)
   python -m market_dashboard krfactors        한국 주식 종목 선정 방식(가치·수익성·저변동·모멘텀·수급 등) 비교
   python -m market_dashboard krcombo          기준 섞기 비교 + 고배당이 왜 잘됐나 분해
+  python -m market_dashboard indicators       시황에서 추적할 지표 고르기(지표 상태별 그다음 시장 백테스트)
 """
 from __future__ import annotations
 
@@ -69,6 +70,7 @@ def main(argv: list[str] | None = None) -> int:
     an.add_argument("--offline", action="store_true")
     sub.add_parser("krfactors")
     sub.add_parser("krcombo")
+    sub.add_parser("indicators")
     se = sub.add_parser("sectors")
     se.add_argument("--offline", action="store_true")
     se.add_argument("--out", help="이 폴더에 sectors.html로 저장(기본: output/market/)")
@@ -85,6 +87,19 @@ def main(argv: list[str] | None = None) -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     _load_dotenv(ROOT / ".env")
+
+    if args.cmd == "indicators":
+        from . import indicators, kr_factors
+
+        px, fred = indicators.fetch(CACHE)
+        snap = None
+        if os.environ.get("KRX_ID") and os.environ.get("KRX_PW"):
+            snaps = kr_factors.load(CACHE / "krx")
+            print(f"한국거래소 월말 스냅숏 {len(snaps)}개")
+            if len(snaps) >= 24:
+                snap = indicators.snapshot_signals(snaps)
+        print(indicators.report(indicators.run(px, fred, snap)))
+        return 0
 
     if args.cmd == "krcombo":
         from . import kr_combo, kr_factors

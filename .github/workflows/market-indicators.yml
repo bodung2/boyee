@@ -1,0 +1,38 @@
+# 시황에서 매일 추적할 지표 고르기: 지표 상태별로 그다음 시장이 어땠는지 실제 데이터로 백테스트해 실행 기록(로그)에 남긴다.
+name: market-indicators
+
+on:
+  pull_request:
+    paths:
+      - "market_dashboard/indicators.py"
+      - ".github/workflows/market-indicators.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  indicators:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # 한국거래소 월말 스냅숏(kr-factors와 같은 보관본). 없으면 새로 받는다(30분 안팎).
+      - name: 한국거래소 월말 스냅숏 보관본 불러오기
+        uses: actions/cache@v4
+        with:
+          path: data/market/krx
+          key: krx-snapshots-${{ github.run_id }}
+          restore-keys: krx-snapshots-
+      - name: 패키지 설치
+        run: pip install "pandas>=2.0" "numpy>=1.24" "yfinance>=0.2.40" pykrx pytest
+      - name: 테스트
+        run: python -m pytest -q tests/test_market_dashboard.py -k "indicator or brief"
+      - name: 지표 백테스트(실제 데이터)
+        env:
+          KRX_ID: ${{ secrets.KRX_ID }}
+          KRX_PW: ${{ secrets.KRX_PW }}
+        run: python -m market_dashboard indicators
