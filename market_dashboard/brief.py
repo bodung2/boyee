@@ -295,6 +295,27 @@ def match_posts(items: list[dict], known: dict[str, dict] | None = None) -> dict
     return known
 
 
+def _pub(it: dict):
+    try:
+        return datetime.strptime((it.get("pub_date") or "")[:16].strip(), "%a, %d %b %Y")
+    except ValueError:
+        return None
+
+
+def drop_deleted(items: list[dict], known: dict[str, dict]) -> dict[str, dict]:
+    """블로그에서 지운 시황 글은 빼낸다. RSS는 최근 글만 주므로, RSS가 덮는 기간(가장 오래된 글 날짜 이후)에
+    있어야 할 글이 목록에 없을 때만 지워진 것으로 본다(그보다 오래된 글은 그대로 둔다)."""
+    dates = [d for d in (_pub(it) for it in items) if d]
+    if not dates:
+        return known
+    since = min(dates).strftime("%Y-%m-%d")
+    urls = {it.get("url") for it in items}
+    gone = [d for d, p in known.items() if d >= since and p.get("url") not in urls]
+    for d in gone:
+        log.info("블로그에서 지운 시황 글을 기록에서 뺍니다: %s %s", d, known[d].get("title"))
+    return {d: p for d, p in known.items() if d not in gone}
+
+
 def sync_posts(arch: Path, blog_id: str) -> dict[str, dict]:
     """블로그 RSS에서 시황 글 링크를 찾아 posts.json에 쌓는다(RSS는 최근 글만 주므로 누적 보관)."""
     path = arch / "posts.json"
@@ -310,7 +331,8 @@ def sync_posts(arch: Path, blog_id: str) -> dict[str, dict]:
                                      headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=20) as resp:
             xml = resp.read().decode("utf-8", "replace")
-        known = match_posts(parse_rss(xml, blog_id), known)
+        items = parse_rss(xml, blog_id)
+        known = match_posts(items, drop_deleted(items, known))
         arch.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(known, ensure_ascii=False, indent=1), encoding="utf-8")
     except Exception as e:  # noqa: BLE001 - 링크가 없어도 기록 화면은 만든다

@@ -668,3 +668,14 @@ def test_market_chart_builds_with_risk_band_marks_and_posts():
     assert risk[last]["on"] == brief.risk_block(brief.risk_states(ohlc["GSPC"]["Close"], None))["on"]
     page = html.render(_three_screens()[0])
     assert 'id="mktCard"' in page and "chart.json" in page
+
+
+def test_deleted_sihwang_post_is_dropped_but_old_ones_kept():
+    from market_dashboard import brief
+    known = {"2026-10-01": {"title": "10월 1일 시황", "url": "https://blog.naver.com/b/1"},   # RSS 기간 밖 → 유지
+             "2026-11-03": {"title": "11월 3일 시황 | 시험", "url": "https://blog.naver.com/b/9"}}  # 지운 글
+    items = [{"title": "11월 4일 시황 | 오늘", "url": "https://blog.naver.com/b/10", "pub_date": "Wed, 04 Nov 2026 13:40:00 +0900"},
+             {"title": "연봉 4천, 상위 몇 %일까?", "url": "https://blog.naver.com/b/8", "pub_date": "Mon, 02 Nov 2026 07:00:00 +0900"}]
+    got = brief.match_posts(items, brief.drop_deleted(items, known))
+    assert set(got) == {"2026-10-01", "2026-11-04"}
+    assert brief.drop_deleted([], known) == known          # RSS를 못 받으면 아무것도 지우지 않는다
