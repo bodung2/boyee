@@ -130,8 +130,8 @@ def signals(px: pd.DataFrame, fred: pd.DataFrame, snap: pd.DataFrame | None = No
     sec = m[[c for c in SECTORS9 if c in m]]
     sec_ok = sec.notna().sum(axis=1) >= 9
     out = pd.DataFrame({
-        "us_trend": (spx > spx.rolling(10).mean()).where(spx.rolling(10).mean().notna()),
-        "us_mom12": (spx / spx.shift(12) > 1).where(spx.shift(12).notna()),
+        "us_trend": (spx > spx.rolling(10).mean()).where(spx.notna() & spx.rolling(10).mean().notna()),
+        "us_mom12": (spx / spx.shift(12) > 1).where(spx.notna() & spx.shift(12).notna()),
         "us_dd52": -(month_end(d_spx) / hi52 - 1),
         "vix": m["^VIX"],
         "curve": (f["T10Y3M"] < 0).where(f["T10Y3M"].notna()),
@@ -140,8 +140,8 @@ def signals(px: pd.DataFrame, fred: pd.DataFrame, snap: pd.DataFrame | None = No
         "unrate": (unrate > unrate.rolling(12).mean()).where(unrate.rolling(12).mean().notna()).shift(1),
         "us_breadth": (sec > sec.rolling(10, min_periods=10).mean()).where(sec.rolling(10, min_periods=10).mean().notna())
         .mean(axis=1).where(sec_ok & sec.rolling(10, min_periods=10).mean().notna().all(axis=1)),
-        "kr_trend": (ks > ks.rolling(10).mean()).where(ks.rolling(10).mean().notna()),
-        "kr_mom12": (ks / ks.shift(12) > 1).where(ks.shift(12).notna()),
+        "kr_trend": (ks > ks.rolling(10).mean()).where(ks.notna() & ks.rolling(10).mean().notna()),
+        "kr_mom12": (ks / ks.shift(12) > 1).where(ks.notna() & ks.shift(12).notna()),
         "krw3": m["KRW=X"] / m["KRW=X"].shift(3) - 1,
     })
     out["us_to_kr"] = out["us_trend"]

@@ -218,6 +218,8 @@ def main(argv: list[str] | None = None) -> int:
                 history_html.render(rows, f"https://blog.naver.com/{blog_id}" if blog_id else ""), encoding="utf-8")
         (out / "brief.json").write_text(json.dumps(b, ensure_ascii=False, indent=1), encoding="utf-8")
         print(f"[시황 요약] {b['date']}")
+        for sg in (b.get("risk") or {}).get("signals", []):
+            print(f"  · 위험 신호 {sg['key']}: {sg['state']} ({sg['label']}, 값 {sg['value']})")
         for line in b["headline"]:
             print("  " + line)
         return 0

@@ -582,3 +582,19 @@ def test_kr_public_data_source_builds_map(tmp_path):
     assert all("likeSrtnCd" not in c for c in calls)
     page = kr_html.render(d)
     assert "금융위원회" in page
+
+
+def test_indicator_now_ignores_month_without_us_price():
+    """미국장이 아직 안 열린 새 달(한국 시세만 있는 줄)을 '12개월 수익 마이너스'로 읽으면 안 된다."""
+    from market_dashboard import brief, indicators
+    idx = pd.bdate_range("2023-01-02", "2026-10-30")
+    spx = pd.Series(np.linspace(90, 100, len(idx)), index=idx)
+    px = pd.DataFrame({"^GSPC": spx})
+    for t in ["^VIX", "^KS11", "KRW=X"] + indicators.SECTORS9:
+        px[t] = spx
+    px.loc[pd.Timestamp("2026-11-02")] = np.nan
+    px.loc[pd.Timestamp("2026-11-02"), "^KS11"] = 50.0
+    fred = pd.DataFrame({"T10Y3M": [1.0], "BAA10Y": [2.0], "UNRATE": [5.0]}, index=[pd.Timestamp("2020-01-01")])
+    sig = indicators.signals(px, fred)
+    assert sig["us_mom12"].dropna().iloc[-1] == True          # noqa: E712 - 10월 말 기준 플러스
+    assert brief.risk_states(spx, None)["us_mom12"]["risk"] is False
