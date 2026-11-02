@@ -1,4 +1,4 @@
-# 집 PC의 모든 예약 작업을 한 번에 등록한다 (PowerShell에서 실행)
+﻿# 집 PC의 모든 예약 작업을 한 번에 등록한다 (PowerShell에서 실행)
 #   powershell -ExecutionPolicy Bypass -File scripts\setup_all_schedules.ps1
 #   미리 보기만:       ... -File scripts\setup_all_schedules.ps1 -WhatIf
 #   일부만 빼기:       ... -File scripts\setup_all_schedules.ps1 -Skip PerpBotPaper,MarketDashboard
