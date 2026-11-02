@@ -37,7 +37,14 @@ jobs:
         env:
           KRX_ID: ${{ secrets.KRX_ID }}
           KRX_PW: ${{ secrets.KRX_PW }}
+          # 공공데이터포털 인증키가 있으면 한국 종목은 그쪽(금융위원회 주식시세정보, 이용허락 제한 없음)으로 만든다
+          DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
         run: python -m market_dashboard krstocks --out site
+      - name: 시황 요약·기록(게시하지 않음)
+        continue-on-error: true
+        env:
+          NAVER_BLOG_ID_INVEST: ${{ vars.NAVER_BLOG_ID_INVEST }}
+        run: python -m market_dashboard brief --out site
       - name: 섹터·한국 종목 화면 내려받기용으로 보관
         uses: actions/upload-artifact@v4
         with:
@@ -45,3 +52,5 @@ jobs:
           path: |
             site/sectors.html
             site/kr.html
+            site/brief.json
+            site/history.html

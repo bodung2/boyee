@@ -3,12 +3,25 @@ from __future__ import annotations
 
 import json
 
-from . import nav
+from . import nav, public
 
 
 def render(data: dict) -> str:
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    return TEMPLATE.replace("__NAV__", nav.bar("sectors.html")).replace("__DATA__", payload)
+    page = TEMPLATE.replace("__NAV__", nav.bar("sectors.html"))
+    if data.get("public"):
+        for a, b in PUBLIC_TEXT.items():
+            page = page.replace(a, b)
+    return public.strip_private(page, bool(data.get("public"))).replace("__DATA__", payload)
+
+
+# 공개 화면에서 바꾸는 문구(편입·후보처럼 매수 권유로 읽히는 말 → 상태 설명)
+PUBLIC_TEXT = {
+    "<h2>읽는 법·규칙</h2>": "<h2>읽는 법</h2>",
+    " · 노란 테두리 = 규칙상 편입 · 점을 누르면 아래에 종목 후보": " · 점을 누르면 아래에 섹터 대표 종목",
+    "행을 누르면 그 섹터의 종목 후보가 나온다.": "행을 누르면 그 섹터의 대표 종목이 나온다.",
+    '"주도 · 매수 후보"': '"주도"', '"둔화 · 신규 X"': '"둔화"', '"회복 · 관심"': '"회복"',
+}
 
 
 TEMPLATE = r"""<!doctype html>
@@ -78,12 +91,14 @@ svg{fill:var(--ink2);font-size:12px}
       <li>가로 = 추세 강도(3·6·12개월 현금 대비 초과수익 ÷ 변동성의 평균, 최근 2주 제외). 오른쪽일수록 강하다.</li>
       <li>세로 = 가속도(지금 추세 강도 − 4주 전). 위일수록 강해지는 중. 점 크기 = 변동성(클수록 출렁임이 큼).</li>
       <li>점 색: <b class="up">주도</b>(강하고 강해지는 중) · <b class="hl">둔화</b>(강하지만 약해지는 중) · 회복(약하지만 좋아지는 중) · <b class="down">회피</b>.
-        노란 테두리 = 섹터 순환 규칙이 지금 담는 섹터.</li>
-      <li>섹터 순환 규칙: 추세 강도 0.5 넘고 200일선 위인 섹터 중 상위 3개, 변동성 반비례 비중(한 섹터 최대 50%), 매달 말 판단 → 다음 거래일 체결, 편도 비용 0.15%.</li>
-      <li>종목 후보: 섹터 대표 종목을 '추세 강도 50% + 낮은 변동성 25% + 작은 1년 최대낙폭 25%' 점수로 정렬. '후보' = 추세 강도 0.5 초과 + 200일선 위 + 거래대금 충분(미국 하루 5천만 달러, 한국 50억 원).</li>
+        <!--private-->노란 테두리 = 섹터 순환 규칙이 지금 담는 섹터.<!--/private--></li>
+      <!--private--><li>섹터 순환 규칙: 추세 강도 0.5 넘고 200일선 위인 섹터 중 상위 3개, 변동성 반비례 비중(한 섹터 최대 50%), 매달 말 판단 → 다음 거래일 체결, 편도 비용 0.15%.</li>
+<!--/private-->
+      <!--private--><li>종목 후보: 섹터 대표 종목을 '추세 강도 50% + 낮은 변동성 25% + 작은 1년 최대낙폭 25%' 점수로 정렬. '후보' = 추세 강도 0.5 초과 + 200일선 위 + 거래대금 충분(미국 하루 5천만 달러, 한국 50억 원).</li><!--/private-->
+      <li>대표 종목 표: 섹터의 대표 종목을 '추세 강도 50% + 낮은 변동성 25% + 작은 1년 최대낙폭 25%' 점수로 정렬했다. '추세 강함' = 추세 강도 0.5 초과 + 200일선 위 + 거래대금 충분.</li>
     </ul>
-    <div class="warnbox">종목 목록은 지금 시점의 대표 종목이라, 과거에 망한 종목이 빠져 있다. 그래서 종목 순위는 백테스트하지 않았고 '살펴볼 후보를 좁히는' 용도다.
-      섹터 순환 백테스트는 섹터 ETF로 계산했다(세금 제외). 참고 자료이며 매매 신호가 아니다.</div>
+    <div class="warnbox">종목 목록은 지금 시점의 대표 종목이라, 과거에 망한 종목이 빠져 있다. 그래서 종목 순위는 백테스트하지 않았다.
+      <!--private-->섹터 순환 백테스트는 섹터 ETF로 계산했다(세금 제외). <!--/private-->참고 자료이며 매매 신호나 투자 권유가 아니다.</div>
     <div class="sub" id="missing" style="margin-top:8px"></div>
   </section>
 </main>
@@ -135,11 +150,11 @@ function widget(C){
     <h2 class="stTitle"></h2><div class="sub stSub"></div>
     <div class="scroll"><table class="tbl stocks"></table></div>
   </section>
-  <section class="card">
+  ${C.backtest?`<section class="card">
     <h2>섹터 순환 백테스트</h2><div class="sub btSub"></div>
     <div class="scroll"><table class="tbl bt"></table></div>
     <div class="warnbox btWarn" style="display:none"></div>
-  </section>`;
+  </section>`:""}`;
   const q = s => root.querySelector(s);
   const svg=q("svg"), range=q("input[type=range]"), speed=bindSpeed(q("[data-a=speed]"));  // 1× = 초당 15거래일
   const F=C.frames.length-1, FMIN=Math.min(C.trail_days,F);
@@ -212,30 +227,33 @@ function widget(C){
 
   // 섹터 표
   const st = s => `<span class="st ${s.weight>0?"pick":s.quadrant==="회피"?"weak":""}">${esc(s.status)}</span>`;
-  q("table.sectors").innerHTML = `<thead><tr><th class="l">섹터</th><th class="l">사분면</th><th>추세</th><th>가속</th><th>1개월</th><th>3개월</th><th>12개월</th><th>변동성</th><th>규칙 비중</th><th class="l">상태</th></tr></thead><tbody>`
+  const wcol = !D.public;   // 공개 화면은 규칙 비중 열 없음
+  q("table.sectors").innerHTML = `<thead><tr><th class="l">섹터</th><th class="l">사분면</th><th>추세</th><th>가속</th><th>1개월</th><th>3개월</th><th>12개월</th><th>변동성</th>${wcol?"<th>규칙 비중</th>":""}<th class="l">상태</th></tr></thead><tbody>`
     + C.sectors.map(s=>`<tr class="click" data-k="${s.key}"><td>${esc(s.name)} <span class="sub">${esc(s.etf)}</span></td><td class="l" style="color:${qColor(s.quadrant)}">${esc(s.quadrant)}</td>
       <td class="${sgn(s.x)}">${num(s.x)}</td><td class="${sgn(s.accel)}">${num(s.accel)}</td><td class="${sgn(s.r1m)}">${pct(s.r1m)}</td><td class="${sgn(s.r3m)}">${pct(s.r3m)}</td><td class="${sgn(s.r12m)}">${pct(s.r12m)}</td>
-      <td>${pct(s.vol,0)}</td><td class="${s.weight>0?"hl":""}">${s.weight>0?pct(s.weight,0):"–"}</td><td class="l">${st(s)}</td></tr>`).join("") + "</tbody>";
+      <td>${pct(s.vol,0)}</td>${wcol?`<td class="${s.weight>0?"hl":""}">${s.weight>0?pct(s.weight,0):"–"}</td>`:""}<td class="l">${st(s)}</td></tr>`).join("") + "</tbody>";
   root.querySelectorAll("table.sectors tbody tr").forEach(tr=>tr.addEventListener("click",()=>select(tr.dataset.k,false)));
 
   function select(k, scroll){
     selected=k; drawDyn();
     root.querySelectorAll("table.sectors tbody tr").forEach(tr=>tr.classList.toggle("sel", tr.dataset.k===k));
     const s=C.sectors.find(o=>o.key===k); if(!s) return;
-    q(".stTitle").innerHTML=`${esc(s.name)} 섹터 종목 후보 <span class="sub">${esc(s.etf_name)}</span>`;
-    const n=s.stocks.filter(r=>r.status==="후보").length;
-    q(".stSub").textContent=`섹터 상태: ${s.status} · 후보 ${n}개 / ${s.stocks.length}개 · 점수 = 추세 50% + 낮은 변동성 25% + 작은 낙폭 25% (섹터 안 순위)`;
+    const strong = D.public ? "추세 강함" : "후보";
+    q(".stTitle").innerHTML=`${esc(s.name)} 섹터 ${D.public?"대표 종목":"종목 후보"} <span class="sub">${esc(s.etf_name)}</span>`;
+    const n=s.stocks.filter(r=>r.status===strong).length;
+    q(".stSub").textContent=`섹터 상태: ${s.status} · ${strong} ${n}개 / ${s.stocks.length}개 · 점수 = 추세 50% + 낮은 변동성 25% + 작은 낙폭 25% (섹터 안 순위)`;
     q("table.stocks").innerHTML=`<thead><tr><th class="l">종목</th><th class="l">상태</th><th>점수</th><th>추세</th><th>가속</th><th>1개월</th><th>3개월</th><th>12개월</th><th>변동성</th><th>1년 최대낙폭</th><th>거래대금(20일)</th></tr></thead><tbody>`
       + s.stocks.map(r=>`<tr><td>${esc(r.name)} <span class="sub">${esc(r.ticker)}</span>${r.overheat?" 🔥":""}</td>
-        <td class="l"><span class="st ${r.status==="후보"?"pick":r.status==="약세"||r.status.includes("부족")||r.status==="데이터 없음"?"weak":""}">${esc(r.status)}</span></td>
+        <td class="l"><span class="st ${r.status===strong?"pick":r.status==="약세"||r.status.includes("부족")||r.status==="데이터 없음"?"weak":""}">${esc(r.status)}</span></td>
         <td>${num(r.score)}</td><td class="${sgn(r.x)}">${num(r.x)}</td><td class="${sgn(r.accel)}">${num(r.accel)}</td>
         <td class="${sgn(r.r1m)}">${pct(r.r1m)}</td><td class="${sgn(r.r3m)}">${pct(r.r3m)}</td><td class="${sgn(r.r12m)}">${pct(r.r12m)}</td>
         <td>${pct(r.vol,0)}</td><td class="down">${pct(r.mdd,0)}</td><td>${money(r.value20,C.currency)}</td></tr>`).join("") + "</tbody>";
     if(scroll) q(".stocksCard").scrollIntoView({behavior:"smooth",block:"start"});
   }
 
-  // 백테스트
+  // 백테스트(공개 화면에는 없음)
   const B=C.backtest;
+  if(B){
   q(".btSub").textContent=`${B.start} ~ ${C.asof} · 섹터 ETF로 계산(${C.currency==="KRW"?"원화":"달러"}) · 아래 4줄은 규칙을 조금 바꿔도 비슷한지 확인`;
   const row=(r,b)=>`<tr${b?' class="sel"':""}><td>${esc(r.name)}</td><td class="${sgn(r.CAGR)}">${pct(r.CAGR)}</td><td>${pct(r["변동성"])}</td><td>${num(r["샤프"])}</td><td class="down">${pct(r["최대낙폭"])}</td><td class="${sgn(r["최악의 해"])}">${pct(r["최악의 해"])}</td><td>${r["회전율"]!=null?num(r["회전율"],1)+"배":"–"}</td></tr>`;
   q("table.bt").innerHTML=`<thead><tr><th class="l">방식</th><th>연 수익</th><th>변동성</th><th>샤프</th><th>최대낙폭</th><th>최악의 해</th><th>회전율/년</th></tr></thead><tbody>`
@@ -246,6 +264,7 @@ function widget(C){
     w.textContent=`이 기간 섹터 순환 규칙은 ${idx.name}보다 위험 대비 수익(샤프 ${num(rule["샤프"])} vs ${num(idx["샤프"])})이 낮았다`
       + ((rule["최대낙폭"]??-1)>(idx["최대낙폭"]??-1)?" — 낙폭은 줄었지만 수익도 줄었다":"")
       + ". 그래서 '규칙상 편입' 표시는 매수 신호가 아니라, 지금 어느 섹터가 강한지 보는 참고로만 쓰는 게 맞다.";
+  }
   }
 
   drawStatic(); setFrame(F); if(selected) select(selected,false);

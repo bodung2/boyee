@@ -82,13 +82,62 @@ def snapshot(day: str, cache_dir: Path) -> pd.DataFrame:
     return df
 
 
-def load(cache_dir: Path, start: str = START) -> dict[pd.Timestamp, pd.DataFrame]:
-    snaps = {}
+def trading_month_ends(start: str = START) -> dict[pd.Period, pd.Timestamp]:
+    """달마다 마지막 거래일. 코스피 지수 거래일(야후)로 정한다 — 한국거래소에 날짜를 묻지 않아 요청이 절반으로 준다.
+    야후도 안 되면 비워 두고(그때는 예전처럼 한국거래소에 묻는다)."""
     try:
-        days = month_ends(start)
-    except Exception as e:   # 한국거래소가 가끔 빈 응답을 준다 → 스냅숏 0개로 돌려 '데이터 부족'으로 처리
-        log.warning("한국거래소 날짜 목록 실패: %s", e)
-        return snaps
+        import yfinance as yf
+
+        k = yf.download("^KS11", start=start + "-01", auto_adjust=True, progress=False)["Close"].dropna()
+        idx = pd.to_datetime(k.index).tz_localize(None)
+        s = pd.Series(idx, index=idx.to_period("M"))
+        return s.groupby(level=0).max().to_dict()
+    except Exception as e:  # noqa: BLE001
+        log.warning("코스피 거래일 받기 실패(한국거래소에 묻습니다): %s", e)
+        return {}
+
+
+def _month_snapshot(month: pd.Period, cache_dir: Path, last_day: pd.Timestamp | None) -> tuple[pd.Timestamp, pd.DataFrame]:
+    """그달 마지막 거래일 스냅숏(저장본이 있으면 그것)."""
+    have = sorted(cache_dir.glob(f"krx_{month.strftime('%Y%m')}??.pkl"))
+    if have:
+        return pd.Timestamp(have[-1].stem[4:]), pd.read_pickle(have[-1])
+    if last_day is None:
+        from pykrx import stock
+
+        last_day = pd.Timestamp(stock.get_nearest_business_day_in_a_week(month.end_time.strftime("%Y%m%d"), prev=True))
+    day = last_day.strftime("%Y%m%d")
+    try:
+        df = snapshot(day, cache_dir)
+    except KeyError as e:      # 한국거래소가 빈 표를 줬다(일시적 오류) → 저장하지 않고 다음 차례에 다시
+        raise RuntimeError(f"{day} 빈 응답") from e
+    if not len(df) or df["시가총액"].sum() <= 0:
+        (cache_dir / f"krx_{day}.pkl").unlink(missing_ok=True)
+        raise RuntimeError(f"{day} 빈 표")
+    return last_day, df
+
+
+def load(cache_dir: Path, start: str = START, rounds: int = 3, pause: float = 60) -> dict[pd.Timestamp, pd.DataFrame]:
+    """월말 스냅숏 전부. 한국거래소가 가끔 빈 응답을 주므로 실패한 달은 잠시 쉬었다가 다시 받는다(최대 rounds번)."""
+    months = list(pd.period_range(start, pd.Timestamp.today().to_period("M") - 1, freq="M"))
+    ends = trading_month_ends(start)
+    snaps: dict[pd.Timestamp, pd.DataFrame] = {}
+    for r in range(rounds):
+        failed = []
+        for m in months:
+            try:
+                d, df = _month_snapshot(m, cache_dir, ends.get(m))
+                snaps[d] = df
+            except Exception as e:  # noqa: BLE001
+                failed.append(m)
+                log.warning("%s 스냅숏 실패(%d회째): %s", m, r + 1, e)
+        if not failed:
+            break
+        months = failed
+        if r + 1 < rounds:
+            log.info("%d개월 실패 → %d초 쉬고 다시", len(failed), pause)
+            time.sleep(pause)
+    return snaps
     for d in days:
         try:
             snaps[pd.Timestamp(d)] = snapshot(d, cache_dir)

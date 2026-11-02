@@ -27,6 +27,8 @@ class Profile:
     max_title: int = 100        # 구조 검증: 제목 최대 글자 수(모바일 홈피드에서 잘리지 않게 줄이는 블로그도 있다)
     use_persona: bool = True    # 교사 페르소나(꾸쓰) 파일을 글쓰기에 넘길지. 신원을 감추는 블로그는 False
     social: bool = True         # 블로그 발행 뒤 인스타·쓰레드 초안을 만들지
+    title_pattern: str = ""     # 구조 검증: 제목이 이 정규식을 포함해야 한다(시황 글의 'M월 D일 시황' 등)
+    same_blog_as: str = ""      # 다른 프로필과 같은 블로그에 올린다(블로그 주소·로그인 브라우저를 그 프로필 것으로)
 
 
 PROFILES: dict[str, Profile] = {
@@ -70,6 +72,21 @@ PROFILES: dict[str, Profile] = {
         neighbor_audience="재테크·내집마련·연금에 관심 있는 직장인",
         neighbor_owner="블로그 주인",
         neighbor_exclude="리딩방·종목 추천·유료 회원 모집·코인 홍보·대출 중개 블로그",
+    ),
+    # 매일 시황: 투자 블로그에 하루 한 편 더. 글감은 시장 대시보드의 오늘 요약(brief.json) + 그날의 공식 발표·뉴스.
+    # 제목은 반드시 'M월 D일 시황'으로 시작한다(대시보드 '시황 기록'이 이 제목으로 날짜별 링크를 붙인다).
+    "market": Profile(
+        name="market", label="매일 시황",
+        write_skill="market-auto-post", factcheck_skill="market-auto-factcheck",
+        thumbnail_style="bold", illustrations=False,
+        extra_forbidden=(
+            "매수 추천", "매도 추천", "종목 추천", "지금 사야", "지금 팔아야", "무조건 오른다", "수익 보장", "원금 보장",
+            "리딩방", "목표주가", "지금이 매수 타이밍", "현직 교사", "교사인 제가", "저는 교사", "우리 반",
+        ),
+        min_sources=4, use_persona=False, social=False, max_title=40, auto_related=True, min_body_chars=1800,
+        title_pattern=r"^\d{1,2}월 \d{1,2}일 시황",
+        same_blog_as="invest",
+        neighbor_tab="", neighbor_owner="블로그 주인",
     ),
 }
 

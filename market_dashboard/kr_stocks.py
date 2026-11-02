@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
@@ -24,6 +24,7 @@ from . import signals
 from .signals import Params
 
 log = logging.getLogger(__name__)
+KST = timezone(timedelta(hours=9))
 
 TOP_N = 200
 DIV_N = 30
@@ -84,6 +85,17 @@ def fetch_universe(cache_dir: Path, today: datetime | None = None) -> pd.DataFra
         raise
 
 
+KR_CLOSE = (15, 40)       # 한국장 마감(15:30) 뒤 시세가 정리되는 시각(KST)
+
+
+def drop_unfinished(df: pd.DataFrame, now: datetime | None = None) -> pd.DataFrame:
+    """한국장이 아직 안 끝난 시각이면 오늘 날짜의 미완성 일봉을 뺀다(장중 값이 종가처럼 쓰이지 않게)."""
+    now = now or datetime.now(KST)
+    if len(df) and df.index[-1].date() == now.date() and (now.hour, now.minute) < KR_CLOSE:
+        return df.iloc[:-1]
+    return df
+
+
 def fetch_prices(uni: pd.DataFrame, cache_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     """(수정종가, 거래량), 열 = 종목코드(+ CASH·BENCH는 Yahoo 티커 그대로)."""
     path = cache_dir / "kr_prices.pkl"
@@ -99,6 +111,7 @@ def fetch_prices(uni: pd.DataFrame, cache_dir: Path) -> tuple[pd.DataFrame, pd.D
             raise RuntimeError("빈 시세")
         for x in (close, vol):
             x.index = pd.to_datetime(x.index).tz_localize(None)
+        close, vol = drop_unfinished(close), drop_unfinished(vol)
         cache_dir.mkdir(parents=True, exist_ok=True)
         pd.to_pickle((close, vol), path)
         return close, vol
@@ -124,7 +137,11 @@ def volume_change(value: pd.DataFrame) -> pd.DataFrame:
     return np.log2((recent / base).where((base > 0) & (recent > 0)))
 
 
-def build(uni: pd.DataFrame, close: pd.DataFrame, volume: pd.DataFrame, p: Params | None = None) -> dict:
+SOURCE = "한국거래소(종목 목록·배당·PBR·PER) · Yahoo(시세)"
+
+
+def build(uni: pd.DataFrame, close: pd.DataFrame, volume: pd.DataFrame, p: Params | None = None,
+          bench_name: str = "KOSPI200(KODEX 200)", bench_short: str = "KOSPI200", source: str = SOURCE) -> dict:
     p = p or Params()
     idx = close.index[close[BENCH].notna()] if BENCH in close else close.index
     cl = close.reindex(idx).ffill(limit=5)
@@ -168,7 +185,8 @@ def build(uni: pd.DataFrame, close: pd.DataFrame, volume: pd.DataFrame, p: Param
         if bool(sig["overheat"].loc[t, c]):
             tags.append("과열")
         rows.append({
-            "code": c, "name": "KOSPI200(KODEX 200)" if is_b else str(info["종목명"]),
+            "code": c, "name": bench_name if is_b else str(info["종목명"]),
+            "short": bench_short if is_b else None,
             "market": "지수" if is_b else str(info["시장"]), "bench": is_b,
             "cap": None if is_b else _f(info["시가총액"], 0),
             "div": None if is_b else _f(info["DIV"], 2), "pbr": None if is_b else _f(info["PBR"], 2),
@@ -192,6 +210,7 @@ def build(uni: pd.DataFrame, close: pd.DataFrame, volume: pd.DataFrame, p: Param
                     "median_x": _f(float(np.median(xs)), 3) if xs else None, "n": len(stocks)},
         "rule": {"top_n": TOP_N, "div_n": DIV_N, "min_value": MIN_VALUE, "spike": SPIKE},
         "missing": [str(uni.loc[c, "종목명"]) for c in uni.index[:TOP_N] if c not in have],
+        "source": source,
     }
 
 

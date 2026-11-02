@@ -128,6 +128,18 @@ notepad .env        # NAVER_BLOG_ID, NAVER_CATEGORY_CHILDHOOD 입력
 - 예약: `scripts\setup_windows.ps1 -Profile invest` (블로그 07:00 출근길 홈피드, 막힌 날 재시도 10:00)
 - 이웃 후보 추천도 투자 블로그 몫(시트 '투자 이웃 후보' 탭)을 매일 함께 만듭니다. 제목은 15~25자·답을 숨긴 질문형, 글 끝은 독자가 자기 구간을 댓글로 답하는 질문입니다.
 
+### 매일 시황 (같은 투자 블로그에 하루 한 편 더, `--profile market`)
+
+시장 대시보드(https://bodung2.github.io/boyee/)의 오늘 요약(`brief.json`) 숫자와 그날의 공식 발표·뉴스 2~3개로 시황 글을 씁니다.
+
+- 스킬: `.claude/skills/market-auto-post`(글쓰기), `market-auto-factcheck`(대시보드 숫자는 요약 파일과, 뉴스·일정은 공식 원문과 대조)
+- 제목은 항상 `M월 D일 시황 | …`. 대시보드 '시황 기록' 탭이 이 제목으로 날짜별 링크를 붙입니다(글이 올라온 다음 날 아침 갱신 때).
+- 게시된 요약이 오늘 것이 아니면(대시보드 갱신이 늦은 날) 이 PC에서 세 화면을 직접 계산해 씁니다.
+- 블로그 주소·로그인은 투자 블로그 것을 그대로 씁니다(`NAVER_BLOG_ID_MARKET`·`NAVER_CATEGORY_MARKET`로 바꿀 수 있음, 카테고리 기본 '매일 시황').
+- 예약: `scripts\setup_all_schedules.ps1 -Only NaverAutoPost-market` (화~토 13:30, 막힌 날 16:00 재시도)
+- 시험 실행: `python -m naver_autopost run --profile market --dry-run`
+- 대시보드 쪽: 저장소 Settings → Secrets and variables → Actions → **Variables**에 `NAVER_BLOG_ID_INVEST`(투자 블로그 아이디)를 넣으면 '시황 기록'에 글 링크가 붙습니다.
+
 ## 구글 블로거 (korea-explained-blogger, 하루 1편)
 
 Codex(ChatGPT 구독)에 설치된 `korea-explained-blogger` 스킬로 글을 쓰고, **구글 공식 Blogger API**로 발행합니다.
@@ -334,6 +346,12 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_market_windows.ps1 -Time 
 ```
 
 웹 주소 **https://bodung2.github.io/boyee/** 에 화~토 아침마다 자동으로 갱신됩니다(GitHub Actions, PC 불필요). PC에서 직접 돌리면 결과는 `output\market\dashboard.html`입니다. 규칙과 화면 설명은 [docs/MARKET_DASHBOARD.md](docs/MARKET_DASHBOARD.md)에 있습니다.
+
+**공개 화면과 데이터 출처**
+- 웹 주소에 올라가는 화면은 공개용(`--public`)이라 규칙상 편입·목표 비중·살 상품·전략 백테스트가 빠져 있습니다. 텔레그램 알림과 PC에서 만든 화면에는 그대로 있습니다.
+- 한국 종목 탭은 저장소 Secrets에 `DATA_GO_KR_KEY`(공공데이터포털 '금융위원회_주식시세정보' 인증키)가 있으면 그 데이터(이용허락 제한 없음)로 만들고, 없으면 한국거래소·Yahoo로 만듭니다. 공공데이터는 기준일 다음 영업일 오후 1시 이후에 올라와서 아침 화면은 이틀 전 장 기준입니다. 배당·PBR·PER 열은 이 출처에 없어 빠집니다.
+- 미국·자산군 시세는 아직 Yahoo입니다(재배포 허락이 있는 유료 시세로 바꿔야 공개 배포에 깔끔합니다).
+- 내 도메인을 연결하면 Settings → Pages → Custom domain에 도메인을 넣고, Variables에 `DASHBOARD_URL`(예: `https://내도메인/`)을 넣습니다(시황 글의 대시보드 주소가 따라 바뀝니다).
 
 ## 코인 선물 추세 추종 봇 (1단계: 백테스트·모의 운용)
 

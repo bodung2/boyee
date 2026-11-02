@@ -7,8 +7,10 @@
   python -m market_dashboard analyze          자산군별 경향·'어느 구간에서 사면 좋았나' 표를 출력
   python -m market_dashboard sectors --out site   미국 주식 섹터 지도 → site/sectors.html (--country US KR 로 한국 섹터도)
   python -m market_dashboard krstocks --out site  한국 시가총액 상위 200종목 지도(추세 × 거래대금) → site/kr.html
+  python -m market_dashboard brief --out site     세 화면의 오늘 요약 → site/brief.json + 시황 기록(site/history.html)
   python -m market_dashboard krfactors        한국 주식 종목 선정 방식(가치·수익성·저변동·모멘텀·수급 등) 비교
   python -m market_dashboard krcombo          기준 섞기 비교 + 고배당이 왜 잘됐나 분해
+  python -m market_dashboard indicators       시황에서 추적할 지표 고르기(지표 상태별 그다음 시장 백테스트)
 """
 from __future__ import annotations
 
@@ -64,22 +66,43 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--notify", action="store_true")
     r.add_argument("--base", choices=["KRW", "USD"], default="KRW")
     r.add_argument("--out", help="이 폴더에 index.html로 저장(기본: output/market/dashboard.html)")
+    r.add_argument("--public", action="store_true", help="공개용: 규칙상 편입·목표 비중·살 상품·전략 백테스트를 빼고 저장")
     an = sub.add_parser("analyze")
     an.add_argument("--offline", action="store_true")
     sub.add_parser("krfactors")
     sub.add_parser("krcombo")
+    sub.add_parser("indicators")
     se = sub.add_parser("sectors")
     se.add_argument("--offline", action="store_true")
     se.add_argument("--out", help="이 폴더에 sectors.html로 저장(기본: output/market/)")
     se.add_argument("--check-names", action="store_true", help="티커가 맞는 종목인지 Yahoo 이름과 나란히 출력")
     se.add_argument("--country", nargs="+", default=["US"], choices=["US", "KR"], help="지도에 넣을 나라(기본 미국만)")
+    se.add_argument("--public", action="store_true", help="공개용: 규칙상 편입·비중·전략 백테스트를 빼고 저장")
+    br = sub.add_parser("brief")
+    br.add_argument("--out", help="brief.json·history.html을 저장할 폴더(기본: output/market/)")
+    br.add_argument("--src", help="dashboard·sectors·kr.json이 있는 폴더(기본: --out)")
+    br.add_argument("--no-archive", action="store_true", help="날짜별 기록·블로그 링크를 건드리지 않음")
     ks = sub.add_parser("krstocks")
     ks.add_argument("--offline", action="store_true")
     ks.add_argument("--out", help="이 폴더에 kr.html로 저장(기본: output/market/)")
+    ks.add_argument("--public", action="store_true", help="공개용: 고배당 30 전략 소개를 빼고 저장")
     args = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     _load_dotenv(ROOT / ".env")
+
+    if args.cmd == "indicators":
+        from . import indicators, kr_factors
+
+        px, fred = indicators.fetch(CACHE)
+        snap = None
+        if os.environ.get("KRX_ID") and os.environ.get("KRX_PW"):
+            snaps = kr_factors.load(CACHE / "krx")
+            print(f"한국거래소 월말 스냅숏 {len(snaps)}개")
+            if len(snaps) >= 24:
+                snap = indicators.snapshot_signals(snaps)
+        print(indicators.report(indicators.run(px, fred, snap)))
+        return 0
 
     if args.cmd == "krcombo":
         from . import kr_combo, kr_factors
@@ -156,12 +179,49 @@ def main(argv: list[str] | None = None) -> int:
                 log.warning("%s 섹터 시세 없음: %s", c.name, e)
         d = sectors.build(got)
         d["generated"] = datetime.now(KST).strftime("%Y-%m-%d %H:%M KST")
+        print(sectors.summary(d))
+        if args.public:
+            from . import public
+            d = public.sectors(d)
         out = Path(args.out) if args.out else OUT
         out.mkdir(parents=True, exist_ok=True)
         (out / "sectors.json").write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
         (out / "sectors.html").write_text(sector_html.render(d), encoding="utf-8")
-        print(sectors.summary(d))
         print(f"섹터 지도: {out / 'sectors.html'}")
+        return 0
+
+    if args.cmd == "brief":
+        from . import brief, history_html
+
+        out = Path(args.out) if args.out else OUT
+        src = Path(args.src) if args.src else out
+        out.mkdir(parents=True, exist_ok=True)
+
+        def read(name):
+            f = src / name
+            return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
+
+        arch = CACHE / "briefs"
+        archive = [] if args.no_archive else brief.load_archive(arch)
+        today = datetime.now(KST).strftime("%Y-%m-%d")
+        b = brief.build(read("dashboard.json"), read("sectors.json"), read("kr.json"), brief.fetch_markets(),
+                        prev=brief.previous(archive, today), risk=brief.fetch_risk())
+        blog_id = (os.environ.get("NAVER_BLOG_ID_MARKET") or os.environ.get("NAVER_BLOG_ID_INVEST") or "").strip()
+        if not args.no_archive:
+            brief.save_archive(arch, b)
+            posts = brief.sync_posts(arch, blog_id)
+            if posts:
+                d = max(posts)
+                b["latest_post"] = {"date": d, **posts[d]}
+            rows = brief.history_rows(brief.load_archive(arch), posts)
+            (out / "history.html").write_text(
+                history_html.render(rows, f"https://blog.naver.com/{blog_id}" if blog_id else ""), encoding="utf-8")
+        (out / "brief.json").write_text(json.dumps(b, ensure_ascii=False, indent=1), encoding="utf-8")
+        print(f"[시황 요약] {b['date']}")
+        for sg in (b.get("risk") or {}).get("signals", []):
+            print(f"  · 위험 신호 {sg['key']}: {sg['state']} ({sg['label']}, 값 {sg['value']})")
+        for line in b["headline"]:
+            print("  " + line)
         return 0
 
     if args.cmd == "krstocks":
@@ -173,15 +233,30 @@ def main(argv: list[str] | None = None) -> int:
             if args.offline:
                 uni = pd.read_pickle(CACHE / "kr_universe.pkl")
                 close, vol = pd.read_pickle(CACHE / "kr_prices.pkl")
+                d = kr_stocks.build(uni, close, vol)
+            elif os.environ.get("DATA_GO_KR_KEY", "").strip():
+                # 공공데이터포털(금융위원회 주식시세정보, 이용허락 제한 없음) — 공개 배포용 출처
+                from . import kr_public
+
+                key = os.environ["DATA_GO_KR_KEY"].strip()
+                snap = kr_public.latest(key)
+                uni = kr_public.universe(snap)
+                panel = kr_public.update_panel(key, list(uni.index), CACHE, snap)
+                close, vol = kr_public.prices(panel, list(uni.index), kr_stocks.BENCH)
+                d = kr_stocks.build(uni, close, vol, bench_name=kr_public.BENCH_NAME,
+                                    bench_short=kr_public.BENCH_SHORT, source=kr_public.SOURCE)
             else:
                 uni = kr_stocks.fetch_universe(CACHE)
                 close, vol = kr_stocks.fetch_prices(uni, CACHE)
-            d = kr_stocks.build(uni, close, vol)
+                d = kr_stocks.build(uni, close, vol)
         except Exception as e:
             log.exception("한국 종목 지도 실패")
             (out / "kr.html").write_text(kr_html.render_error(str(e)), encoding="utf-8")
             return 1
         d["generated"] = datetime.now(KST).strftime("%Y-%m-%d %H:%M KST")
+        if args.public:
+            from . import public
+            d = public.kr(d)
         (out / "kr.json").write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
         (out / "kr.html").write_text(kr_html.render(d), encoding="utf-8")
         print(kr_stocks.summary(d))
@@ -220,12 +295,15 @@ def main(argv: list[str] | None = None) -> int:
 
     d = report.build(close, fred, Params(), base=args.base, products_live=live)
     d["generated"] = datetime.now(KST).strftime("%Y-%m-%d %H:%M KST")
+    text = summary(d)          # 텔레그램(나만 보는 알림)은 규칙상 비중까지
+    if args.public:
+        from . import public
+        d = public.assets(d)
     out = Path(args.out) if args.out else OUT
     out.mkdir(parents=True, exist_ok=True)
     (out / "dashboard.json").write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
     page = out / ("index.html" if args.out else "dashboard.html")
     page.write_text(html.render(d), encoding="utf-8")
-    text = summary(d)
     if os.environ.get("DASHBOARD_URL"):
         text += "\n" + os.environ["DASHBOARD_URL"]
     print(text)

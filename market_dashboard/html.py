@@ -3,12 +3,25 @@ from __future__ import annotations
 
 import json
 
-from . import nav
+from . import nav, public
 
 
 def render(data: dict) -> str:
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    return TEMPLATE.replace("__NAV__", nav.bar("index.html")).replace("__DATA__", payload)
+    page = TEMPLATE.replace("__NAV__", nav.bar("index.html"))
+    if data.get("public"):
+        for a, b in PUBLIC_TEXT.items():
+            page = page.replace(a, b)
+    return public.strip_private(page, bool(data.get("public"))).replace("__DATA__", payload)
+
+
+# 공개 화면에서 바꾸는 문구(규칙상 비중·매수 시점처럼 읽히는 말 → 상태 설명)
+PUBLIC_TEXT = {
+    "점 크기는 그 시점 규칙상 비중. ": "",
+    "<h2>오늘의 답</h2>": "<h2>추세 순위</h2>",
+    "경향 분석 — 어느 구간에서 사면 좋았나": "경향 분석 — 사분면별로 그 뒤 어땠나(과거 통계)",
+    '"주도 · 매수 후보"': '"주도"', '"둔화 · 신규 X"': '"둔화"', '"회복 · 관심"': '"회복"', '"회피 · 보유 X"': '"회피"',
+}
 
 
 TEMPLATE = r"""<!doctype html>
@@ -129,12 +142,12 @@ svg{fill:var(--ink2)} svg text{font-size:12px}
     <div class="legend"><span><i style="background:var(--pos);height:3px"></i>같이 움직임(+)</span><span><i style="background:var(--neg);height:3px"></i>반대로 움직임(−)</span><span>선 굵기 = 상관의 크기</span><span>🔥 과열(50일선에서 크게 이탈)</span><span>○ 현금보다 약함</span></div>
   </section>
 
-  <section class="card" id="buyCard">
+  <!--private--><section class="card" id="buyCard">
     <h2>이 자산군 사려면</h2>
     <div class="sub">지도의 점이나 아래 표의 줄을 누르면 그 자산군을 실제로 살 수 있는 대표 상품이 나옵니다. 상품 이름을 누르면 시세 페이지가 열립니다.</div>
     <div class="chipbtns" id="buyPicks"></div>
     <div id="buy"></div>
-  </section>
+  </section><!--/private-->
 
   <section class="card">
     <h2>오늘의 답</h2>
@@ -169,7 +182,7 @@ svg{fill:var(--ink2)} svg text{font-size:12px}
     <div class="scroll"><table class="tbl" id="anaProf"></table></div>
   </section>
 
-  <section class="card">
+  <!--private--><section class="card">
     <h2>백테스트(원화 기준)</h2>
     <div class="sub" id="btSub"></div>
     <div class="legend" id="navLegend"></div>
@@ -182,13 +195,14 @@ svg{fill:var(--ink2)} svg text{font-size:12px}
     <div class="scroll"><table class="tbl" id="years"></table></div>
     <h2 style="margin-top:18px">최근 보유 이력(월별)</h2>
     <div class="scroll"><table class="tbl" id="holdings"></table></div>
-  </section>
+  </section><!--/private-->
 
-  <section class="card note">
+  <!--private--><section class="card note">
     <h2>규칙</h2>
     <ul id="rules"></ul>
     <div class="warnbox">참고 자료이며 매매 신호가 아닙니다. 과거 성과가 미래 수익을 보장하지 않습니다. 백테스트에는 세금이 빠져 있습니다(해외 직투 양도차익 22%, 국내 상장 해외 ETF 15.4% 등). 투자는 비상금을 뺀 여유 자금으로만.</div>
-  </section>
+  </section><!--/private-->
+  <p class="sub">참고 자료이며 매매 신호나 투자 권유가 아닙니다. 과거 통계가 미래를 보장하지 않습니다.</p>
 </main>
 <div id="tip"></div>
 <script>
@@ -206,7 +220,7 @@ function showTip(html, ev){ tip.innerHTML=html; tip.style.display="block"; const
 function hideTip(){ tip.style.display="none"; }
 
 /* 머리말 */
-$("asof").textContent = `기준일 ${D.asof} · ${D.base==="KRW"?"원화":"달러"} 기준 수익 · 다음 리밸런싱 ${D.next_rebalance}` + (D.generated?` · 갱신 ${D.generated}`:"");
+$("asof").textContent = `기준일 ${D.asof} · ${D.base==="KRW"?"원화":"달러"} 기준 수익` + (D.next_rebalance?` · 다음 리밸런싱 ${D.next_rebalance}`:"") + (D.generated?` · 갱신 ${D.generated}`:"");
 (function chips(){
   const c = $("chips"); const L = D.liquidity, R = D.regime, C = D.corr;
   const items = [];
@@ -214,7 +228,7 @@ $("asof").textContent = `기준일 ${D.asof} · ${D.base==="KRW"?"원화":"달�
   if (C.avg_now!=null) items.push(`평균 상관 <b>${num(C.avg_now)}</b>`);
   if (R.name) items.push(`국면 <b>${esc(R.name)}</b>`);
   const picks = D.assets.filter(a=>a.weight>0);
-  items.push(`편입 <b>${picks.length}</b>개 · 현금 <b>${pct(1-picks.reduce((s,a)=>s+a.weight,0),0)}</b>`);
+  if(!D.public) items.push(`편입 <b>${picks.length}</b>개 · 현금 <b>${pct(1-picks.reduce((s,a)=>s+a.weight,0),0)}</b>`);
   c.innerHTML = items.map(t=>`<span class="chip">${t}</span>`).join("");
 })();
 
@@ -369,6 +383,7 @@ drawQuad(); setFrame(F);
 /* 이 자산군 사려면 */
 let buyKey=null;
 function showBuy(key, scroll){
+  if(!$("buyCard")) return;
   buyKey=key; const P=D.products, isCash=key==="CASH";
   const a=D.assets.find(x=>x.key===key), e=isCash?P.cash:P.by_asset[key];
   if(!e) return;
@@ -395,6 +410,7 @@ function showBuy(key, scroll){
   if(scroll) $("buyCard").scrollIntoView({behavior:"smooth",block:"start"});
 }
 (function buyPicks(){
+  if(!$("buyCard")) return;
   const picks=D.assets.filter(a=>a.weight>0);
   const btns=picks.map(a=>`<button data-k="${a.key}">${esc(a.name)} ${pct(a.weight,0)}</button>`).join("")+`<button data-k="CASH">현금</button>`;
   $("buyPicks").innerHTML=`<span class="sub" style="align-self:center">오늘 규칙상 담을 것:</span>`+btns;
@@ -405,6 +421,12 @@ function showBuy(key, scroll){
 /* 오늘의 답 */
 (function answer(){
   const p=D.params;
+  if(D.public){   // 공개 화면: 상태·목표 비중 없이 추세 순위만
+    $("answerSub").textContent="추세 강도 순(3·6·12개월 현금 대비 초과수익 ÷ 변동성). 순위는 지금 상태를 보여 줄 뿐, 매수·매도 판단이 아닙니다.";
+    $("answer").innerHTML=`<thead><tr><th>#</th><th class="l">자산</th><th class="l">사분면</th><th>추세</th><th>가속</th><th>1개월</th><th>3개월</th><th>12개월</th></tr></thead><tbody>`
+      + D.assets.map((a,i)=>`<tr><td>${i+1}</td><td class="l"><span class="dot" style="background:${gColor(a.group)}"></span>${esc(a.name)}</td><td class="l">${esc(a.quadrant)}</td><td class="${signCls(a.x)}">${num(a.x)}</td><td class="${signCls(a.accel)}">${num(a.accel)}</td><td class="${signCls(a.r1m)}">${pct(a.r1m)}</td><td class="${signCls(a.r3m)}">${pct(a.r3m)}</td><td class="${signCls(a.r12m)}">${pct(a.r12m)}</td></tr>`).join("") + "</tbody>";
+    return;
+  }
   $("answerSub").textContent = `규칙: 새 편입은 추세 강도>${p.min_x}(보유 중이면 ${p.hold_x} 아래로 내려갈 때까지 유지) · ${p.horizons.length}개 기간 중 2개 이상 현금보다 우위 · 200일선 위 → 강한 순으로 최대 ${p.top_n}개, 이미 담은 자산과 상관 ${p.corr_max}↑면 건너뜀, 변동성 역가중(한 자산 최대 ${pct(p.max_weight,0)}), 남는 비중은 현금. 매매는 월 1회.`;
   const rows = D.assets.map((a,i)=>{
     const tag = a.weight>0 ? `<span class="tag ${a.overheat?"hot":"buy"}">${esc(a.status)}</span>` : esc(a.status);
@@ -484,7 +506,7 @@ lineChart($("corrHist"), {"평균 상관": D.corr.avg_hist}, {colors:["var(--s1)
 
 /* 백테스트 */
 (function bt(){
-  const B=D.backtest; const colors=["var(--s1)","var(--s2)","var(--s3)","var(--s4)"];
+  const B=D.backtest; if(!B||!$("btTable")) return; const colors=["var(--s1)","var(--s2)","var(--s3)","var(--s4)"];
   const names=Object.keys(B.nav);
   $("btSub").textContent=`${B.start}부터 매월 말 신호 → 다음 거래일 체결, 편도 비용 ${pct(D.params.cost,2)} 반영, 세금 미반영. 위: 누적 가치(로그 눈금, 시작=1), 아래: 고점 대비 낙폭.`;
   $("navLegend").innerHTML=names.map((n,i)=>`<span><i style="background:${colors[i]};height:${i===0?3:2}px"></i>${esc(n)}</span>`).join("");
@@ -504,6 +526,7 @@ lineChart($("corrHist"), {"평균 상관": D.corr.avg_hist}, {colors:["var(--s1)
 
 /* 규칙 */
 (function rules(){
+  if(!$("rules")) return;
   const p=D.params;
   const r=[
     `추세 강도 = ${p.horizons.map(h=>Math.round(h/21)).join("·")}개월 '현금(미 3개월 국채) 대비 초과수익 ÷ 변동성'의 평균. 최근 ${p.skip}거래일은 뺀다(단기 반전 회피). 신호는 달러 기준 가격으로 계산.`,

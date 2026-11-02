@@ -1,4 +1,5 @@
 """자산군 모멘텀 대시보드: 신호가 미래 데이터를 안 쓰는지, 편입 규칙·비중·백테스트 계산이 맞는지 확인한다."""
+import json
 import numpy as np
 import pandas as pd
 import pytest
@@ -328,3 +329,272 @@ def test_kr_stock_map_builds_and_renders():
     assert "한국 종목 지도" in page and 'href="kr.html" class="on"' in page
     assert "고배당 30" in kr_stocks.summary(d)
     assert "한국 종목" in kr_html.render_error("x")
+
+
+def _three_screens():
+    from market_dashboard import kr_stocks, sectors
+    from market_dashboard.sector_universe import US
+    px = _prices(drifts={"SPY": 0.0008, "TLT": 0.0004})
+    close = pd.DataFrame({a.ticker: px[a.key] for a in universe.ASSETS})
+    close["^IRX"] = 2.0
+    close[universe.FX_TICKER] = 1200.0
+    dash = json.loads(json.dumps(report.build(close, pd.DataFrame(), Params())))
+    sec = json.loads(json.dumps(sectors.build({"US": _fake_country(US)})))
+    kr = json.loads(json.dumps(kr_stocks.build(*_kr_stock_data(n=60))))
+    return dash, sec, kr
+
+
+def test_brief_summarises_three_screens_and_compares_with_yesterday():
+    from datetime import datetime
+    from market_dashboard import brief
+    dash, sec, kr = _three_screens()
+    mk = [{"ticker": "^KS11", "name": "코스피", "date": "2026-11-02", "close": 2500.0, "d1": 0.012, "w1": -0.02, "unit": "%"}]
+    y = brief.build(dash, sec, kr, mk, now=datetime(2026, 11, 2, 9, tzinfo=brief.KST))
+    assert y["kr"]["n"] == 59 and len(y["kr"]["div30"]) == 30 and y["us"]["rank"] and y["assets"] is not None
+    assert y["changes"] == {}
+    # 배분(편입·비중)은 요약에 넣지 않는다
+    assert "weight" not in json.dumps(y) and "picks" not in json.dumps(y)
+    prev = json.loads(json.dumps(y))
+    prev["kr"]["above_sma"] = y["kr"]["above_sma"] - 0.05
+    prev["kr"]["div30"] = prev["kr"]["div30"][1:] + [{"code": "999990", "name": "빠진종목", "div": 9.0}]
+    prev["us"]["rank"][0]["quadrant"] = "회피" if y["us"]["rank"][0]["quadrant"] != "회피" else "주도"
+    t = brief.build(dash, sec, kr, mk, prev=prev, now=datetime(2026, 11, 3, 9, tzinfo=brief.KST))
+    c = t["changes"]
+    assert c["since"] == "2026-11-02" and c["kr_above_sma_pp"] == 5.0
+    assert c["div30_in"] == [y["kr"]["div30"][0]["name"]] and c["div30_out"] == ["빠진종목"]
+    assert c["us_moves"]
+    assert any("200일선 위" in h and "(+5%p)" in h for h in t["headline"])
+    assert any(h.startswith("코스피 +1.2%") for h in t["headline"])
+    assert brief.build(None, None, None)["headline"] == []      # 아무것도 못 받은 날에도 멈추지 않음
+
+
+def test_brief_matches_sihwang_posts_by_title_date():
+    from market_dashboard import brief
+    items = [
+        {"title": "11월 3일 시황 | 200일선 위 21%", "url": "https://blog.naver.com/b/1", "pub_date": "Tue, 03 Nov 2026 14:02:00 +0900"},
+        {"title": "12월 31일 시황 | 한 해 정리", "url": "https://blog.naver.com/b/2", "pub_date": "Fri, 01 Jan 2027 09:00:00 +0900"},
+        {"title": "연봉 4천, 상위 몇 %일까?", "url": "https://blog.naver.com/b/3", "pub_date": "Tue, 03 Nov 2026 07:00:00 +0900"},
+    ]
+    got = brief.match_posts(items, {"2026-11-02": {"title": "old", "url": "u"}})
+    assert set(got) == {"2026-11-02", "2026-11-03", "2026-12-31"}
+    assert got["2026-11-03"]["url"].endswith("/1")
+
+
+def test_brief_cli_archives_and_renders_history(tmp_path, monkeypatch):
+    import market_dashboard.__main__ as cli
+    from market_dashboard import brief, kr_html, sector_html
+    dash, sec, kr = _three_screens()
+    site = tmp_path / "site"
+    site.mkdir()
+    for name, d in (("dashboard.json", dash), ("sectors.json", sec), ("kr.json", kr)):
+        (site / name).write_text(json.dumps(d), encoding="utf-8")
+    monkeypatch.setattr(cli, "CACHE", tmp_path / "cache")
+    monkeypatch.setattr(brief, "fetch_markets", lambda: [])
+    monkeypatch.setattr(brief, "fetch_risk", lambda: None)
+    monkeypatch.delenv("NAVER_BLOG_ID_INVEST", raising=False)
+    monkeypatch.delenv("NAVER_BLOG_ID_MARKET", raising=False)
+    (tmp_path / "cache" / "briefs").mkdir(parents=True)
+    (tmp_path / "cache" / "briefs" / "posts.json").write_text(json.dumps(
+        {"2000-01-03": {"title": "1월 3일 시황 | 옛날", "url": "https://blog.naver.com/x/9"}}), encoding="utf-8")
+    old = brief.build(dash, sec, kr)
+    old["date"] = "2000-01-03"
+    brief.save_archive(tmp_path / "cache" / "briefs", old)
+    assert cli.main(["brief", "--out", str(site)]) == 0
+    b = json.loads((site / "brief.json").read_text(encoding="utf-8"))
+    assert b["changes"]["since"] == "2000-01-03" and b["latest_post"]["url"].endswith("/9")
+    page = (site / "history.html").read_text(encoding="utf-8")
+    assert "시황 기록" in page and "1월 3일 시황 | 옛날" in page and b["date"] in page
+    assert len(list((tmp_path / "cache" / "briefs").glob("????-??-??.json"))) == 2
+    # 모든 화면 위쪽 탭에 '시황 기록'과 요약 줄 자리가 있다
+    for html_page in (kr_html.render(kr), sector_html.render(sec)):
+        assert 'href="history.html"' in html_page and 'id="briefStrip"' in html_page
+
+
+def test_kr_unfinished_daily_bar_is_dropped_during_market_hours():
+    from datetime import datetime
+    from market_dashboard import kr_stocks
+    df = pd.DataFrame({"a": [1.0, 2.0, 3.0]}, index=pd.to_datetime(["2026-10-30", "2026-10-31", "2026-11-02"]))
+    at = lambda h, m: datetime(2026, 11, 2, h, m, tzinfo=kr_stocks.KST)  # noqa: E731
+    assert len(kr_stocks.drop_unfinished(df, at(10, 0))) == 2       # 장중: 오늘 값 뺌
+    assert len(kr_stocks.drop_unfinished(df, at(16, 0))) == 3       # 마감 뒤: 그대로
+    assert len(kr_stocks.drop_unfinished(df.iloc[:2], at(10, 0))) == 2   # 오늘 값이 없으면 그대로
+
+
+def test_indicator_study_finds_planted_risk_signal():
+    """합성 시장: 금리차가 역전된 달 다음 달에는 크게 빠진다 → '하락 위험 신호'로 골라야 한다. 아무 정보 없는 지표는 빼야 한다."""
+    from market_dashboard import indicators
+    rng = np.random.default_rng(5)
+    idx = pd.bdate_range("1995-01-02", "2024-12-31")
+    months = idx.to_period("M")
+    crash_m = pd.Index(months.unique())[rng.random(len(months.unique())) < 0.08]   # 드물게(8%) 오는 급락 달
+    crash = months.isin(crash_m)
+    ret = rng.normal(np.where(crash, -0.008, 0.0006), np.where(crash, 0.03, 0.008))
+    spx = pd.Series(100 * np.exp(np.cumsum(ret)), index=idx)
+    px = pd.DataFrame({"^GSPC": spx, "^VIX": 15 + rng.normal(0, 3, len(idx)), "^KS11": spx * 0.5, "KRW=X": 1200.0}, index=idx)
+    for t in indicators.SECTORS9:
+        px[t] = spx
+    fidx = pd.date_range("1995-01-01", "2024-12-01", freq="MS")
+    # 급락 달 바로 전 달에 금리차 역전(미래를 아는 합성 신호)
+    inverted = pd.Index(fidx.to_period("M")).map(lambda p: (p + 1) in set(crash_m))
+    fred = pd.DataFrame({"T10Y3M": np.where(inverted, -0.5, 1.0), "BAA10Y": rng.uniform(1, 4, len(fidx)),
+                         "UNRATE": 5.0}, index=fidx)
+    res = indicators.run(px, fred)
+    curve = next(r for r in res if r["spec"].key == "curve")
+    v = indicators.verdict(curve)[0]
+    assert v.startswith("추적 추천") and "하락" in v
+    vix = next(r for r in res if r["spec"].key == "vix")       # 아무 정보 없는 VIX(잡음)
+    assert not indicators.verdict(vix)[0].startswith("추적 추천")
+    text = indicators.report(res)
+    assert "장단기 금리차" in text and "== 추적 추천 ==" in text
+    # 미래 정보 없음: 백분위는 그때까지 값만으로
+    r = indicators.expanding_rank(pd.Series(np.arange(40, dtype=float)))
+    assert np.isnan(r.iloc[34]) and r.iloc[39] == 1.0
+
+
+def test_one_missing_ticker_is_refetched_or_filled_from_cache(tmp_path):
+    idx = pd.bdate_range("2024-01-01", periods=5)
+    close = pd.DataFrame({"SPY": [1.0, 2, 3, 4, 5], "GLD": np.nan}, index=idx)
+    old = pd.DataFrame({"SPY": 1.0, "GLD": [9.0, 9, 9, 9, 9], "TLT": 7.0}, index=idx)
+    cache = tmp_path / "prices.csv"
+    old.to_csv(cache)
+    # 다시 받기가 되면 그 값
+    got = data.fill_missing(close, ["SPY", "GLD"], cache, lambda t: pd.Series(2.0, index=idx))
+    assert (got["GLD"] == 2.0).all()
+    # 다시 받기도 실패하면 저장본 값, 저장본에도 없으면 그대로 비워 둔다
+    def fail(t):
+        raise RuntimeError("database is locked")
+    got = data.fill_missing(close, ["SPY", "GLD", "TLT", "QQQ"], cache, fail)
+    assert (got["GLD"] == 9.0).all() and (got["TLT"] == 7.0).all() and "QQQ" not in got
+
+
+def test_kr_snapshot_load_retries_failed_months(tmp_path, monkeypatch):
+    from market_dashboard import kr_factors
+    months = list(pd.period_range("2024-01", "2024-03", freq="M"))
+    monkeypatch.setattr(kr_factors.pd.Timestamp, "today", classmethod(lambda cls: pd.Timestamp("2024-04-15")))
+    monkeypatch.setattr(kr_factors, "trading_month_ends", lambda start: {m: m.end_time.normalize() - pd.Timedelta(days=1) for m in months})
+    calls = {}
+
+    def fake_snapshot(day, cache_dir):
+        calls[day] = calls.get(day, 0) + 1
+        if day.startswith("202402") and calls[day] == 1:      # 2월은 처음 한 번 빈 응답
+            raise KeyError("종가")
+        df = pd.DataFrame({"종가": [1.0], "시가총액": [10.0]}, index=["000010"])
+        df.to_pickle(cache_dir / f"krx_{day}.pkl")
+        return df
+
+    monkeypatch.setattr(kr_factors, "snapshot", fake_snapshot)
+    snaps = kr_factors.load(tmp_path, start="2024-01", pause=0)
+    assert len(snaps) == 3 and calls["20240228"] == 2
+    # 다음 실행은 저장본만 읽고 한국거래소에 묻지 않는다
+    calls.clear()
+    assert len(kr_factors.load(tmp_path, start="2024-01", pause=0)) == 3 and not calls
+
+
+def test_public_pages_drop_allocation_and_buy_wording():
+    from market_dashboard import kr_html, public, sector_html
+    dash, sec, kr = _three_screens()
+    assert any(a["weight"] > 0 for a in dash["assets"])            # 집 PC 화면에는 있다
+    pd_, ps, pk = public.assets(dash), public.sectors(sec), public.kr(kr)
+    assert all(a["weight"] == 0 for a in pd_["assets"]) and pd_["backtest"] is None and not pd_["products"]
+    assert all(s["weight"] == 0 for c in ps["countries"] for s in c["sectors"])
+    assert all(r["status"] != "후보" for c in ps["countries"] for s in c["sectors"] for r in s["stocks"])
+    pages = {"asset": html.render(pd_), "sector": sector_html.render(ps), "kr": kr_html.render(pk)}
+    for name, page in pages.items():
+        # 화면 구간(HTML)이 빠졌는지만 본다 — 화면에 실제로 보이는 글은 브라우저 점검으로 확인
+        for word in ("<h2>이 자산군 사려면</h2>", "<h2>백테스트(원화 기준)</h2>", "<h2>규칙</h2>", "이번 연구에서 가장 나았던 방식",
+                     "매수 후보\"", "<!--private-->"):
+            assert word not in page, (name, word)
+        assert "참고 자료" in page or "매매 신호" in page
+    # 집 PC 화면은 그대로
+    assert "이 자산군 사려면" in html.render(dash) and "고배당 30" in kr_html.render(kr)
+
+
+def test_risk_signals_follow_backtest_rules():
+    from market_dashboard import brief
+    idx = pd.bdate_range("2023-01-02", "2026-10-30")
+    up = pd.Series(np.linspace(100, 200, len(idx)), index=idx)
+    down = up.copy()
+    down.iloc[-120:] = np.linspace(200, 120, 120)                 # 최근 반년 급락
+    cidx = pd.bdate_range("1990-01-01", "2026-10-30")
+    calm = pd.Series(2.0 + 0.3 * np.sin(np.arange(len(cidx)) / 200), index=cidx)
+    wide = calm.copy()
+    wide.iloc[-60:] += np.linspace(0, 3, 60)                      # 최근 3개월 스프레드 급확대
+    safe = brief.risk_block(brief.risk_states(up, calm))
+    risky = brief.risk_block(brief.risk_states(down, wide))
+    st = {s["key"]: s["state"] for s in risky["signals"]}
+    assert st == {"us_trend": "위험", "us_mom12": "위험", "credit": "위험"} and risky["on"] == 3
+    assert {s["key"]: s["state"] for s in safe["signals"]}["us_trend"] == "안전"
+    # 무디스 자료(신용 스프레드)는 값 없이 상태만
+    assert next(s for s in risky["signals"] if s["key"] == "credit")["value"] is None
+    b = brief.build(None, None, None, risk=risky)
+    assert b["headline"][0] == "미국 하락 위험 신호 3/3개 켜짐"
+    prev = brief.build(None, None, None, risk=safe)
+    assert brief.build(None, None, None, prev=prev, risk=risky)["changes"]["risk_moves"]
+
+
+def test_kr_public_data_source_builds_map(tmp_path):
+    """공공데이터포털 응답 모양(가짜)으로 한국 종목 지도를 만든다: 분할 보정·시가총액 가중 비교 지수·배당 열 없음."""
+    from datetime import datetime
+    from market_dashboard import kr_html, kr_public, kr_stocks
+    rng = np.random.default_rng(7)
+    days = pd.bdate_range("2023-09-01", "2026-10-30")
+    codes = [f"{i:05d}0" for i in range(1, 61)] + ["000015"]          # 마지막은 우선주(빠져야 함)
+    rows = []
+    for j, c in enumerate(codes):
+        px = 10000 * np.exp(np.cumsum(rng.normal(0.0003, 0.02, len(days))))
+        shares = np.full(len(days), 1e7)
+        if j == 0:                                                     # 첫 종목: 중간에 1:5 액면분할
+            px[400:] /= 5
+            shares[400:] *= 5
+        for d, p_, sh in zip(days, px, shares):
+            rows.append({"basDt": d.strftime("%Y%m%d"), "srtnCd": c, "itmsNm": "스팩1호" if j == 59 else f"종목{j}",
+                         "mrktCtg": "KOSDAQ" if j % 3 == 0 else "KOSPI", "clpr": str(round(p_)), "trqu": "1000",
+                         "trPrc": str(5e9 + j * 1e8), "lstgStCnt": str(int(sh)), "mrktTotAmt": str(p_ * sh * (1 + j))})
+    allrows = pd.DataFrame(rows)
+
+    def fake_fetch(key, params):
+        df = allrows
+        if "basDt" in params:
+            df = df[df["basDt"] == params["basDt"]]
+        if "likeSrtnCd" in params:
+            df = df[(df["srtnCd"] == params["likeSrtnCd"]) & (df["basDt"] >= params["beginBasDt"])
+                    & (df["basDt"] <= params["endBasDt"])]
+        n, pg = params["numOfRows"], params["pageNo"]
+        return df.iloc[(pg - 1) * n: pg * n].to_dict("records"), len(df)
+
+    snap = kr_public.latest("k", today=datetime(2026, 11, 1, tzinfo=kr_public.KST), fetch=fake_fetch)
+    assert snap["date"].iloc[0] == pd.Timestamp("2026-10-30")
+    uni = kr_public.universe(snap)
+    assert "000015" not in uni.index and not uni["종목명"].str.contains("스팩").any()
+    panel = kr_public.update_panel("k", list(uni.index), tmp_path, snap, fetch=fake_fetch)
+    close, vol = kr_public.prices(panel, list(uni.index), kr_stocks.BENCH)
+    s = close["000010"].dropna()
+    assert abs(s.iloc[401] / s.iloc[399] - 1) < 0.2                   # 분할 날 가격이 1/5로 뚝 떨어지지 않음
+    d = kr_stocks.build(uni, close, vol, bench_name=kr_public.BENCH_NAME, bench_short=kr_public.BENCH_SHORT,
+                        source=kr_public.SOURCE)
+    assert d["source"] == kr_public.SOURCE and len([x for x in d["stocks"] if not x["bench"]]) == 59
+    bench = next(x for x in d["stocks"] if x["bench"])
+    assert bench["short"] == "상위 200" and bench["x"] is not None
+    assert all(x["div"] is None for x in d["stocks"])
+    # 다음 날: 저장본에 하루치만 이어 붙인다
+    calls = []
+    kr_public.update_panel("k", list(uni.index), tmp_path, snap, fetch=lambda k, p: (calls.append(p), fake_fetch(k, p))[1])
+    assert all("likeSrtnCd" not in c for c in calls)
+    page = kr_html.render(d)
+    assert "금융위원회" in page
+
+
+def test_indicator_now_ignores_month_without_us_price():
+    """미국장이 아직 안 열린 새 달(한국 시세만 있는 줄)을 '12개월 수익 마이너스'로 읽으면 안 된다."""
+    from market_dashboard import brief, indicators
+    idx = pd.bdate_range("2023-01-02", "2026-10-30")
+    spx = pd.Series(np.linspace(90, 100, len(idx)), index=idx)
+    px = pd.DataFrame({"^GSPC": spx})
+    for t in ["^VIX", "^KS11", "KRW=X"] + indicators.SECTORS9:
+        px[t] = spx
+    px.loc[pd.Timestamp("2026-11-02")] = np.nan
+    px.loc[pd.Timestamp("2026-11-02"), "^KS11"] = 50.0
+    fred = pd.DataFrame({"T10Y3M": [1.0], "BAA10Y": [2.0], "UNRATE": [5.0]}, index=[pd.Timestamp("2020-01-01")])
+    sig = indicators.signals(px, fred)
+    assert sig["us_mom12"].dropna().iloc[-1] == True          # noqa: E712 - 10월 말 기준 플러스
+    assert brief.risk_states(spx, None)["us_mom12"]["risk"] is False

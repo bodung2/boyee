@@ -28,6 +28,30 @@ FRED_SERIES = {
 }
 
 
+def fill_missing(close: pd.DataFrame, tickers: list[str], cache: Path, refetch) -> pd.DataFrame:
+    """여러 종목을 한꺼번에 받다 몇 개만 빠지는 날(yfinance 'database is locked' 등)이 있다.
+    빠진 종목은 하나씩 한 번 더 받고, 그래도 없으면 저장본의 그 종목 열로 채운다(한 종목 때문에 화면 전체가 멈추지 않게)."""
+    missing = [t for t in tickers if t not in close or close[t].notna().sum() == 0]
+    if not missing:
+        return close
+    close = close.copy()
+    for t in missing:
+        try:
+            s = refetch(t)
+            s = s.squeeze() if isinstance(s, pd.DataFrame) else s
+            if s is not None and s.notna().sum() > 0:
+                close[t] = s.reindex(close.index)
+                continue
+        except Exception as e:  # noqa: BLE001
+            log.warning("%s 다시 받기 실패: %s", t, e)
+        if cache.exists():
+            old = pd.read_csv(cache, index_col=0, parse_dates=True)
+            if t in old:
+                log.warning("%s 시세를 받지 못해 저장본 값으로 채웁니다", t)
+                close[t] = old[t].reindex(close.index).ffill()
+    return close
+
+
 def fetch_prices(cache_dir: Path, start: str = START) -> pd.DataFrame:
     """종목별 수정종가(현지 통화) + 원/달러 환율 열(FX_TICKER). 실패하면 저장본."""
     cache = cache_dir / "prices.csv"
@@ -40,6 +64,8 @@ def fetch_prices(cache_dir: Path, start: str = START) -> pd.DataFrame:
         close = close.dropna(how="all")
         if close.empty:
             raise RuntimeError("빈 시세")
+        close = fill_missing(close, tickers, cache, lambda t: yf.download(
+            t, start=start, auto_adjust=True, progress=False, threads=False)["Close"])
         cache_dir.mkdir(parents=True, exist_ok=True)
         close.to_csv(cache)
         return close
