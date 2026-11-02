@@ -10,7 +10,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TABLE = ROOT / "scripts" / "setup_all_schedules.ps1"
-SELF_BAT = "run_quest_board.bat"          # 보드 자신은 퀘스트로 보여 주지 않는다
+# 보드 자신(23:40 요약, 매시간 갱신, 더블클릭용)은 퀘스트로 보여 주지 않는다
+SELF_BATS = {"run_quest_board.bat", "run_quest_board_refresh.bat", "quest_board.bat"}
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 # 작업 스케줄러 결과 코드(0x41301 실행 중, 0x41303 아직 실행 안 함, 0x41306 강제 종료)
@@ -61,7 +62,7 @@ def parse_table(text: str) -> list[Quest]:
     quests = []
     for entry in _ENTRY.finditer(m.group(1)):
         kv = {k: _value(v) for k, v in _PAIR.findall(entry.group(1))}
-        if not kv.get("Name") or not kv.get("Bat") or kv["Bat"] == SELF_BAT:
+        if not kv.get("Name") or not kv.get("Bat") or kv["Bat"].lower() in SELF_BATS:
             continue
         quests.append(Quest(
             name=kv["Name"], bat=kv["Bat"], arg=kv.get("Arg", ""), times=list(kv.get("Times", [])),
@@ -73,11 +74,11 @@ def parse_table(text: str) -> list[Quest]:
 _PS = r"""
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $root = '%s'
-$out = @(Get-ScheduledTask | Where-Object { @($_.Actions | Where-Object { $_.Execute -like "$root\scripts\*" }).Count -gt 0 } | ForEach-Object {
+$out = @(Get-ScheduledTask | Where-Object { @($_.Actions | Where-Object { $_.Execute -like "$root\scripts\*" -or $_.Arguments -like "*$root\scripts\*" }).Count -gt 0 } | ForEach-Object {
   $i = Get-ScheduledTaskInfo -InputObject $_
   $a = @($_.Actions)[0]
   [pscustomobject]@{
-    Name = $_.TaskName; State = "$($_.State)"; Bat = (Split-Path -Leaf $a.Execute); Arg = "$($a.Arguments)"
+    Name = $_.TaskName; State = "$($_.State)"; Execute = "$($a.Execute)"; Arguments = "$($a.Arguments)"
     LastRun = if ($i.LastRunTime) { $i.LastRunTime.ToString("yyyy-MM-ddTHH:mm:ss") } else { "" }
     LastResult = $i.LastTaskResult
     NextRun = if ($i.NextRunTime) { $i.NextRunTime.ToString("yyyy-MM-ddTHH:mm:ss") } else { "" }
@@ -100,7 +101,23 @@ def read_scheduler(root: Path = ROOT) -> dict[str, dict] | None:
         return None
     if isinstance(data, dict):
         data = [data]
-    return {d["Name"]: d for d in data if isinstance(d, dict) and d.get("Name")}
+    return {d["Name"]: _with_bat(d) for d in data if isinstance(d, dict) and d.get("Name")}
+
+
+def _with_bat(info: dict) -> dict:
+    """작업의 실행 파일·인자에서 bat 이름과 넘기는 옵션을 뽑는다.
+    창 없이 도는 작업은 `wscript.exe "...\\run_hidden.vbs" "...\\job.bat" 옵션` 모양이다."""
+    if info.get("Bat"):
+        return info
+    text = f'"{info.get("Execute", "")}" {info.get("Arguments", "")}'
+    bats = list(re.finditer(r'[^"\s\\]+\.bat"?', text, re.I))
+    if bats:
+        m = bats[-1]
+        info["Bat"] = m.group(0).strip('"')
+        info["Arg"] = text[m.end():].strip()
+    else:
+        info["Bat"], info["Arg"] = "", info.get("Arguments", "")
+    return info
 
 
 def load(root: Path = ROOT, live: dict[str, dict] | None = None, table_text: str | None = None
@@ -117,7 +134,7 @@ def load(root: Path = ROOT, live: dict[str, dict] | None = None, table_text: str
         if q.live is None:
             missing.append(q.name)
     for name, info in sorted(live.items()):
-        if name in known or info.get("Bat") == SELF_BAT:
+        if name in known or str(info.get("Bat", "")).lower() in SELF_BATS:
             continue
         quests.append(Quest(name=name, bat=info.get("Bat", ""), arg=info.get("Arg", ""),
                             times=sorted(t for t in info.get("Times") or [] if t), desc=name,

@@ -14,6 +14,7 @@ TABLE = '''$Schedule = @(
     @{ Name = "PerpBotPaper"; Bat = "run_perp_paper.bat"; Arg = ""; Times = @("01:05"); Hours = 0.5; Wake = $false; Every = 4; Desc = "선물 봇" }
     @{ Name = "NewQuest"; Bat = "run_new_thing.bat"; Arg = ""; Times = @("09:00"); Hours = 1; Wake = $false; Desc = "새 퀘스트" }
     @{ Name = "QuestBoard"; Bat = "run_quest_board.bat"; Arg = "--notify"; Times = @("23:40"); Hours = 0.5; Wake = $false; Desc = "보드" }
+    @{ Name = "QuestBoardRefresh"; Bat = "run_quest_board_refresh.bat"; Arg = ""; Times = @("00:05"); Hours = 0.25; Wake = $false; Every = 1; Hidden = $true; Desc = "갱신" }
 )
 '''
 MON = datetime(2026, 11, 2, 19, 0, tzinfo=board.KST)      # 월요일
@@ -38,7 +39,7 @@ def statuses(p, live=None, now=MON):
 
 def test_parse_table_reads_every_field_and_skips_board_itself():
     qs = {q.name: q for q in schedule.parse_table(TABLE)}
-    assert "QuestBoard" not in qs
+    assert "QuestBoard" not in qs and "QuestBoardRefresh" not in qs
     edu = qs["NaverAutoPost-edu"]
     assert (edu.bat, edu.arg, edu.times, edu.label) == ("run_daily.bat", "--profile edu", ["06:00", "11:00"], "네이버 교육 블로그")
     assert qs["NaverAutoPost-market"].days == ["Tuesday", "Saturday"]
@@ -50,6 +51,21 @@ def test_real_schedule_table_parses():
     names = {q.name for q in qs}
     assert {"NaverAutoPost-edu", "TistoryAutoPost", "BloggerAutoPost", "NaverAutoPost-Social-childhood"} <= names
     assert all(q.times for q in qs)
+    assert not names & {"QuestBoard", "QuestBoardRefresh"}
+    text = (schedule.ROOT / "scripts" / "setup_all_schedules.ps1").read_text(encoding="utf-8-sig")
+    assert 'Name = "QuestBoardRefresh"' in text and "Every = 1; Hidden = $true" in text
+
+
+def test_scheduler_entries_find_bat_even_when_run_hidden():
+    plain = schedule._with_bat({"Execute": r"C:\Users\박보영\boyee\scripts\run_daily.bat", "Arguments": "--profile edu"})
+    assert (plain["Bat"], plain["Arg"]) == ("run_daily.bat", "--profile edu")
+    hidden = schedule._with_bat({"Execute": "wscript.exe", "Arguments":
+                                 r'"C:\Users\박 보영\boyee\scripts\run_hidden.vbs" "C:\Users\박 보영\boyee\scripts\run_tistory_daily.bat" --slot 2'})
+    assert (hidden["Bat"], hidden["Arg"]) == ("run_tistory_daily.bat", "--slot 2")
+    quests, _, _ = schedule.load(live={"QuestBoardRefresh": schedule._with_bat({
+        "Name": "QuestBoardRefresh", "Execute": "wscript.exe",
+        "Arguments": r'"C:\b\scripts\run_hidden.vbs" "C:\b\scripts\run_quest_board_refresh.bat"'})}, table_text=TABLE)
+    assert "QuestBoardRefresh" not in {q.name for q in quests}
 
 
 def test_today_states_from_records_logs_and_locks(tmp_path):
@@ -134,6 +150,7 @@ def test_render_and_summary(tmp_path):
         {"date": "2026-11-02", "title": "<제목>", "url": "https://blog.naver.com/a/1", "source": "autopost"}]))
     b, _ = statuses(p)
     page = html.render(b)
+    assert '<meta http-equiv="refresh" content="300">' in page
     assert "오늘의 퀘스트 · 11/2(월)" in page and "&lt;제목&gt;" in page and "https://blog.naver.com/a/1" in page
     text = board.summary_text(b)
     assert text.startswith("[퀘스트 보드] 11/2(월)")

@@ -115,7 +115,9 @@ def main() -> int:
     for line in done:
         print(line)
     problems = [d for d in done if d.startswith("⚠️")]
-    if problems:
+    # 매시간 도는 작업(퀘스트 보드 갱신)은 AUTOPOST_UPDATE_QUIET=1로 알림을 끈다 — 같은 문제가 매시간 오지 않게.
+    # 문제는 그날의 다른 예약 작업이 부를 때 알린다.
+    if problems and not env.get("AUTOPOST_UPDATE_QUIET"):
         notify(env, "\n".join(problems))
     return 0
 
