@@ -33,7 +33,7 @@ description: "네이버 투자 블로그의 '매일 시황' 글을 완전 자동
 `MARKET_BRIEF`를 Read로 읽는다. 구조:
 - `date`: 요약 날짜(=TODAY여야 한다), `changes.since`: 비교 기준(지난번 요약 날짜)
 - `markets[]`: 주요 지수. `close` 종가, `d1` 하루 변화, `w1` 한 주(5거래일) 변화, `date` 그 지수의 마지막 거래일. **`unit`이 "%"면 d1·w1은 비율(0.012 = +1.2%), "%p"면 금리 변화 그대로(0.05 = +0.05%p).**
-- `kr`: 한국 시가총액 상위 종목. `above_sma` 200일선 위 비율(0.21 = 21%), `median_x` 추세 강도 중앙값, `counts` 지도 네 칸별 종목 수, `kospi200`(x·r1w·r1m), `lead_with_volume`(거래 늘며 강세, `vchg`는 log2라서 1 = 평소의 2배, 2 = 4배), `week_up`·`week_down`(한 주 수익 상·하위, `r1w` 비율), `volume_only`(거래만 급증), `div30`(고배당 30, `div`는 배당수익률 %)
+- `kr`: 한국 시가총액 상위 종목. `above_sma` 200일선 위 비율(0.21 = 21%), `median_x` 추세 강도 중앙값, `counts` 지도 네 칸별 종목 수, `kospi200`(x·r1w·r1m), `lead_with_volume`(거래 늘며 강세, `vchg`는 log2라서 1 = 평소의 2배, 2 = 4배), `week_up`·`week_down`(한 주 수익 상·하위, `r1w` 비율), `volume_only`(거래만 급증), `div30`(고배당 30, `div`는 배당수익률 %. 비어 있으면 — 배당 자료가 없는 출처인 날 — 고배당 이야기는 쓰지 않는다)
 - `us`: 미국 섹터. `rank`(추세 강도 순, `quadrant` 주도/둔화/회복/회피), `leaders`, `weakening`, `laggards`
 - `assets`: 자산군. `strongest`(추세가 가장 강한 자산), `turning`(회복→주도 경계), `liquidity`(유동성 온도)
 - `risk`: 미국 하락 위험 신호 3개(백테스트로 고른 것). `signals[]`마다 `state`(위험/안전/중간), `label`(지금 상태를 말로), `p_if_risk`·`p_if_safe`(과거 1990~2026년 그 상태 뒤 6개월 안에 S&P500이 −10% 넘게 빠진 적이 있었던 비율, 0.44 = 44%), `on`/`of`(켜진 개수), `basis`(통계 설명). 신용 스프레드는 값 없이 상태만 있다.

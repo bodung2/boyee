@@ -43,7 +43,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          DASHBOARD_URL: https://bodung2.github.io/boyee/
+          DASHBOARD_URL: ${{ vars.DASHBOARD_URL || 'https://bodung2.github.io/boyee/' }}
         run: python -m market_dashboard run --out site --notify --public
 
       - name: 미국 섹터 지도 — 실패해도 자산군 대시보드는 그대로 게시
@@ -56,6 +56,8 @@ jobs:
         env:
           KRX_ID: ${{ secrets.KRX_ID }}
           KRX_PW: ${{ secrets.KRX_PW }}
+          # 공공데이터포털 인증키가 있으면 한국 종목은 그쪽(금융위원회 주식시세정보, 이용허락 제한 없음)으로 만든다
+          DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
         run: python -m market_dashboard krstocks --out site --public
 
       # 세 화면의 오늘 요약(brief.json) + 날짜별 기록(시황 기록 화면). 블로그 RSS에서 'M월 D일 시황' 글을 찾아 날짜에 링크를 붙인다.
@@ -64,6 +66,8 @@ jobs:
         continue-on-error: true
         env:
           NAVER_BLOG_ID_INVEST: ${{ vars.NAVER_BLOG_ID_INVEST }}
+          # 내 도메인을 연결하면 저장소 Variables에 DASHBOARD_URL(예: https://sihwangmap.com/)을 넣는다
+          DASHBOARD_URL: ${{ vars.DASHBOARD_URL || 'https://bodung2.github.io/boyee/' }}
         run: python -m market_dashboard brief --out site
 
       - uses: actions/upload-pages-artifact@v3

@@ -231,10 +231,22 @@ def main(argv: list[str] | None = None) -> int:
             if args.offline:
                 uni = pd.read_pickle(CACHE / "kr_universe.pkl")
                 close, vol = pd.read_pickle(CACHE / "kr_prices.pkl")
+                d = kr_stocks.build(uni, close, vol)
+            elif os.environ.get("DATA_GO_KR_KEY", "").strip():
+                # 공공데이터포털(금융위원회 주식시세정보, 이용허락 제한 없음) — 공개 배포용 출처
+                from . import kr_public
+
+                key = os.environ["DATA_GO_KR_KEY"].strip()
+                snap = kr_public.latest(key)
+                uni = kr_public.universe(snap)
+                panel = kr_public.update_panel(key, list(uni.index), CACHE, snap)
+                close, vol = kr_public.prices(panel, list(uni.index), kr_stocks.BENCH)
+                d = kr_stocks.build(uni, close, vol, bench_name=kr_public.BENCH_NAME,
+                                    bench_short=kr_public.BENCH_SHORT, source=kr_public.SOURCE)
             else:
                 uni = kr_stocks.fetch_universe(CACHE)
                 close, vol = kr_stocks.fetch_prices(uni, CACHE)
-            d = kr_stocks.build(uni, close, vol)
+                d = kr_stocks.build(uni, close, vol)
         except Exception as e:
             log.exception("한국 종목 지도 실패")
             (out / "kr.html").write_text(kr_html.render_error(str(e)), encoding="utf-8")

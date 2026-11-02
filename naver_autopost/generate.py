@@ -165,9 +165,14 @@ def _market_brief(cfg: Config, out_dir: Path, today: str) -> str:
     from market_dashboard import brief
 
     path = out_dir / "market_brief.json"
+    site = os.environ.get("DASHBOARD_URL") or brief.DASHBOARD_URL
     if not path.exists():
-        brief.for_post(today, path, site_url=os.environ.get("DASHBOARD_URL") or brief.DASHBOARD_URL)
-    return f"MARKET_BRIEF={_rel(path)}\nDASHBOARD_URL={os.environ.get('DASHBOARD_URL') or brief.DASHBOARD_URL}\n"
+        brief.for_post(today, path, site_url=site)
+    try:   # 대시보드가 새 주소(내 도메인)로 옮겼으면 요약에 적힌 주소를 쓴다
+        site = json.loads(path.read_text(encoding="utf-8")).get("dashboard_url") or site
+    except (OSError, ValueError):
+        pass
+    return f"MARKET_BRIEF={_rel(path)}\nDASHBOARD_URL={site}\n"
 
 
 def write_post(cfg: Config, out_dir: Path, today: str, feedback: str = "") -> Path:

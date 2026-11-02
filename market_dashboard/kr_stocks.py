@@ -137,7 +137,11 @@ def volume_change(value: pd.DataFrame) -> pd.DataFrame:
     return np.log2((recent / base).where((base > 0) & (recent > 0)))
 
 
-def build(uni: pd.DataFrame, close: pd.DataFrame, volume: pd.DataFrame, p: Params | None = None) -> dict:
+SOURCE = "한국거래소(종목 목록·배당·PBR·PER) · Yahoo(시세)"
+
+
+def build(uni: pd.DataFrame, close: pd.DataFrame, volume: pd.DataFrame, p: Params | None = None,
+          bench_name: str = "KOSPI200(KODEX 200)", bench_short: str = "KOSPI200", source: str = SOURCE) -> dict:
     p = p or Params()
     idx = close.index[close[BENCH].notna()] if BENCH in close else close.index
     cl = close.reindex(idx).ffill(limit=5)
@@ -181,7 +185,8 @@ def build(uni: pd.DataFrame, close: pd.DataFrame, volume: pd.DataFrame, p: Param
         if bool(sig["overheat"].loc[t, c]):
             tags.append("과열")
         rows.append({
-            "code": c, "name": "KOSPI200(KODEX 200)" if is_b else str(info["종목명"]),
+            "code": c, "name": bench_name if is_b else str(info["종목명"]),
+            "short": bench_short if is_b else None,
             "market": "지수" if is_b else str(info["시장"]), "bench": is_b,
             "cap": None if is_b else _f(info["시가총액"], 0),
             "div": None if is_b else _f(info["DIV"], 2), "pbr": None if is_b else _f(info["PBR"], 2),
@@ -205,6 +210,7 @@ def build(uni: pd.DataFrame, close: pd.DataFrame, volume: pd.DataFrame, p: Param
                     "median_x": _f(float(np.median(xs)), 3) if xs else None, "n": len(stocks)},
         "rule": {"top_n": TOP_N, "div_n": DIV_N, "min_value": MIN_VALUE, "spike": SPIKE},
         "missing": [str(uni.loc[c, "종목명"]) for c in uni.index[:TOP_N] if c not in have],
+        "source": source,
     }
 
 

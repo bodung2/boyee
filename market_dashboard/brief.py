@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import math
 import re
 from datetime import datetime, timedelta, timezone
@@ -245,7 +246,7 @@ def build(dash: dict | None, sec: dict | None, kr: dict | None, markets: list[di
           prev: dict | None = None, now: datetime | None = None, risk: dict | None = None) -> dict:
     now = now or datetime.now(KST)
     b = {"date": now.strftime("%Y-%m-%d"), "generated": now.strftime("%Y-%m-%d %H:%M KST"),
-         "dashboard_url": DASHBOARD_URL, "markets": markets or [],
+         "dashboard_url": os.environ.get("DASHBOARD_URL") or DASHBOARD_URL, "markets": markets or [],
          "assets": _assets(dash), "us": _us(sec), "kr": _kr(kr), "risk": risk}
     b["changes"] = _changes(b, prev)
     b["headline"] = headline(b)

@@ -130,7 +130,7 @@ svg{display:block;width:100%;height:auto;fill:var(--ink2);font-size:12px}
   <section class="card note">
     <h2>읽는 법·한계</h2>
     <ul>
-      <li>대상: 어제 기준 KOSPI+KOSDAQ 보통주 중 최근 20일 하루 평균 거래대금 10억 원 이상, 시가총액 상위 200개. 종목 목록·배당·PBR·PER은 한국거래소, 가격·거래량은 Yahoo.</li>
+      <li>대상: 가장 최근 거래일 기준 KOSPI+KOSDAQ 보통주 중 최근 20일 하루 평균 거래대금 10억 원 이상, 시가총액 상위 200개. 데이터 출처: <span id="src"></span>.</li>
       <li>추세 강도: 3·6·12개월 현금(단기채권 ETF) 대비 초과수익 ÷ 변동성의 평균(최근 2주 제외). 0보다 크면 현금보다 강한 추세.</li>
       <li>거래대금 변화: log2(최근 20일 평균 거래대금 ÷ 그 앞 100일 평균).</li>
       <li><b>거래만 급증</b>: 거래대금이 평소의 2배 이상인데 1개월 수익이 ±5% 안. '거래량은 늘었는데 아직 안 오른' 종목 — <b>검증하지 않은 관찰용</b>이다. 코인에서 같은 생각을 시험했을 땐 비용을 넘는 수익이 없었다.</li>
@@ -301,6 +301,7 @@ function drawAll(){
   $("listSub").textContent=`${rows.length}개 표시 · 머리글을 누르면 정렬, 행을 누르면 지도에 표시 · 필터는 지도 위 버튼과 같이 움직인다`;
   table("all", rows, sortKey, desc, k=>{ if(k===sortKey) desc=!desc; else { sortKey=k; desc=k!=="name"&&k!=="quad"; } drawAll(); });
 }
+$("src").textContent=D.source||"한국거래소 · Yahoo";
 $("missing").textContent=D.missing&&D.missing.length?`시세를 받지 못한 종목: ${D.missing.join(", ")}`:"";
 
 drawStatic(); setFrame(F); refresh();

@@ -530,3 +530,55 @@ def test_risk_signals_follow_backtest_rules():
     assert b["headline"][0] == "미국 하락 위험 신호 3/3개 켜짐"
     prev = brief.build(None, None, None, risk=safe)
     assert brief.build(None, None, None, prev=prev, risk=risky)["changes"]["risk_moves"]
+
+
+def test_kr_public_data_source_builds_map(tmp_path):
+    """공공데이터포털 응답 모양(가짜)으로 한국 종목 지도를 만든다: 분할 보정·시가총액 가중 비교 지수·배당 열 없음."""
+    from datetime import datetime
+    from market_dashboard import kr_html, kr_public, kr_stocks
+    rng = np.random.default_rng(7)
+    days = pd.bdate_range("2023-09-01", "2026-10-30")
+    codes = [f"{i:05d}0" for i in range(1, 61)] + ["000015"]          # 마지막은 우선주(빠져야 함)
+    rows = []
+    for j, c in enumerate(codes):
+        px = 10000 * np.exp(np.cumsum(rng.normal(0.0003, 0.02, len(days))))
+        shares = np.full(len(days), 1e7)
+        if j == 0:                                                     # 첫 종목: 중간에 1:5 액면분할
+            px[400:] /= 5
+            shares[400:] *= 5
+        for d, p_, sh in zip(days, px, shares):
+            rows.append({"basDt": d.strftime("%Y%m%d"), "srtnCd": c, "itmsNm": "스팩1호" if j == 59 else f"종목{j}",
+                         "mrktCtg": "KOSDAQ" if j % 3 == 0 else "KOSPI", "clpr": str(round(p_)), "trqu": "1000",
+                         "trPrc": str(5e9 + j * 1e8), "lstgStCnt": str(int(sh)), "mrktTotAmt": str(p_ * sh * (1 + j))})
+    allrows = pd.DataFrame(rows)
+
+    def fake_fetch(key, params):
+        df = allrows
+        if "basDt" in params:
+            df = df[df["basDt"] == params["basDt"]]
+        if "likeSrtnCd" in params:
+            df = df[(df["srtnCd"] == params["likeSrtnCd"]) & (df["basDt"] >= params["beginBasDt"])
+                    & (df["basDt"] <= params["endBasDt"])]
+        n, pg = params["numOfRows"], params["pageNo"]
+        return df.iloc[(pg - 1) * n: pg * n].to_dict("records"), len(df)
+
+    snap = kr_public.latest("k", today=datetime(2026, 11, 1, tzinfo=kr_public.KST), fetch=fake_fetch)
+    assert snap["date"].iloc[0] == pd.Timestamp("2026-10-30")
+    uni = kr_public.universe(snap)
+    assert "000015" not in uni.index and not uni["종목명"].str.contains("스팩").any()
+    panel = kr_public.update_panel("k", list(uni.index), tmp_path, snap, fetch=fake_fetch)
+    close, vol = kr_public.prices(panel, list(uni.index), kr_stocks.BENCH)
+    s = close["000010"].dropna()
+    assert abs(s.iloc[401] / s.iloc[399] - 1) < 0.2                   # 분할 날 가격이 1/5로 뚝 떨어지지 않음
+    d = kr_stocks.build(uni, close, vol, bench_name=kr_public.BENCH_NAME, bench_short=kr_public.BENCH_SHORT,
+                        source=kr_public.SOURCE)
+    assert d["source"] == kr_public.SOURCE and len([x for x in d["stocks"] if not x["bench"]]) == 59
+    bench = next(x for x in d["stocks"] if x["bench"])
+    assert bench["short"] == "상위 200" and bench["x"] is not None
+    assert all(x["div"] is None for x in d["stocks"])
+    # 다음 날: 저장본에 하루치만 이어 붙인다
+    calls = []
+    kr_public.update_panel("k", list(uni.index), tmp_path, snap, fetch=lambda k, p: (calls.append(p), fake_fetch(k, p))[1])
+    assert all("likeSrtnCd" not in c for c in calls)
+    page = kr_html.render(d)
+    assert "금융위원회" in page
