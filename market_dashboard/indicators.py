@@ -33,7 +33,7 @@ DD_MONTHS, DD_LEVEL = 6, -0.10
 MIN_HISTORY = 36
 SECTORS9 = ["XLB", "XLE", "XLF", "XLI", "XLK", "XLP", "XLU", "XLV", "XLY"]   # 1998년 말부터 있는 섹터 ETF
 YAHOO = ["^GSPC", "^VIX", "^KS11", "KRW=X"] + SECTORS9
-FRED = ["T10Y3M", "BAMLH0A0HYM2", "UNRATE"]
+FRED = ["T10Y3M", "BAA10Y", "UNRATE"]   # 하이일드 스프레드(ICE)는 FRED가 최근 3년만 줘서 Baa−10년물로 대신
 
 
 @dataclass(frozen=True)
@@ -52,8 +52,8 @@ SPECS = [
     Spec("us_dd52", "S&P500 52주 고점 대비 낙폭", "US", "level", "낙폭 큼(상위 1/3)", "2008-01-01"),
     Spec("vix", "VIX(변동성 지수)", "US", "level", "높음(상위 1/3)", "2008-01-01"),
     Spec("curve", "장단기 금리차(10년−3개월) 역전", "US", "flag", "역전", "2008-01-01"),
-    Spec("hy", "하이일드 신용 스프레드", "US", "level", "높음(상위 1/3)", "2008-01-01"),
-    Spec("hy_chg", "하이일드 스프레드 3개월 변화", "US", "level", "확대(상위 1/3)", "2008-01-01"),
+    Spec("hy", "신용 스프레드(Baa 회사채−10년물)", "US", "level", "높음(상위 1/3)", "2008-01-01"),
+    Spec("hy_chg", "신용 스프레드 3개월 변화", "US", "level", "확대(상위 1/3)", "2008-01-01"),
     Spec("unrate", "실업률이 12개월 평균 위(한 달 늦춤)", "US", "flag", "위", "2008-01-01"),
     Spec("us_breadth", "미국 섹터 9개 중 10개월 평균 위 비율", "US", "level", "높음(상위 1/3)", "2008-01-01"),
     Spec("kr_trend", "코스피가 10개월 평균 위", "KR", "flag", "위", "2010-01-01"),
@@ -135,8 +135,8 @@ def signals(px: pd.DataFrame, fred: pd.DataFrame, snap: pd.DataFrame | None = No
         "us_dd52": -(month_end(d_spx) / hi52 - 1),
         "vix": m["^VIX"],
         "curve": (f["T10Y3M"] < 0).where(f["T10Y3M"].notna()),
-        "hy": f["BAMLH0A0HYM2"],
-        "hy_chg": f["BAMLH0A0HYM2"] - f["BAMLH0A0HYM2"].shift(3),
+        "hy": f["BAA10Y"],
+        "hy_chg": f["BAA10Y"] - f["BAA10Y"].shift(3),
         "unrate": (unrate > unrate.rolling(12).mean()).where(unrate.rolling(12).mean().notna()).shift(1),
         "us_breadth": (sec > sec.rolling(10, min_periods=10).mean()).where(sec.rolling(10, min_periods=10).mean().notna())
         .mean(axis=1).where(sec_ok & sec.rolling(10, min_periods=10).mean().notna().all(axis=1)),
@@ -154,15 +154,18 @@ def signals(px: pd.DataFrame, fred: pd.DataFrame, snap: pd.DataFrame | None = No
 def outcomes(daily: pd.Series) -> pd.DataFrame:
     """월말마다: 다음 h개월 수익, 다음 6개월 안 최저점(−10% 이상 빠졌나), 다음 1개월 변동성."""
     daily = daily.dropna()
-    m = month_end(daily)
+    m = month_end(daily).dropna()
     out = pd.DataFrame({f"r{h}": m.shift(-h) / m - 1 for h in HORIZONS})
+    idx, vals = daily.index.values, daily.to_numpy(float)
+    lr = np.diff(np.log(vals), prepend=np.nan)
     dd, vol = [], []
     for t, v in m.items():
-        win = daily[(daily.index > t) & (daily.index <= t + pd.DateOffset(months=DD_MONTHS))]
-        full = len(win) and win.index[-1] >= t + pd.DateOffset(months=DD_MONTHS) - pd.Timedelta(days=7)
-        dd.append(float(win.min() / v - 1 <= DD_LEVEL) if full else np.nan)
-        nxt = daily[(daily.index > t) & (daily.index <= t + pd.DateOffset(months=1))]
-        vol.append(float(np.log(nxt).diff().std() * math.sqrt(252)) if len(nxt) > 15 else np.nan)
+        i0 = np.searchsorted(idx, np.datetime64(t), side="right")
+        i6 = np.searchsorted(idx, np.datetime64(t + pd.DateOffset(months=DD_MONTHS)), side="right")
+        i1 = np.searchsorted(idx, np.datetime64(t + pd.DateOffset(months=1)), side="right")
+        complete = i6 < len(idx)          # 6개월이 다 지나야 판정
+        dd.append(float(vals[i0:i6].min() / v - 1 <= DD_LEVEL) if complete and i6 > i0 else np.nan)
+        vol.append(float(np.nanstd(lr[i0:i1], ddof=1) * math.sqrt(252)) if i1 - i0 > 15 and i1 < len(idx) else np.nan)
     out["dd"] = dd
     out["vol"] = vol
     return out
@@ -262,12 +265,15 @@ def verdict(r: dict) -> tuple[str, str]:
             and min(abs(a[0] - a[1]), abs(b[0] - b[1])) >= 0.03:
         vol_ok = True
         reasons.append(f"다음 달 변동성이 두 기간 모두 {'높음' if a[0] > a[1] else '낮음'}")
-    if ret_ok and (dd_ok or vol_ok):
-        return "추적 추천(수익·위험 모두)", "; ".join(reasons)
-    if dd_ok or vol_ok:
-        return "추적 추천(위험 신호)", "; ".join(reasons)
+    # 변동성은 원래 다음 달로 이어지므로(변동성 지속) 변동성 차이만으로는 추천하지 않는다
+    if ret_ok and dd_ok:
+        return "추적 추천(수익·하락 위험 모두)", "; ".join(reasons)
+    if dd_ok:
+        return "추적 추천(하락 위험 신호)", "; ".join(reasons)
     if ret_ok:
-        return "참고(수익만)", "; ".join(reasons)
+        return "추적 추천(수익 차이)", "; ".join(reasons)
+    if vol_ok:
+        return "참고(변동성만 — 원래 이어지는 성질)", "; ".join(reasons)
     return "뺌(일관된 효과 없음)", ""
 
 

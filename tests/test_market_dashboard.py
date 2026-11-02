@@ -420,26 +420,47 @@ def test_kr_unfinished_daily_bar_is_dropped_during_market_hours():
 
 
 def test_indicator_study_finds_planted_risk_signal():
-    """합성 시장: VIX가 높은 달 다음에는 변동성이 크고 크게 빠진다 → '위험 신호'로 골라야 한다."""
+    """합성 시장: 금리차가 역전된 달 다음 달에는 크게 빠진다 → '하락 위험 신호'로 골라야 한다. 아무 정보 없는 지표는 빼야 한다."""
     from market_dashboard import indicators
     rng = np.random.default_rng(5)
     idx = pd.bdate_range("1995-01-02", "2024-12-31")
-    regime = np.repeat(rng.random(len(idx) // 21 + 1) < 0.3, 21)[:len(idx)]   # 달마다 위험한 시기 30%
-    vol = np.where(regime, 0.03, 0.008)
-    ret = rng.normal(np.where(regime, -0.002, 0.0006), vol)
+    months = idx.to_period("M")
+    crash_m = pd.Index(months.unique())[rng.random(len(months.unique())) < 0.08]   # 드물게(8%) 오는 급락 달
+    crash = months.isin(crash_m)
+    ret = rng.normal(np.where(crash, -0.008, 0.0006), np.where(crash, 0.03, 0.008))
     spx = pd.Series(100 * np.exp(np.cumsum(ret)), index=idx)
-    vix = pd.Series(np.where(np.roll(regime, -21), 35.0, 14.0) + rng.normal(0, 1, len(idx)), index=idx)  # 다음 달 위험을 미리 반영
-    px = pd.DataFrame({"^GSPC": spx, "^VIX": vix, "^KS11": spx * 0.5, "KRW=X": 1200.0}, index=idx)
+    px = pd.DataFrame({"^GSPC": spx, "^VIX": 15 + rng.normal(0, 3, len(idx)), "^KS11": spx * 0.5, "KRW=X": 1200.0}, index=idx)
     for t in indicators.SECTORS9:
-        px[t] = spx * (1 + rng.normal(0, 0.01, len(idx)))
+        px[t] = spx
     fidx = pd.date_range("1995-01-01", "2024-12-01", freq="MS")
-    fred = pd.DataFrame({"T10Y3M": 1.0, "BAMLH0A0HYM2": rng.uniform(3, 8, len(fidx)), "UNRATE": 5.0}, index=fidx)
+    # 급락 달 바로 전 달에 금리차 역전(미래를 아는 합성 신호)
+    inverted = pd.Index(fidx.to_period("M")).map(lambda p: (p + 1) in set(crash_m))
+    fred = pd.DataFrame({"T10Y3M": np.where(inverted, -0.5, 1.0), "BAA10Y": rng.uniform(1, 4, len(fidx)),
+                         "UNRATE": 5.0}, index=fidx)
     res = indicators.run(px, fred)
-    vix_row = next(r for r in res if r["spec"].key == "vix")
-    assert indicators.verdict(vix_row)[0].startswith("추적 추천")
-    assert vix_row["all"]["vol"][0] > vix_row["all"]["vol"][1]
+    curve = next(r for r in res if r["spec"].key == "curve")
+    v = indicators.verdict(curve)[0]
+    assert v.startswith("추적 추천") and "하락" in v
+    vix = next(r for r in res if r["spec"].key == "vix")       # 아무 정보 없는 VIX(잡음)
+    assert not indicators.verdict(vix)[0].startswith("추적 추천")
     text = indicators.report(res)
-    assert "VIX" in text and "== 추적 추천 ==" in text
+    assert "장단기 금리차" in text and "== 추적 추천 ==" in text
     # 미래 정보 없음: 백분위는 그때까지 값만으로
     r = indicators.expanding_rank(pd.Series(np.arange(40, dtype=float)))
     assert np.isnan(r.iloc[34]) and r.iloc[39] == 1.0
+
+
+def test_one_missing_ticker_is_refetched_or_filled_from_cache(tmp_path):
+    idx = pd.bdate_range("2024-01-01", periods=5)
+    close = pd.DataFrame({"SPY": [1.0, 2, 3, 4, 5], "GLD": np.nan}, index=idx)
+    old = pd.DataFrame({"SPY": 1.0, "GLD": [9.0, 9, 9, 9, 9], "TLT": 7.0}, index=idx)
+    cache = tmp_path / "prices.csv"
+    old.to_csv(cache)
+    # 다시 받기가 되면 그 값
+    got = data.fill_missing(close, ["SPY", "GLD"], cache, lambda t: pd.Series(2.0, index=idx))
+    assert (got["GLD"] == 2.0).all()
+    # 다시 받기도 실패하면 저장본 값, 저장본에도 없으면 그대로 비워 둔다
+    def fail(t):
+        raise RuntimeError("database is locked")
+    got = data.fill_missing(close, ["SPY", "GLD", "TLT", "QQQ"], cache, fail)
+    assert (got["GLD"] == 9.0).all() and (got["TLT"] == 7.0).all() and "QQQ" not in got
