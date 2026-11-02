@@ -15,6 +15,8 @@ import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pandas as pd
+
 log = logging.getLogger(__name__)
 
 KST = timezone(timedelta(hours=9))
@@ -24,6 +26,7 @@ MARKETS = {
     "^GSPC": "S&P500", "^IXIC": "나스닥", "^KS11": "코스피", "^KQ11": "코스닥",
     "KRW=X": "원/달러 환율", "^TNX": "미국 10년물 금리(%)",
 }
+KR_HOURS = {"^KS11", "^KQ11", "KRW=X"}
 POST_TITLE = re.compile(r"(\d{1,2})\s*월\s*(\d{1,2})\s*일[^|]{0,6}시황")
 
 
@@ -44,11 +47,16 @@ def fetch_markets() -> list[dict]:
     except Exception as e:  # noqa: BLE001 - 지수가 없어도 요약은 만든다
         log.warning("주요 지수 실패: %s", e)
         return []
+    from .kr_stocks import drop_unfinished
+
+    raw.index = pd.to_datetime(raw.index).tz_localize(None)
     out = []
     for t, name in MARKETS.items():
         if t not in raw:
             continue
         s = raw[t].dropna()
+        if t in KR_HOURS:   # 한국장·환율은 장중이면 오늘 값이 미완성이다
+            s = drop_unfinished(s.to_frame())[t]
         if len(s) < 6:
             continue
         last, prev, week = float(s.iloc[-1]), float(s.iloc[-2]), float(s.iloc[-6])

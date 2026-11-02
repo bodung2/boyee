@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
@@ -24,6 +24,7 @@ from . import signals
 from .signals import Params
 
 log = logging.getLogger(__name__)
+KST = timezone(timedelta(hours=9))
 
 TOP_N = 200
 DIV_N = 30
@@ -84,6 +85,17 @@ def fetch_universe(cache_dir: Path, today: datetime | None = None) -> pd.DataFra
         raise
 
 
+KR_CLOSE = (15, 40)       # 한국장 마감(15:30) 뒤 시세가 정리되는 시각(KST)
+
+
+def drop_unfinished(df: pd.DataFrame, now: datetime | None = None) -> pd.DataFrame:
+    """한국장이 아직 안 끝난 시각이면 오늘 날짜의 미완성 일봉을 뺀다(장중 값이 종가처럼 쓰이지 않게)."""
+    now = now or datetime.now(KST)
+    if len(df) and df.index[-1].date() == now.date() and (now.hour, now.minute) < KR_CLOSE:
+        return df.iloc[:-1]
+    return df
+
+
 def fetch_prices(uni: pd.DataFrame, cache_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     """(수정종가, 거래량), 열 = 종목코드(+ CASH·BENCH는 Yahoo 티커 그대로)."""
     path = cache_dir / "kr_prices.pkl"
@@ -99,6 +111,7 @@ def fetch_prices(uni: pd.DataFrame, cache_dir: Path) -> tuple[pd.DataFrame, pd.D
             raise RuntimeError("빈 시세")
         for x in (close, vol):
             x.index = pd.to_datetime(x.index).tz_localize(None)
+        close, vol = drop_unfinished(close), drop_unfinished(vol)
         cache_dir.mkdir(parents=True, exist_ok=True)
         pd.to_pickle((close, vol), path)
         return close, vol

@@ -405,3 +405,13 @@ def test_brief_cli_archives_and_renders_history(tmp_path, monkeypatch):
     # 모든 화면 위쪽 탭에 '시황 기록'과 요약 줄 자리가 있다
     for html_page in (kr_html.render(kr), sector_html.render(sec)):
         assert 'href="history.html"' in html_page and 'id="briefStrip"' in html_page
+
+
+def test_kr_unfinished_daily_bar_is_dropped_during_market_hours():
+    from datetime import datetime
+    from market_dashboard import kr_stocks
+    df = pd.DataFrame({"a": [1.0, 2.0, 3.0]}, index=pd.to_datetime(["2026-10-30", "2026-10-31", "2026-11-02"]))
+    at = lambda h, m: datetime(2026, 11, 2, h, m, tzinfo=kr_stocks.KST)  # noqa: E731
+    assert len(kr_stocks.drop_unfinished(df, at(10, 0))) == 2       # 장중: 오늘 값 뺌
+    assert len(kr_stocks.drop_unfinished(df, at(16, 0))) == 3       # 마감 뒤: 그대로
+    assert len(kr_stocks.drop_unfinished(df.iloc[:2], at(10, 0))) == 2   # 오늘 값이 없으면 그대로
