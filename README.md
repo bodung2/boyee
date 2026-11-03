@@ -139,7 +139,7 @@ notepad .env        # NAVER_BLOG_ID, NAVER_CATEGORY_CHILDHOOD 입력
 - 제목은 항상 `M월 D일 시황 | …`. 대시보드 '시황 기록' 탭이 이 제목으로 날짜별 링크를 붙입니다(글이 올라온 다음 날 아침 갱신 때).
 - 게시된 요약이 오늘 것이 아니면(대시보드 갱신이 늦은 날) 이 PC에서 세 화면을 직접 계산해 씁니다.
 - 블로그 주소·로그인은 투자 블로그 것을 그대로 씁니다(`NAVER_BLOG_ID_MARKET`·`NAVER_CATEGORY_MARKET`로 바꿀 수 있음, 카테고리 기본 '매일 시황').
-- 예약: `scripts\setup_all_schedules.ps1 -Only NaverAutoPost-market` (화~토 13:30, 막힌 날 16:00 재시도)
+- 예약: `scripts\setup_all_schedules.ps1 -Only NaverAutoPost-market` (월~금 17:30 한국장 마감 뒤, 막힌 날 19:30 재시도)
 - 시험 실행: `python -m naver_autopost run --profile market --dry-run`
 - 대시보드 쪽: 저장소 Settings → Secrets and variables → Actions → **Variables**에 `NAVER_BLOG_ID_INVEST`(투자 블로그 아이디)를 넣으면 '시황 기록'에 글 링크가 붙습니다.
 
@@ -348,7 +348,7 @@ Claude가 막힌 단계(수요·노출·클릭·읽기)를 진단하고 상위 �
 powershell -ExecutionPolicy Bypass -File scripts\setup_market_windows.ps1 -Time 07:40   # 화~토 07:40 예약 + 지금 한 번 실행
 ```
 
-웹 주소 **https://bodung2.github.io/boyee/** 에 화~토 아침마다 자동으로 갱신됩니다(GitHub Actions, PC 불필요). PC에서 직접 돌리면 결과는 `output\market\dashboard.html`입니다. 규칙과 화면 설명은 [docs/MARKET_DASHBOARD.md](docs/MARKET_DASHBOARD.md)에 있습니다.
+웹 주소 **https://bodung2.github.io/boyee/** 에 화~토 아침마다, 그리고 월~금 오후 4시(한국장 마감 뒤)에 한 번 더 자동으로 갱신됩니다(GitHub Actions, PC 불필요). PC에서 직접 돌리면 결과는 `output\market\dashboard.html`입니다. 규칙과 화면 설명은 [docs/MARKET_DASHBOARD.md](docs/MARKET_DASHBOARD.md)에 있습니다.
 
 **공개 화면과 데이터 출처**
 - 웹 주소에 올라가는 화면은 공개용(`--public`)이라 규칙상 편입·목표 비중·살 상품·전략 백테스트가 빠져 있습니다. 텔레그램 알림과 PC에서 만든 화면에는 그대로 있습니다.

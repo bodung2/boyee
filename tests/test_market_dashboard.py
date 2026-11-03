@@ -634,6 +634,50 @@ def test_for_post_waits_retries_and_falls_back_to_site_files(tmp_path, monkeypat
         brief.for_post("2026-11-02", out2, sleep=lambda s: None)
 
 
+
+def test_for_post_needs_todays_kospi_close(tmp_path, monkeypatch):
+    """요약 날짜가 오늘이어도 코스피 종가가 전날 것이면(장중에 갱신된 요약) 쓰지 않고 기다렸다가 PC에서 계산한다."""
+    import subprocess
+    from market_dashboard import brief
+    dash, sec, kr = _three_screens()
+    ks = lambda d: [{"ticker": "^KS11", "date": d, "close": 1.0}, {"ticker": "^GSPC", "date": "2026-11-02", "close": 1.0}]
+    fresh = {"date": "2026-11-03", "markets": ks("2026-11-03"), "us": {"x": 1}, "kr": {"x": 1}}
+    stale = {"date": "2026-11-03", "markets": ks("2026-11-02"), "us": {"x": 1}, "kr": {"x": 1}}
+    assert brief.kr_fresh(fresh, "2026-11-03") and not brief.kr_fresh(stale, "2026-11-03")
+    assert not brief.kr_fresh({}, "2026-11-03")
+    site = {"brief.json": stale}
+    monkeypatch.setattr(brief, "_get_json", lambda url: site.get(url.rsplit("/", 1)[-1]))
+    monkeypatch.setattr(brief, "fetch_risk", lambda: None)
+    runs = []
+
+    def fake_run(cmd, cwd, timeout, check, stdout, stderr):
+        name = {"run": "dashboard.json", "sectors": "sectors.json", "krstocks": "kr.json"}[cmd[3]]
+        runs.append(cmd[3])
+        (pathlib.Path(cmd[5]) / name).write_text(json.dumps({"run": dash, "sectors": sec, "krstocks": kr}[cmd[3]]),
+                                                 encoding="utf-8")
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    # 1) 오늘 종가가 든 요약은 기다리지 않고 그대로 쓴다
+    site["brief.json"] = fresh
+    slept = []
+    out = tmp_path / "a" / "market_brief.json"
+    brief.for_post("2026-11-03", out, sleep=slept.append)
+    assert slept == [] and runs == [] and json.loads(out.read_text(encoding="utf-8"))["markets"][0]["date"] == "2026-11-03"
+    # 2) 장중 요약(코스피 전날 종가)은 기다렸다가 PC에서 계산하고, 그래도 오늘 종가가 없으면 kr_stale로 표시한다
+    site["brief.json"] = stale
+    monkeypatch.setattr(brief, "fetch_markets", lambda: ks("2026-11-02"))
+    out = tmp_path / "b" / "market_brief.json"
+    brief.for_post("2026-11-03", out, sleep=slept.append)
+    b = json.loads(out.read_text(encoding="utf-8"))
+    assert slept == [15 * 60] and sorted(runs) == ["krstocks", "run", "sectors"]
+    assert b["source"] == "local" and b["kr_stale"] == "2026-11-02"
+    # 3) PC 계산에 오늘 종가가 있으면 표시하지 않는다
+    monkeypatch.setattr(brief, "fetch_markets", lambda: ks("2026-11-03"))
+    out = tmp_path / "c" / "market_brief.json"
+    brief.for_post("2026-11-03", out, sleep=lambda s: None)
+    assert "kr_stale" not in json.loads(out.read_text(encoding="utf-8"))
+
 def _fake_ohlc(days=520, seed=11):
     rng = np.random.default_rng(seed)
     idx = pd.bdate_range("2024-10-01", periods=days)

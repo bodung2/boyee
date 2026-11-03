@@ -361,6 +361,17 @@ def _get_json(url: str, timeout: int = 20) -> dict | None:
         return None
 
 
+def kr_date(b: dict | None) -> str | None:
+    """요약에 들어 있는 코스피 종가의 날짜(없으면 None)."""
+    return next((m.get("date") for m in (b or {}).get("markets") or [] if m.get("ticker") == "^KS11"), None)
+
+
+def kr_fresh(b: dict | None, today: str) -> bool:
+    """오늘 한국장 종가까지 들어 있는 요약인가(시황 글은 그날 한국 마감 + 간밤 미국 마감을 다룬다)."""
+    d = kr_date(b)
+    return bool(d and d >= today)
+
+
 REQUIRED = ("us", "kr")       # 이 둘이 없으면 시황 글을 쓰지 않는다(16:00 재시도)
 SITE_FILES = {"dashboard.json": "assets", "sectors.json": "us", "kr.json": "kr"}
 
@@ -382,11 +393,16 @@ def for_post(today: str, out_path: Path, site_url: str = DASHBOARD_URL, build_di
     sleep = sleep or _time.sleep
     base = site_url.rstrip("/") + "/"
     site = _get_json(base + "brief.json")
-    if not (site and site.get("date") == today) and wait_min > 0:
-        log.info("게시된 요약이 아직 오늘 것이 아니라(%s) %d분 기다립니다", (site or {}).get("date"), wait_min)
+
+    def usable(x):   # 오늘 요약이고, 오늘 한국장 종가까지 들어 있고, 미국 섹터·한국 종목이 다 있다
+        return bool(x and x.get("date") == today and kr_fresh(x, today) and all(x.get(k) for k in REQUIRED))
+
+    if not usable(site) and wait_min > 0:
+        log.info("게시된 요약이 아직 오늘 한국 마감 전 것이라(요약 %s, 코스피 %s) %d분 기다립니다",
+                 (site or {}).get("date"), kr_date(site), wait_min)
         sleep(wait_min * 60)
         site = _get_json(base + "brief.json") or site
-    if site and site.get("date") == today and all(site.get(k) for k in REQUIRED):
+    if usable(site):
         b = site
     else:
         log.info("게시된 요약을 쓸 수 없어(%s) 이 PC에서 계산합니다", (site or {}).get("date"))
@@ -424,6 +440,10 @@ def for_post(today: str, out_path: Path, site_url: str = DASHBOARD_URL, build_di
         if used_site:
             b["from_site"] = used_site
             log.warning("이 PC에서 못 만든 화면은 게시된 파일을 썼습니다: %s", ", ".join(used_site))
+    if not kr_fresh(b, today):
+        # 한국 휴장일이거나 시세가 아직 안 들어온 날: 글은 쓰되, 한국 숫자가 몇 일 것인지 글감에 밝혀 둔다
+        b["kr_stale"] = kr_date(b)
+        log.warning("요약의 코스피 종가가 오늘(%s)이 아니라 %s 기준입니다(휴장이거나 시세 지연)", today, kr_date(b))
     missing = [k for k in REQUIRED if not b.get(k)]
     if missing:
         names = {"us": "미국 섹터", "kr": "한국 종목"}
