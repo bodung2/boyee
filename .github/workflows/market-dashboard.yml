@@ -70,11 +70,17 @@ jobs:
           NAVER_BLOG_ID_INVEST: ${{ vars.NAVER_BLOG_ID_INVEST }}
           # 내 도메인을 연결하면 저장소 Variables에 DASHBOARD_URL(예: https://sihwangmap.com/)을 넣는다
           DASHBOARD_URL: ${{ vars.DASHBOARD_URL || 'https://bodung2.github.io/boyee/' }}
+          # 야후가 한국 지수를 늦게 올린 날 코스피·코스닥 종가를 한국거래소에서 채운다(없으면 네이버 증권)
+          KRX_ID: ${{ secrets.KRX_ID }}
+          KRX_PW: ${{ secrets.KRX_PW }}
         run: python -m market_dashboard brief --out site
 
       # 자산군 탭 맨 위 '시장 차트'(지수 일봉·하락 위험 신호 띠·시황 기록 점). 실패하면 그 카드만 숨는다.
       - name: 시장 차트 — 실패해도 다른 화면은 그대로 게시
         continue-on-error: true
+        env:
+          KRX_ID: ${{ secrets.KRX_ID }}
+          KRX_PW: ${{ secrets.KRX_PW }}
         run: python -m market_dashboard chart --out site
 
       - uses: actions/upload-pages-artifact@v3

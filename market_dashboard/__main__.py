@@ -227,6 +227,8 @@ def main(argv: list[str] | None = None) -> int:
 
         arch = CACHE / "briefs"
         archive = [] if args.no_archive else brief.load_archive(arch)
+        for fixed in brief.repair_stale_archive(archive):     # 야후 지연으로 전날 값이 들어간 지난 요약 바로잡기
+            brief.save_archive(arch, fixed)
         today = datetime.now(KST).strftime("%Y-%m-%d")
         b = brief.build(read("dashboard.json"), read("sectors.json"), read("kr.json"), brief.fetch_markets(),
                         prev=brief.previous(archive, today), risk=brief.fetch_risk())
