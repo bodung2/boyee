@@ -27,3 +27,4 @@ data/lab/
 
 # 퀘스트 보드에서 PC에서만 바꾼 예약 시각·끈 작업
 data/schedule_overrides.json
+data/quest_board_drive.json
