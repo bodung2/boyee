@@ -42,7 +42,7 @@ def test_market_uses_invest_blog_and_login(monkeypatch):
     assert c.profile_dir.name == ".browser-profile-invest"      # 같은 네이버 로그인을 쓴다
     assert c.category == "매일 시황"
     assert c.history_file.name == "published_market.json"
-    assert c.retry_time == "16:00" and c.social_draft is False
+    assert c.retry_time == "19:30" and c.social_draft is False
     monkeypatch.setenv("NAVER_BLOG_ID_MARKET", "other")
     assert Config.load("market").blog_id == "other"
 

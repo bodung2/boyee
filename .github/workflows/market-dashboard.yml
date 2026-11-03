@@ -1,4 +1,5 @@
-# 자산군 모멘텀 대시보드: 화~토 아침(한국 시간 07:30, 전날 미국장 마감 반영)에 새로 계산해 GitHub Pages에 올린다.
+# 자산군 모멘텀 대시보드: 화~토 아침(한국 시간 07:30, 전날 미국장 마감 반영)과 평일 오후(16:00, 그날 한국장 마감 반영)에
+# 새로 계산해 GitHub Pages에 올린다. 텔레그램 요약은 아침에만.
 # 주소: https://bodung2.github.io/boyee/
 # 최초 1회: 저장소 Settings → Pages → Build and deployment → Source를 "GitHub Actions"로.
 # 텔레그램 요약(선택): Settings → Secrets and variables → Actions에 TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID.
@@ -7,6 +8,7 @@ name: market-dashboard
 on:
   schedule:
     - cron: "30 22 * * 1-5"   # UTC 월~금 22:30 = 한국 화~토 07:30
+    - cron: "0 7 * * 1-5"     # UTC 월~금 07:00 = 한국 월~금 16:00(한국장 마감 뒤, 시황 글 17:30 전)
   workflow_dispatch:           # Actions 탭에서 "Run workflow"로 바로 실행
 
 permissions:
@@ -44,7 +46,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           DASHBOARD_URL: ${{ vars.DASHBOARD_URL || 'https://bodung2.github.io/boyee/' }}
-        run: python -m market_dashboard run --out site --notify --public
+        run: python -m market_dashboard run --out site --public ${{ github.event.schedule == '0 7 * * 1-5' && ' ' || '--notify' }}
 
       - name: 미국 섹터 지도 — 실패해도 자산군 대시보드는 그대로 게시
         continue-on-error: true
