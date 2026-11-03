@@ -385,6 +385,7 @@ def test_brief_cli_archives_and_renders_history(tmp_path, monkeypatch):
     import market_dashboard.__main__ as cli
     from market_dashboard import brief, kr_html, sector_html
     dash, sec, kr = _three_screens()
+    monkeypatch.setattr(brief, "MANUAL_POSTS", tmp_path / "none.json")
     site = tmp_path / "site"
     site.mkdir()
     for name, d in (("dashboard.json", dash), ("sectors.json", sec), ("kr.json", kr)):
@@ -723,3 +724,53 @@ def test_deleted_sihwang_post_is_dropped_but_old_ones_kept():
     got = brief.match_posts(items, brief.drop_deleted(items, known))
     assert set(got) == {"2026-10-01", "2026-11-04"}
     assert brief.drop_deleted([], known) == known          # RSS를 못 받으면 아무것도 지우지 않는다
+
+
+def test_kr_index_fills_days_yahoo_is_missing(monkeypatch):
+    """야후에 11/3 코스피가 없으면 한국 출처 값으로 채우고, 야후에 있는 날은 건드리지 않는다."""
+    from market_dashboard import kr_index
+    idx = pd.bdate_range("2026-10-26", "2026-11-02")
+    yahoo = pd.DataFrame({"Close": np.linspace(5600, 5859.08, len(idx))}, index=idx)
+    naver = kr_index.parse_naver([
+        {"localTradedAt": "2026-11-03T15:30:00+09:00", "closePrice": "5,648.79", "openPrice": "5,800.00",
+         "highPrice": "5,810.00", "lowPrice": "5,615.80"},
+        {"localTradedAt": "2026-11-02", "closePrice": "1.00"},       # 야후에 있는 날은 무시
+    ])
+    from market_dashboard import brief
+    out = kr_index.fill(yahoo, "^KS11", extra=naver)
+    assert out.index[-1] == pd.Timestamp("2026-11-03") and out["Close"].iloc[-1] == 5648.79
+    assert out.loc["2026-11-02", "Close"] == 5859.08 and list(out.columns) == ["Close"]
+    e = brief.market_entry("^KS11", "코스피", out["Close"])
+    assert e["date"] == "2026-11-03" and round(e["d1"], 4) == round(5648.79 / 5859.08 - 1, 4)
+    assert kr_index.backup("^GSPC") is None                                  # 한국 지수가 아니면 받지 않는다
+
+
+def test_repair_kr_fixes_archived_brief_with_stale_kospi():
+    from market_dashboard import brief
+    idx = pd.bdate_range("2026-10-26", "2026-11-03")
+    s = pd.Series(np.r_[np.linspace(5500, 5859.08, len(idx) - 1), 5648.79], index=idx)
+    old = {"date": "2026-11-03", "generated": "2026-11-03 22:39 KST", "kr_stale": "2026-11-02",
+           "markets": [{"ticker": "^KS11", "name": "코스피", "date": "2026-11-02", "d1": 0.0224}]}
+    morning = {"date": "2026-11-04", "generated": "2026-11-04 07:20 KST",       # 아침 요약은 11/3까지가 맞다
+               "markets": [{"ticker": "^KS11", "name": "코스피", "date": "2026-11-02", "d1": 0.0224}]}
+    fine = {"date": "2026-11-03", "generated": "2026-11-03 12:34 KST",          # 장중 요약은 11/2가 맞다
+            "markets": [{"ticker": "^KS11", "name": "코스피", "date": "2026-11-02", "d1": 0.0224}]}
+    fixed = brief.repair_kr([old, morning, fine], {"^KS11": s})
+    assert fixed == [old, morning] and "kr_stale" not in old
+    assert old["markets"][0]["date"] == "2026-11-03" and old["markets"][0]["d1"] < -0.03
+    assert "코스피 -3.6%" in old["headline"] and fine["markets"][0]["date"] == "2026-11-02"
+
+
+def test_manual_posts_override_rss(tmp_path, monkeypatch):
+    from market_dashboard import brief
+    f = tmp_path / "m.json"
+    f.write_text(json.dumps({"2026-11-03": {"title": "11월 3일 시황", "url": "https://blog.naver.com/x/1"},
+                             "bad": {"url": "u"}}), encoding="utf-8")
+    assert brief.manual_posts(f) == {"2026-11-03": {"title": "11월 3일 시황", "url": "https://blog.naver.com/x/1"}}
+    # RSS를 못 받아도 직접 지정한 링크는 posts.json에 들어간다
+    monkeypatch.setattr(brief, "MANUAL_POSTS", f)
+    import urllib.request
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(OSError("막힘")))
+    assert brief.sync_posts(tmp_path / "arch", "someblog")["2026-11-03"]["url"].endswith("/1")
+    real = brief.manual_posts(pathlib.Path(brief.__file__).with_name("posts_manual.json"))
+    assert real["2026-11-03"]["url"].endswith("224464022707")

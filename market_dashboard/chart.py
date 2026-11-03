@@ -36,6 +36,7 @@ def fetch_ohlc(cache_dir: Path) -> dict[str, pd.DataFrame]:
     try:
         import yfinance as yf
 
+        from . import kr_index
         from .kr_stocks import drop_unfinished
 
         raw = yf.download([t for t, _ in INDICES.values()], period=f"{YEARS}y", auto_adjust=False,
@@ -44,6 +45,8 @@ def fetch_ohlc(cache_dir: Path) -> dict[str, pd.DataFrame]:
         for k, (t, _) in INDICES.items():
             df = pd.DataFrame({c: raw[c][t] for c in ("Open", "High", "Low", "Close")}).dropna()
             df.index = pd.to_datetime(df.index).tz_localize(None)
+            if t in kr_index.KRX_CODE:   # 야후가 그날 한국 지수를 늦게 올리는 날이 있어 빈 날을 한국 출처로 채운다
+                df = kr_index.fill(df, t)
             out[k] = drop_unfinished(df) if k == "KS11" else df
         if not all(len(v) for v in out.values()):
             raise RuntimeError("빈 시세")

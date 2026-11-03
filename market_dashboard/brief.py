@@ -48,28 +48,90 @@ def fetch_markets() -> list[dict]:
     except Exception as e:  # noqa: BLE001 - 지수가 없어도 요약은 만든다
         log.warning("주요 지수 실패: %s", e)
         return []
+    from . import kr_index
     from .kr_stocks import drop_unfinished
 
     raw.index = pd.to_datetime(raw.index).tz_localize(None)
     out = []
     for t, name in MARKETS.items():
-        if t not in raw:
-            continue
-        s = raw[t].dropna()
+        s = raw[t].dropna() if t in raw else pd.Series(dtype=float)
+        if t in kr_index.KRX_CODE:   # 야후가 그날 한국 지수를 늦게 올리는 날이 있어 빈 날을 한국 출처로 채운다
+            s = kr_index.fill(s.to_frame("Close"), t)["Close"]
         if t in KR_HOURS:   # 한국장·환율은 장중이면 오늘 값이 미완성이다
-            s = drop_unfinished(s.to_frame())[t]
-        if len(s) < 6:
-            continue
-        last, prev, week = float(s.iloc[-1]), float(s.iloc[-2]), float(s.iloc[-6])
-        is_rate = t == "^TNX"
-        out.append({
-            "ticker": t, "name": name, "date": s.index[-1].strftime("%Y-%m-%d"), "close": _num(last, 2),
-            # 금리는 %p 변화, 나머지는 % 변화
-            "d1": _num(last - prev if is_rate else last / prev - 1, 4),
-            "w1": _num(last - week if is_rate else last / week - 1, 4),
-            "unit": "%p" if is_rate else "%",
-        })
+            s = drop_unfinished(s.to_frame("Close"))["Close"]
+        e = market_entry(t, name, s)
+        if e:
+            out.append(e)
     return out
+
+
+def market_entry(t: str, name: str, s: pd.Series) -> dict | None:
+    """종가 시계열의 마지막 날 기준 종가·하루·한 주 변화."""
+    s = s.dropna()
+    if len(s) < 6:
+        return None
+    last, prev, week = float(s.iloc[-1]), float(s.iloc[-2]), float(s.iloc[-6])
+    is_rate = t == "^TNX"
+    return {
+        "ticker": t, "name": name, "date": s.index[-1].strftime("%Y-%m-%d"), "close": _num(last, 2),
+        # 금리는 %p 변화, 나머지는 % 변화
+        "d1": _num(last - prev if is_rate else last / prev - 1, 4),
+        "w1": _num(last - week if is_rate else last / week - 1, 4),
+        "unit": "%p" if is_rate else "%",
+    }
+
+
+def repair_stale_archive(archive: list[dict], recent: int = 10) -> list[dict]:
+    """최근 요약 중 한국 지수 날짜가 모자란 것이 있을 때만 한국 출처를 받아 고친다."""
+    from . import kr_index
+
+    need = [b for b in archive[-recent:]
+            if any(m.get("ticker") in kr_index.KRX_CODE and m.get("date", "") < _basis_day(b)
+                   for m in b.get("markets") or [])]
+    if not need:
+        return []
+    series = {}
+    for t in kr_index.KRX_CODE:
+        df = kr_index.backup(t)
+        if df is not None:
+            series[t] = df["Close"]
+    return repair_kr(need, series) if series else []
+
+
+def _basis_day(b: dict) -> str:
+    """이 요약이 담았어야 할 한국장 마지막 날: 만든 시각이 그날 15:40 뒤면 그날, 아니면 그 전날까지."""
+    gen = (b.get("generated") or "")[:16]
+    try:
+        g = datetime.strptime(gen, "%Y-%m-%d %H:%M")
+    except ValueError:
+        return b.get("date", "")
+    from .kr_stocks import KR_CLOSE
+    day = g.date() if (g.hour, g.minute) >= KR_CLOSE else g.date() - timedelta(days=1)
+    return day.strftime("%Y-%m-%d")
+
+
+def repair_kr(archive: list[dict], series: dict[str, pd.Series]) -> list[dict]:
+    """쌓아 둔 요약 중 한국 지수가 야후 지연으로 전날 값이던 것을 고친다(series: 티커 → 한국 출처 종가).
+    고친 요약 목록을 돌려준다(헤드라인도 다시 만든다)."""
+    fixed = []
+    for b in archive:
+        changed = False
+        basis = _basis_day(b)
+        for m in b.get("markets") or []:
+            s = series.get(m.get("ticker"))
+            if s is None or not len(s) or m.get("date", "") >= basis:
+                continue
+            e = market_entry(m["ticker"], m["name"], s[s.index <= pd.Timestamp(basis)])
+            if e and e["date"] > m.get("date", ""):
+                log.info("기록 %s의 %s를 %s 값으로 고침(%s → %s)", b.get("date"), m["name"], e["date"],
+                         m.get("d1"), e["d1"])
+                m.update(e)
+                changed = True
+        if changed:
+            b.pop("kr_stale", None)
+            b["headline"] = headline(b)
+            fixed.append(b)
+    return fixed
 
 
 # ---------------- 하락 위험 신호(백테스트로 고른 미국 지표 3개) ----------------
@@ -316,12 +378,24 @@ def drop_deleted(items: list[dict], known: dict[str, dict]) -> dict[str, dict]:
     return {d: p for d, p in known.items() if d not in gone}
 
 
+MANUAL_POSTS = Path(__file__).with_name("posts_manual.json")
+
+
+def manual_posts(path: Path | None = None) -> dict[str, dict]:
+    """직접 지정한 시황 글 링크(날짜 → {title, url}). RSS에서 못 찾거나 다시 올린 글을 바로 붙일 때 쓴다."""
+    try:
+        d = json.loads((path or MANUAL_POSTS).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {k: v for k, v in d.items() if re.fullmatch(r"\d{4}-\d{2}-\d{2}", k) and isinstance(v, dict) and v.get("url")}
+
+
 def sync_posts(arch: Path, blog_id: str) -> dict[str, dict]:
     """블로그 RSS에서 시황 글 링크를 찾아 posts.json에 쌓는다(RSS는 최근 글만 주므로 누적 보관)."""
     path = arch / "posts.json"
     known = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     if not blog_id:
-        return known
+        return {**known, **manual_posts()}
     try:
         import urllib.request
 
@@ -333,10 +407,14 @@ def sync_posts(arch: Path, blog_id: str) -> dict[str, dict]:
             xml = resp.read().decode("utf-8", "replace")
         items = parse_rss(xml, blog_id)
         known = match_posts(items, drop_deleted(items, known))
+        known.update(manual_posts())
         arch.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(known, ensure_ascii=False, indent=1), encoding="utf-8")
     except Exception as e:  # noqa: BLE001 - 링크가 없어도 기록 화면은 만든다
         log.warning("블로그 RSS 실패: %s", e)
+        known.update(manual_posts())
+        arch.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(known, ensure_ascii=False, indent=1), encoding="utf-8")
     return known
 
 
