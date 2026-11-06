@@ -457,6 +457,26 @@ def login(cfg: TistoryConfig, wait_minutes: int = 5) -> None:
     print("로그인 확인. 창을 다시 열어도 로그인이 유지됩니다.")
 
 
+LAST_COOKIES: list[str] = []
+# 카카오 로그인 유지 쿠키(이름 앞부분). _karmt: '로그인 상태 유지' 토큰, _kawlt: 로그인 토큰
+KAKAO_STAY_COOKIES = ("_karmt", "_kawlt", "_kahai", "_kau")
+
+
+def kakao_cookie_report(cookies: list[dict]) -> list[str]:
+    """카카오 쿠키의 이름·만료일만(값은 빼고) → 로그인 유지가 저장돼 있는지 보는 진단용."""
+    out = []
+    now = time.time()
+    for c in cookies:
+        if "kakao.com" not in c.get("domain", ""):
+            continue
+        exp = c.get("expires", -1)
+        when = "브라우저 닫으면 사라짐" if exp in (-1, None) else (
+            "이미 만료" if exp < now else time.strftime("%Y-%m-%d까지", time.localtime(exp)))
+        mark = "★" if c["name"].startswith(KAKAO_STAY_COOKIES) else " "
+        out.append(f"{mark} {c['name']} ({c.get('domain', '')}) {when}")
+    return sorted(out)
+
+
 def check_session(cfg: TistoryConfig, forget_tistory: bool = False, record: bool = True) -> bool:
     """저장된 로그인으로 글쓰기 화면이 열리는지 확인한다(10~90초). 실패 이유는 LAST_LOGIN['reason'].
     forget_tistory: 티스토리 로그인 쿠키를 지우고 시작한다(티스토리 세션이 끝났을 때 카카오로 다시 들어가는지 시험)."""
@@ -464,6 +484,7 @@ def check_session(cfg: TistoryConfig, forget_tistory: bool = False, record: bool
     with sync_playwright() as p:
         ctx = _open(p, cfg, headless=cfg.headless)
         if forget_tistory:
+            LAST_COOKIES[:] = kakao_cookie_report(ctx.cookies())
             ctx.clear_cookies(domain=re.compile(r"(^|\.)tistory\.com$"))
         try:
             page = ctx.pages[0] if ctx.pages else ctx.new_page()

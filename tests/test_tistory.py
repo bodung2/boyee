@@ -1307,3 +1307,13 @@ def test_check_session_records_result(cfg, monkeypatch):
     assert not publisher.check_session(cfg)
     assert login_log.load(cfg)["events"][-1]["event"] == "fail"
     assert not publisher.check_session(cfg, record=False) and len(login_log.load(cfg)["events"]) == 1
+
+
+def test_kakao_cookie_report_hides_values():
+    later = time.time() + 30 * 86400
+    rows = publisher.kakao_cookie_report([
+        {"name": "_karmt", "value": "SECRET", "domain": ".kakao.com", "expires": later},
+        {"name": "_kawlt", "value": "SECRET", "domain": ".kakao.com", "expires": -1},
+        {"name": "TSSESSION", "value": "SECRET", "domain": ".tistory.com", "expires": -1}])
+    assert len(rows) == 2 and not any("SECRET" in r for r in rows)
+    assert rows[0].startswith("★ _karmt") and "까지" in rows[0] and "브라우저 닫으면" in rows[1]

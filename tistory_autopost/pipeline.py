@@ -519,6 +519,12 @@ def relogin_test(cfg: TistoryConfig) -> int:
         print("✅ 티스토리 로그인이 끊겨도 카카오 로그인 유지·간편로그인으로 비밀번호 없이 다시 들어갑니다.")
         return 0
     print(f"❌ 다시 들어가지 못했습니다: {_login_reason()}\n   막힌 화면: {cfg.output_dir / 'relogin_test' / 'login_failed.png'}")
+    cookies = publisher.LAST_COOKIES
+    print("   저장된 카카오 쿠키(★ 로그인 유지 관련, 값은 표시 안 함):")
+    print("\n".join(f"     {c}" for c in cookies) if cookies else "     (카카오 쿠키가 하나도 없습니다)")
+    if not any(c.startswith("★") and "까지" in c for c in cookies):
+        print("   → 오래 가는 카카오 로그인 유지 쿠키가 없습니다. `login` 창에서 '로그인 상태 유지'가 체크되지 않았거나 "
+              "카카오가 저장하지 않았습니다.")
     return 1
 
 _sleep = time.sleep
