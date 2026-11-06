@@ -259,6 +259,27 @@ def _refresh_note(cfg: TistoryConfig, today: date) -> str:
     return "🔄 새 통계가 나와 갱신하면 좋은 글:\n" + "\n".join(lines)
 
 
+def repair_urls(cfg: TistoryConfig) -> int:
+    """발행은 됐는데 글 주소를 못 찾아 '글 관리' 주소로 남은 기록을 RSS로 다시 찾아 고친다(퀘스트 보드·성장 실험실용)."""
+    from . import publisher
+    try:
+        entries = history.load(cfg.history_file)
+        fixed = 0
+        for e in entries:
+            if str(e.get("url", "")).rstrip("/").endswith("/manage/posts") and e.get("title"):
+                url = publisher.find_post_url(cfg, e["title"])
+                if url:
+                    e["url"] = url
+                    fixed += 1
+        if fixed:
+            history.save(cfg.history_file, entries)
+            log.info("글 주소를 다시 찾아 고친 기록: %d건", fixed)
+        return fixed
+    except Exception as e:  # noqa: BLE001 - 보조 기능이라 발행을 막지 않는다
+        log.warning("글 주소 고치기 실패: %s", e)
+        return 0
+
+
 def _slot_dir(day: str, slot: int) -> str:
     """하루 여러 편: 1편째는 output/tistory/<날짜>, 2편째부터는 <날짜>-2, <날짜>-3 ..."""
     return day if slot <= 1 else f"{day}-{slot}"
@@ -316,6 +337,7 @@ def run(cfg: TistoryConfig, dry_run: bool = False, force: bool = False, slot: in
                 return 0
             if not cfg.blog_name:
                 raise RuntimeError(".env에 TISTORY_BLOG(블로그 주소 이름)가 없습니다")
+            repair_urls(cfg)
             out_dir = cfg.output_dir / _slot_dir(today, slot)
             if _load(out_dir / "stage.json").get("published"):
                 if not force:
@@ -323,12 +345,8 @@ def run(cfg: TistoryConfig, dry_run: bool = False, force: bool = False, slot: in
                     return 0
                 stamp = datetime.now(KST).strftime("%H%M%S")
                 shutil.move(str(out_dir), str(out_dir.with_name(f"{out_dir.name}-published-{stamp}")))
-            # 글쓰기(수십 분) 전에 로그인부터 확인한다.
-            if not publisher.check_session(cfg):
-                raise publisher.SessionExpired(
-                    "티스토리(카카오) 로그인이 풀려 있습니다. `python -m tistory_autopost login`으로 다시 로그인하세요"
-                    "(카카오 로그인 화면에서 '로그인 상태 유지' 체크). 자주 풀리면 .env에 KAKAO_LOGIN_ID·KAKAO_LOGIN_PASSWORD를 "
-                    "넣어 두면 다음부터 자동으로 다시 로그인합니다. 마지막 화면: output\\tistory\\login_failed.png")
+            # 글쓰기(수십 분) 전에 로그인부터 확인한다. 풀려 있으면 이유·화면을 알리고 다시 로그인할 때까지 기다린다.
+            _ensure_session(cfg, label)
             try:
                 log.info("텔레그램 화제 제보 %d건을 받았습니다", inbox.pull(cfg))
             except Exception as e:  # noqa: BLE001 - 제보는 보조 입력이라 실패해도 큐로 진행한다
@@ -375,6 +393,74 @@ def run(cfg: TistoryConfig, dry_run: bool = False, force: bool = False, slot: in
         log.exception("티스토리 자동 발행 실패")
         notify(cfg, f"[{LABEL} 자동발행 실패{label}] {today}\n{e}")
         return 1
+
+
+def _login_reason() -> str:
+    from . import publisher
+    return publisher.LAST_LOGIN.get("reason") or (
+        "티스토리(카카오) 로그인이 풀려 있습니다. PC에서 `.venv\\Scripts\\python.exe -m tistory_autopost login`으로 "
+        "다시 로그인하세요('로그인 상태 유지' 체크).")
+
+
+def _share_login_failure(cfg: TistoryConfig) -> None:
+    """막힌 로그인 화면을 텔레그램 사진으로 보내고, 주인만 보는 구글 드라이브에도 올린다(원격 진단용).
+    GitHub 저장소는 공개라서 화면은 올리지 않는다. 실패해도 넘어간다."""
+    from naver_autopost.notify import send_photo
+    shot = cfg.output_dir / "login_failed.png"
+    send_photo(cfg.telegram_bot_token, cfg.telegram_chat_id, shot, f"[{LABEL}] 로그인에서 멈춘 화면")
+    try:
+        from quest_board import drive
+        state_dir = cfg.data_dir / ".drive"
+        dump = cfg.output_dir / "login_failed.json"
+        if dump.exists():
+            drive.put(dump.read_bytes(), "tistory_login_failed.json", "application/json",
+                      state_dir / "tistory_login_failed_json.json")
+        if shot.exists():
+            drive.put(shot.read_bytes(), "tistory_login_failed.png", "image/png", state_dir / "tistory_login_failed_png.json")
+    except Exception as e:  # noqa: BLE001 - 진단 자료 올리기는 보조 기능이다
+        log.info("로그인 실패 화면을 드라이브에 올리지 못했습니다: %s", e)
+
+
+def _ensure_session(cfg: TistoryConfig, label: str = "") -> None:
+    """로그인을 확인한다. 풀려 있으면 막힌 이유·화면을 알리고, 블로그 주인이 PC에서 `login`을 다시 하면
+    (쿠키 파일이 바뀌면) 바로 이어서 글을 쓴다. cfg.login_wait_min분 안에 안 되면 SessionExpired."""
+    from . import publisher
+
+    if publisher.check_session(cfg):
+        return
+    reason = _login_reason()
+    _share_login_failure(cfg)
+    if cfg.login_wait_min <= 0:
+        raise publisher.SessionExpired(reason)
+    notify(cfg, f"[{LABEL}{label}] 로그인이 풀려 글을 시작하지 못했습니다.\n{reason}\n"
+                f"{cfg.login_wait_min}분 동안 기다렸다가, 다시 로그인하면 바로 이어서 발행합니다.")
+    cookie_file = publisher._state_file(cfg)
+    seen, settled = _mtime(cookie_file), -1          # settled: 쿠키 파일이 바뀐 뒤 조용히 지난 분
+    for _ in range(cfg.login_wait_min):                # 1분마다 본다
+        _sleep(60)
+        now = _mtime(cookie_file)
+        if now != seen:                                 # `login`이 쿠키를 새로 저장했다 → 끝날 때까지 1분 더 본다
+            seen, settled = now, 0
+            continue
+        if settled < 0:
+            continue
+        settled = -1
+        try:
+            if publisher.check_session(cfg):
+                log.info("다시 로그인된 것을 확인해 이어서 진행합니다")
+                return
+        except Exception as e:  # noqa: BLE001 - 아직 `login` 창이 프로필을 쓰는 중일 수 있다
+            log.info("로그인 다시 확인 실패(계속 기다립니다): %s", e)
+        reason = _login_reason()
+        seen = _mtime(cookie_file)                      # 확인하면서 파일을 다시 썼다
+    raise publisher.SessionExpired(reason)
+
+
+def _mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
 
 
 _sleep = time.sleep

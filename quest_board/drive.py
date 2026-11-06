@@ -54,22 +54,28 @@ def _send(url: str, body: bytes, content_type: str, method: str, token: str) -> 
 
 def upload(html_text: str, state_file: Path, token: str | None = None, send=_send) -> str:
     """드라이브의 quest_board.html을 새 내용으로 바꾸고 파일 id를 돌려준다(처음이면 만든다)."""
+    return put(html_text.encode("utf-8"), FILE_NAME, "text/html", state_file, token, send)
+
+
+def put(data: bytes, name: str, mime: str, state_file: Path, token: str | None = None, send=_send) -> str:
+    """주인만 보는 드라이브 파일 하나(name)를 새 내용으로 바꾸고 id를 돌려준다(처음이면 만든다).
+    공유 설정을 바꾸지 않는다. state_file에 파일 id를 기억해 같은 파일을 계속 덮어쓴다."""
     token = token or _token()
-    data = html_text.encode("utf-8")
+    ctype = f"{mime}; charset=utf-8" if mime.startswith("text/") or mime.endswith("json") else mime
     try:
         file_id = json.loads(state_file.read_text(encoding="utf-8")).get("id", "")
     except (OSError, ValueError):
         file_id = ""
     if file_id:
         try:
-            send(f"{UPLOAD}/{file_id}?uploadType=media&fields=id", data, "text/html; charset=utf-8", "PATCH", token)
+            send(f"{UPLOAD}/{file_id}?uploadType=media&fields=id", data, ctype, "PATCH", token)
             return file_id
         except FileNotFoundError:
             pass                       # 드라이브에서 지웠으면 새로 만든다
     boundary = uuid.uuid4().hex
-    meta = json.dumps({"name": FILE_NAME, "mimeType": "text/html"}).encode()
+    meta = json.dumps({"name": name, "mimeType": mime}).encode()
     body = (f"--{boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n".encode() + meta
-            + f"\r\n--{boundary}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n".encode() + data
+            + f"\r\n--{boundary}\r\nContent-Type: {ctype}\r\n\r\n".encode() + data
             + f"\r\n--{boundary}--".encode())
     created = send(f"{UPLOAD}?uploadType=multipart&fields=id", body, f"multipart/related; boundary={boundary}",
                    "POST", token)

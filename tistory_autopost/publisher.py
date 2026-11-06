@@ -102,20 +102,26 @@ def _cookie_key(c: dict) -> tuple:
 
 
 def _close(ctx, cfg: TistoryConfig) -> None:
-    """로그인된 상태면 새 쿠키를 저장한 뒤 브라우저를 닫는다(다음에 열 때 옛 쿠키를 넣지 않게)."""
+    """지금 쿠키를 저장한 뒤 브라우저를 닫는다(다음에 열 때 옛 쿠키를 넣지 않게)."""
     try:
-        if any(c["name"] == "TSSESSION" for c in ctx.cookies("https://www.tistory.com")):
-            _save_cookies(ctx, cfg)
+        _save_cookies(ctx, cfg)
     except Exception as e:  # noqa: BLE001 - 저장 실패로 발행 결과를 바꾸지 않는다
         log.warning("로그인 쿠키 저장 실패: %s", e)
     ctx.close()
 
 
 def _save_cookies(ctx, cfg: TistoryConfig) -> None:
+    """브라우저의 티스토리·카카오 쿠키를 파일에 저장한다. 로그인에 실패했을 때도 저장한다:
+    카카오는 로그인 유지 쿠키를 쓸 때마다 새 값으로 바꾸므로, 실패한 실행이 바꾼 새 값을 버리고
+    옛 값을 남기면 다음 실행에서 카카오가 그 옛 값을 거부해 로그인이 영영 풀린다."""
     cookies = [c for c in ctx.cookies() if any(d in c.get("domain", "") for d in ("tistory.com", "kakao.com", "daum.net"))]
+    if not cookies:                      # 브라우저가 제대로 열리지 않은 경우: 있던 파일을 지우지 않는다
+        return
     path = _state_file(cfg)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(cookies, ensure_ascii=False), encoding="utf-8")
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(cookies, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(path)
 
 
 def _login_hint(url: str) -> str:
@@ -168,7 +174,7 @@ def _mask(text: str) -> str:
     return re.sub(r"\d", "9", _ACCOUNT_TEXT.sub("<계정>", str(text or "")))
 
 
-def _dump_login(page: Page, out_dir: Path) -> None:
+def _dump_login(page: Page, out_dir: Path, info: dict | None = None) -> None:
     """로그인 실패 화면의 누를 수 있는 요소 목록(계정·숫자는 가림) → login_failed.json. 화면이 바뀌면 이걸 보고 고친다."""
     try:
         items = page.evaluate(
@@ -177,7 +183,7 @@ def _dump_login(page: Page, out_dir: Path) -> None:
                 .map(e => ({tag: e.tagName, id: e.id, cls: String(e.className).slice(0, 60),
                             role: e.getAttribute('role'), type: e.getAttribute('type'),
                             text: (e.innerText || e.value || '').trim().slice(0, 40)}))""")
-        data = {"url": page.url.split("?")[0], "title": page.title(),
+        data = {**(info or {}), "url": page.url.split("?")[0], "title": page.title(),
                 "items": [{**i, "text": _mask(i.get("text", ""))} for i in items]}
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / "login_failed.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -248,6 +254,68 @@ def _kakao_needs_approval(page: Page) -> bool:
     return "카카오톡" in text and any(w in text for w in ("확인 요청", "인증 요청", "로그인 요청", "알림을 보냈"))
 
 
+# 마지막 로그인 확인 결과(실패하면 어떤 화면에서 막혔는지). 실패 알림·퀘스트 보드에 그대로 나간다.
+LAST_LOGIN: dict = {}
+CAPTCHA_WORDS = ("자동입력 방지", "보안문자", "보안 문자", "captcha", "로봇이 아닙니다")
+
+
+def _body_text(page: Page) -> str:
+    try:
+        return page.inner_text("body", timeout=2000) or ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def login_problem(state: str, cfg: TistoryConfig, url: str = "", typed: bool = False) -> str:
+    """막힌 화면 → 사람이 읽는 원인과 할 일."""
+    has_cred = bool(getattr(cfg, "kakao_login_id", "") and getattr(cfg, "kakao_login_password", ""))
+    fix = "PC에서 `.venv\\Scripts\\python.exe -m tistory_autopost login`으로 다시 로그인하세요('로그인 상태 유지' 체크)."
+    if state == "kakao_password":
+        if typed:
+            return ("카카오 비밀번호 화면에서 .env의 KAKAO_LOGIN_ID·KAKAO_LOGIN_PASSWORD로 자동 로그인했지만 넘어가지 않았습니다"
+                    "(비밀번호가 바뀌었거나 카카오가 추가 확인을 요구). " + fix)
+        if has_cred:
+            return "카카오 비밀번호 화면인데 아이디·비밀번호 칸을 찾지 못했습니다(카카오 화면이 바뀜). " + fix
+        return ("카카오 '로그인 상태 유지' 기간이 끝나 비밀번호를 묻습니다. .env에 KAKAO_LOGIN_ID·KAKAO_LOGIN_PASSWORD가 "
+                "없어 자동으로 다시 로그인하지 못했습니다. " + fix + " 두 값을 .env에 넣어 두면 다음부터는 스스로 다시 로그인합니다.")
+    if state == "kakao_approval":
+        return f"카카오가 카카오톡 로그인 확인을 요청했는데 {APPROVAL_WAIT_SEC // 60}분 안에 '확인'이 눌리지 않았습니다. " + fix
+    if state == "captcha":
+        return "카카오가 보안문자(자동입력 방지)를 띄웠습니다. 자동으로 풀 수 없습니다. " + fix
+    if state == "kakao_select":
+        return "카카오 계정 선택 화면에서 저장된 계정을 눌러도 넘어가지 않았습니다. " + fix
+    if state == "tistory_login":
+        return "티스토리 로그인 화면의 '카카오계정으로 로그인' 버튼을 찾지 못했거나 눌러도 넘어가지 않았습니다. " + fix
+    if state == "no_blog":
+        return (f"로그인은 됐는데 글쓰기 화면이 열리지 않습니다({url}). .env의 TISTORY_BLOG가 "
+                "이 카카오 계정의 블로그인지 확인하세요.")
+    return f"로그인 화면에서 넘어가지 못했습니다(마지막 주소 {url or '알 수 없음'}). " + fix
+
+
+def _login_state(page: Page) -> str:
+    url = page.url
+    if "/manage" in url and not _on_login_page(url):
+        return "ok"
+    text = _body_text(page)
+    if any(w.lower() in text.lower() for w in CAPTCHA_WORDS):
+        return "captcha"
+    if "accounts.kakao.com" in url or "logins.daum.net" in url:
+        if _kakao_needs_approval(page):
+            return "kakao_approval"
+        pw = page.locator("input[type='password']")
+        try:
+            if pw.count() and pw.first.is_visible():
+                return "kakao_password"
+        except Exception:  # noqa: BLE001
+            pass
+        return "kakao_select"
+    if "/auth/login" in url:
+        return "tistory_login"
+    if "tistory.com" in url:
+        return "no_blog"
+    return "unknown"
+
+
 def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bool:
     """글쓰기 화면을 연다. 로그인 화면으로 가면 카카오 자동 로그인 버튼을 누르고,
     카카오 간편 로그인 화면이면 저장된 계정을 골라 기다린다. 실패하면 화면을 login_failed.png로 남긴다."""
@@ -259,6 +327,8 @@ def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bo
         page.wait_for_timeout(1500)
         url = page.url
         if "/manage" in url and not _on_login_page(url):
+            LAST_LOGIN.clear()
+            LAST_LOGIN.update(ok=True)
             return True
         if "/auth/login" in url and clicked < 2:
             for sel in KAKAO_LOGIN_BUTTONS:
@@ -294,8 +364,14 @@ def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bo
                     continue
                 log.warning("카카오 비밀번호 입력 화면입니다(카카오 로그인 유지 기간이 끝남)")
                 break
+    state = _login_state(page)
+    if state == "ok":
+        return True
+    LAST_LOGIN.update(ok=False, state=state, url=page.url.split("?")[0], when=time.strftime("%Y-%m-%d %H:%M"),
+                      reason=login_problem(state, cfg, page.url.split("?")[0], typed))
+    log.warning("로그인 실패[%s]: %s", state, LAST_LOGIN["reason"])
     _shot(page, cfg.output_dir, "login_failed")
-    _dump_login(page, cfg.output_dir)
+    _dump_login(page, cfg.output_dir, LAST_LOGIN)
     return False
 
 
@@ -332,20 +408,19 @@ def login(cfg: TistoryConfig, wait_minutes: int = 5) -> None:
 
 
 def check_session(cfg: TistoryConfig) -> bool:
-    """저장된 로그인으로 글쓰기 화면이 열리는지 확인한다(10~45초)."""
+    """저장된 로그인으로 글쓰기 화면이 열리는지 확인한다(10~90초). 실패 이유는 LAST_LOGIN['reason']."""
+    LAST_LOGIN.clear()
     with sync_playwright() as p:
         ctx = _open(p, cfg, headless=cfg.headless)
         try:
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
             page.on("dialog", lambda d: d.dismiss())
-            ok = _ensure_logged_in(page, cfg)
-            if ok:
-                _save_cookies(ctx, cfg)          # 새로 받은 쿠키로 갱신
-            else:
+            ok = _ensure_logged_in(page, cfg, timeout=90)
+            if not ok:
                 log.warning("로그인 확인 실패. 마지막 화면: %s", page.url)
             return ok
         finally:
-            ctx.close()
+            _close(ctx, cfg)                     # 성공·실패 모두 새 쿠키를 저장한다
 
 
 def _find(page: Page, key: str, timeout: float = 10_000) -> Locator:
@@ -785,8 +860,28 @@ def _probe(body_html: str) -> str:
     return _squash(html_to_text(body_html))[:20]
 
 
+_MANAGE_LINKS = """(blog) => [...document.querySelectorAll('a[href]')]
+    .map(a => ({text: (a.innerText || a.getAttribute('title') || '').trim(), href: a.href}))
+    .filter(x => x.text && x.href.startsWith(blog))"""
+_POST_URL = re.compile(r"/(\d+|entry/[^/?#]+)/?$")
+
+
+def manage_post_url(page: Page, cfg: TistoryConfig, title: str) -> str:
+    """글 관리 화면(로그인 필요)에서 같은 제목 글의 주소를 찾는다. RSS가 늦게 바뀌거나 비공개 카테고리일 때 쓴다."""
+    try:
+        page.goto(f"{cfg.blog_url}/manage/posts/", wait_until="domcontentloaded")
+        page.wait_for_timeout(3000)
+        want = _norm_title(title)
+        for link in page.evaluate(_MANAGE_LINKS, cfg.blog_url):
+            if _norm_title(link["text"]) == want and _POST_URL.search(link["href"].split("?")[0]):
+                return link["href"].split("?")[0]
+    except Exception as e:  # noqa: BLE001
+        log.warning("글 관리 화면에서 주소 찾기 실패: %s", e)
+    return ""
+
+
 def _verify_published(page: Page, cfg: TistoryConfig, post: dict, out_dir: Path) -> str:
-    """RSS로 글 주소를 찾고, 그 글을 열어 본문 문장이 실제로 보이는지 확인한다."""
+    """RSS(늦으면 글 관리 화면)로 글 주소를 찾고, 그 글을 열어 본문 문장이 실제로 보이는지 확인한다."""
     url = ""
     for _ in range(6):                      # RSS 반영까지 잠깐 걸릴 수 있다
         item = rss_item(cfg, post["title"])
@@ -795,7 +890,11 @@ def _verify_published(page: Page, cfg: TistoryConfig, post: dict, out_dir: Path)
             break
         page.wait_for_timeout(10_000)
     if not url:
-        log.warning("발행은 했지만 RSS에서 글 주소를 찾지 못했습니다")
+        url = manage_post_url(page, cfg, post["title"])
+        if url:
+            log.info("RSS에 아직 없어 글 관리 화면에서 주소를 찾았습니다: %s", url)
+    if not url:
+        log.warning("발행은 했지만 글 주소를 찾지 못했습니다(다음 실행 때 다시 찾습니다)")
         return f"{cfg.blog_url}/manage/posts/"
     page.goto(url, wait_until="domcontentloaded")
     page.wait_for_timeout(2500)
