@@ -494,10 +494,10 @@ def keepalive(cfg: TistoryConfig) -> int:
         return 1
 
 
-def relogin_test(cfg: TistoryConfig) -> int:
+def relogin_test(cfg: TistoryConfig, real: bool = False) -> int:
     """티스토리 로그인이 끊긴 상황을 흉내 내 비밀번호 없이 다시 들어가는지 시험한다.
-    지금 브라우저 프로필을 임시로 복사하고, 그 복사본에서 티스토리 쿠키만 지운 뒤 글쓰기 화면을 연다.
-    카카오 '로그인 상태 유지'·'간편로그인 정보 저장'이 살아 있으면 비밀번호·캡차 없이 들어간다. 진짜 프로필은 건드리지 않는다."""
+    기본: 지금 브라우저 프로필을 임시로 복사하고, 그 복사본에서 티스토리 쿠키만 지운 뒤 글쓰기 화면을 연다(진짜는 안 건드림).
+    real=True: 진짜 프로필에서 티스토리 쿠키만 지우고 시험한다. 실패하면 저장해 둔 티스토리 쿠키로 되돌린다."""
     import dataclasses
     import tempfile
 
@@ -506,15 +506,31 @@ def relogin_test(cfg: TistoryConfig) -> int:
     if not cfg.profile_dir.exists():
         print("❌ 저장된 로그인이 없습니다. 먼저 `python -m tistory_autopost login`을 실행하세요.")
         return 1
-    skip = shutil.ignore_patterns("Singleton*", "lockfile", "*.lock", "Cache", "Code Cache", "GPUCache",
-                                  "Service Worker", "GrShaderCache", "ShaderCache", "DawnCache", "Crashpad")
-    with tempfile.TemporaryDirectory(prefix="tistory-relogin-") as tmp:
-        copy = Path(tmp) / "profile"
-        shutil.copytree(cfg.profile_dir, copy, ignore=skip)
-        test_cfg = dataclasses.replace(cfg, profile_dir=copy, headless=False, kakao_password_login=False,
-                                       output_dir=cfg.output_dir / "relogin_test")
-        print("티스토리 로그인이 끊긴 상황을 만들어, 비밀번호 없이 카카오로 다시 들어가는지 시험합니다(1~2분).")
+    publisher.LAST_LOGIN_KAKAO.clear()
+    if real:
+        cookie_file = publisher._state_file(cfg)
+        backup = cookie_file.read_bytes() if cookie_file.exists() else None
+        test_cfg = dataclasses.replace(cfg, kakao_password_login=False, output_dir=cfg.output_dir / "relogin_test")
+        print("진짜 브라우저에서 티스토리 로그인만 지우고, 비밀번호 없이 카카오로 다시 들어가는지 시험합니다(1~2분).")
         ok = publisher.check_session(test_cfg, forget_tistory=True, record=False)
+        if not ok and backup is not None:
+            cookie_file.write_bytes(backup)                 # 티스토리 로그인 되돌리기
+            back = publisher.check_session(cfg, record=False)
+            print("   (시험 전 티스토리 로그인으로 되돌렸습니다" + (")" if back else
+                  " — 되돌리지 못했습니다. `login`을 한 번 해 주세요)"))
+    else:
+        skip = shutil.ignore_patterns("Singleton*", "lockfile", "*.lock", "Cache", "Code Cache", "GPUCache",
+                                      "Service Worker", "GrShaderCache", "ShaderCache", "DawnCache", "Crashpad")
+        with tempfile.TemporaryDirectory(prefix="tistory-relogin-") as tmp:
+            copy = Path(tmp) / "profile"
+            shutil.copytree(cfg.profile_dir, copy, ignore=skip)
+            test_cfg = dataclasses.replace(cfg, profile_dir=copy, headless=False, kakao_password_login=False,
+                                           output_dir=cfg.output_dir / "relogin_test")
+            print("티스토리 로그인이 끊긴 상황을 만들어(복사본), 비밀번호 없이 카카오로 다시 들어가는지 시험합니다(1~2분).")
+            ok = publisher.check_session(test_cfg, forget_tistory=True, record=False)
+    kakao = publisher.LAST_LOGIN_KAKAO.get("logged_in")
+    print("   카카오 계정 자체 로그인: " + {True: "살아 있음", False: "풀려 있음(카카오가 이 브라우저를 로그인 안 된 것으로 봄)",
+                                       None: "확인 못 함"}[kakao])
     if ok:
         print("✅ 티스토리 로그인이 끊겨도 카카오 로그인 유지·간편로그인으로 비밀번호 없이 다시 들어갑니다.")
         return 0

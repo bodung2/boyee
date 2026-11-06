@@ -504,6 +504,19 @@ def login(cfg: TistoryConfig, wait_minutes: int = 5) -> None:
 
 
 LAST_COOKIES: list[str] = []
+LAST_LOGIN_KAKAO: dict = {}
+KAKAO_ACCOUNT_PAGE = "https://accounts.kakao.com/weblogin/account/info"
+
+
+def kakao_logged_in(page: Page) -> bool | None:
+    """카카오 계정 페이지가 로그인 화면으로 넘어가지 않으면 카카오 자체 로그인은 살아 있다. 알 수 없으면 None."""
+    try:
+        page.goto(KAKAO_ACCOUNT_PAGE, wait_until="domcontentloaded")
+        page.wait_for_timeout(2500)
+        return "/login" not in page.url
+    except Exception as e:  # noqa: BLE001
+        log.info("카카오 계정 페이지 확인 실패: %s", e)
+        return None
 # 카카오 로그인 유지 쿠키(이름 앞부분). _karmt: '로그인 상태 유지' 토큰, _kawlt: 로그인 토큰
 KAKAO_STAY_COOKIES = ("_karmt", "_kawlt", "_kahai", "_kau")
 
@@ -532,6 +545,8 @@ def check_session(cfg: TistoryConfig, forget_tistory: bool = False, record: bool
         if forget_tistory:
             LAST_COOKIES[:] = kakao_cookie_report(ctx.cookies())
             ctx.clear_cookies(domain=re.compile(r"(^|\.)tistory\.com$"))
+            probe = ctx.pages[0] if ctx.pages else ctx.new_page()
+            LAST_LOGIN_KAKAO["logged_in"] = kakao_logged_in(probe)
         try:
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
             page.on("dialog", lambda d: d.dismiss())
