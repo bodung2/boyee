@@ -774,3 +774,27 @@ def test_manual_posts_override_rss(tmp_path, monkeypatch):
     assert brief.sync_posts(tmp_path / "arch", "someblog")["2026-11-03"]["url"].endswith("/1")
     real = brief.manual_posts(pathlib.Path(brief.__file__).with_name("posts_manual.json"))
     assert real["2026-11-03"]["url"].endswith("224464022707")
+
+
+def test_fetch_risk_returns_none_when_yahoo_is_empty(monkeypatch):
+    """야후가 빈 시세를 주면(집 PC SSL 오류 등) 글쓰기를 멈추지 않고 위험 신호만 뺀다."""
+    import yfinance as yf
+    from market_dashboard import brief
+    monkeypatch.setattr(yf, "download", lambda *a, **k: pd.DataFrame({"Close": pd.Series(dtype=float)}))
+    assert brief.fetch_risk() is None
+
+
+def test_ascii_ca_bundle_on_korean_user_folder(tmp_path, monkeypatch):
+    import certifi
+    import market_dashboard as md
+    src = tmp_path / "박보영" / "cacert.pem"
+    src.parent.mkdir()
+    src.write_text("CERT", encoding="utf-8")
+    monkeypatch.setattr(md._sys, "platform", "win32")
+    monkeypatch.delenv("CURL_CA_BUNDLE", raising=False)
+    monkeypatch.setattr(certifi, "where", lambda: str(src))
+    monkeypatch.setenv("PROGRAMDATA", str(tmp_path / "pd"))
+    md._ascii_ca_bundle()
+    dst = md._os.environ["CURL_CA_BUNDLE"]
+    assert dst.startswith(str(tmp_path / "pd")) and pathlib.Path(dst).read_text(encoding="utf-8") == "CERT"
+    monkeypatch.delenv("CURL_CA_BUNDLE")
