@@ -1081,3 +1081,58 @@ def test_drive_put_creates_then_overwrites_private_file(tmp_path):
     assert drive.put(b"png", "tistory_login_failed.png", "image/png", state, token="t", send=send) == "f1"
     drive.put(b"png2", "tistory_login_failed.png", "image/png", state, token="t", send=send)
     assert calls[0][0] == "POST" and calls[1] == ("PATCH", "image/png")
+
+
+# ---------------------------------------------------------------- 로그인 유지 점검(하루 3번)
+
+def test_keepalive_refreshes_login(cfg, monkeypatch):
+    monkeypatch.setattr(publisher, "check_session", lambda c: True)
+    assert pipeline.keepalive(cfg) == 0
+    assert not (cfg.log_dir / ".run-tistory.lock").exists()
+
+
+def test_keepalive_tells_reason_when_relogin_fails(cfg, tmp_path, monkeypatch):
+    cfg.data_dir = tmp_path / "data"
+    told = []
+
+    def check(c):
+        publisher.LAST_LOGIN.update(ok=False, state="kakao_approval", reason="카카오톡 확인이 눌리지 않았습니다")
+        return False
+
+    monkeypatch.setattr(publisher, "check_session", check)
+    monkeypatch.setattr(pipeline, "notify", lambda c, text: told.append(text))
+    monkeypatch.setattr("naver_autopost.notify.send_photo", lambda *a, **k: False)
+    assert pipeline.keepalive(cfg) == 1
+    assert told and "카카오톡 확인" in told[0] and "로그인 점검 실패" in told[0]
+
+
+def test_keepalive_skips_while_post_is_being_written(cfg, monkeypatch):
+    cfg.log_dir.mkdir(parents=True, exist_ok=True)
+    (cfg.log_dir / ".run-tistory.lock").write_text("1", encoding="utf-8")
+    monkeypatch.setattr(publisher, "check_session", lambda c: pytest.fail("발행 중에는 브라우저를 열지 않는다"))
+    assert pipeline.keepalive(cfg) == 0
+    assert (cfg.log_dir / ".run-tistory.lock").exists()     # 발행 실행의 잠금은 건드리지 않는다
+
+
+def test_relogin_test_uses_empty_profile(cfg, monkeypatch):
+    cfg.kakao_login_id, cfg.kakao_login_password = "me@example.com", "pw"
+    seen = []
+    monkeypatch.setattr(publisher, "check_session", lambda c: seen.append(c) or True)
+    assert pipeline.relogin_test(cfg) == 0
+    assert seen[0].profile_dir != cfg.profile_dir and not seen[0].headless
+    cfg.kakao_login_password = ""
+    assert pipeline.relogin_test(cfg) == 1
+
+
+def test_keepalive_is_scheduled_hidden_before_tistory_runs():
+    from quest_board import checks, schedule
+    qs = {q.name: q for q in schedule.parse_table(
+        (schedule.ROOT / "scripts" / "setup_all_schedules.ps1").read_text(encoding="utf-8-sig"))}
+    q = qs["TistoryKeepAlive"]
+    assert q.bat == "run_tistory_keepalive.bat" and q.times == ["07:50", "16:20", "21:50"]
+    assert 'Name = "TistoryKeepAlive"' in schedule.ROOT.joinpath("scripts", "setup_all_schedules.ps1").read_text(
+        encoding="utf-8-sig").split("Hidden = $true")[1].split("\n")[0] or "Hidden = $true; Desc = \"티스토리 로그인" in \
+        schedule.ROOT.joinpath("scripts", "setup_all_schedules.ps1").read_text(encoding="utf-8-sig")
+    assert checks.known(q)
+    bat = (schedule.ROOT / "scripts" / "run_tistory_keepalive.bat").read_text(encoding="utf-8")
+    assert "self_update.py" in bat and "AUTOPOST_UPDATE_QUIET=1" in bat and bat.rstrip().endswith(")")
