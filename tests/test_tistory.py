@@ -1423,3 +1423,24 @@ def test_password_page_falls_back_to_saved_simple_login_account(cfg, tmp_path):
         ok = publisher._ensure_logged_in(ctx.new_page(), cfg, timeout=15)
         b.close()
     assert ok
+
+
+def test_relogin_test_real_restores_tistory_login_on_failure(cfg, monkeypatch, capsys):
+    cfg.profile_dir.mkdir(parents=True)
+    publisher._state_file(cfg).write_text('[{"name": "TSSESSION"}]', encoding="utf-8")
+    calls = []
+
+    def check(c, forget_tistory=False, record=True):
+        calls.append((c.profile_dir == cfg.profile_dir, forget_tistory))
+        if forget_tistory:
+            publisher._state_file(cfg).write_text("[]", encoding="utf-8")   # 시험이 티스토리 쿠키를 지웠다
+            publisher.LAST_LOGIN_KAKAO["logged_in"] = False
+            return False
+        return True
+
+    monkeypatch.setattr(publisher, "check_session", check)
+    assert pipeline.relogin_test(cfg, real=True) == 1
+    assert calls == [(True, True), (True, False)]
+    assert "TSSESSION" in publisher._state_file(cfg).read_text(encoding="utf-8")
+    out = capsys.readouterr().out
+    assert "되돌렸습니다" in out and "풀려 있음" in out
