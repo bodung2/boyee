@@ -68,6 +68,8 @@ class TistoryConfig:
     # 카카오 로그인 유지가 끝났을 때만 쓰는 계정(비우면 직접 `login`). .env는 git에 올라가지 않는다.
     kakao_login_id: str = ""
     kakao_login_password: str = ""
+    # 아이디·비밀번호를 프로그램이 직접 입력할지(기본 끔: 카카오가 캡차를 띄운다). 평소에는 간편로그인·로그인 유지로 들어간다.
+    kakao_password_login: bool = False
 
     @property
     def blog_url(self) -> str:
@@ -128,4 +130,5 @@ class TistoryConfig:
             login_wait_min=int(env("TISTORY_LOGIN_WAIT_MIN", "120")),
             kakao_login_id=env("KAKAO_LOGIN_ID", "").strip(),
             kakao_login_password=env("KAKAO_LOGIN_PASSWORD", ""),
+            kakao_password_login=_bool("KAKAO_PASSWORD_LOGIN", False),
         )
