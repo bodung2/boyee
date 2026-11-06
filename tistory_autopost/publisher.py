@@ -245,6 +245,15 @@ def _kakao_password_login(page: Page, cfg: TistoryConfig) -> bool:
     return True
 
 
+PASSWORD_SETTLE_SEC = 45
+WRONG_PASSWORD_WORDS = ("일치하지 않", "잘못 입력", "다시 확인해", "올바르지 않", "비밀번호를 확인")
+
+
+def _kakao_wrong_password(page: Page) -> bool:
+    text = _body_text(page)
+    return any(w in text for w in WRONG_PASSWORD_WORDS)
+
+
 def _kakao_needs_approval(page: Page) -> bool:
     """카카오톡으로 로그인 확인을 보냈다는 화면(2단계 인증)인가."""
     try:
@@ -270,6 +279,9 @@ def login_problem(state: str, cfg: TistoryConfig, url: str = "", typed: bool = F
     """막힌 화면 → 사람이 읽는 원인과 할 일."""
     has_cred = bool(getattr(cfg, "kakao_login_id", "") and getattr(cfg, "kakao_login_password", ""))
     fix = "PC에서 `.venv\\Scripts\\python.exe -m tistory_autopost login`으로 다시 로그인하세요('로그인 상태 유지' 체크)."
+    if state == "kakao_wrong_password":
+        return ("카카오가 .env의 KAKAO_LOGIN_ID·KAKAO_LOGIN_PASSWORD가 맞지 않다고 합니다. 두 값(아이디는 카카오 계정 이메일 또는 "
+                "전화번호)을 확인해 고친 뒤 `relogin-test`로 다시 시험하세요.")
     if state == "kakao_password":
         if typed:
             return ("카카오 비밀번호 화면에서 .env의 KAKAO_LOGIN_ID·KAKAO_LOGIN_PASSWORD로 자동 로그인했지만 넘어가지 않았습니다"
@@ -322,7 +334,8 @@ def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bo
     page.goto(_newpost_url(cfg), wait_until="domcontentloaded")
     deadline = time.time() + timeout
     clicked = picked = 0
-    typed = told = False
+    typed = told = wrong = False
+    typed_at = 0.0
     while time.time() < deadline:
         page.wait_for_timeout(1500)
         url = page.url
@@ -359,16 +372,23 @@ def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bo
                 continue
             if password.count() and password.first.is_visible():
                 if not typed and _kakao_password_login(page, cfg):
-                    typed = True
-                    deadline = max(deadline, time.time() + 60)
+                    typed, typed_at = True, time.time()
+                    deadline = max(deadline, time.time() + 90)
                     continue
+                if typed:
+                    # 로그인 버튼을 누른 뒤 카카오가 넘어가기까지 몇 초~수십 초 걸린다. 그동안은 비밀번호 칸이 그대로 보인다.
+                    if time.time() - typed_at < PASSWORD_SETTLE_SEC:
+                        continue
+                    wrong = _kakao_wrong_password(page)
                 log.warning("카카오 비밀번호 입력 화면입니다(카카오 로그인 유지 기간이 끝남)")
                 break
     state = _login_state(page)
     if state == "ok":
         return True
     LAST_LOGIN.update(ok=False, state=state, url=page.url.split("?")[0], when=time.strftime("%Y-%m-%d %H:%M"),
-                      reason=login_problem(state, cfg, page.url.split("?")[0], typed))
+                      reason=login_problem("kakao_wrong_password" if wrong else state, cfg, page.url.split("?")[0], typed))
+    if wrong:
+        LAST_LOGIN["state"] = "kakao_wrong_password"
     log.warning("로그인 실패[%s]: %s", state, LAST_LOGIN["reason"])
     _shot(page, cfg.output_dir, "login_failed")
     _dump_login(page, cfg.output_dir, LAST_LOGIN)

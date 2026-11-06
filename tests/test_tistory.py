@@ -1136,3 +1136,67 @@ def test_keepalive_is_scheduled_hidden_before_tistory_runs():
     assert checks.known(q)
     bat = (schedule.ROOT / "scripts" / "run_tistory_keepalive.bat").read_text(encoding="utf-8")
     assert "self_update.py" in bat and "AUTOPOST_UPDATE_QUIET=1" in bat and bat.rstrip().endswith(")")
+
+
+SLOW_KAKAO_FORM = """<!doctype html><meta charset="utf-8">
+<input name="loginId" value=""><input type="password" name="password">
+<button type="submit" onclick="setTimeout(()=>location.href='https://www.tistory.com/auth/kakao/redirect', 5000)">로그인</button>"""
+
+
+def test_password_login_waits_while_kakao_is_still_on_the_form(cfg, tmp_path, monkeypatch):
+    """11/7 relogin-test: 카카오는 로그인됐다고 알림을 보냈는데, 버튼을 누른 1.5초 뒤 아직 보이는 비밀번호 칸을 보고 포기했다."""
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    monkeypatch.setattr(publisher, "_tell", lambda c, text: None)
+    cfg.kakao_login_id, cfg.kakao_login_password = "me@example.com", "pw-123"
+    cfg.output_dir = tmp_path / "out"
+
+    def serve(route):
+        url = route.request.url
+        has = "TSSESSION=" in (route.request.headers.get("cookie") or "")
+        if "/manage/newpost" in url:
+            route.fulfill(status=200, content_type="text/html", body="<title>editor</title>" if has else
+                          "<script>location.href='https://accounts.kakao.com/login/'</script>")
+        elif "accounts.kakao.com" in url:
+            route.fulfill(status=200, content_type="text/html", body=SLOW_KAKAO_FORM)
+        elif "/auth/kakao/redirect" in url:
+            route.fulfill(status=200, content_type="text/html", body=(
+                "<script>document.cookie='TSSESSION=abc; domain=.tistory.com; path=/; secure';"
+                "location.href='https://myblog.tistory.com/manage/newpost/'</script>"))
+        else:
+            route.fulfill(status=200, body="")
+
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        ctx = b.new_context()
+        ctx.route(re.compile(r"https://[^/]*(tistory|kakao)\.com/.*"), serve)
+        ok = publisher._ensure_logged_in(ctx.new_page(), cfg, timeout=12)
+        b.close()
+    assert ok
+
+
+def test_wrong_password_is_reported_after_waiting(cfg, tmp_path, monkeypatch):
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    monkeypatch.setattr(publisher, "PASSWORD_SETTLE_SEC", 3)
+    cfg.kakao_login_id, cfg.kakao_login_password = "me@example.com", "bad"
+    cfg.output_dir = tmp_path / "out"
+    form = ('<!doctype html><meta charset="utf-8"><input name="loginId" value=""><input type="password">'
+            '<p id="m"></p><button type="submit" onclick="document.getElementById(\'m\').innerText='
+            '\'계정 또는 비밀번호가 일치하지 않습니다\'">로그인</button>')
+
+    def serve(route):
+        if "/manage/newpost" in route.request.url:
+            route.fulfill(status=200, content_type="text/html",
+                          body="<script>location.href='https://accounts.kakao.com/login/'</script>")
+        else:
+            route.fulfill(status=200, content_type="text/html", body=form)
+
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        ctx = b.new_context()
+        ctx.route(re.compile(r"https://[^/]*(tistory|kakao)\.com/.*"), serve)
+        ok = publisher._ensure_logged_in(ctx.new_page(), cfg, timeout=12)
+        b.close()
+    assert not ok and publisher.LAST_LOGIN["state"] == "kakao_wrong_password"
+    assert "맞지 않다" in publisher.LAST_LOGIN["reason"]
