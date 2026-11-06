@@ -1,5 +1,6 @@
 """티스토리 '논쟁 × 공식 통계' 자동 발행: 주제 선정·제보·검증·전체 흐름·가짜 에디터 발행을 확인한다."""
 import json
+import os
 import re
 import time
 from datetime import date, datetime
@@ -947,3 +948,136 @@ def test_growth_lab_theme_follows_tistory_mode(monkeypatch):
     monkeypatch.setenv("TISTORY_MODE", "fix")
     assert "오류" in theme_of(BLOGS["tistory"])
     assert theme_of(BLOGS["invest"]) == BLOGS["invest"].theme
+
+
+# ---------------------------------------------------------------- 로그인이 풀렸을 때(11/2~11/6 연속 실패)
+
+def test_password_page_reports_why_and_what_to_do(cfg, tmp_path):
+    """카카오 비밀번호 화면에서 멈추면 '왜'(로그인 유지 만료, .env 계정 없음)와 '할 일'을 남긴다."""
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    cfg.output_dir = tmp_path / "out"
+    cfg.kakao_login_id = cfg.kakao_login_password = ""
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        ctx = b.new_context()
+        _kakao_route(ctx, simple=False)
+        ok = publisher._ensure_logged_in(ctx.new_page(), cfg, timeout=12)
+        b.close()
+    assert not ok
+    assert publisher.LAST_LOGIN["state"] == "kakao_password"
+    assert "KAKAO_LOGIN_ID" in publisher.LAST_LOGIN["reason"] and "tistory_autopost login" in publisher.LAST_LOGIN["reason"]
+    dump = json.loads((cfg.output_dir / "login_failed.json").read_text(encoding="utf-8"))
+    assert dump["state"] == "kakao_password" and "me@example.com" not in json.dumps(dump, ensure_ascii=False)
+
+
+def test_login_problem_messages_differ_by_screen(cfg):
+    cfg.kakao_login_id, cfg.kakao_login_password = "me@example.com", "pw"
+    typed = publisher.login_problem("kakao_password", cfg, typed=True)
+    assert "자동 로그인했지만" in typed
+    assert "카카오톡" in publisher.login_problem("kakao_approval", cfg)
+    assert "보안문자" in publisher.login_problem("captcha", cfg)
+    assert "TISTORY_BLOG" in publisher.login_problem("no_blog", cfg, "https://www.tistory.com/")
+
+
+def test_cookies_saved_even_when_login_failed(cfg):
+    """카카오는 로그인 유지 쿠키를 쓸 때마다 바꾼다. 실패한 실행의 새 값도 저장해야 다음 실행이 옛 값으로 막히지 않는다."""
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    later = time.time() + 86400
+    publisher._state_file(cfg).parent.mkdir(parents=True, exist_ok=True)
+    publisher._state_file(cfg).write_text(json.dumps([
+        {"name": "_kawlt", "value": "old", "domain": ".kakao.com", "path": "/", "expires": -1}]), encoding="utf-8")
+    with sync_playwright() as p:
+        ctx = publisher._open(p, cfg, headless=True)
+        ctx.add_cookies([{"name": "_kawlt", "value": "rotated", "domain": ".kakao.com", "path": "/", "expires": later}])
+        publisher._close(ctx, cfg)                       # TSSESSION이 없어도(로그인 실패) 저장
+    saved = {c["name"]: c["value"] for c in json.loads(publisher._state_file(cfg).read_text(encoding="utf-8"))}
+    assert saved == {"_kawlt": "rotated"}
+
+
+def test_run_waits_for_relogin_then_publishes(cfg, tmp_path, monkeypatch):
+    """로그인이 풀려 있으면 이유를 알리고 기다리다가, 주인이 `login`을 다시 하면(쿠키 파일이 바뀜) 이어서 진행한다."""
+    cfg.data_dir = tmp_path / "data"
+    cfg.login_wait_min = 30
+    cookie = publisher._state_file(cfg)
+    cookie.parent.mkdir(parents=True, exist_ok=True)
+    cookie.write_text("[]", encoding="utf-8")
+    checks, told, minutes = [], [], [0]
+
+    def check(c):
+        checks.append(minutes[0])
+        if len(checks) == 1:
+            publisher.LAST_LOGIN.update(ok=False, state="kakao_password", reason="카카오 로그인 유지 만료")
+            return False
+        return True
+
+    def fake_sleep(sec):
+        minutes[0] += 1
+        if minutes[0] == 5:                              # 5분 뒤 주인이 다시 로그인
+            os.utime(cookie, (time.time() + 100, time.time() + 100))
+
+    monkeypatch.setattr(publisher, "check_session", check)
+    monkeypatch.setattr(pipeline, "_sleep", fake_sleep)
+    monkeypatch.setattr(pipeline, "notify", lambda c, text: told.append(text))
+    monkeypatch.setattr("naver_autopost.notify.send_photo", lambda *a, **k: False)
+    pipeline._ensure_session(cfg)
+    assert checks == [0, 6]                              # 파일이 바뀐 뒤 1분 더 기다렸다가 확인
+    assert told and "카카오 로그인 유지 만료" in told[0] and "30분" in told[0]
+
+
+def test_run_gives_up_with_reason_when_nobody_logs_in(cfg, tmp_path, monkeypatch):
+    cfg.data_dir = tmp_path / "data"
+    cfg.login_wait_min = 3
+
+    def check(c):
+        publisher.LAST_LOGIN.update(ok=False, state="captcha", reason="보안문자가 떴습니다")
+        return False
+
+    monkeypatch.setattr(publisher, "check_session", check)
+    monkeypatch.setattr(pipeline, "_sleep", lambda s: None)
+    monkeypatch.setattr(pipeline, "notify", lambda c, text: None)
+    monkeypatch.setattr("naver_autopost.notify.send_photo", lambda *a, **k: False)
+    with pytest.raises(publisher.SessionExpired, match="보안문자"):
+        pipeline._ensure_session(cfg)
+
+
+def test_repair_urls_fixes_manage_posts_records(cfg, monkeypatch):
+    from naver_autopost import history
+    history.save(cfg.history_file, [
+        {"date": "2026-11-01", "title": "로프티아 출시", "url": "https://myblog.tistory.com/manage/posts/", "source": "autopost"},
+        {"date": "2026-10-30", "title": "다른 글", "url": "https://myblog.tistory.com/399", "source": "autopost"}])
+    monkeypatch.setattr(publisher, "find_post_url", lambda c, t: "https://myblog.tistory.com/401" if t == "로프티아 출시" else None)
+    assert pipeline.repair_urls(cfg) == 1
+    urls = [e["url"] for e in history.load(cfg.history_file)]
+    assert urls == ["https://myblog.tistory.com/401", "https://myblog.tistory.com/399"]
+
+
+def test_manage_page_finds_post_url_when_rss_lags(cfg):
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    page_html = ('<meta charset="utf-8"><a href="https://myblog.tistory.com/manage/post/402">수정</a>'
+                 '<a href="https://myblog.tistory.com/402">로프티아 출시 시간 정리</a>'
+                 '<a href="https://myblog.tistory.com/401">예전 글</a>')
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        ctx = b.new_context()
+        ctx.route(re.compile(r"https://myblog\.tistory\.com/.*"),
+                  lambda r: r.fulfill(status=200, content_type="text/html", body=page_html))
+        url = publisher.manage_post_url(ctx.new_page(), cfg, "로프티아  출시 시간 정리")
+        b.close()
+    assert url == "https://myblog.tistory.com/402"
+
+
+def test_drive_put_creates_then_overwrites_private_file(tmp_path):
+    from quest_board import drive
+    calls = []
+
+    def send(url, body, ctype, method, token):
+        calls.append((method, ctype))
+        return {"id": "f1"}
+
+    state = tmp_path / "s.json"
+    assert drive.put(b"png", "tistory_login_failed.png", "image/png", state, token="t", send=send) == "f1"
+    drive.put(b"png2", "tistory_login_failed.png", "image/png", state, token="t", send=send)
+    assert calls[0][0] == "POST" and calls[1] == ("PATCH", "image/png")
