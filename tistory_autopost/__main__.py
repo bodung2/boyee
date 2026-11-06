@@ -136,6 +136,8 @@ def _check(cfg: TistoryConfig) -> int:
         try:
             good = publisher.check_session(cfg)
             print("✅" if good else "❌ 로그인이 필요합니다 → python -m tistory_autopost login")
+            from . import login_log
+            print(f"   로그인 유지 기록: {login_log.summary(cfg)}")
             ok &= good
         except Exception as e:  # noqa: BLE001
             ok = False

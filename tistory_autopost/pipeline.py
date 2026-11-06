@@ -475,6 +475,11 @@ def keepalive(cfg: TistoryConfig) -> int:
     try:
         with _Lock(cfg.log_dir / ".run-tistory.lock"):
             if publisher.check_session(cfg):
+                from . import login_log
+                log.info("로그인 유지 기록: %s", login_log.summary(cfg))
+                remind = login_log.due_reminder(cfg)
+                if remind:
+                    notify(cfg, remind)
                 log.info("티스토리 로그인 유지 확인 완료")
                 return 0
             reason = _login_reason()
@@ -509,7 +514,7 @@ def relogin_test(cfg: TistoryConfig) -> int:
         test_cfg = dataclasses.replace(cfg, profile_dir=copy, headless=False, kakao_password_login=False,
                                        output_dir=cfg.output_dir / "relogin_test")
         print("티스토리 로그인이 끊긴 상황을 만들어, 비밀번호 없이 카카오로 다시 들어가는지 시험합니다(1~2분).")
-        ok = publisher.check_session(test_cfg, forget_tistory=True)
+        ok = publisher.check_session(test_cfg, forget_tistory=True, record=False)
     if ok:
         print("✅ 티스토리 로그인이 끊겨도 카카오 로그인 유지·간편로그인으로 비밀번호 없이 다시 들어갑니다.")
         return 0

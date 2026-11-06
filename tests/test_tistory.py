@@ -64,6 +64,7 @@ def cfg(tmp_path):
     c.topics_file = tmp_path / "topics.json"
     c.topics_file.write_text(json.dumps({"topics": TOPICS}), encoding="utf-8")
     c.log_dir = tmp_path / "logs"
+    c.data_dir = tmp_path / "data"
     c.telegram_bot_token = c.telegram_chat_id = ""
     c.headless = True
     c.browser_channel = ""
@@ -1123,7 +1124,7 @@ def test_relogin_test_uses_profile_copy_without_tistory_cookies(cfg, monkeypatch
     (cfg.profile_dir / "Cookies").write_text("x", encoding="utf-8")
     (cfg.profile_dir / "SingletonLock").write_text("x", encoding="utf-8")
     monkeypatch.setattr(publisher, "check_session",
-                        lambda c, forget_tistory=False: seen.append((c, forget_tistory, sorted(p.name for p in c.profile_dir.iterdir()))) or True)
+                        lambda c, forget_tistory=False, record=True: seen.append((c, forget_tistory and not record, sorted(p.name for p in c.profile_dir.iterdir()))) or True)
     assert pipeline.relogin_test(cfg) == 0
     c, forget, files = seen[0]
     assert forget and c.profile_dir != cfg.profile_dir and not c.kakao_password_login
@@ -1253,3 +1254,56 @@ def test_wrong_password_is_reported_after_waiting(cfg, tmp_path, monkeypatch):
         b.close()
     assert not ok and publisher.LAST_LOGIN["state"] == "kakao_wrong_password"
     assert "맞지 않다" in publisher.LAST_LOGIN["reason"]
+
+
+# ---------------------------------------------------------------- 로그인 유지 기간 기록·미리 알림
+
+from tistory_autopost import login_log  # noqa: E402
+
+
+def _at(day: str, hm: str = "08:30"):
+    return datetime.strptime(f"{day} {hm}", "%Y-%m-%d %H:%M").replace(tzinfo=KST)
+
+
+def test_login_log_measures_lifetime_and_reminds_once_a_day(cfg):
+    login_log.record(cfg, "manual_login", now=_at("2026-10-01", "21:00"))
+    for d in range(2, 12):
+        login_log.record(cfg, "ok", now=_at(f"2026-10-{d:02d}"))
+        login_log.record(cfg, "ok", now=_at(f"2026-10-{d:02d}", "16:20"))     # 하루 한 번만 남는다
+    login_log.record(cfg, "fail", "kakao_password", now=_at("2026-10-11", "21:00"))
+    login_log.record(cfg, "manual_login", now=_at("2026-10-11", "22:00"))
+    events = login_log.load(cfg)["events"]
+    assert sum(e["event"] == "ok" for e in events) == 10
+    assert login_log.lifetimes(events) == [10.0]
+    assert login_log.due_reminder(cfg, now=_at("2026-10-15")) == ""            # 6일 남음
+    msg = login_log.due_reminder(cfg, now=_at("2026-10-19"))                   # 2일 남음
+    assert "약 2일 뒤" in msg and "10일 만에" in msg and "tistory_autopost login" in msg
+    assert login_log.due_reminder(cfg, now=_at("2026-10-19", "21:50")) == ""   # 같은 날 두 번 보내지 않는다
+    assert login_log.due_reminder(cfg, now=_at("2026-10-20"))
+    assert "약 1일 남음" in login_log.summary(cfg, now=_at("2026-10-20"))
+
+
+def test_login_log_waits_until_first_expiry_is_seen(cfg):
+    assert "기록이 아직 없습니다" in login_log.summary(cfg)
+    login_log.record(cfg, "manual_login", now=_at("2026-11-07", "10:00"))
+    login_log.record(cfg, "fail", "kakao_approval", now=_at("2026-11-08"))    # 카카오 유지가 끝난 건 아님
+    assert login_log.lifetimes(login_log.load(cfg)["events"]) == []
+    assert login_log.due_reminder(cfg, now=_at("2026-12-30")) == ""
+    assert "관찰 중" in login_log.summary(cfg, now=_at("2026-11-09"))
+
+
+def test_keepalive_sends_reminder(cfg, monkeypatch):
+    told = []
+    monkeypatch.setattr(publisher, "check_session", lambda c: True)
+    monkeypatch.setattr(pipeline, "notify", lambda c, text: told.append(text))
+    monkeypatch.setattr(login_log, "due_reminder", lambda c: "곧 끝나요")
+    assert pipeline.keepalive(cfg) == 0 and told == ["곧 끝나요"]
+
+
+def test_check_session_records_result(cfg, monkeypatch):
+    pytest.importorskip("playwright")
+    monkeypatch.setattr(publisher, "_ensure_logged_in", lambda page, c, timeout=45: False)
+    publisher.LAST_LOGIN.update(state="kakao_password")
+    assert not publisher.check_session(cfg)
+    assert login_log.load(cfg)["events"][-1]["event"] == "fail"
+    assert not publisher.check_session(cfg, record=False) and len(login_log.load(cfg)["events"]) == 1

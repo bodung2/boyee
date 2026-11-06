@@ -447,6 +447,8 @@ def login(cfg: TistoryConfig, wait_minutes: int = 5) -> None:
                                      ".env의 TISTORY_BLOG가 이 계정의 블로그 주소인지 확인하세요.")
             page.wait_for_timeout(3000)
             _save_cookies(ctx, cfg)
+            from . import login_log
+            login_log.record(cfg, "manual_login")
         finally:
             ctx.close()
     if not check_session(cfg):
@@ -455,7 +457,7 @@ def login(cfg: TistoryConfig, wait_minutes: int = 5) -> None:
     print("로그인 확인. 창을 다시 열어도 로그인이 유지됩니다.")
 
 
-def check_session(cfg: TistoryConfig, forget_tistory: bool = False) -> bool:
+def check_session(cfg: TistoryConfig, forget_tistory: bool = False, record: bool = True) -> bool:
     """저장된 로그인으로 글쓰기 화면이 열리는지 확인한다(10~90초). 실패 이유는 LAST_LOGIN['reason'].
     forget_tistory: 티스토리 로그인 쿠키를 지우고 시작한다(티스토리 세션이 끝났을 때 카카오로 다시 들어가는지 시험)."""
     LAST_LOGIN.clear()
@@ -469,6 +471,9 @@ def check_session(cfg: TistoryConfig, forget_tistory: bool = False) -> bool:
             ok = _ensure_logged_in(page, cfg, timeout=90)
             if not ok:
                 log.warning("로그인 확인 실패. 마지막 화면: %s", page.url)
+            if record:
+                from . import login_log
+                login_log.record(cfg, "ok" if ok else "fail", "" if ok else LAST_LOGIN.get("state", ""))
             return ok
         finally:
             _close(ctx, cfg)                     # 성공·실패 모두 새 쿠키를 저장한다
