@@ -182,7 +182,9 @@ def fetch_risk() -> dict | None:
 
         spx = yf.download("^GSPC", period="2y", auto_adjust=True, progress=False)["Close"].squeeze()
         spx.index = pd.to_datetime(spx.index).tz_localize(None)
-    except Exception as e:  # noqa: BLE001
+        if not isinstance(spx, pd.Series) or len(spx.dropna()) < 260:
+            raise RuntimeError("S&P500 시세가 비었음")
+    except Exception as e:  # noqa: BLE001 - 위험 신호가 없어도 요약은 만든다
         log.warning("S&P500 받기 실패: %s", e)
         return None
     try:

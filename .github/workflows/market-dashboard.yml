@@ -8,7 +8,11 @@ name: market-dashboard
 on:
   schedule:
     - cron: "30 22 * * 1-5"   # UTC 월~금 22:30 = 한국 화~토 07:30
-    - cron: "0 7 * * 1-5"     # UTC 월~금 07:00 = 한국 월~금 16:00(한국장 마감 뒤, 시황 글 17:30 전)
+    # 한국 월~금 오후(한국장 마감 뒤, 시황 글 17:30 전). GitHub 예약은 정각에 몰려 몇 시간씩 밀리는 날이 많아
+    # 정각을 피해 세 번 걸어 둔다(먼저 도는 것이 반영되고, 늦게 돈 것은 같은 값으로 다시 올릴 뿐이다).
+    - cron: "7 7 * * 1-5"     # 16:07
+    - cron: "37 7 * * 1-5"    # 16:37
+    - cron: "13 8 * * 1-5"    # 17:13
   workflow_dispatch:           # Actions 탭에서 "Run workflow"로 바로 실행
 
 permissions:
@@ -18,7 +22,7 @@ permissions:
 
 concurrency:
   group: market-dashboard
-  cancel-in-progress: true
+  cancel-in-progress: false   # 오후 예약 여러 개가 겹쳐도 앞의 것을 끊지 않고 차례로
 
 jobs:
   build:
@@ -46,7 +50,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           DASHBOARD_URL: ${{ vars.DASHBOARD_URL || 'https://bodung2.github.io/boyee/' }}
-        run: python -m market_dashboard run --out site --public ${{ github.event.schedule == '0 7 * * 1-5' && ' ' || '--notify' }}
+        run: python -m market_dashboard run --out site --public ${{ (github.event_name != 'schedule' || github.event.schedule == '30 22 * * 1-5') && '--notify' || ' ' }}
 
       - name: 미국 섹터 지도 — 실패해도 자산군 대시보드는 그대로 게시
         continue-on-error: true
