@@ -1317,3 +1317,66 @@ def test_kakao_cookie_report_hides_values():
         {"name": "TSSESSION", "value": "SECRET", "domain": ".tistory.com", "expires": -1}])
     assert len(rows) == 2 and not any("SECRET" in r for r in rows)
     assert rows[0].startswith("★ _karmt") and "까지" in rows[0] and "브라우저 닫으면" in rows[1]
+
+
+# ---------------------------------------------------------------- 11/7: 카카오 로그인은 살아 있는데 비밀번호 화면
+
+AUTHORIZE = ("https://kauth.kakao.com/oauth/authorize?client_id=abc&state=xyz&prompt=select_account"
+             "&redirect_uri=https%3A%2F%2Fwww.tistory.com%2Fauth%2Fkakao%2Fredirect&response_type=code&through_account=true")
+
+
+def test_sso_url_drops_only_prompt():
+    import urllib.parse
+    login = "https://accounts.kakao.com/login/?continue=" + urllib.parse.quote(AUTHORIZE, safe="") + "&talk_login=#login"
+    out = publisher._sso_url(login)
+    q = urllib.parse.parse_qs(urllib.parse.urlparse(out).query)
+    assert out.startswith("https://kauth.kakao.com/oauth/authorize?") and "prompt" not in q
+    assert q["client_id"] == ["abc"] and q["state"] == ["xyz"] and q["redirect_uri"] == ["https://www.tistory.com/auth/kakao/redirect"]
+    assert publisher._sso_url("https://accounts.kakao.com/login/?continue=https%3A%2F%2Fevil.example%2Foauth%2Fauthorize%3Fprompt%3Dx") == ""
+    assert publisher._sso_url(out) == ""
+
+
+def test_live_kakao_login_skips_forced_account_choice(cfg, tmp_path):
+    """카카오 로그인 쿠키(_kawlt)가 살아 있으면, 계정 다시 고르기를 뺀 요청으로 비밀번호 없이 들어간다."""
+    pytest.importorskip("playwright")
+    import urllib.parse
+    from playwright.sync_api import sync_playwright
+    cfg.output_dir = tmp_path / "out"
+    cfg.kakao_password_login = False
+    login_page = "https://accounts.kakao.com/login/?continue=" + urllib.parse.quote(AUTHORIZE, safe="") + "&talk_login="
+
+    def serve(route):
+        url = route.request.url
+        cookie = route.request.headers.get("cookie") or ""
+        if "/manage/newpost" in url:
+            route.fulfill(status=200, content_type="text/html", body="<title>editor</title>" if "TSSESSION=" in cookie else
+                          f"<script>location.href='{AUTHORIZE}'</script>")
+        elif "kauth.kakao.com/oauth/authorize" in url:
+            if "prompt=" in url or "_kawlt=" not in cookie:      # 계정 다시 고르기 → 비밀번호 화면
+                route.fulfill(status=200, content_type="text/html", body=f"<script>location.href='{login_page}'</script>")
+            else:                                                # 살아 있는 카카오 로그인 → 바로 티스토리로
+                route.fulfill(status=200, content_type="text/html",
+                              body="<script>location.href='https://www.tistory.com/auth/kakao/redirect?code=1'</script>")
+        elif "accounts.kakao.com" in url:
+            route.fulfill(status=200, content_type="text/html",
+                          body='<meta charset="utf-8"><input name="loginId"><input type="password">')
+        elif "/auth/kakao/redirect" in url:
+            route.fulfill(status=200, content_type="text/html", body=(
+                "<script>document.cookie='TSSESSION=abc; domain=.tistory.com; path=/; secure';"
+                "location.href='https://myblog.tistory.com/manage/newpost/'</script>"))
+        else:
+            route.fulfill(status=200, body="")
+
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        ctx = b.new_context()
+        ctx.add_cookies([{"name": "_kawlt", "value": "live", "domain": ".kakao.com", "path": "/",
+                          "expires": time.time() + 86400, "secure": True}])
+        ctx.route(re.compile(r"https://[^/]*(tistory|kakao)\.com/.*"), serve)
+        ok = publisher._ensure_logged_in(ctx.new_page(), cfg, timeout=15)
+        ctx.clear_cookies(domain=re.compile(r"kakao"))
+        ctx.clear_cookies(domain=re.compile(r"tistory"))
+        expired = publisher._ensure_logged_in(ctx.new_page(), cfg, timeout=10)
+        b.close()
+    assert ok
+    assert not expired and publisher.LAST_LOGIN["state"] == "kakao_password"   # 카카오 로그인도 끝났으면 그대로 실패
