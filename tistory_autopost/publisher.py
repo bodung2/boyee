@@ -342,6 +342,15 @@ def _sso_url(url: str) -> str:
     return urllib.parse.urlunparse(parts._replace(query=urllib.parse.urlencode(kept)))
 
 
+def _simple_login_url(url: str) -> str:
+    """카카오 아이디·비밀번호 화면(/login/…#login) → 같은 요청의 간편로그인 화면(/login/simple/…#simpleLogin)."""
+    import urllib.parse
+    parts = urllib.parse.urlparse(url)
+    if parts.hostname != "accounts.kakao.com" or not parts.path.startswith("/login") or "/simple" in parts.path:
+        return ""
+    return urllib.parse.urlunparse(parts._replace(path="/login/simple/", fragment="simpleLogin"))
+
+
 def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bool:
     """글쓰기 화면을 연다. 로그인 화면으로 가면 카카오 자동 로그인 버튼을 누르고,
     카카오 간편 로그인 화면이면 저장된 계정을 골라 기다린다. 실패하면 화면을 login_failed.png로 남긴다."""
@@ -349,7 +358,7 @@ def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bo
     deadline = time.time() + timeout
     clicked = picked = 0
     typed = told = wrong = False
-    sso_tries = 0
+    sso_tries = simple_tries = 0
     typed_at = 0.0
     while time.time() < deadline:
         page.wait_for_timeout(1500)
@@ -380,6 +389,17 @@ def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bo
                     page.goto(sso, wait_until="domcontentloaded")
                 except Exception as e:  # noqa: BLE001 - 넘어가는 중에 끊겨도 다음 확인에서 본다
                     log.info("카카오 로그인 유지 요청 중 화면 전환: %s", e)
+                continue
+            # 간편로그인('간편로그인 정보 저장')으로 저장된 계정은 /login/simple/ 화면에 나온다. 비밀번호 화면이면 한 번 가 본다.
+            simple = _simple_login_url(url) if simple_tries < 1 else ""
+            if simple:
+                simple_tries += 1
+                log.info("카카오 간편로그인 화면으로 가서 저장된 계정을 찾습니다")
+                try:
+                    page.goto(simple, wait_until="domcontentloaded")
+                except Exception as e:  # noqa: BLE001
+                    log.info("간편로그인 화면 전환: %s", e)
+                page.wait_for_timeout(1500)
                 continue
             password = page.locator("input[type='password']")
             on_password = password.count() and password.first.is_visible()
