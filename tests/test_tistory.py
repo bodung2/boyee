@@ -1380,3 +1380,46 @@ def test_live_kakao_login_skips_forced_account_choice(cfg, tmp_path):
         b.close()
     assert ok
     assert not expired and publisher.LAST_LOGIN["state"] == "kakao_password"   # 카카오 로그인도 끝났으면 그대로 실패
+
+
+def test_simple_login_url():
+    u = "https://accounts.kakao.com/login/?continue=https%3A%2F%2Fkauth.kakao.com%2Foauth%2Fauthorize%3Fa%3D1&talk_login=hidden#login"
+    out = publisher._simple_login_url(u)
+    assert out == ("https://accounts.kakao.com/login/simple/?continue=https%3A%2F%2Fkauth.kakao.com%2Foauth%2Fauthorize"
+                   "%3Fa%3D1&talk_login=hidden#simpleLogin")
+    assert publisher._simple_login_url(out) == "" and publisher._simple_login_url("https://www.tistory.com/") == ""
+
+
+def test_password_page_falls_back_to_saved_simple_login_account(cfg, tmp_path):
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    cfg.output_dir = tmp_path / "out"
+    cfg.kakao_password_login = False
+    picker = ('<meta charset="utf-8"><ul><li class="item_account" onclick="location.href=\'https://www.tistory.com/auth/kakao/redirect\'">'
+              '<span>bo***@gmail.com</span></li><li><a href="#">새로운 계정으로 로그인</a></li></ul>')
+
+    def serve(route):
+        url = route.request.url
+        has = "TSSESSION=" in (route.request.headers.get("cookie") or "")
+        if "/manage/newpost" in url:
+            route.fulfill(status=200, content_type="text/html", body="<title>editor</title>" if has else
+                          "<script>location.href='https://accounts.kakao.com/login/?continue=x#login'</script>")
+        elif "accounts.kakao.com/login/simple" in url:
+            route.fulfill(status=200, content_type="text/html", body=picker)
+        elif "accounts.kakao.com" in url:
+            route.fulfill(status=200, content_type="text/html",
+                          body='<meta charset="utf-8"><input name="loginId"><input type="password">')
+        elif "/auth/kakao/redirect" in url:
+            route.fulfill(status=200, content_type="text/html", body=(
+                "<script>document.cookie='TSSESSION=abc; domain=.tistory.com; path=/; secure';"
+                "location.href='https://myblog.tistory.com/manage/newpost/'</script>"))
+        else:
+            route.fulfill(status=200, body="")
+
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        ctx = b.new_context()
+        ctx.route(re.compile(r"https://[^/]*(tistory|kakao)\.com/.*"), serve)
+        ok = publisher._ensure_logged_in(ctx.new_page(), cfg, timeout=15)
+        b.close()
+    assert ok
