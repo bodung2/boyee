@@ -490,27 +490,31 @@ def keepalive(cfg: TistoryConfig) -> int:
 
 
 def relogin_test(cfg: TistoryConfig) -> int:
-    """빈 브라우저 프로필(저장된 로그인 없음)로 .env의 카카오 계정 자동 로그인이 실제로 되는지 시험한다.
-    지금 쓰는 로그인은 건드리지 않는다. 카카오톡 확인이 오면 휴대폰에서 눌러 준다."""
+    """티스토리 로그인이 끊긴 상황을 흉내 내 비밀번호 없이 다시 들어가는지 시험한다.
+    지금 브라우저 프로필을 임시로 복사하고, 그 복사본에서 티스토리 쿠키만 지운 뒤 글쓰기 화면을 연다.
+    카카오 '로그인 상태 유지'·'간편로그인 정보 저장'이 살아 있으면 비밀번호·캡차 없이 들어간다. 진짜 프로필은 건드리지 않는다."""
     import dataclasses
     import tempfile
 
     from . import publisher
 
-    if not (cfg.kakao_login_id and cfg.kakao_login_password):
-        print("❌ .env에 KAKAO_LOGIN_ID·KAKAO_LOGIN_PASSWORD가 없습니다.")
+    if not cfg.profile_dir.exists():
+        print("❌ 저장된 로그인이 없습니다. 먼저 `python -m tistory_autopost login`을 실행하세요.")
         return 1
+    skip = shutil.ignore_patterns("Singleton*", "lockfile", "*.lock", "Cache", "Code Cache", "GPUCache",
+                                  "Service Worker", "GrShaderCache", "ShaderCache", "DawnCache", "Crashpad")
     with tempfile.TemporaryDirectory(prefix="tistory-relogin-") as tmp:
-        test_cfg = dataclasses.replace(cfg, profile_dir=Path(tmp) / "profile", headless=False,
+        copy = Path(tmp) / "profile"
+        shutil.copytree(cfg.profile_dir, copy, ignore=skip)
+        test_cfg = dataclasses.replace(cfg, profile_dir=copy, headless=False, kakao_password_login=False,
                                        output_dir=cfg.output_dir / "relogin_test")
-        print("빈 브라우저로 카카오 자동 로그인을 시험합니다(1~10분). 카카오톡 확인 알림이 오면 '확인'을 눌러 주세요.")
-        ok = publisher.check_session(test_cfg)
+        print("티스토리 로그인이 끊긴 상황을 만들어, 비밀번호 없이 카카오로 다시 들어가는지 시험합니다(1~2분).")
+        ok = publisher.check_session(test_cfg, forget_tistory=True)
     if ok:
-        print("✅ 저장된 로그인이 없어도 .env 계정으로 스스로 다시 로그인됩니다. 로그인이 풀려도 자동으로 복구됩니다.")
+        print("✅ 티스토리 로그인이 끊겨도 카카오 로그인 유지·간편로그인으로 비밀번호 없이 다시 들어갑니다.")
         return 0
-    print(f"❌ 자동 로그인 실패: {_login_reason()}\n   막힌 화면: {cfg.output_dir / 'relogin_test' / 'login_failed.png'}")
+    print(f"❌ 다시 들어가지 못했습니다: {_login_reason()}\n   막힌 화면: {cfg.output_dir / 'relogin_test' / 'login_failed.png'}")
     return 1
-
 
 _sleep = time.sleep
 

@@ -749,6 +749,7 @@ def test_kakao_password_login_waits_for_kakaotalk_approval(cfg, tmp_path, monkey
     told = []
     monkeypatch.setattr(publisher, "_tell", lambda c, text: told.append(text))
     cfg.kakao_login_id, cfg.kakao_login_password = "me@example.com", "pw-123"
+    cfg.kakao_password_login = True
     cfg.output_dir = tmp_path / "out"
 
     def serve(route):
@@ -966,7 +967,7 @@ def test_password_page_reports_why_and_what_to_do(cfg, tmp_path):
         b.close()
     assert not ok
     assert publisher.LAST_LOGIN["state"] == "kakao_password"
-    assert "KAKAO_LOGIN_ID" in publisher.LAST_LOGIN["reason"] and "tistory_autopost login" in publisher.LAST_LOGIN["reason"]
+    assert "간편로그인 정보 저장" in publisher.LAST_LOGIN["reason"] and "tistory_autopost login" in publisher.LAST_LOGIN["reason"]
     dump = json.loads((cfg.output_dir / "login_failed.json").read_text(encoding="utf-8"))
     assert dump["state"] == "kakao_password" and "me@example.com" not in json.dumps(dump, ensure_ascii=False)
 
@@ -974,7 +975,7 @@ def test_password_page_reports_why_and_what_to_do(cfg, tmp_path):
 def test_login_problem_messages_differ_by_screen(cfg):
     cfg.kakao_login_id, cfg.kakao_login_password = "me@example.com", "pw"
     typed = publisher.login_problem("kakao_password", cfg, typed=True)
-    assert "자동 로그인했지만" in typed
+    assert "자동 입력했지만" in typed and "캡차" in typed
     assert "카카오톡" in publisher.login_problem("kakao_approval", cfg)
     assert "보안문자" in publisher.login_problem("captcha", cfg)
     assert "TISTORY_BLOG" in publisher.login_problem("no_blog", cfg, "https://www.tistory.com/")
@@ -1114,14 +1115,64 @@ def test_keepalive_skips_while_post_is_being_written(cfg, monkeypatch):
     assert (cfg.log_dir / ".run-tistory.lock").exists()     # 발행 실행의 잠금은 건드리지 않는다
 
 
-def test_relogin_test_uses_empty_profile(cfg, monkeypatch):
-    cfg.kakao_login_id, cfg.kakao_login_password = "me@example.com", "pw"
+def test_relogin_test_uses_profile_copy_without_tistory_cookies(cfg, monkeypatch):
     seen = []
-    monkeypatch.setattr(publisher, "check_session", lambda c: seen.append(c) or True)
+    cfg.kakao_password_login = True
+    assert pipeline.relogin_test(cfg) == 1                 # 프로필이 없으면 먼저 login
+    cfg.profile_dir.mkdir(parents=True)
+    (cfg.profile_dir / "Cookies").write_text("x", encoding="utf-8")
+    (cfg.profile_dir / "SingletonLock").write_text("x", encoding="utf-8")
+    monkeypatch.setattr(publisher, "check_session",
+                        lambda c, forget_tistory=False: seen.append((c, forget_tistory, sorted(p.name for p in c.profile_dir.iterdir()))) or True)
     assert pipeline.relogin_test(cfg) == 0
-    assert seen[0].profile_dir != cfg.profile_dir and not seen[0].headless
-    cfg.kakao_login_password = ""
-    assert pipeline.relogin_test(cfg) == 1
+    c, forget, files = seen[0]
+    assert forget and c.profile_dir != cfg.profile_dir and not c.kakao_password_login
+    assert files == ["Cookies"]                            # 잠금 파일은 복사하지 않는다
+
+
+def test_password_is_not_typed_unless_enabled(cfg):
+    class Page:
+        def locator(self, sel):
+            raise AssertionError("화면을 건드리지 않는다")
+    cfg.kakao_login_id, cfg.kakao_login_password, cfg.kakao_password_login = "me@example.com", "pw", False
+    assert publisher._kakao_password_login(Page(), cfg) is False
+
+
+def test_login_window_prechecks_stay_signed_in_boxes():
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    form = ('<meta charset="utf-8"><label><input type="checkbox" id="a"> 로그인 상태 유지</label>'
+            '<input type="checkbox" id="b"><label for="b">간편로그인 정보 저장</label>'
+            '<label><input type="checkbox" id="c"> 광고 수신 동의</label>')
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        ctx = b.new_context()
+        ctx.route("https://accounts.kakao.com/**", lambda r: r.fulfill(status=200, content_type="text/html", body=form))
+        page = ctx.new_page()
+        page.goto("https://accounts.kakao.com/login/")
+        assert publisher.check_stay_boxes(page) == 2
+        checked = page.evaluate("() => ['a','b','c'].map(i => document.getElementById(i).checked)")
+        assert publisher.check_stay_boxes(page) == 0
+        b.close()
+    assert checked == [True, True, False]
+
+
+def test_forget_tistory_clears_only_tistory_cookies(cfg, monkeypatch):
+    pytest.importorskip("playwright")
+    later = time.time() + 86400
+    publisher._state_file(cfg).parent.mkdir(parents=True, exist_ok=True)
+    publisher._state_file(cfg).write_text(json.dumps([
+        {"name": "TSSESSION", "value": "s", "domain": ".tistory.com", "path": "/", "expires": later},
+        {"name": "_kawlt", "value": "k", "domain": ".kakao.com", "path": "/", "expires": later}]), encoding="utf-8")
+    names = []
+
+    def fake(page, c, timeout=45):
+        names.extend(x["name"] for x in page.context.cookies())
+        return True
+
+    monkeypatch.setattr(publisher, "_ensure_logged_in", fake)
+    assert publisher.check_session(cfg, forget_tistory=True)
+    assert names == ["_kawlt"]
 
 
 def test_keepalive_is_scheduled_hidden_before_tistory_runs():
@@ -1149,6 +1200,7 @@ def test_password_login_waits_while_kakao_is_still_on_the_form(cfg, tmp_path, mo
     from playwright.sync_api import sync_playwright
     monkeypatch.setattr(publisher, "_tell", lambda c, text: None)
     cfg.kakao_login_id, cfg.kakao_login_password = "me@example.com", "pw-123"
+    cfg.kakao_password_login = True
     cfg.output_dir = tmp_path / "out"
 
     def serve(route):
@@ -1180,6 +1232,7 @@ def test_wrong_password_is_reported_after_waiting(cfg, tmp_path, monkeypatch):
     from playwright.sync_api import sync_playwright
     monkeypatch.setattr(publisher, "PASSWORD_SETTLE_SEC", 3)
     cfg.kakao_login_id, cfg.kakao_login_password = "me@example.com", "bad"
+    cfg.kakao_password_login = True
     cfg.output_dir = tmp_path / "out"
     form = ('<!doctype html><meta charset="utf-8"><input name="loginId" value=""><input type="password">'
             '<p id="m"></p><button type="submit" onclick="document.getElementById(\'m\').innerText='

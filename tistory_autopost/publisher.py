@@ -218,7 +218,7 @@ def _first_visible(page: Page, selectors: list[str]) -> Locator | None:
 def _kakao_password_login(page: Page, cfg: TistoryConfig) -> bool:
     """카카오 비밀번호 화면에서 .env의 계정으로 로그인한다('로그인 상태 유지' 체크). 값이 없으면 하지 않는다."""
     login_id, password = getattr(cfg, "kakao_login_id", ""), getattr(cfg, "kakao_login_password", "")
-    if not password:
+    if not password or not getattr(cfg, "kakao_password_login", False):
         return False
     box = _first_visible(page, KAKAO_ID_INPUTS)
     if box is not None and not (box.input_value() or "").strip():
@@ -265,7 +265,8 @@ def _kakao_needs_approval(page: Page) -> bool:
 
 # 마지막 로그인 확인 결과(실패하면 어떤 화면에서 막혔는지). 실패 알림·퀘스트 보드에 그대로 나간다.
 LAST_LOGIN: dict = {}
-CAPTCHA_WORDS = ("자동입력 방지", "보안문자", "보안 문자", "captcha", "로봇이 아닙니다")
+CAPTCHA_WORDS = ("자동입력 방지", "자동 입력 방지", "보안문자", "보안 문자", "보안 인증", "보안인증", "captcha",
+                 "로봇이 아닙니다", "그림을 선택", "퍼즐")
 
 
 def _body_text(page: Page) -> str:
@@ -277,19 +278,18 @@ def _body_text(page: Page) -> str:
 
 def login_problem(state: str, cfg: TistoryConfig, url: str = "", typed: bool = False) -> str:
     """막힌 화면 → 사람이 읽는 원인과 할 일."""
-    has_cred = bool(getattr(cfg, "kakao_login_id", "") and getattr(cfg, "kakao_login_password", ""))
-    fix = "PC에서 `.venv\\Scripts\\python.exe -m tistory_autopost login`으로 다시 로그인하세요('로그인 상태 유지' 체크)."
+    fix = ("PC에서 `.venv\\Scripts\\python.exe -m tistory_autopost login`으로 다시 로그인하세요"
+           "('로그인 상태 유지'·'간편로그인 정보 저장' 체크).")
     if state == "kakao_wrong_password":
         return ("카카오가 .env의 KAKAO_LOGIN_ID·KAKAO_LOGIN_PASSWORD가 맞지 않다고 합니다. 두 값(아이디는 카카오 계정 이메일 또는 "
                 "전화번호)을 확인해 고친 뒤 `relogin-test`로 다시 시험하세요.")
     if state == "kakao_password":
         if typed:
-            return ("카카오 비밀번호 화면에서 .env의 KAKAO_LOGIN_ID·KAKAO_LOGIN_PASSWORD로 자동 로그인했지만 넘어가지 않았습니다"
-                    "(비밀번호가 바뀌었거나 카카오가 추가 확인을 요구). " + fix)
-        if has_cred:
-            return "카카오 비밀번호 화면인데 아이디·비밀번호 칸을 찾지 못했습니다(카카오 화면이 바뀜). " + fix
-        return ("카카오 '로그인 상태 유지' 기간이 끝나 비밀번호를 묻습니다. .env에 KAKAO_LOGIN_ID·KAKAO_LOGIN_PASSWORD가 "
-                "없어 자동으로 다시 로그인하지 못했습니다. " + fix + " 두 값을 .env에 넣어 두면 다음부터는 스스로 다시 로그인합니다.")
+            return ("카카오 비밀번호 화면에서 .env의 계정으로 자동 입력했지만 넘어가지 않았습니다(카카오가 캡차·추가 확인을 띄움). "
+                    + fix)
+        return ("카카오 '로그인 상태 유지'·'간편로그인 정보 저장'이 끝나 비밀번호를 묻습니다. " + fix
+                + " 로그인 창에서 '로그인 상태 유지'와 '간편로그인 정보 저장'을 둘 다 체크하면(프로그램이 미리 체크해 둡니다) "
+                "비밀번호 없이 오래 유지됩니다.")
     if state == "kakao_approval":
         return f"카카오가 카카오톡 로그인 확인을 요청했는데 {APPROVAL_WAIT_SEC // 60}분 안에 '확인'이 눌리지 않았습니다. " + fix
     if state == "captcha":
@@ -395,6 +395,32 @@ def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bo
     return False
 
 
+_STAY_BOXES = """() => {
+    const want = /로그인 상태 유지|간편로그인 정보 저장|간편 로그인 정보 저장/;
+    let n = 0;
+    for (const box of document.querySelectorAll('input[type=checkbox]')) {
+        const label = box.closest('label') || (box.id && document.querySelector(`label[for="${box.id}"]`));
+        const text = (label ? label.innerText : '') + ' ' + (box.name || '');
+        if ((want.test(text) || /saveSignedIn|staySignedIn/.test(box.name || '')) && !box.checked) {
+            (label || box).click(); n++;
+        }
+    }
+    return n; }"""
+
+
+def check_stay_boxes(page: Page) -> int:
+    """카카오 로그인 화면의 '로그인 상태 유지'·'간편로그인 정보 저장' 칸을 체크해 둔다(사람이 로그인할 때 빠뜨리지 않게)."""
+    if "kakao.com" not in page.url:
+        return 0
+    try:
+        n = page.evaluate(_STAY_BOXES)
+        if n:
+            log.info("카카오 로그인 화면: 로그인 유지 칸 %d개를 체크했습니다", n)
+        return n
+    except Exception:  # noqa: BLE001 - 화면 전환 중
+        return 0
+
+
 def login(cfg: TistoryConfig, wait_minutes: int = 5) -> None:
     """최초 1회: 열린 창에서 카카오 계정으로 직접 로그인하면 세션을 저장한다."""
     with sync_playwright() as p:
@@ -403,11 +429,13 @@ def login(cfg: TistoryConfig, wait_minutes: int = 5) -> None:
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
             page.on("dialog", lambda d: d.dismiss())
             page.goto("https://www.tistory.com/auth/login")
-            print("열린 브라우저에서 티스토리(카카오 계정)에 로그인하세요. '로그인 상태 유지'를 꼭 체크하세요.")
+            print("열린 브라우저에서 티스토리(카카오 계정)에 로그인하세요. '로그인 상태 유지'와 '간편로그인 정보 저장'을 "
+                  "꼭 체크하세요(보이면 프로그램이 미리 체크해 둡니다). 캡차가 나오면 직접 풀어 주세요.")
             deadline = time.time() + wait_minutes * 60
             ok = False
             while time.time() < deadline:
                 page.wait_for_timeout(3000)
+                check_stay_boxes(page)
                 if any(c["name"] == "TSSESSION" for c in ctx.cookies("https://www.tistory.com")):
                     ok = True
                     break
@@ -427,11 +455,14 @@ def login(cfg: TistoryConfig, wait_minutes: int = 5) -> None:
     print("로그인 확인. 창을 다시 열어도 로그인이 유지됩니다.")
 
 
-def check_session(cfg: TistoryConfig) -> bool:
-    """저장된 로그인으로 글쓰기 화면이 열리는지 확인한다(10~90초). 실패 이유는 LAST_LOGIN['reason']."""
+def check_session(cfg: TistoryConfig, forget_tistory: bool = False) -> bool:
+    """저장된 로그인으로 글쓰기 화면이 열리는지 확인한다(10~90초). 실패 이유는 LAST_LOGIN['reason'].
+    forget_tistory: 티스토리 로그인 쿠키를 지우고 시작한다(티스토리 세션이 끝났을 때 카카오로 다시 들어가는지 시험)."""
     LAST_LOGIN.clear()
     with sync_playwright() as p:
         ctx = _open(p, cfg, headless=cfg.headless)
+        if forget_tistory:
+            ctx.clear_cookies(domain=re.compile(r"(^|\.)tistory\.com$"))
         try:
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
             page.on("dialog", lambda d: d.dismiss())
