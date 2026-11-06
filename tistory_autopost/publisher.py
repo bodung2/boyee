@@ -287,9 +287,9 @@ def login_problem(state: str, cfg: TistoryConfig, url: str = "", typed: bool = F
         if typed:
             return ("카카오 비밀번호 화면에서 .env의 계정으로 자동 입력했지만 넘어가지 않았습니다(카카오가 캡차·추가 확인을 띄움). "
                     + fix)
-        return ("카카오 '로그인 상태 유지'·'간편로그인 정보 저장'이 끝나 비밀번호를 묻습니다. " + fix
-                + " 로그인 창에서 '로그인 상태 유지'와 '간편로그인 정보 저장'을 둘 다 체크하면(프로그램이 미리 체크해 둡니다) "
-                "비밀번호 없이 오래 유지됩니다.")
+        return ("티스토리 로그인이 끝났고, 카카오가 비밀번호를 다시 묻습니다(이 자동화 브라우저에서는 카카오가 로그인을 "
+                "오래 유지해 주지 않습니다 — 11/7 relogin-test --real로 확인). " + fix
+                + " 다시 로그인하면 티스토리 로그인이 끝날 때까지 하루 3번 점검이 계속 새로 고칩니다.")
     if state == "kakao_approval":
         return f"카카오가 카카오톡 로그인 확인을 요청했는데 {APPROVAL_WAIT_SEC // 60}분 안에 '확인'이 눌리지 않았습니다. " + fix
     if state == "captcha":
