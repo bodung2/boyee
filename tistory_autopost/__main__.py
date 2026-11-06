@@ -8,6 +8,8 @@
   python -m tistory_autopost run --slot 2       하루 2편째(오후 예약 작업이 실행)
   python -m tistory_autopost republish          오늘 검수 통과한 글을 다시 올리기(잘못 올라간 글을 지운 뒤)
   python -m tistory_autopost republish --date 2026-10-07 --dry-run
+  python -m tistory_autopost keepalive          로그인 유지 점검(예약 작업이 하루 3번, 풀렸으면 스스로 다시 로그인)
+  python -m tistory_autopost relogin-test       빈 브라우저로 .env 카카오 계정 자동 로그인이 되는지 시험
   python -m tistory_autopost diagnose           글쓰기 화면 구조 저장(발행이 화면을 못 찾을 때)
 """
 from __future__ import annotations
@@ -36,6 +38,8 @@ def main(argv: list[str] | None = None) -> int:
     rep.add_argument("--dry-run", action="store_true", help="공개 발행 직전에 멈춘다")
     rep.add_argument("--slot", type=int, default=1, help="그날 몇 번째 글인지(2편째는 2)")
     sub.add_parser("diagnose")
+    sub.add_parser("keepalive")
+    sub.add_parser("relogin-test")
     args = parser.parse_args(argv)
     cfg = TistoryConfig.load()
 
@@ -58,6 +62,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "republish":
         from .pipeline import republish
         return republish(cfg, args.date, dry_run=args.dry_run, slot=max(args.slot, 1))
+    if args.cmd == "keepalive":
+        from .pipeline import keepalive
+        return keepalive(cfg)
+    if args.cmd == "relogin-test":
+        from .pipeline import relogin_test
+        return relogin_test(cfg)
     if args.cmd == "diagnose":
         from . import publisher
         path = publisher.diagnose(cfg, cfg.output_dir / "diagnostics")

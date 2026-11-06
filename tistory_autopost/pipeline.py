@@ -463,6 +463,55 @@ def _mtime(path: Path) -> float:
         return 0.0
 
 
+
+def keepalive(cfg: TistoryConfig) -> int:
+    """로그인 유지 점검(하루 몇 번, 글쓰기·통계 읽기 전에). 글쓰기 화면을 한 번 열어 티스토리·카카오 로그인을
+    새로 고친다. 풀려 있으면 .env의 카카오 계정으로 스스로 다시 로그인하고, 그래도 안 되면 막힌 화면과 할 일을
+    알린다. 발행 실행이 브라우저를 쓰는 중이면(잠금) 건너뛴다 — 그 실행이 로그인을 새로 고친다."""
+    from . import publisher
+
+    today = today_kst()
+    setup_logging(cfg, f"tistory-keepalive-{today}")
+    try:
+        with _Lock(cfg.log_dir / ".run-tistory.lock"):
+            if publisher.check_session(cfg):
+                log.info("티스토리 로그인 유지 확인 완료")
+                return 0
+            reason = _login_reason()
+            _share_login_failure(cfg)
+            raise publisher.SessionExpired(reason)
+    except RuntimeError as e:
+        if "이미 실행 중" in str(e):
+            log.info("티스토리 글을 쓰는 중이라 로그인 점검을 건너뜁니다(완료)")
+            return 0
+        log.exception("티스토리 로그인 유지 점검 실패")
+        notify(cfg, f"[{LABEL} 로그인 점검 실패] 다음 발행 전에 고쳐 주세요.\n{e}")
+        return 1
+
+
+def relogin_test(cfg: TistoryConfig) -> int:
+    """빈 브라우저 프로필(저장된 로그인 없음)로 .env의 카카오 계정 자동 로그인이 실제로 되는지 시험한다.
+    지금 쓰는 로그인은 건드리지 않는다. 카카오톡 확인이 오면 휴대폰에서 눌러 준다."""
+    import dataclasses
+    import tempfile
+
+    from . import publisher
+
+    if not (cfg.kakao_login_id and cfg.kakao_login_password):
+        print("❌ .env에 KAKAO_LOGIN_ID·KAKAO_LOGIN_PASSWORD가 없습니다.")
+        return 1
+    with tempfile.TemporaryDirectory(prefix="tistory-relogin-") as tmp:
+        test_cfg = dataclasses.replace(cfg, profile_dir=Path(tmp) / "profile", headless=False,
+                                       output_dir=cfg.output_dir / "relogin_test")
+        print("빈 브라우저로 카카오 자동 로그인을 시험합니다(1~10분). 카카오톡 확인 알림이 오면 '확인'을 눌러 주세요.")
+        ok = publisher.check_session(test_cfg)
+    if ok:
+        print("✅ 저장된 로그인이 없어도 .env 계정으로 스스로 다시 로그인됩니다. 로그인이 풀려도 자동으로 복구됩니다.")
+        return 0
+    print(f"❌ 자동 로그인 실패: {_login_reason()}\n   막힌 화면: {cfg.output_dir / 'relogin_test' / 'login_failed.png'}")
+    return 1
+
+
 _sleep = time.sleep
 
 

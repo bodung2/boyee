@@ -22,6 +22,7 @@ $Schedule = @(
     @{ Name = "NaverAutoPost-edu";             Bat = "run_daily.bat";            Arg = "--profile edu";     Times = @("06:00", "11:00"); Hours = 9; Wake = $true; Desc = "네이버 교육 블로그(11:00은 막힌 날 재시도)" }
     @{ Name = "NaverAutoPost-invest";          Bat = "run_daily.bat";            Arg = "--profile invest";  Times = @("07:00", "10:00"); Hours = 9; Wake = $true; Desc = "네이버 투자 블로그(10:00은 막힌 날 재시도)" }
     @{ Name = "MarketDashboard";               Bat = "run_market_dashboard.bat"; Arg = "";                  Times = @("07:40"); Hours = 1;   Wake = $false; Days = @("Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"); Desc = "시장 대시보드(화~토)" }
+    @{ Name = "TistoryKeepAlive";              Bat = "run_tistory_keepalive.bat"; Arg = "";                 Times = @("07:50", "16:20", "21:50"); Hours = 0.5; Wake = $true; Hidden = $true; Desc = "티스토리 로그인 유지 점검(발행·통계 전, 풀렸으면 스스로 다시 로그인)" }
     @{ Name = "TistoryAutoPost";               Bat = "run_tistory_daily.bat";    Arg = "";                  Times = @("08:30"); Hours = 8;   Wake = $true;  Desc = "티스토리 1편째" }
     @{ Name = "NaverAutoPost-market";          Bat = "run_daily.bat";            Arg = "--profile market";  Times = @("17:30", "19:30"); Hours = 5; Wake = $true; Days = @("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"); Desc = "네이버 투자 블로그 매일 시황(월~금 한국장 마감 뒤, 19:30은 막힌 날 재시도)" }
     @{ Name = "NaverAutoPost-childhood";       Bat = "run_daily.bat";            Arg = "--profile childhood"; Times = @("12:00", "15:00"); Hours = 9; Wake = $true; Desc = "네이버 유아 블로그(15:00은 막힌 날 재시도)" }

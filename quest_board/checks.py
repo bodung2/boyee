@@ -149,6 +149,13 @@ def _growth_lab(p: Paths, q: Quest, day: str) -> Result:
     return Result()
 
 
+def _tistory_keepalive(p: Paths, q: Quest, day: str) -> Result:
+    log = p.logs / f"tistory-keepalive-{day}.log"
+    if log.exists() and not _error(log):
+        return Result("done", f"로그인 유지 확인 {_mtime_hm(log)}")
+    return Result()
+
+
 @dataclass
 class Kind:
     group: str                       # 발행 / SNS / 보조
@@ -173,6 +180,8 @@ KINDS: dict[str, Kind] = {
                                      lambda q, d: [], lambda q: [], history=False),
     "run_perp_paper.bat": Kind("보조", _by_mtime("data/perp/paper_state.json", "모의 운용"),
                                lambda q, d: [], lambda q: [], history=False),
+    "run_tistory_keepalive.bat": Kind("보조", _tistory_keepalive, lambda q, d: [f"tistory-keepalive-{d}.log"],
+                                      lambda q: []),
     "run_growth_lab.bat": Kind("보조", _growth_lab, lambda q, d: [f"lab-{d}.log"], lambda q: [".run-lab.lock"]),
 }
 GENERIC = Kind("보조", lambda p, q, d: Result(), lambda q, d: [], lambda q: [], history=False)
