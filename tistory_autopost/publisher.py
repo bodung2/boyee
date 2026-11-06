@@ -328,6 +328,20 @@ def _login_state(page: Page) -> str:
     return "unknown"
 
 
+def _sso_url(url: str) -> str:
+    """카카오 로그인 화면 주소의 continue(카카오 인증 요청)에서 prompt=select_account만 뺀 주소. 해당 없으면 빈 문자열."""
+    import urllib.parse
+    inner = (urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("continue") or [""])[0]
+    parts = urllib.parse.urlparse(inner)
+    if parts.hostname != "kauth.kakao.com" or not parts.path.startswith("/oauth/authorize"):
+        return ""
+    query = urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
+    if not any(k == "prompt" for k, _ in query):
+        return ""
+    kept = [(k, v) for k, v in query if k != "prompt"]
+    return urllib.parse.urlunparse(parts._replace(query=urllib.parse.urlencode(kept)))
+
+
 def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bool:
     """글쓰기 화면을 연다. 로그인 화면으로 가면 카카오 자동 로그인 버튼을 누르고,
     카카오 간편 로그인 화면이면 저장된 계정을 골라 기다린다. 실패하면 화면을 login_failed.png로 남긴다."""
@@ -335,6 +349,7 @@ def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bo
     deadline = time.time() + timeout
     clicked = picked = 0
     typed = told = wrong = False
+    sso_tries = 0
     typed_at = 0.0
     while time.time() < deadline:
         page.wait_for_timeout(1500)
@@ -355,6 +370,17 @@ def _ensure_logged_in(page: Page, cfg: TistoryConfig, timeout: float = 45) -> bo
                 except Exception:  # noqa: BLE001 - 화면 전환 중
                     pass
         elif "accounts.kakao.com" in url:
+            # 티스토리는 카카오에 '매번 계정을 다시 고르라'(prompt=select_account)고 요청해서, 카카오 로그인이 살아 있어도
+            # 비밀번호 화면이 나온다. 그 옵션만 뺀 같은 요청을 한 번 보내면 살아 있는 카카오 로그인으로 바로 넘어간다.
+            sso = _sso_url(url) if sso_tries < 2 else ""
+            if sso:
+                sso_tries += 1
+                log.info("카카오 로그인 유지로 다시 들어가기(계정 다시 고르기 생략)")
+                try:
+                    page.goto(sso, wait_until="domcontentloaded")
+                except Exception as e:  # noqa: BLE001 - 넘어가는 중에 끊겨도 다음 확인에서 본다
+                    log.info("카카오 로그인 유지 요청 중 화면 전환: %s", e)
+                continue
             password = page.locator("input[type='password']")
             on_password = password.count() and password.first.is_visible()
             # 계정 선택 화면: 눌러도 넘어가지 않으면 다음 후보를 누른다(최대 3번)
