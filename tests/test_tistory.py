@@ -968,7 +968,7 @@ def test_password_page_reports_why_and_what_to_do(cfg, tmp_path):
         b.close()
     assert not ok
     assert publisher.LAST_LOGIN["state"] == "kakao_password"
-    assert "간편로그인 정보 저장" in publisher.LAST_LOGIN["reason"] and "tistory_autopost login" in publisher.LAST_LOGIN["reason"]
+    assert "비밀번호를 다시 묻습니다" in publisher.LAST_LOGIN["reason"] and "tistory_autopost login" in publisher.LAST_LOGIN["reason"]
     dump = json.loads((cfg.output_dir / "login_failed.json").read_text(encoding="utf-8"))
     assert dump["state"] == "kakao_password" and "me@example.com" not in json.dumps(dump, ensure_ascii=False)
 
