@@ -10,7 +10,7 @@ class Profile:
     label: str
     write_skill: str
     factcheck_skill: str
-    thumbnail_style: str        # "edu"(가운데 정렬) | "childhood"·"bold"(질문형·다크, 좌상단 고정 레이아웃)
+    thumbnail_style: str        # "edu"(가운데 정렬) | "childhood"·"bold"(질문형·다크, 좌상단 고정 레이아웃) | "photo"(직접 찍은 사진 위 글씨)
     illustrations: bool         # AI 이미지(기본: Codex/ChatGPT 구독)로 본문 일러스트 생성
     extra_forbidden: tuple[str, ...] = ()
     # 레인별 블로그 카테고리(없으면 NAVER_CATEGORY_<프로필> 하나를 쓴다). 마지막 "*"는 나머지 레인.
@@ -22,6 +22,8 @@ class Profile:
     neighbor_owner: str = "교사 SR(꾸쓰쌤)"    # 이웃 추천 프롬프트에서 블로그 주인을 부르는 말
     neighbor_exclude: str = ""                 # 이웃 후보에서 더 빼야 할 블로그 유형
     min_sources: int = 10       # 구조 검증: 출처 최소 개수
+    min_primary: int = 2        # 구조 검증: 1차 출처 최소 개수
+    min_claims: int = 5         # 구조 검증: 검증 대상 사실 최소 개수
     auto_related: bool = False  # 글 끝 '함께 보면 좋은 글'이 비면 발행 이력에서 자동으로 채운다
     min_body_chars: int = 1500  # 구조 검증: 본문 최소 글자 수
     max_title: int = 100        # 구조 검증: 제목 최대 글자 수(모바일 홈피드에서 잘리지 않게 줄이는 블로그도 있다)
@@ -29,6 +31,7 @@ class Profile:
     social: bool = True         # 블로그 발행 뒤 인스타·쓰레드 초안을 만들지
     title_pattern: str = ""     # 구조 검증: 제목이 이 정규식을 포함해야 한다(시황 글의 'M월 D일 시황' 등)
     same_blog_as: str = ""      # 다른 프로필과 같은 블로그에 올린다(블로그 주소·로그인 브라우저를 그 프로필 것으로)
+    photos: bool = False        # 블로그 주인이 직접 찍은 사진(places_inbox 폴더)으로 쓰는 글. 새 폴더가 있는 날만 발행
 
 
 PROFILES: dict[str, Profile] = {
@@ -53,6 +56,21 @@ PROFILES: dict[str, Profile] = {
         neighbor_tab="유아 이웃 후보",
         neighbor_keywords=("누리과정", "유아 발달", "유치원 놀이", "초등 입학 준비", "한글 떼기",
                            "유아 수학 놀이", "엄마표 놀이", "유아 독서", "유아 활동지", "어린이집 생활"),
+    ),
+    # 아이와 가볼 곳: 블로그 주인이 아이들과 직접 다녀온 장소를 직접 찍은 사진 + 메모로 소개한다(유아 블로그에 올림).
+    # places_inbox\<장소 이름>\ 폴더에 사진과 메모.txt를 넣어 두면 그날 저녁 한 편 발행하고 폴더를 _발행됨으로 옮긴다.
+    # 경험은 메모에 적힌 것만 쓴다(AI 티가 안 나는 글의 핵심). 사진은 위치 정보를 지우고 얼굴을 흐려서 올린다.
+    "place": Profile(
+        name="place", label="아이와 가볼 곳",
+        write_skill="childhood-place-post", factcheck_skill="childhood-place-factcheck",
+        thumbnail_style="photo", illustrations=False, photos=True,
+        extra_forbidden=(
+            "정상/지연", "통과해야", "못하면 발달", "smartstore.naver.com", "coupang.com",
+            "구매 링크", "구매하기",
+            "우리 동네", "집 근처", "집에서 차로", "집에서 걸어서",     # 사는 곳이 드러나지 않게
+        ),
+        min_sources=2, min_primary=1, min_claims=3, min_body_chars=1200, max_title=45,
+        social=False, same_blog_as="childhood",   # 함께 보면 좋은 글은 스킬이 직접 고른다
     ),
     # 투자 블로그: 티스토리 '숫자로 보는 한국'(stats-auto-post)의 '통념 × 공식 숫자' 방식을 돈·부동산·일상 주제로 옮긴 글.
     # 홈피드·검색 유입용 후킹 제목/썸네일. 글쓴이 신원(교사)은 드러내지 않는다.

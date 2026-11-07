@@ -1,5 +1,7 @@
 playwright>=1.45
 pillow>=10.0
+pillow-heif>=0.16         # 아이폰 HEIC 사진 열기(아이와 가볼 곳)
+opencv-python-headless>=4.8,<5  # 사진 속 얼굴 흐림(아이와 가볼 곳). 5부터 옛 얼굴 찾기(Haar)가 빠져 4.x로 고정
 tzdata>=2024.1
 # 자산군 모멘텀 대시보드(market_dashboard)
 pandas>=2.0

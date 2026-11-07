@@ -196,16 +196,35 @@ def write_post(cfg: Config, out_dir: Path, today: str, feedback: str = "") -> Pa
         "사람 검토 없이 자동 발행되므로 사실 정확성이 최우선이다. 질문하지 말고 끝까지 진행하라. "
         "고른 주제의 원문(보도자료·PDF 등)을 열 수 없으면 사람에게 묻지 말고, 원문을 확인할 수 있는 다른 주제로 바꿔 끝까지 써라."
     )
+    if cfg.profile.photos:
+        prompt = _place_prompt(cfg, out_dir, today, related)
     lab = _lab_brief(cfg, today)
     if lab:
         prompt += "\n\n" + lab
     if feedback:
-        prompt += f"\n\n직전 시도는 아래 이유로 발행이 거부되었다. 다른 주제를 고르거나 문제를 해결하라:\n{feedback}"
+        prompt += (f"\n\n직전 시도는 아래 이유로 발행이 거부되었다. "
+                   f"{'같은 장소·같은 사진으로' if cfg.profile.photos else '다른 주제를 고르거나'} 문제를 해결하라:\n{feedback}")
     _run_claude(cfg, prompt, out_dir / "claude_write.log")
     post_path = out_dir / "post.json"
     if not post_path.exists():
         raise NoPostError("post.json이 만들어지지 않았습니다(Claude가 글을 쓰지 않고 끝남)")
     return post_path
+
+
+def _place_prompt(cfg: Config, out_dir: Path, today: str, related: list[Path]) -> str:
+    """장소 글(직접 찍은 사진 + 메모): 글감은 정해져 있으니 주제를 고르지 않는다."""
+    return (
+        f"/{cfg.profile.write_skill}\n\n"
+        f"TODAY={today}\nOUTPUT_DIR={_rel(out_dir)}\nHISTORY_FILE={_rel(cfg.history_file)}\n"
+        f"RELATED_HISTORY_FILES={','.join(str(_rel(p)) for p in related) or '(없음)'}\n"
+        f"MEMO_FILE={_rel(out_dir / 'memo.txt')}\nPHOTOS_FILE={_rel(out_dir / 'photos.json')}\n"
+        f"{_persona_lines(cfg)}\n"
+        "스킬 지침대로 블로그 주인이 아이들과 직접 다녀온 장소 소개 글 1편을 완성해 OUTPUT_DIR/post.json에 저장하라. "
+        "경험·아이 반응·느낌은 MEMO_FILE(과 PERSONA_FILE)에 적힌 것만 쓰고 지어내지 마라. "
+        "사진은 OUTPUT_DIR의 photo_*.jpg를 Read로 직접 보고 고른다(원본 폴더는 열지 마라). "
+        "운영시간·요금·주차 같은 장소 정보는 공식 홈페이지로 오늘 기준을 확인하고, 확인되지 않으면 쓰지 마라. "
+        "사람 검토 없이 자동 발행된다. 질문하지 말고 끝까지 진행하라."
+    )
 
 
 def repair_post(cfg: Config, out_dir: Path, errors: list[str]) -> None:

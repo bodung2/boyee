@@ -90,6 +90,7 @@ class Config:
     retry_time: str
     telegram_bot_token: str
     telegram_chat_id: str
+    places_inbox: Path = ROOT / "places_inbox"   # 장소 글: 사진·메모 폴더를 넣는 곳(사진 프로필만 씀)
 
     def category_for(self, lane: str | None) -> str:
         """글의 레인에 맞는 블로그 카테고리. .env의 NAVER_CATEGORY_<프로필>_<레인>이 있으면 그것을 쓴다."""
@@ -112,21 +113,23 @@ class Config:
         # 같은 블로그에 올리는 프로필(시황 → 투자): 따로 적지 않으면 그 블로그의 주소·로그인 브라우저를 쓴다
         base = profile.same_blog_as.upper()
         own = profile.name.upper()
+        # 로그인 브라우저는 블로그(네이버 계정)마다 하나: 같은 블로그에 올리는 프로필은 그 블로그 것을 같이 쓴다
+        blog_of = profile.same_blog_as or profile.name
+        is_default_blog = blog_of == profiles.DEFAULT_PROFILE
 
         def per_blog(key: str) -> str | None:
             return env(f"{key}_{own}") or (env(f"{key}_{base}") if base else None)
         return cls(
             profile=profile,
             blog_id=(per_blog("NAVER_BLOG_ID") or env("NAVER_BLOG_ID", "")).strip(),
-            category=(env(f"NAVER_CATEGORY_{own}") or {"market": "매일 시황"}.get(profile.name)
+            category=(env(f"NAVER_CATEGORY_{own}") or {"market": "매일 시황", "place": "아이와 가볼 곳"}.get(profile.name)
                       or env("NAVER_CATEGORY", "")).strip(),
             browser_channel=env("BROWSER_CHANNEL", "chrome").strip(),
             headless=_bool("HEADLESS", False),
             # 네이버 계정마다 자동화용 크롬 저장 공간을 따로 둔다(로그인 충돌 방지).
             profile_dir=Path(per_blog("BROWSER_PROFILE_DIR")
-                             or (env("BROWSER_PROFILE_DIR") if profile.name == profiles.DEFAULT_PROFILE else None)
-                             or str(ROOT / (".browser-profile" if profile.name == profiles.DEFAULT_PROFILE
-                                            else f".browser-profile-{profile.same_blog_as or profile.name}"))),
+                             or (env("BROWSER_PROFILE_DIR") if is_default_blog else None)
+                             or str(ROOT / (".browser-profile" if is_default_blog else f".browser-profile-{blog_of}"))),
             output_dir=Path(env("OUTPUT_DIR", str(ROOT / "output"))) / profile.name,
             history_file=data_dir / f"published_{profile.name}.json",
             data_dir=data_dir,
@@ -155,7 +158,7 @@ class Config:
             gpt_factcheck=_bool("GPT_FACTCHECK", True),
             gpt_check_rounds=max(1, int(env("GPT_CHECK_ROUNDS", "2"))),
             illustration_count=int(env("ILLUSTRATION_COUNT", "2")),
-            infographic=_bool("INFOGRAPHIC", True),
+            infographic=_bool("INFOGRAPHIC", True) and not profile.photos,   # 사진 글에는 AI 인포그래픽을 넣지 않는다
             infographic_skill=env("INFOGRAPHIC_SKILL", "onepage").strip(),
             infographic_timeout=int(env("INFOGRAPHIC_TIMEOUT_SEC", "900")),
             # 소셜 계정은 블로그마다 따로: THREADS_ACCESS_TOKEN_EDU / THREADS_ACCESS_TOKEN_CHILDHOOD …
@@ -174,7 +177,8 @@ class Config:
             # 아침 발행이 막히면 이 시각에 예약 작업이 한 번 더 돌린다(setup_windows.ps1 -RetryTime과 같게). off면 끔
             # 기본값: 교육 11:00(06:00 발행), 유아 15:00(12:00 발행), 투자 10:00(07:00 발행), 시황 19:30(17:30 발행)
             retry_time=(env(f"RETRY_TIME_{profile.name.upper()}")
-                        or {"childhood": "15:00", "invest": "10:00", "market": "19:30"}.get(profile.name, "11:00")).strip(),
+                        or {"childhood": "15:00", "invest": "10:00", "market": "19:30", "place": "off"}.get(profile.name, "11:00")).strip(),
             telegram_bot_token=env("TELEGRAM_BOT_TOKEN", "").strip(),
             telegram_chat_id=env("TELEGRAM_CHAT_ID", "").strip(),
+            places_inbox=Path(env("PLACES_INBOX") or str(ROOT / "places_inbox")),
         )

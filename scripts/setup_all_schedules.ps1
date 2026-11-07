@@ -27,6 +27,7 @@ $Schedule = @(
     @{ Name = "NaverAutoPost-market";          Bat = "run_daily.bat";            Arg = "--profile market";  Times = @("17:30", "19:30"); Hours = 5; Wake = $true; Days = @("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"); Desc = "네이버 투자 블로그 매일 시황(월~금 한국장 마감 뒤, 19:30은 막힌 날 재시도)" }
     @{ Name = "NaverAutoPost-childhood";       Bat = "run_daily.bat";            Arg = "--profile childhood"; Times = @("12:00", "15:00"); Hours = 9; Wake = $true; Desc = "네이버 유아 블로그(15:00은 막힌 날 재시도)" }
     @{ Name = "TistoryAutoPost2";              Bat = "run_tistory_daily.bat";    Arg = "--slot 2";          Times = @("17:00"); Hours = 8;   Wake = $true;  Desc = "티스토리 2편째" }
+    @{ Name = "NaverAutoPost-place";           Bat = "run_daily.bat";            Arg = "--profile place";   Times = @("18:10"); Hours = 4;   Wake = $true;  Desc = "유아 블로그 '아이와 가볼 곳'(places_inbox에 새 장소 폴더가 있는 날만)" }
     @{ Name = "NaverNeighbors";                Bat = "run_neighbors.bat";        Arg = "";                  Times = @("19:00"); Hours = 2;   Wake = $true;  Desc = "네이버 이웃 후보 추천" }
     @{ Name = "NaverAutoPost-Social-edu";      Bat = "run_social.bat";           Arg = "--profile edu";     Times = @("20:00"); Hours = 2;   Wake = $true;  Desc = "교육 블로그 인스타·쓰레드" }
     @{ Name = "NaverAutoPost-Social-childhood"; Bat = "run_social.bat";          Arg = "--profile childhood"; Times = @("21:00"); Hours = 2; Wake = $true; Desc = "유아 블로그 인스타·쓰레드" }

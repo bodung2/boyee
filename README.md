@@ -5,6 +5,7 @@
 | 프로필 | 글 규칙(원본 스킬) | 자동 발행용 스킬 | 상태 |
 |---|---|---|---|
 | `childhood` (기본) | early-childhood-insight-extraction | `.claude/skills/childhood-auto-post`, `childhood-auto-factcheck` | **사용 중** |
+| `place` | (직접 다녀온 곳 + 직접 찍은 사진) | `.claude/skills/childhood-place-post`, `childhood-place-factcheck` | 유아 블로그 '아이와 가볼 곳', `places_inbox`에 폴더가 있는 날 18:10 ([설명](docs/PLACE_POSTS.md)) |
 | `edu` | education-insight-extraction | `.claude/skills/edu-auto-post`, `edu-auto-factcheck` | 교육 블로그(flw3148), 매일 06:00 |
 | 구글 블로거 | Codex 스킬 korea-explained-blogger | `python -m blogger_autopost` ([아래](#구글-블로거-korea-explained-blogger-하루-1편)) | 매일 1편, Blogger API |
 | 티스토리 | `.claude/skills/stats-auto-post`, `stats-auto-factcheck` | `python -m tistory_autopost` ([아래](#티스토리-논쟁--공식-통계-하루-1편)) | 매일 1편, 브라우저 자동화 |

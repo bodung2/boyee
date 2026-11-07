@@ -18,6 +18,12 @@ MIN_BODY_CHARS = 1500
 MIN_SOURCES = 10
 MIN_PRIMARY_SOURCES = 2
 MIN_CLAIMS = 5
+MIN_PHOTOS_IN_POST = 2      # 직접 찍은 사진으로 쓰는 글(장소 글)의 본문 사진 최소 장수
+
+
+def photo_names(post: dict) -> set[str]:
+    """직접 찍은 사진(장소 글)의 이미지 이름들."""
+    return {str(p.get("name")) for p in post.get("photos") or [] if p.get("name")}
 
 
 def html_to_text(fragment: str) -> str:
@@ -151,7 +157,7 @@ def validate(post: dict, profile: Profile | None = None, after_factcheck: bool =
     markers = [m.group(1) for m in IMAGE_MARKER.finditer(body)]
     if markers.count("card") != 1:
         errors.append(f"[[IMAGE:card]] 표시는 정확히 1번이어야 합니다(현재 {markers.count('card')}번)")
-    illust_names = {i.get("name") for i in post.get("illustrations") or []}
+    illust_names = {i.get("name") for i in post.get("illustrations") or []} | photo_names(post)
     unknown = sorted(set(markers) - {"card", "infographic"} - illust_names)  # 인포그래픽은 발행 직전에 넣는다
     if unknown:
         errors.append(f"알 수 없는 이미지 표시: {unknown}")
@@ -175,13 +181,20 @@ def validate(post: dict, profile: Profile | None = None, after_factcheck: bool =
     min_sources = profile.min_sources if profile else MIN_SOURCES
     if len(sources) < min_sources:
         errors.append(f"출처가 부족합니다({len(sources)}개 < {min_sources}개)")
-    if sum(1 for s in sources if s.get("primary")) < MIN_PRIMARY_SOURCES:
-        errors.append(f"1차 출처가 {MIN_PRIMARY_SOURCES}개 미만입니다")
-    if len(post["claims"]) < MIN_CLAIMS:
-        errors.append(f"검증 대상 사실이 {MIN_CLAIMS}개 미만입니다")
+    min_primary = profile.min_primary if profile else MIN_PRIMARY_SOURCES
+    if sum(1 for s in sources if s.get("primary")) < min_primary:
+        errors.append(f"1차 출처가 {min_primary}개 미만입니다")
+    min_claims = profile.min_claims if profile else MIN_CLAIMS
+    if len(post["claims"]) < min_claims:
+        errors.append(f"검증 대상 사실이 {min_claims}개 미만입니다")
+    if profile and profile.photos:
+        used = [m for m in markers if m in photo_names(post)]
+        if len(used) < MIN_PHOTOS_IN_POST:
+            errors.append(f"본문에 넣은 사진이 {len(used)}장입니다(최소 {MIN_PHOTOS_IN_POST}장, photos.json의 이름으로 "
+                          "<p>[[IMAGE:photo_01]]</p>처럼 넣기)")
 
     thumb = post["thumbnail"]
-    if profile and profile.thumbnail_style in ("childhood", "bold"):
+    if profile and profile.thumbnail_style in ("childhood", "bold", "photo"):
         lines = thumb.get("main_lines") or []
         if not 1 <= len(lines) <= 3:
             errors.append(f"썸네일 메인은 1~3줄이어야 합니다(현재 {len(lines)}줄)")
