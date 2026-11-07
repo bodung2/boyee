@@ -13,7 +13,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from . import (codex_image, content, gemini_client, generate, history, images, infographic, notify,
-               openai_client, persona, social)
+               openai_client, persona, places, social)
 from .config import Config
 from .errors import ExternalAccountError
 
@@ -112,11 +112,14 @@ def _save_json(path: Path, data: dict) -> None:
 def _drop_images(post: dict, names: set[str], out_dir: Path, why: str) -> None:
     if not names:
         return
-    log.warning("일러스트 %s 제외(%s)", sorted(names), why)
+    log.warning("이미지 %s 제외(%s)", sorted(names), why)
     post["body_html"] = content.remove_markers(post["body_html"], names)
     post["illustrations"] = [i for i in post.get("illustrations") or [] if i.get("name") not in names]
+    if post.get("photos"):
+        post["photos"] = [p for p in post["photos"] if p.get("name") not in names]
     for name in names:
         (out_dir / f"{name}.png").unlink(missing_ok=True)
+        (out_dir / f"{name}.jpg").unlink(missing_ok=True)
 
 
 def image_generator(cfg: Config):
@@ -254,11 +257,15 @@ def _lab_fields(post: dict) -> dict:
         return {}
 
 
-def _attempt(cfg: Config, today: str, out_dir: Path, feedback: str, resume: bool = False) -> dict:
+def _attempt(cfg: Config, today: str, out_dir: Path, feedback: str, resume: bool = False,
+             place: "places.Folder | None" = None) -> dict:
     """글 1편을 발행 가능한 상태로 만든다. resume이면 지난 실행이 멈춘 단계부터 이어서 한다
-    (예: OpenAI 잔액 부족으로 멈췄을 때 이미 쓴 글·통과한 검수를 다시 하지 않음)."""
+    (예: OpenAI 잔액 부족으로 멈췄을 때 이미 쓴 글·통과한 검수를 다시 하지 않음).
+    place: 장소 글(사진 프로필)이면 오늘 쓸 places_inbox 폴더. 사진을 먼저 준비(위치 정보 삭제·얼굴 흐림)한다."""
     post_path = out_dir / "post.json"
     stage = _stage(out_dir) if resume else {}
+    if place is not None and not (out_dir / "photos.json").exists():
+        places.prepare(place, out_dir, models_dir=cfg.data_dir / "models")
     if not stage.get("written"):
         try:
             generate.write_post(cfg, out_dir, today, feedback)
@@ -289,6 +296,8 @@ def _attempt(cfg: Config, today: str, out_dir: Path, feedback: str, resume: bool
         bad = {name for name, verdict in (fc.get("images") or {}).items() if not str(verdict).startswith("ok")}
         _drop_images(post, bad, out_dir, "검수 탈락")
         _save_json(post_path, post)
+        if cfg.profile.photos:
+            _check_photos_left(post)
         if fc.get("verdict") != "pass":
             raise Rejected(f"Claude 팩트체크 불합격: {fc.get('summary', '')}\n"
                            + json.dumps(fc.get("issues", [])[:10], ensure_ascii=False))
@@ -324,7 +333,17 @@ def _wait_for_limit(cfg: Config, err: "generate.ClaudeLimitError", deadline: dat
 _sleep = time.sleep
 
 
-def produce(cfg: Config, today: str, out_dir: Path) -> dict:
+def _check_photos_left(post: dict) -> None:
+    """검수가 사진(얼굴·명찰 등)을 빼고 나서 본문 사진이 너무 적으면 멈춘다. 다시 써도 사진은 그대로라 새로 쓰지 않는다."""
+    left = [m.group(1) for m in content.IMAGE_MARKER.finditer(post["body_html"])
+            if m.group(1) in content.photo_names(post)]
+    if len(left) < content.MIN_PHOTOS_IN_POST:
+        raise places.PhotoError(
+            f"검수에서 사진을 빼고 나니 본문 사진이 {len(left)}장만 남아 올리지 않았습니다"
+            "(아이 얼굴·명찰·차 번호판이 보이는 사진은 뺍니다). 뒷모습·풍경·시설 사진을 폴더에 더 넣어 주세요.")
+
+
+def produce(cfg: Config, today: str, out_dir: Path, place: "places.Folder | None" = None) -> dict:
     """발행 가능한 post를 만든다. 떨어지면 최대 MAX_ATTEMPTS번까지 새로 쓴다."""
     ready = out_dir / "ready.json"
     if ready.exists() and (out_dir / "post.json").exists():
@@ -344,7 +363,8 @@ def produce(cfg: Config, today: str, out_dir: Path) -> dict:
             log.info("[%s] 글쓰기 시도 %d/%d%s", cfg.profile.name, attempt, cfg.max_attempts,
                      " (이어서)" if resume else "")
             try:
-                post = _attempt(cfg, today, out_dir, feedback, resume=bool(resume))
+                post = (_attempt(cfg, today, out_dir, feedback, resume=bool(resume), place=place) if place is not None
+                        else _attempt(cfg, today, out_dir, feedback, resume=bool(resume)))
             except generate.ClaudeLimitError as e:
                 _wait_for_limit(cfg, e, deadline)
                 resume = True  # 한도가 풀리면 같은 글을 멈춘 단계부터 이어서 한다
@@ -398,6 +418,17 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
                           else images.make_thumbnail_childhood(post["thumbnail"], None, thumb_out, tone=tone)),
             "card": images.make_card(post["card"], fname("card", "card"), tone=tone),
         }
+    elif cfg.profile.thumbnail_style == "photo":
+        # 직접 찍은 대표 사진 위에 질문 글씨를 얹는다(검수를 통과한 사진만). 사진이 없으면 단색.
+        tone = images.childhood_tone(None)
+        kept = [p.get("name") for p in post.get("photos") or [] if (out_dir / f"{p.get('name')}.jpg").exists()]
+        cover = post.get("cover_photo") if post.get("cover_photo") in kept else (kept[0] if kept else None)
+        thumb_out = fname("thumbnail", "thumbnail")
+        imgs = {
+            "thumbnail": (images.make_thumbnail_scene(post["thumbnail"], out_dir / f"{cover}.jpg", thumb_out, tone)
+                          if cover else images.make_thumbnail_childhood(post["thumbnail"], None, thumb_out, tone=tone)),
+            "card": images.make_card(post["card"], fname("card", "card"), tone=tone),
+        }
     elif cfg.profile.thumbnail_style == "childhood":
         tone = images.childhood_tone(post.get("domain"))
         imgs = {
@@ -415,6 +446,10 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
         path = out_dir / f"{ill.get('name')}.png"
         if path.exists():
             imgs[ill["name"]] = path
+    for photo in post.get("photos") or []:
+        path = out_dir / f"{photo.get('name')}.jpg"
+        if path.exists():
+            imgs[photo["name"]] = path
     info = out_dir / f"{infographic.NAME}.png"
     if info.exists():
         thumb_name = str(names.get("thumbnail") or "")
@@ -459,6 +494,55 @@ def _preflight(cfg: Config) -> None:
             raise RuntimeError("ChatGPT 팩트체크에 쓸 Codex CLI(ChatGPT 로그인)도 OPENAI_API_KEY도 없습니다")
 
 
+NO_PLACE_LOG = "새 장소 폴더가 없어 오늘은 쉽니다"     # 퀘스트 보드가 이 문구로 '건너뜀'을 표시한다
+
+
+def _pick_place(cfg: Config, out_dir: Path) -> "places.Folder | None":
+    """장소 글: 오늘 쓸 places_inbox 폴더. 오늘 이미 준비하다 멈춘 폴더가 있으면 그 폴더를 이어서 쓴다.
+    이미 발행한 폴더(이력의 place_folder)는 다시 쓰지 않는다(폴더를 옮기지 못한 경우의 중복 발행 방지)."""
+    root = cfg.places_inbox
+    places.ensure_inbox(root)
+    published = {str(e.get("place_key")) for e in history.load(cfg.history_file) if e.get("place_key")}
+    try:
+        started = json.loads((out_dir / "photos.json").read_text(encoding="utf-8")).get("place_folder")
+    except (OSError, ValueError):
+        started = None
+    if started and (root / started).is_dir():
+        folder = places.inspect(root / started, now=float("inf"))     # 이어서 할 때는 '방금 바뀜'을 따지지 않는다
+        if folder.ready and folder.key not in published:
+            log.info("오늘 준비하던 장소 폴더를 이어서 씁니다: %s", folder.name)
+            return folder
+    for f in places.pending(root):
+        if f.key in published:           # 발행은 됐는데 폴더를 옮기지 못했던 경우
+            log.warning("'%s'는 이미 발행한 폴더라 %s로 옮깁니다", f.name, places.DONE_DIR)
+            _archive_place(cfg, f, today_kst())
+    folder, waiting = places.pick(root)
+    if folder is not None and folder.key in published:
+        folder = None                    # 옮기지 못해 남아 있으면 이번에는 쉰다(같은 글을 두 번 올리지 않게)
+    waiting = [f for f in waiting if f.key not in published]
+    blocked = [f for f in waiting if any("방금" not in p for p in f.problems)]
+    for f in blocked:
+        log.warning("장소 폴더 '%s' 준비 덜 됨: %s", f.name, " / ".join(f.problems))
+    if folder is None:
+        log.info("%s(%s)", NO_PLACE_LOG, root)
+        if blocked:
+            notify.send(cfg, f"[{cfg.profile.label}] 장소 폴더를 확인해 주세요(오늘은 올리지 않았습니다)\n" + "\n".join(
+                f"- {f.name}: {' / '.join(p for p in f.problems if '방금' not in p)}" for f in blocked))
+        return None
+    log.info("오늘 쓸 장소 폴더: %s (사진 %d장)", folder.name, len(folder.photos))
+    return folder
+
+
+def _archive_place(cfg: Config, place: "places.Folder", today: str) -> str:
+    try:
+        moved = places.archive(place.path, cfg.places_inbox, today)
+        log.info("장소 폴더를 옮겼습니다: %s", moved)
+        return f"\n📁 장소 폴더 → {places.DONE_DIR}\\{moved.name}"
+    except OSError as e:
+        log.warning("장소 폴더를 옮기지 못했습니다(다음 실행 때 다시 옮깁니다): %s", e)
+        return f"\n⚠️ 장소 폴더를 {places.DONE_DIR}로 옮기지 못했습니다(다음 실행 때 다시 옮김): {e}"
+
+
 def retry_note(cfg: Config, now: datetime | None = None) -> str:
     """아침 실패 알림에 붙이는 안내: 재시도 시각 전이면 그때 자동으로 한 번 더 돈다고 알려 준다.
     (재시도는 예약 작업이 같은 명령을 다시 실행하는 것. 이미 발행했으면 바로 끝나고, 멈춘 단계부터 이어서 한다)"""
@@ -487,6 +571,11 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
             if done and not force:
                 log.info("오늘(%s)은 이미 발행했습니다: %s", today, done["url"])
                 return 0
+            place = None
+            if cfg.profile.photos:
+                place = _pick_place(cfg, cfg.output_dir / today)
+                if place is None:
+                    return 0
             _preflight(cfg)
             # 글쓰기(30분+) 전에 네이버 로그인부터 확인한다.
             if not publisher.check_session(cfg):
@@ -507,10 +596,15 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
                 ready_post = _load_post(out_dir / "post.json")
                 found = history.find_published(cfg.history_file, today, ready_post["title"])
                 if found:
-                    history.upsert(cfg.history_file, history.autopost_entry(today, ready_post, found["url"]))
+                    entry = history.autopost_entry(today, ready_post, found["url"])
+                    if place:
+                        entry.update(place_folder=place.name, place_key=place.key)
+                    history.upsert(cfg.history_file, entry)
                     log.info("오늘 글은 이미 블로그에 있습니다(기록만 바로잡음): %s", found["url"])
+                    if place:
+                        _archive_place(cfg, place, today)
                     return 0
-            post = produce(cfg, today, out_dir)
+            post = produce(cfg, today, out_dir, place=place) if place else produce(cfg, today, out_dir)
             if cfg.profile.auto_related:
                 post["body_html"], added = content.ensure_related(
                     post["body_html"], history.load(cfg.history_file), post.get("lane", ""), post.get("title", ""))
@@ -550,11 +644,16 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
                 "lane": post.get("lane", ""), "cluster": post.get("cluster", ""), "domain": post.get("domain"),
                 "tags": post.get("tags", []), "source": "autopost",
                 "persona_used": persona.clean_used(post.get("persona_used"), persona.load()),
+                **({"place_folder": place.name, "place_key": place.key} if place else {}),
                 **_lab_fields(post),
             })
+            if place:
+                cat_note += _archive_place(cfg, place, today)
             notify.send(cfg, f"[{label} 자동발행 완료] {post['title']}\n{url}\n{cat_note}{_social_drafts(cfg, out_dir, url)}")
             return 0
     except Exception as e:
         log.exception("자동 발행 실패")
-        notify.send(cfg, f"[{label} 자동발행 실패] {today}\n{e}{retry_note(cfg)}")
+        place_note = ("\n📁 장소 폴더는 places_inbox에 그대로 두었습니다. 내일 같은 시각에 다시 시도합니다(사진·메모를 고쳐도 됩니다)."
+                      if cfg.profile.photos else "")
+        notify.send(cfg, f"[{label} 자동발행 실패] {today}\n{e}{retry_note(cfg)}{place_note}")
         return 1

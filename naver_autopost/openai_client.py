@@ -131,6 +131,10 @@ MARKET_EXTRA = """이 글은 매일 시황 글이다. 출처가 '시장 대시�
 그 숫자는 웹에서 같은 값을 못 찾았다는 이유로 지적하지 말고, 서로 모순될 때만 지적하라. 대신 지수 종가·등락률, 공식 발표·기업 실적 숫자,
 다가오는 일정(금통위·FOMC·CPI 등) 날짜, 근거 없는 인과 설명('A 때문에 B'), 종목 매수/매도 권유를 특히 확인하라."""
 
+PLACE_EXTRA = """이 글은 블로그 주인이 아이들과 직접 다녀온 장소를 소개하는 후기다. 방문한 날의 경험·아이 반응·느낌·대기 시간 같은
+1인칭 문장은 검증 대상이 아니다(지적하지 않는다). 대신 운영시간·휴관일·요금·할인 대상·예약 방법·주차·주소·시설 이름·대상 연령 같은
+장소 정보를 공식 홈페이지 기준으로 확인하라. 방문 뒤 바뀐 요금·운영시간, 문을 닫거나 이전한 시설은 반드시 지적하라."""
+
 
 def _output_text(resp: dict) -> str:
     if resp.get("output_text"):
@@ -166,7 +170,8 @@ def _article(post: dict) -> str:
 
 
 def _instructions(cfg: Config) -> str:
-    extra = {"childhood": CHILDHOOD_EXTRA, "invest": INVEST_EXTRA, "market": MARKET_EXTRA}.get(cfg.profile.name, "")
+    extra = {"childhood": CHILDHOOD_EXTRA, "invest": INVEST_EXTRA, "market": MARKET_EXTRA,
+             "place": PLACE_EXTRA}.get(cfg.profile.name, "")
     return FACTCHECK_INSTRUCTIONS.format(extra=extra)
 
 

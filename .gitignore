@@ -30,3 +30,7 @@ data/schedule_overrides.json
 data/quest_board_drive.json
 data/tistory_login_log.json
 data/.drive/
+
+# 아이와 가볼 곳: 직접 찍은 사진·메모(아이 사진이라 절대 올리지 않는다)
+places_inbox/
+data/models/

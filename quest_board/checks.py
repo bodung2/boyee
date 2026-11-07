@@ -83,11 +83,18 @@ def _mtime_hm(path: Path) -> str:
 
 # ---------------------------------------------------------------- 종류별 확인
 
+NO_PLACE_LOG = "새 장소 폴더가 없어 오늘은 쉽니다"   # naver_autopost.pipeline.NO_PLACE_LOG와 같은 문구
+
+
 def _naver(p: Paths, q: Quest, day: str) -> Result:
     prof = _opt(q.arg, "--profile", "childhood")
     for e in _json(p.data / f"published_{prof}.json", []):
         if e.get("source") == "autopost" and e.get("date") == day and e.get("url"):
             return Result("done", e.get("title", ""), e["url"], e.get("category", ""))
+    # 장소 글(사진 폴더가 있는 날만 발행): 폴더가 없어 쉰 날은 '건너뜀'
+    if prof == "place" and NO_PLACE_LOG in _tail(p.logs / f"{prof}-{day}.log") \
+            and not _error(p.logs / f"{prof}-{day}.log"):
+        return Result("skip", note="places_inbox에 새 장소 폴더가 없어 쉬었습니다")
     return Result()
 
 
