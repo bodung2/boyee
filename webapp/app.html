@@ -94,6 +94,8 @@ border-radius:10px;padding:10px 12px;cursor:pointer;text-align:left;width:100%}
 .grow-row .gp{text-align:right;font-variant-numeric:tabular-nums;color:var(--sub);font-size:13px}
 .hex2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.hex{margin:0;padding:10px}.hex figcaption{font-size:13px;font-weight:700}
 .hex svg{width:100%;height:auto;display:block}.hexv{display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px 6px;font-size:11px;color:var(--sub);font-variant-numeric:tabular-nums;white-space:nowrap}
+.track{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 2px}.track span{background:var(--chip);border-radius:8px;padding:6px 10px;font-size:13px;color:var(--sub)}
+.track b{display:block;font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums}.track small{font-size:11px;color:var(--mute)}
 .bar1{height:8px;border-radius:4px;background:var(--chip);overflow:hidden;margin:8px 0 6px}.bar1 i{display:block;height:100%;background:var(--s1);border-radius:4px}
 .pss{display:flex;gap:6px}.pss label{flex:1;display:flex;gap:4px;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:8px;padding:6px 0;font-weight:400}
 @media (max-width:520px){.grid{grid-template-columns:repeat(2,1fr)}.hero .big{font-size:26px}.legend{grid-template-columns:1fr}}
@@ -132,6 +134,10 @@ const PIPE_KINDS = [["ads", "광고 수익(애드센스·애드포스트)"], ["a
   ["rent", "임대"], ["etc", "기타"]];
 const PIPE_STATUS = [["on", "운영 중"], ["prep", "준비 중"], ["pause", "쉬는 중"], ["off", "접음"]];
 const PIPE_KIND = Object.fromEntries(PIPE_KINDS), PIPE_STAT = Object.fromEntries(PIPE_STATUS);
+// 파이프라인 수익 기록(분류 pipeincome, f.pipe = 파이프라인 id, f.amount = 원)
+const pipeIncomes = id => (DATA ? DATA.items : []).filter(i => i.category === "pipeincome" && i.f && i.f.pipe === id)
+  .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+const pipeTotal = id => pipeIncomes(id).reduce((a, i) => a + (num(i.f.amount) || 0), 0);
 const monthly = it => (it.f.status || "on") === "on" ? (num(it.f.monthly) || 0) : 0;
 const FIELDS = {
   finance: [
@@ -450,6 +456,8 @@ function itemCard(it) {
     const st = f.status || "on";
     if (st !== "on") badge = `<span class="badge${st === "prep" ? " warn" : ""}">${esc(PIPE_STAT[st])}</span>`;
     if (num(f.monthly)) { right = won(num(f.monthly)) + "/월"; rsub = st === "on" ? "연 " + won(num(f.monthly) * 12) : ""; }
+    const tot = pipeTotal(it.id), n = pipeIncomes(it.id).length;
+    if (n) { sub.push(`누적 수익 ${won(tot)}(${n}건)`); if (!right) right = "누적 " + won(tot); }
   } else if (it.category === "awards") {
     const kinds = Object.fromEntries(FIELDS.awards[0].options); sub.push(kinds[f.kind] || "수상");
     if (f.org) sub.push(f.org);
@@ -547,6 +555,33 @@ function readForm() {
   }
   EDIT.f = f;
 }
+function incomeBox() {
+  if (!EDIT.id) return '<p class="muted">💰 수익 기록은 이 파이프라인을 저장한 뒤 다시 열면 넣을 수 있어요.</p>';
+  const list = pipeIncomes(EDIT.id), tot = list.reduce((a, i) => a + (num(i.f.amount) || 0), 0);
+  return `<div class="card" style="margin:4px 0 14px"><div class="row"><b>💰 수익 기록</b><span class="muted">누적 ${won(tot)} · ${list.length}건</span></div>
+    ${list.slice().reverse().map(e => `<div class="dday"><span>${esc(fmtDay(e.date))}${e.f.memo ? " · " + esc(e.f.memo) : ""}</span>
+      <b>${won(num(e.f.amount))} <button class="btn" type="button" data-act="delincome" data-id="${esc(e.id)}" aria-label="이 수익 기록 지우기">✕</button></b></div>`).join("")}
+    <div class="row" style="margin-top:8px;flex-wrap:nowrap"><input id="inc_date" type="date" value="${esc(DATA.today)}" max="${esc(DATA.today)}" style="flex:1;min-width:0" aria-label="입금일">
+      <input id="inc_amt" inputmode="decimal" placeholder="금액(원)" style="flex:1;min-width:0" aria-label="수익 금액">
+      <button class="btn" type="button" data-act="addincome">＋ 추가</button></div>
+    <small class="muted">들어온 날과 금액을 적어 두면, 이 파이프라인의 누적 수익이 1만·10만·100만·1,000만·1억 원을 넘는 날 🏅 성장에 돌파 점수가 생겨요.</small></div>`;
+}
+async function incomeAct(kind, id) {
+  readForm(); const keep = EDIT;                     // 고치던 내용은 그대로 두고 수익 기록만 저장
+  try {
+    if (kind === "add") {
+      const amt = num($("#inc_amt").value), d = $("#inc_date").value || DATA.today;
+      if (!(amt > 0)) return toast("금액을 적어 주세요");
+      if (d > DATA.today) return toast("앞으로의 날짜는 적을 수 없어요");
+      busy = true; await api("saveItem", {category: "pipeincome", name: `${keep.name || "파이프라인"} 수익`, date: d, f: {pipe: keep.id, amount: amt}});
+    } else {
+      if (!confirm("이 수익 기록을 지울까요?")) return;
+      busy = true; await api("deleteItem", id);
+    }
+    busy = false; await loadAssets(true); EDIT = keep; drawForm(); toast(kind === "add" ? "수익을 기록했어요" : "지웠어요");
+  } catch (e) { toast("저장하지 못했습니다: " + e.message, true); }
+  busy = false;
+}
 function drawForm() {
   $("#form").dataset.mode = "item";          // 성장 기록 화면과 같은 틀을 쓰므로 어느 쪽인지 표시
   const c = EDIT.category, meta = CATS[c], f = EDIT.f || {};
@@ -567,6 +602,7 @@ function drawForm() {
     <div class="f"><label for="date">${esc(meta.date)}</label><input id="date" name="date" type="date" value="${esc(EDIT.date)}">
       ${["positions", "awards", "works", "realestate", "people"].includes(c) ? '<small>🏅 성장 점수는 이 날짜로 계산돼요. 점수 시작일 이후면 새 성취(100%), 이전이거나 비우면 과거 업적(20%)</small>' : ""}</div>
     ${fields}
+    ${c === "pipeline" ? incomeBox() : ""}
     <div class="row"><div>${EDIT.id ? '<button class="btn danger" type="button" data-act="delete">삭제</button>' : ""}</div>
       <div class="row"><button class="btn" type="button" data-act="close">취소</button><button class="btn primary" type="submit">저장</button></div></div>`;
 }
@@ -606,6 +642,8 @@ document.addEventListener("click", e => {
   if (a.dataset.act === "tl-order") { TL_NEW = !TL_NEW; store.set("tlOrder", TL_NEW ? "new" : "old"); render(); }
   if (a.dataset.act === "close") $("#sheet").hidden = true;
   if (a.dataset.act === "delete") remove();
+  if (a.dataset.act === "addincome") incomeAct("add");
+  if (a.dataset.act === "delincome") incomeAct("del", a.dataset.id);
 });
 $("#add").addEventListener("click", () => DATA ? openEditor(null) : toast("불러오는 중입니다"));
 $("#form").addEventListener("submit", save);
@@ -665,11 +703,13 @@ const MILES = {
   networth: {title: "순자산 구간 돌파(가구)", bands: [[2.386e8, .5], [3.305e8, .4], [4.618e8, .3], [6.938e8, .2], [11.002e8, .10], [17.4e8, .05], [51e8, .01]],
     src: "가계금융복지조사 2025(국가데이터처 부록 통계표 12, 2025.3월말): 순자산 경계값 P50 2억 3,860만 · P60 3억 3,050만 · P70 4억 6,180만 · P80 6억 9,380만 · P90 11억 20만 원. 상위 5%·1%는 P80·P90에서 외삽(추정). 전체 가구 기준이라 30대 기준보다 엄격",
     level: "공식(상위 10%까지) + 추정(5%·1%)"},
-  pipeline: {title: "파이프라인 월수입(운영 중 합계) 돌파", bands: [[1e4, .15], [1e5, .10], [5e5, .04], [1e6, .02], [3e6, .006], [1e7, .001]],
-    src: "첫 부수입(월 1만 원)부터 구간별 — 부업 참가율 1.95%(2022, 임금 부업 한정)를 참고한 추정 구간", level: "추정"},
+  pipeline: {title: "파이프라인 월수입(운영 중 합계) 돌파", bands: [[1e5, .10], [5e5, .04], [1e6, .02], [3e6, .006], [1e7, .001]],
+    src: "운영 중인 파이프라인 월수입 합계 구간 — 부업 참가율 1.95%(2022, 임금 부업 한정)를 참고한 추정 구간", level: "추정"},
   home: {title: "첫 내 집 마련", p: .36, src: "주택소유통계 2024(국가데이터처, 2025.11 발표): 30대 주택 소유율 36%", level: "공식(30대)"},
   marriage: {title: "결혼", p: .487, src: "인구주택총조사 확대 공표 2023: 30대 미혼율 51.3% → 기혼 48.7%(30대 전체, 성별·35~39세 구분 원문 확인 필요). 평균 수준이라 점수는 거의 없음", level: "공식(30대 전체)"},
   child: {title: "자녀(태어난 순서)", p: {1: .45, 2: .25, 3: .04}, src: "30대 후반 남성 중 자녀 1명 이상 45%·2명 이상 25%·3명 이상 4%로 추정(합계출산율 0.75, 신혼부부 무자녀 47.5% 참고). 공식 분포 확인 필요", level: "추정"},
+  pipeIncome: {title: "파이프라인 누적 수익 돌파(파이프라인별)", bands: [[1e4, .15], [1e5, .10], [1e6, .04], [1e7, .01], [1e8, .001]],
+    src: "수익 기록을 더한 누적 금액 기준. 첫 수익(1만 원)부터 1억 원까지 — 부업 참가율 1.95%(2022, 임금 부업 한정)를 참고한 추정 구간", level: "추정"},
   income: {title: "저작물 누적 수익 돌파(작품별)", bands: [[1e5, .2], [1e6, .05], [1e7, .01], [1e8, .001]], src: "추정", level: "추정"},
   position: {title: "직위(재직 중 비율)", p: {staff: .5, lead: .265, mid: .052, head: .0265, top: .003},
     src: "교육통계서비스(KEDI) 직위별 교원수 2026, 초·중·고 교원 43만 6,264명: 보직교사 이상(보직·수석·교감·교장) 26.5% · 교감 이상 5.2% · 교장 2.6%. '그 이상'(교육장·교육감 등)은 추정. 교원이 아닌 직장은 같은 단계의 비율로 근사",
@@ -845,6 +885,14 @@ function milestones(start) {
     add(when(i), "career", MILES.work.p[i.f.kind] || .2, `✍️ ${i.name}`);
     MILES.income.bands.forEach(([v, p]) => { if ((num(i.f.income) || 0) >= v) add(when(i), "economy", p, `✍️ ${i.name} 수익 ${won(v)} 돌파`); });
   });
+  // 파이프라인: 파이프라인마다 수익 기록을 날짜순으로 더해, 누적 수익이 구간을 넘은 날 돌파
+  items.filter(i => i.category === "pipeline").forEach(pl => {
+    let cum = 0;
+    pipeIncomes(pl.id).forEach(e => {
+      const before = cum; cum += num(e.f.amount) || 0;
+      MILES.pipeIncome.bands.forEach(([v, p]) => { if (before < v && cum >= v) add(e.date, "economy", p, `💵 ${pl.name} 누적 수익 ${won(v)} 돌파`); });
+    });
+  });
   // 부동산: 첫 내 집 마련(가장 이른 매입)
   const homes = items.filter(i => i.category === "realestate").sort((a, b) => when(a) < when(b) ? -1 : 1);
   if (homes.length) add(when(homes[0]), "economy", MILES.home.p, `🏠 첫 내 집 마련 · ${homes[0].name}`);
@@ -916,6 +964,7 @@ function scoreAll() {
     GOALS.forEach(g => { if (w[g.k].pts) { byGoal[g.k] += w[g.k].pts; events.push({date: addDays(ws, 6) > DATA.today ? DATA.today : addDays(ws, 6), goal: g.k, pts: w[g.k].pts,
       label: `${ws.slice(5).replace("-", ".")} 주 · ${w[g.k].what} (${fmtTop(w[g.k].p)})`, week: true}); } });
   }
+  const flowTotal = Object.values(byGoal).reduce((a, b) => a + b, 0);       // 흐름 점수(매주 쌓은 것)
   const past = Object.fromEntries(GOALS.map(g => [g.k, 0]));
   milestones(start).forEach(m => {
     if (m.past) { const add = Math.min(PAST_CAP - past[m.goal], m.pts * PAST_RATE); past[m.goal] += add; byGoal[m.goal] += add;
@@ -923,7 +972,7 @@ function scoreAll() {
     else { byGoal[m.goal] += m.pts; events.push(m); }
   });
   const total = Object.values(byGoal).reduce((a, b) => a + b, 0);
-  return {start, weeks, byGoal, events: events.sort((a, b) => a.date < b.date ? 1 : -1), total};
+  return {start, weeks, byGoal, events: events.sort((a, b) => a.date < b.date ? 1 : -1), total, flowTotal, mileTotal: total - flowTotal};
 }
 // 기간(이번 주 / 이번 달)의 상위 %(실제 기록 기준)와 그 기간에 얻은 점수
 function periodTop(S, mode) {
@@ -964,12 +1013,14 @@ function renderGrowth() {
       <span class="gt ${t.any && t.p < .5 ? "up" : ""}">${t.any ? fmtTop(t.p) : (g.k === "mind" ? "점검·기록 없음" : g.k === "career" ? "직위 기록 없음" : "기록 없음")}</span>
       <span class="gp">${Math.round(S.byGoal[g.k])}점</span></button>`;
   }).join("");
-  const feed = S.events.slice(0, 12).map(e => `<div class="dday"><span>${GOAL[e.goal].icon} ${esc(e.label)}</span><b>+${Math.round(e.pts * 10) / 10}</b></div>`).join("");
+  const feed = S.events.slice(0, 12).map(e => `<div class="dday"><span><span class="badge">${e.week ? "📈 흐름" : "🏆 돌파"}</span> ${GOAL[e.goal].icon} ${esc(e.label)}</span><b>+${Math.round(e.pts * 10) / 10}</b></div>`).join("");
   const recent = gLogs().sort((a, b) => (b.date + b.updated) < (a.date + a.updated) ? -1 : 1).slice(0, 8).map(l =>
     `<button type="button" class="item" data-g="dellog" data-id="${esc(l.id)}"><span class="t">${GOAL[l.f.goal].icon} ${esc(l.name)}</span>
       <span class="r">${esc(fmtDay(l.date))}</span><span class="s">${esc(l.f.text || "")}</span><span class="rs">눌러서 지우기</span></button>`).join("");
   $("#gmain").innerHTML = `<div class="card hero"><div class="row"><span class="label">인생 레벨</span><span class="muted">${fmtDay(S.start)}부터</span></div>
       <div class="big">Lv.${lv} <span style="font-size:18px;color:var(--sub)">${Math.round(S.total).toLocaleString("ko-KR")}점</span></div>
+      <div class="track"><span>📈 흐름 점수 <b>${Math.round(S.flowTotal).toLocaleString("ko-KR")}</b><small>매일·매주 쌓은 것</small></span>
+        <span>🏆 돌파 점수 <b>${Math.round(S.mileTotal).toLocaleString("ko-KR")}</b><small>업적을 이룬 것</small></span></div>
       <div class="bar1"><i style="width:${Math.min(100, (S.total - cur) / (nextLv - cur) * 100).toFixed(1)}%"></i></div>
       <div class="delta">다음 레벨까지 ${Math.ceil(nextLv - S.total).toLocaleString("ko-KR")}점 · 이번 주 +${Math.round(thisWeek)}점</div></div>
     <div class="hex2">${hexagon("쌓은 점수", GOALS.map(g => S.byGoal[g.k]), "--s1", v => Math.round(v) + "")}
