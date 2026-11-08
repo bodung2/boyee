@@ -125,3 +125,16 @@ def test_screen_and_apps_script_agree_on_api_version():
     assert re.search(r"const API_VERSION = (\d+);", gs).group(1) == re.search(r"const NEED_API = (\d+);", app).group(1)
     for fn in ("getData", "saveItem", "deleteItem", "refreshPrices", "apiVersion", "getQuestBoard"):
         assert f"function {fn}(" in gs, fn
+
+
+def test_growth_benchmarks_name_their_source_and_evidence_level():
+    """성장 점수의 모든 기준 숫자는 출처(src)와 근거 수준(level)을 함께 가진다(화면 '점수 기준·출처'에 그대로 보인다)."""
+    import re
+    app = (schedule.ROOT / "webapp" / "app.html").read_text(encoding="utf-8")
+    bench = app[app.index("const BENCH = {"):app.index("const MILES = {")]
+    miles = app[app.index("const MILES = {"):app.index("const SIZE_PTS")]
+    for goal in ("body", "craft", "career", "social", "mind", "economy"):
+        block = re.search(goal + r": \{.*?level: \"[^\"]+\"\}", bench, re.S)
+        assert block and "src:" in block.group(0), goal
+    assert miles.count("src:") == miles.count("level:") >= 10
+    assert "const CAP = 56" in app and "Math.log2(0.5 / Math.max(p, 0.001))" in app

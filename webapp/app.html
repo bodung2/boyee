@@ -87,14 +87,25 @@ padding:10px 16px;border-radius:8px;font-size:14px;max-width:calc(100% - 32px);d
 .muted{color:var(--sub);font-size:12px}
 .mini{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:2px 2px 0;font-size:13px;color:var(--sub)}
 .mini b{font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums}
+.grow-row{display:grid;grid-template-columns:28px 1fr auto 64px;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);
+border-radius:10px;padding:10px 12px;cursor:pointer;text-align:left;width:100%}
+.grow-row .gi{font-size:18px}.grow-row .gn{font-weight:700}.grow-row .gn small{display:block;font-weight:400;font-size:11px;color:var(--mute)}
+.grow-row .gt{font-variant-numeric:tabular-nums;font-weight:700;color:var(--sub);white-space:nowrap}.grow-row .gt.up{color:var(--up)}
+.grow-row .gp{text-align:right;font-variant-numeric:tabular-nums;color:var(--sub);font-size:13px}
+.hex2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.hex{margin:0;padding:10px}.hex figcaption{font-size:13px;font-weight:700}
+.hex svg{width:100%;height:auto;display:block}.hexv{display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px 6px;font-size:11px;color:var(--sub);font-variant-numeric:tabular-nums;white-space:nowrap}
+.bar1{height:8px;border-radius:4px;background:var(--chip);overflow:hidden;margin:8px 0 6px}.bar1 i{display:block;height:100%;background:var(--s1);border-radius:4px}
+.pss{display:flex;gap:6px}.pss label{flex:1;display:flex;gap:4px;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:8px;padding:6px 0;font-weight:400}
 @media (max-width:520px){.grid{grid-template-columns:repeat(2,1fr)}.hero .big{font-size:26px}.legend{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <div class="tabs" role="tablist">
+  <button role="tab" data-tab="growth" aria-selected="false">🏅 성장</button>
   <button role="tab" data-tab="quest" aria-selected="false">퀘스트 보드</button>
   <button role="tab" data-tab="assets" aria-selected="false">내 자산</button>
 </div>
+<section id="growth" hidden><main id="gmain"><p class="empty">불러오는 중…</p></main></section>
 <section id="quest" hidden><iframe id="qframe" title="퀘스트 보드"></iframe><main id="qmsg" hidden></main></section>
 <section id="assets" hidden><main id="amain"><p class="empty">불러오는 중…</p></main>
   <button class="fab" type="button" id="add">＋ 추가</button></section>
@@ -160,11 +171,17 @@ const FIELDS = {
     {k: "memo", label: "메모", type: "area"}],
   positions: [
     {k: "org", label: "기관·소속"},
+    {k: "level", label: "직위 수준(성장 점수용)", type: "select", options: [["staff", "일반(담임·팀원)"], ["lead", "보직(부장·팀장)"],
+      ["mid", "중간관리(교감·차장)"], ["head", "기관장(교장·부서장)"], ["top", "그 이상"]]},
     {k: "end", label: "종료일", hint: "지금 맡고 있으면 비워 두세요", type: "date"},
     {k: "link", label: "링크(선택)", hint: "관련 페이지·계좌·문서 주소", type: "url"},
     {k: "memo", label: "메모", type: "area"}],
   awards: [
     {k: "kind", label: "종류", type: "select", options: [["award", "상"], ["cert", "자격증"], ["honor", "표창"], ["etc", "기타"]]},
+    {k: "level", label: "수상 수준(성장 점수용)", type: "select", show: f => f.kind !== "cert", options: [["org", "기관 내(교내·사내)"],
+      ["local", "지역(교육지원청·시군구)"], ["region", "광역(교육감·시도지사)"], ["nation", "국가(장관급)"], ["top", "대통령급 이상"]]},
+    {k: "cert_level", label: "자격 난이도(성장 점수용)", type: "select", show: f => f.kind === "cert", options: [["basic", "기능사·민간 기초"],
+      ["mid", "산업기사·중급"], ["high", "기사·상급"], ["pro", "기술사·전문자격"]]},
     {k: "org", label: "수여 기관"},
     {k: "link", label: "증빙 링크(선택)", type: "url"},
     {k: "memo", label: "메모", type: "area"}]
@@ -235,9 +252,9 @@ function ago(iso) {
 // ---------------------------------------------------------------- 탭
 function showTab(name) {
   document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name));
-  $("#quest").hidden = name !== "quest"; $("#assets").hidden = name !== "assets";
+  $("#quest").hidden = name !== "quest"; $("#assets").hidden = name !== "assets"; $("#growth").hidden = name !== "growth";
   store.set("tab", name);
-  if (name === "quest") loadQuest(); else if (!DATA) loadAssets();
+  if (name === "quest") loadQuest(); else if (!DATA) loadAssets(); else if (name === "growth") renderGrowth();
 }
 let questAt = 0;
 async function loadQuest() {
@@ -264,6 +281,7 @@ async function loadAssets(quiet) {
     DATA = await api("getData");
     DATA.oldApi = ver < NEED_API;
     render();
+    if (typeof renderGrowth === "function") renderGrowth();
     if (!quiet && stalePrices()) refresh(true);
   } catch (e) {
     $("#amain").innerHTML = `<div class="note">자산 데이터를 불러오지 못했습니다: ${esc(e.message)}<br>
@@ -376,7 +394,7 @@ function summary() {
       `<div class="dday"><span>${esc(x.text)}</span><b>${x.days ? "D-" + x.days : "오늘"}</b></div>`).join("")}</div>` : "";
   const now = byCat("positions").filter(x => !(x.f || {}).end).sort((a, b) => a.date < b.date ? 1 : -1);
   const pos = now.length ? `<h2>지금 맡고 있는 일</h2><div class="list">${now.map(itemCard).join("")}</div>` : "";
-  const empty = DATA.items.length ? "" : `<div class="card" style="margin-top:12px"><p class="empty" style="padding:8px 0">아직 기록이 없습니다.<br>
+  const empty = DATA.items.some(it => ORDER.includes(it.category)) ? "" : `<div class="card" style="margin-top:12px"><p class="empty" style="padding:8px 0">아직 기록이 없습니다.<br>
       오른쪽 아래 <b>＋ 추가</b>로 첫 기록을 남겨 보세요. 돈으로 셀 수 있는 것뿐 아니라 사람·저작물·직위·수상도 함께 쌓입니다.</p></div>`;
   return `${empty}<h2>한눈에</h2><div class="grid">${stats}</div>${days}${alloc}${pos}
     <p class="muted" style="margin-top:20px">데이터는 이 구글 계정의 비공개 시트에만 저장됩니다 · <a href="${esc(DATA.sheetUrl)}" target="_blank" rel="noopener">시트 열기</a></p>`;
@@ -485,7 +503,7 @@ let TL_NEW = store.get("tlOrder") === "new";      // 기본: 오래된 것부터
 function timeline() {
   const ev = [];
   const add = (d, t, id) => { d = normDay(d); if (d) ev.push({d, t, id}); };
-  DATA.items.forEach(it => {
+  DATA.items.filter(it => ORDER.includes(it.category)).forEach(it => {      // 성장 기록(log 등)은 연표에서 뺀다
     const f = it.f || {}, c = CATS[it.category] || {icon: "•"};
     if (it.category === "people") {
       if (f.anniv_date) add(f.anniv_date, `💐 ${it.name} · ${f.anniv_label || "기념일"}`, it.id);
@@ -530,6 +548,7 @@ function readForm() {
   EDIT.f = f;
 }
 function drawForm() {
+  $("#form").dataset.mode = "item";          // 성장 기록 화면과 같은 틀을 쓰므로 어느 쪽인지 표시
   const c = EDIT.category, meta = CATS[c], f = EDIT.f || {};
   const seen = new Set();
   const fields = FIELDS[c].filter(d => !d.show || d.show(f)).filter(d => !seen.has(d.k) && seen.add(d.k)).map(d => {
@@ -594,7 +613,460 @@ $("#form").addEventListener("change", e => {
 });
 $("#sheet").addEventListener("click", e => { if (e.target.id === "sheet") $("#sheet").hidden = true; });
 VIEW = VIEWS.some(([k]) => k === store.get("view")) ? store.get("view") : "summary";
-showTab(store.get("tab") === "assets" ? "assets" : "quest");
+showTab(["assets", "growth"].includes(store.get("tab")) ? store.get("tab") : "quest");
+</script>
+<script>
+"use strict";
+// ================================================================ 🏅 성장: 6대 목표 점수
+// 모든 기록을 '30대 후반 남성 중 상위 몇 %인가'로 바꾸고, 같은 공식(R)으로 점수를 매긴다(영역 사이 형평성).
+//   흐름 점수: 매주 그 주의 기록이 상위 몇 %인지 → R(p), 한 영역 한 주 최대 CAP(상위 1%)
+//   돌파 점수: 처음 그 구간을 넘었을 때 한 번 → R(p) × MILE
+//   시작일 이전 업적: PAST_RATE만, 영역별 PAST_CAP까지
+// 기준 숫자는 BENCH에 출처·근거 수준과 함께 모아 둔다(화면의 '점수 기준'에 그대로 보인다).
+const GOALS = [
+  {k: "body", icon: "💪", label: "신체", short: "신체"}, {k: "mind", icon: "🧘", label: "정신", short: "정신"},
+  {k: "craft", icon: "🎨", label: "기능·영감", short: "기능"}, {k: "social", icon: "🤝", label: "사회", short: "사회"},
+  {k: "career", icon: "🎖", label: "커리어", short: "커리어"}, {k: "economy", icon: "💰", label: "경제", short: "경제"}];
+const GOAL = Object.fromEntries(GOALS.map(g => [g.k, g]));
+const CAP = 56, MILE = 4, PAST_RATE = 0.2, PAST_CAP = 100, MONTH_W = 52 / 12;
+const R = p => p >= 0.5 ? 0 : 10 * Math.log2(0.5 / Math.max(p, 0.001));      // 상위 50% = 0, 10% = 23, 1% = 56, 0.1% = 90
+const pFromPts = pts => 0.5 / Math.pow(2, pts / 10);
+const LV = n => 25 * n * n;                                                     // 레벨 n에 필요한 누적 점수
+const levelOf = pts => { let n = 0; while (LV(n + 1) <= pts) n++; return n; };
+
+const BENCH = {
+  body: {title: "주간 운동 횟수(1회 30분 이상)", group: "30대(성별 통합)·전체",
+    survival: {1: .678, 2: .522, 3: .357, 4: .25, 5: .15, 6: .08, 7: .04},
+    src: "국민생활체육조사 2025(문화체육관광부, 2026.1.19 발표): 주 1회 이상 30대 67.8%, 주 2회 이상 전체 52.2% · 주 3회 이상 남성 35.7%(이전 조사) · 4회 이상은 추세로 추정",
+    level: "공식(1·2회) + 추정(3회 이상)"},
+  craft: {title: "하루 평균 가사·돌봄 시간(요리·놀이·정리·설거지·청소·분리수거)", group: "30대 남성",
+    mean: 76, pd: .70, cv: .8,
+    src: "생활시간조사 2024(국가데이터처) 통계표 2-1: 30~39세 남자 가정관리 49분 + 가족 및 가구원 돌보기 27분 = 하루 76분(요일 평균). 참고: 25~39세 기혼·유자녀 남성은 134분. 하루 참여율 70%·분포(로그정규, 변동계수 0.8)는 추정",
+    level: "평균 공식, 참여율·분포 추정"},
+  career: {title: "하루 평균 학습·자기계발 시간(연수·공부·업무 학습)", group: "30대 남성",
+    mean: 19, pd: .15, cv: .8,
+    src: "생활시간조사 2024 통계표 2-1: 30~39세 남자 학습 하루 19분(학교활동 외 학습 18분). 하루 참여율 15%·분포는 추정",
+    level: "평균 공식, 참여율·분포 추정"},
+  social: {title: "하루 평균 교류·나눔 시간(만남·모임·가족 행사·멘토링·봉사)", group: "30대 남성",
+    mean: 39, pd: .728, cv: .8,
+    src: "생활시간조사 2024: 30~39세 남자 교제 및 참여활동 38분 + 자원봉사 1분 = 하루 39분(통계표 2-1) · 남자 교제 및 참여활동 행위자 비율 72.8%(통계표 4-2, 10세 이상 남자) · 분포는 추정",
+    level: "평균·참여율 공식, 분포 추정"},
+  mind: {title: "월 1회 스트레스 점검(PSS-10, 0~40, 낮을수록 좋음)", group: "남성·30~44세",
+    mean: 12.5, sd: 6.0,
+    src: "Cohen PSS-10 규준(미국 대표표본): 남성 12.1(SD 5.9), 30~44세 13.0(SD 6.2) → 평균 12.5, SD 6.0. 한국 성인 규준 확인 필요",
+    level: "해외 규준"},
+  economy: {title: "월 저축률(저축·투자·대출 원금 상환 ÷ 세후 소득)", group: "전체 가구",
+    mean: .25, sd: .20,
+    src: "가계동향조사 2025년 4분기(국가데이터처): 흑자율(흑자액÷처분가능소득) 전체 30.8%, 소득 5분위별 -38.0·20.7·23.5·28.6·45.4% → 중간 25%, 표준편차 20%p의 정규분포로 근사",
+    level: "공식 평균, 분포 추정"}
+};
+// 순자산 상위 5%·1% 경계는 공표되지 않아 P80·P90으로 파레토 꼬리(α≈1.5)를 맞춰 외삽(추정)
+const MILES = {
+  networth: {title: "순자산 구간 돌파(가구)", bands: [[2.386e8, .5], [3.305e8, .4], [4.618e8, .3], [6.938e8, .2], [11.002e8, .10], [17.4e8, .05], [51e8, .01]],
+    src: "가계금융복지조사 2025(국가데이터처 부록 통계표 12, 2025.3월말): 순자산 경계값 P50 2억 3,860만 · P60 3억 3,050만 · P70 4억 6,180만 · P80 6억 9,380만 · P90 11억 20만 원. 상위 5%·1%는 P80·P90에서 외삽(추정). 전체 가구 기준이라 30대 기준보다 엄격",
+    level: "공식(상위 10%까지) + 추정(5%·1%)"},
+  pipeline: {title: "파이프라인 월수입(운영 중 합계) 돌파", bands: [[1e5, .10], [5e5, .04], [1e6, .02], [3e6, .006], [1e7, .001]],
+    src: "부업 참가율 1.95%(2022, 임금 부업 한정)를 참고한 추정 구간", level: "추정"},
+  income: {title: "저작물 누적 수익 돌파(작품별)", bands: [[1e5, .2], [1e6, .05], [1e7, .01], [1e8, .001]], src: "추정", level: "추정"},
+  position: {title: "직위(재직 중 비율)", p: {staff: .5, lead: .265, mid: .052, head: .0265, top: .003},
+    src: "교육통계서비스(KEDI) 직위별 교원수 2026, 초·중·고 교원 43만 6,264명: 보직교사 이상(보직·수석·교감·교장) 26.5% · 교감 이상 5.2% · 교장 2.6%. '그 이상'(교육장·교육감 등)은 추정. 교원이 아닌 직장은 같은 단계의 비율로 근사",
+    level: "공식(교원) + 추정(그 이상)"},
+  award: {title: "수상·표창", p: {org: .3, local: .1, region: .03, nation: .005, top: .0005}, src: "수상 단계별 희소도 추정", level: "추정"},
+  cert: {title: "자격증", p: {basic: .3, mid: .12, high: .05, pro: .008}, src: "자격 등급별 희소도 추정(합격률·보유율 원문 확인 필요)", level: "추정"},
+  work: {title: "저작물 발표(커리어)", p: {book: .01, paper: .03, research: .05, workbook: .05, writing: .2, talk: .1, etc: .2},
+    src: "저작 종류별 희소도 추정", level: "추정"},
+  race: {title: "대회 완주", p: {"5k": .10, "10k": .05, half: .015, full: .004}, src: "완주 경험 비율 추정", level: "추정"},
+  fitness: {title: "국민체력100 등급", p: {3: .70, 2: .50, 1: .30},
+    src: "문화체육관광부 「체력인증 등급별 기준과 절차에 관한 규정」(2015.9 고시): 성별·연령별 기준으로 1등급 상위 30%, 2등급 상위 50%, 3등급 상위 70%", level: "공식"},
+  volunteer: {title: "누적 봉사 시간", bands: [[10, .2], [50, .07], [100, .03], [300, .008]], src: "사회조사 자원봉사 참여율 참고 추정", level: "추정"},
+  craftLevel: {title: "기능·영감 숙련 단계", p: {2: .4, 3: .2, 4: .07, 5: .02}, src: "숙련 단계별 희소도 추정", level: "추정"},
+  pss: {title: "스트레스 점검 상위 구간 돌파(첫 측정보다 좋아졌을 때)", bands: [.25, .10, .05, .01], src: "PSS-10 규준", level: "해외 규준"}
+};
+const SIZE_PTS = {s: 5, m: 15, l: 40};            // 작은 승리 ≈ 상위 35%, 의미 있는 ≈ 17%, 큰 돌파 ≈ 3%
+const SIZE_LABEL = {s: "작은 승리", m: "의미 있는 승리", l: "큰 돌파"};
+const MIND_SUBS = [["discipline", "⏰ 규율"], ["emotion", "🌊 감정 조절"], ["impulse", "🧲 충동 조절"], ["avoid", "🦁 회피 극복"], ["heart", "🧘 마음 단련"]];
+const MIND_EX = {
+  discipline: ["피곤했지만 계획한 일을 해냄", "한 달 내내 루틴을 지킴", "몇 년간 못 바꾸던 습관을 바꿈"],
+  emotion: ["화날 상황에서 차분히 말함", "갈등을 대화로 풀어냄", "오래된 관계의 갈등을 회복함"],
+  impulse: ["충동구매·야식을 참음", "한 달간 계획대로 씀", "오래된 나쁜 습관을 끊음"],
+  avoid: ["미루던 일을 처리함", "두려운 일에 도전함", "인생의 큰 결정을 내리고 실행함"],
+  heart: ["나를 돌아본 기록을 남김", "힘든 시기에 다시 일어섬", "큰 실패·상실을 딛고 회복함"]};
+const CRAFT_FIELDS = [["cook", "🍳 요리"], ["play", "🧸 놀이"], ["tidy", "🗂 정리"], ["dish", "🍽 설거지·주방"], ["clean", "🧹 청소"], ["recycle", "♻️ 분리수거"]];
+const RECYCLE_MIN = 15;
+const PSS_Q = ["예상치 못한 일 때문에 속상했던 적이", "인생에서 중요한 일들을 조절할 수 없다고 느낀 적이", "신경이 예민해지고 스트레스를 받았다고 느낀 적이",
+  "개인적인 문제를 다루는 능력에 자신감을 느낀 적이", "일이 내 뜻대로 진행되고 있다고 느낀 적이", "해야 할 일들을 감당할 수 없다고 느낀 적이",
+  "일상의 짜증을 잘 다스릴 수 있었던 적이", "일이 잘 돌아가고 있다고(주도하고 있다고) 느낀 적이", "내가 어쩔 수 없는 일 때문에 화가 났던 적이",
+  "어려운 일이 너무 많이 쌓여 극복할 수 없다고 느낀 적이"];
+const PSS_REV = [3, 4, 6, 7];                       // 4·5·7·8번은 거꾸로 채점
+
+function ncdf(z) {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z)), d = 0.3989423 * Math.exp(-z * z / 2);
+  const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  return z > 0 ? 1 - p : p;
+}
+// 시간 지표의 상위 비율: 하루 평균 x분보다 많이 한 사람의 비율.
+// 생활시간조사는 '하루' 기록이라, 한 주 평균으로 바꿀 때 참여율을 1-(1-하루참여)^3 으로 올리고(추정) 같은 평균을 유지한다.
+function topShareTime(x, b) {
+  if (!(x > 0)) return 1;
+  const pw = 1 - Math.pow(1 - b.pd, 3), doer = b.mean / pw, s2 = Math.log(1 + b.cv * b.cv), mu = Math.log(doer) - s2 / 2;
+  return pw * (1 - ncdf((Math.log(x) - mu) / Math.sqrt(s2)));
+}
+const topShareNormal = (x, b, lowerBetter) => lowerBetter ? ncdf((x - b.mean) / b.sd) : 1 - ncdf((x - b.mean) / b.sd);
+const fmtTop = p => p >= 1 ? "기록 없음" : p > .5 ? "평균 아래" : "상위 " + (p < .01 ? (p * 100).toFixed(1) : Math.round(p * 100)) + "%";
+// 주 n회(소수 가능)의 상위 비율: 정수 사이는 로그로 보간
+function bodyShare(rate) {
+  if (!(rate > 0)) return 1;
+  const S = BENCH.body.survival, r = Math.min(7, rate), lo = Math.max(1, Math.floor(r)), hi = Math.min(7, lo + 1);
+  if (r < 1) return 1 - (1 - S[1]) * r;
+  const t = r - lo; return Math.exp(Math.log(S[lo]) * (1 - t) + Math.log(S[hi]) * t);
+}
+// 기간(from~to, 날짜 수 days)의 실제 기록으로 상위 %를 낸다(월간 성적표)
+function rangeShare(from, to, logs) {
+  // 기간 초반 하루 이틀 기록으로 부풀지 않게 최소 7일로 나눈다(주간은 그 주 합계를 7일 기준으로)
+  const days = Math.max(7, Math.round((parseDay(to) - parseDay(from)) / 864e5) + 1), inR = logs.filter(l => l.date >= from && l.date <= to);
+  const by = (goal, types) => inR.filter(l => l.f.goal === goal && (!types || types.includes(l.f.type)));
+  const sumMin = list => list.reduce((a, l) => a + (l.f.field === "recycle" ? (num(l.f.count) || 1) * RECYCLE_MIN : (num(l.f.minutes) || 0)), 0);
+  const perDay = {};
+  by("body", ["exercise"]).forEach(l => { if ((num(l.f.minutes) || 30) >= 30) perDay[l.date] = Math.min(2, (perDay[l.date] || 0) + 1); });
+  const sessions = Object.values(perDay).reduce((a, b) => a + b, 0);
+  const out = {
+    body: {p: bodyShare(sessions * 7 / days), any: sessions > 0},
+    craft: (m => ({p: topShareTime(m / days, BENCH.craft), any: m > 0}))(sumMin(by("craft", ["time"]))),
+    career: (m => ({p: topShareTime(m / days, BENCH.career), any: m > 0}))(sumMin(by("career", ["study"]))),
+    social: (m => ({p: topShareTime(m / days, BENCH.social), any: m > 0}))(sumMin(by("social", ["volunteer", "together"])))
+  };
+  const sav = by("economy", ["saving"]).map(l => num(l.f.income) > 0 ? (num(l.f.saving) || 0) / num(l.f.income) : null).filter(r => r != null);
+  out.economy = sav.length ? {p: topShareNormal(Math.max(...sav), BENCH.economy), any: true} : {p: 1, any: false};
+  return out;
+}
+// 정신의 '상위 %'는 최근 31일 안의 스트레스 점검(PSS-10)으로 낸다(A안)
+function mindShare(logs) {
+  const from = addDays(DATA.today, -31), l = logs.filter(x => x.f.type === "pss" && x.date >= from).sort((a, b) => a.date < b.date ? 1 : -1)[0];
+  return l ? {p: topShareNormal(num(l.f.score), BENCH.mind, true), any: true, pss: true} : {p: 1, any: false};
+}
+
+// ---------------------------------------------------------------- 날짜
+const dayStr = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function weekStart(s) { const d = parseDay(s); if (!d) return ""; const k = (d.getDay() + 6) % 7; d.setDate(d.getDate() - k); return dayStr(d); }
+function addDays(s, n) { const d = parseDay(s); d.setDate(d.getDate() + n); return dayStr(d); }
+
+// ---------------------------------------------------------------- 기록·설정
+const gLogs = () => DATA.items.filter(i => i.category === "log" && i.f && GOAL[i.f.goal]);
+const gSetting = () => DATA.items.find(i => i.category === "setting" && i.name === "growth");
+const gMiles = () => DATA.items.filter(i => i.category === "milestone" && i.f && GOAL[i.f.goal]);
+const pssScore = a => a.reduce((s, v, i) => s + (PSS_REV.includes(i) ? 4 - v : v), 0);
+
+// 한 주(월~일)의 영역별 기록을 상위 %와 점수로 바꾼다
+function weekStats(ws, logs, start) {
+  const we = addDays(ws, 6), inW = logs.filter(l => l.date >= ws && l.date <= we && l.date >= start);
+  const out = {};
+  const by = (goal, type) => inW.filter(l => l.f.goal === goal && (!type || l.f.type === type));
+  // 신체: 30분 이상 운동 횟수(하루 2회까지)
+  const perDay = {};
+  by("body", "exercise").forEach(l => { if ((num(l.f.minutes) || 30) >= 30) perDay[l.date] = Math.min(2, (perDay[l.date] || 0) + 1); });
+  const n = Math.min(7, Object.values(perDay).reduce((a, b) => a + b, 0));
+  out.body = flow(bodyShare(n), n, `운동 ${n}회`);
+  // 기능·영감: 가사·돌봄 시간 + 처음·완성 기록(같은 상한 안)
+  const craftMin = by("craft", "time").reduce((a, l) => a + (l.f.field === "recycle" ? (num(l.f.count) || 1) * RECYCLE_MIN : (num(l.f.minutes) || 0)), 0);
+  out.craft = flow(topShareTime(craftMin / 7, BENCH.craft), craftMin, `가사·돌봄 하루 평균 ${Math.round(craftMin / 7)}분`,
+    by("craft", "first").length * 5 + by("craft", "project").reduce((a, l) => a + (SIZE_PTS[l.f.size] || 5), 0));
+  // 커리어: 학습·자기계발 시간
+  const studyMin = by("career", "study").reduce((a, l) => a + (num(l.f.minutes) || 0), 0);
+  out.career = flow(topShareTime(studyMin / 7, BENCH.career), studyMin, `학습 하루 평균 ${Math.round(studyMin / 7)}분`);
+  // 사회: 교류·나눔 시간 + 기부·기념일 챙김(작은 기록, 같은 상한 안)
+  const socMin = by("social").filter(l => ["volunteer", "together"].includes(l.f.type)).reduce((a, l) => a + (num(l.f.minutes) || 0), 0);
+  out.social = flow(topShareTime(socMin / 7, BENCH.social), socMin, `교류·나눔 하루 평균 ${Math.round(socMin / 7)}분`,
+    by("social").filter(l => ["donate", "care"].includes(l.f.type)).length * 5);
+  // 정신: 성취 기록(같은 영역 반복은 절반 → 0, 큰 돌파는 월 1회) — 점수를 상위 %로 되돌려 표시
+  let mindPts = 0; const seen = {};
+  by("mind", "win").sort((a, b) => a.date < b.date ? -1 : 1).forEach(l => {
+    const sub = l.f.sub || "heart"; seen[sub] = (seen[sub] || 0) + 1;
+    let pts = SIZE_PTS[l.f.size] || 5;
+    if (l.f.size === "l" && logs.some(o => o !== l && o.f.goal === "mind" && o.f.type === "win" && o.f.size === "l"
+        && o.date.slice(0, 7) === l.date.slice(0, 7) && o.date < l.date)) pts = SIZE_PTS.m;   // 같은 달 두 번째 큰 돌파는 의미 있는 승리로
+    mindPts += seen[sub] === 1 ? pts : seen[sub] === 2 ? pts / 2 : 0;
+  });
+  mindPts = Math.min(CAP, mindPts);
+  out.mind = {p: mindPts ? pFromPts(mindPts) : 1, pts: mindPts, any: mindPts > 0, what: `정신 성취 ${by("mind", "win").length}개`};
+  // 경제: 그 주에 적은 월 저축률(한 달 점수를 주 단위로 환산해 그 주에 넣음)
+  const sav = by("economy", "saving").map(l => (num(l.f.income) > 0 ? (num(l.f.saving) || 0) / num(l.f.income) : null)).filter(r => r != null);
+  if (sav.length) {
+    const r = Math.max(...sav), p = topShareNormal(r, BENCH.economy);
+    out.economy = {p, pts: Math.min(CAP * MONTH_W, R(p) * MONTH_W) || 1, any: true, what: `저축률 ${Math.round(r * 100)}% (월)`};
+  } else out.economy = {p: 1, pts: 0, any: false, what: ""};
+  return out;
+}
+function flow(p, amount, what, extra) {
+  const any = amount > 0 || extra > 0;
+  const pts = Math.min(CAP, R(p) + (extra || 0));
+  return {p, pts: any ? Math.max(1, pts) : 0, any, what};
+}
+
+// 돌파(한 번) 점수 목록: [{date, goal, pts, label, past}]
+function milestones(start) {
+  const ev = [], add = (date, goal, p, label) => {
+    const pts = R(p) * MILE;
+    if (pts > 0) ev.push({date: date || "", goal, pts, label: `${label} (${fmtTop(p)})`, past: !date || date < start});
+  };
+  const items = DATA.items;
+  items.filter(i => i.category === "positions").forEach(i => add(i.date, "career", MILES.position.p[i.f.level] || .5, `🎖 ${i.name}`));
+  items.filter(i => i.category === "awards").forEach(i => add(i.date, "career",
+    i.f.kind === "cert" ? (MILES.cert.p[i.f.cert_level] || .3) : (MILES.award.p[i.f.level] || .3), `🏆 ${i.name}`));
+  items.filter(i => i.category === "works").forEach(i => {
+    add(i.date, "career", MILES.work.p[i.f.kind] || .2, `✍️ ${i.name}`);
+    MILES.income.bands.forEach(([v, p]) => { if ((num(i.f.income) || 0) >= v) add(i.date, "economy", p, `✍️ ${i.name} 수익 ${won(v)} 돌파`); });
+  });
+  // 순자산: 매일 기록에서 처음 넘은 날. 시작일에 이미 넘어 있던 구간은 과거 업적
+  const h = DATA.history.filter(x => isFinite(x.net));
+  MILES.networth.bands.forEach(([v, p]) => {
+    const first = h.find(x => x.net >= v);
+    if (first) add(first.date > start ? first.date : "", "economy", p, `💰 순자산 ${won(v)} 돌파`);
+  });
+  // 저장된 돌파(파이프라인·스트레스 점검 구간): 기록할 때 확정해 둔 것
+  gMiles().forEach(m => ev.push({date: m.f.past ? "" : m.date, goal: m.f.goal, pts: num(m.f.pts) || 0, label: m.name, past: !!m.f.past}));
+  // 기록에서 나오는 돌파
+  const logs = gLogs();
+  logs.filter(l => l.f.type === "race").forEach(l => add(l.date, "body", MILES.race.p[l.f.dist] || .1, `🏃 ${l.name}`));
+  let best = 9;
+  logs.filter(l => l.f.type === "fitness").sort((a, b) => a.date < b.date ? -1 : 1).forEach((l, i) => {
+    const g = num(l.f.grade) || 3;
+    if (g < best) { if (i > 0 || l.date < start) add(i === 0 ? "" : l.date, "body", MILES.fitness.p[g] || .5, `💪 체력 ${g}등급`); best = g; }
+  });
+  logs.filter(l => l.f.type === "level").forEach(l => add(l.date, "craft", MILES.craftLevel.p[l.f.stage] || .4, `📈 ${l.name}`));
+  let vol = 0;
+  logs.filter(l => l.f.type === "volunteer").sort((a, b) => a.date < b.date ? -1 : 1).forEach(l => {
+    const before = vol; vol += (num(l.f.minutes) || 0) / 60;
+    MILES.volunteer.bands.forEach(([v, p]) => { if (before < v && vol >= v) add(l.date, "social", p, `🤝 누적 봉사 ${v}시간`); });
+  });
+  return ev;
+}
+
+// 파이프라인·스트레스 점검처럼 '지금 상태'로 정하는 돌파는 처음 확인한 날 저장해 두면 점수가 줄지 않는다
+let persisting = false;
+async function persistMiles(start, activating) {
+  if (persisting) return 0;
+  persisting = true;
+  try { return await persistMilesOnce(start, activating); } finally { persisting = false; }
+}
+async function persistMilesOnce(start, activating) {
+  const have = new Set(gMiles().map(m => m.f.key)), todo = [];
+  const pipe = byCat("pipeline").reduce((a, x) => a + monthly(x), 0);
+  MILES.pipeline.bands.forEach(([v, p]) => { if (pipe >= v && !have.has("pipe:" + v)) todo.push({key: "pipe:" + v, goal: "economy", p, label: `💵 파이프라인 월 ${won(v)} 돌파`}); });
+  const pss = gLogs().filter(l => l.f.type === "pss").sort((a, b) => a.date < b.date ? -1 : 1);
+  if (pss.length) {
+    const base = topShareNormal(num(pss[0].f.score), BENCH.mind, true);
+    pss.slice(1).forEach(l => {
+      const p = topShareNormal(num(l.f.score), BENCH.mind, true);
+      MILES.pss.bands.forEach(b => { if (p <= b && base > b && !have.has("pss:" + b)) { have.add("pss:" + b); todo.push({key: "pss:" + b, goal: "mind", p: b, label: `🧘 스트레스 점검 상위 ${b * 100}% 진입`, date: l.date}); } });
+    });
+  }
+  for (const t of todo) {
+    await api("saveItem", {category: "milestone", name: `${t.label} (${fmtTop(t.p)})`, date: t.date || DATA.today,
+      f: {goal: t.goal, key: t.key, pts: Math.round(R(t.p) * MILE * 10) / 10, past: activating ? "1" : ""}});
+  }
+  return todo.length;
+}
+
+// 전체 점수 계산
+function scoreAll() {
+  const st = gSetting(), start = st ? st.date : DATA.today;
+  const logs = gLogs(), weeks = [], byGoal = Object.fromEntries(GOALS.map(g => [g.k, 0])), events = [];
+  for (let ws = weekStart(start); ws <= weekStart(DATA.today); ws = addDays(ws, 7)) {
+    const w = weekStats(ws, logs, start); weeks.push({ws, w});
+    GOALS.forEach(g => { if (w[g.k].pts) { byGoal[g.k] += w[g.k].pts; events.push({date: addDays(ws, 6) > DATA.today ? DATA.today : addDays(ws, 6), goal: g.k, pts: w[g.k].pts,
+      label: `${ws.slice(5).replace("-", ".")} 주 · ${w[g.k].what} (${fmtTop(w[g.k].p)})`, week: true}); } });
+  }
+  const past = Object.fromEntries(GOALS.map(g => [g.k, 0]));
+  milestones(start).forEach(m => {
+    if (m.past) { const add = Math.min(PAST_CAP - past[m.goal], m.pts * PAST_RATE); past[m.goal] += add; byGoal[m.goal] += add;
+      if (add > 0) events.push({...m, pts: add, label: m.label + " · 과거 업적 20%"}); }
+    else { byGoal[m.goal] += m.pts; events.push(m); }
+  });
+  const total = Object.values(byGoal).reduce((a, b) => a + b, 0);
+  return {start, weeks, byGoal, events: events.sort((a, b) => a.date < b.date ? 1 : -1), total};
+}
+// 기간(이번 주 / 이번 달)의 상위 %(실제 기록 기준)와 그 기간에 얻은 점수
+function periodTop(S, mode) {
+  const logs = gLogs(), ws = weekStart(DATA.today), m = DATA.today.slice(0, 7);
+  const from = mode === "week" ? ws : m + "-01", to = DATA.today;
+  const shares = rangeShare(from < S.start ? S.start : from, to, logs);
+  shares.mind = mindShare(logs);
+  const out = {};
+  GOALS.forEach(g => {
+    const pts = S.weeks.filter(x => mode === "week" ? x.ws === ws : (x.ws.slice(0, 7) === m)).reduce((a, x) => a + x.w[g.k].pts, 0);
+    out[g.k] = {...shares[g.k], pts};
+  });
+  return out;
+}
+
+// ---------------------------------------------------------------- 그리기
+let GVIEW = store.get("gview") === "month" ? "month" : "week";
+function renderGrowth() {
+  if (!DATA || $("#growth").hidden) return;
+  const st = gSetting();
+  if (!st) {
+    $("#gmain").innerHTML = `<div class="card"><h2 style="margin-top:0">🏅 6대 목표 성장 점수</h2>
+      <p class="muted" style="font-size:14px;line-height:1.7">신체 · 정신 · 기능·영감 · 사회 · 커리어 · 경제의 기록을 <b>30대 후반 남성 중 상위 몇 %</b>인지로 바꿔 같은 기준으로 점수를 쌓습니다.
+      평균(상위 50%)은 0점, 상위 10%는 23점, 상위 1%는 56점. 지금까지 쌓아 둔 업적은 20%만(영역별 최대 ${PAST_CAP}점) 들어가고, 오늘부터의 성취가 점수를 만듭니다.</p>
+      <button class="btn primary" type="button" data-g="start">오늘부터 시작하기</button></div>`;
+    return;
+  }
+  const S = scoreAll(), lv = levelOf(S.total), nextLv = LV(lv + 1), cur = LV(lv);
+  const thisWeek = S.weeks.length ? GOALS.reduce((a, g) => a + S.weeks[S.weeks.length - 1].w[g.k].pts, 0) : 0;
+  const T = periodTop(S, GVIEW);
+  const rows = GOALS.map(g => {
+    const t = T[g.k], b = BENCH[g.k];
+    return `<button type="button" class="grow-row" data-g="log" data-goal="${g.k}"><span class="gi">${g.icon}</span><span class="gn">${g.label}<small>${esc(b.level)}</small></span>
+      <span class="gt ${t.any && t.p < .5 ? "up" : ""}">${t.any ? fmtTop(t.p) : (g.k === "mind" ? "점검·기록 없음" : "기록 없음")}</span>
+      <span class="gp">${Math.round(S.byGoal[g.k])}점</span></button>`;
+  }).join("");
+  const feed = S.events.slice(0, 12).map(e => `<div class="dday"><span>${GOAL[e.goal].icon} ${esc(e.label)}</span><b>+${Math.round(e.pts * 10) / 10}</b></div>`).join("");
+  const recent = gLogs().sort((a, b) => (b.date + b.updated) < (a.date + a.updated) ? -1 : 1).slice(0, 8).map(l =>
+    `<button type="button" class="item" data-g="dellog" data-id="${esc(l.id)}"><span class="t">${GOAL[l.f.goal].icon} ${esc(l.name)}</span>
+      <span class="r">${esc(fmtDay(l.date))}</span><span class="s">${esc(l.f.text || "")}</span><span class="rs">눌러서 지우기</span></button>`).join("");
+  $("#gmain").innerHTML = `<div class="card hero"><div class="row"><span class="label">인생 레벨</span><span class="muted">${fmtDay(S.start)}부터</span></div>
+      <div class="big">Lv.${lv} <span style="font-size:18px;color:var(--sub)">${Math.round(S.total).toLocaleString("ko-KR")}점</span></div>
+      <div class="bar1"><i style="width:${Math.min(100, (S.total - cur) / (nextLv - cur) * 100).toFixed(1)}%"></i></div>
+      <div class="delta">다음 레벨까지 ${Math.ceil(nextLv - S.total).toLocaleString("ko-KR")}점 · 이번 주 +${Math.round(thisWeek)}점</div></div>
+    <div class="hex2">${hexagon("쌓은 점수", GOALS.map(g => S.byGoal[g.k]), "--s1", v => Math.round(v) + "")}
+      ${hexagon(GVIEW === "week" ? "이번 주 상위 %" : "이번 달 상위 %", GOALS.map(g => T[g.k].any ? 1 - T[g.k].p : 0), "--s3", v => v <= 0 ? "-" : v < .5 ? "평균↓" : Math.max(1, Math.round((1 - v) * 100)) + "%", 1)}</div>
+    <div class="row" style="margin-top:14px"><h2 style="margin:0">${GVIEW === "week" ? "이번 주" : "이번 달"} 성적표</h2>
+      <div class="ranges" role="group">${[["week", "주간"], ["month", "월간"]].map(([k, l]) => `<button type="button" data-gview="${k}" aria-pressed="${k === GVIEW}">${l}</button>`).join("")}</div></div>
+    <div class="grow-row" style="cursor:default;border:0;background:none;padding:2px 12px;font-size:11px;color:var(--mute)"><span></span><span>영역 · 근거</span><span>상위 %</span><span style="text-align:right">쌓은 점수</span></div>
+    <div class="list">${rows}</div>
+    <p class="muted">줄을 누르면 그 영역을 기록합니다 · 비교 기준: 30대 후반 남성 · <a href="#" data-g="bench">점수 기준·출처 보기</a></p>
+    <h2>빠르게 기록</h2><div class="grid">${GOALS.map(g => `<button type="button" class="stat" data-g="log" data-goal="${g.k}"><div class="l">${g.icon} ${g.label}</div><div class="n" style="font-size:15px">＋ 기록</div></button>`).join("")}</div>
+    ${feed ? `<h2>최근 얻은 점수</h2><div class="card">${feed}</div>` : ""}
+    ${recent ? `<h2>최근 기록</h2><div class="list">${recent}</div>` : ""}`;
+  persistMiles(S.start, false).then(n => { if (n) loadAssets(true); }).catch(() => {});
+}
+
+function hexagon(title, vals, color, fmt, fixedMax) {
+  const W = 220, C = 110, Rr = 78, max = fixedMax || Math.max(50, ...vals) * 1.1;
+  const pt = (i, r) => { const a = -Math.PI / 2 + i * Math.PI / 3; return [C + r * Math.cos(a), C + r * Math.sin(a)]; };
+  const ring = f => GOALS.map((_, i) => pt(i, Rr * f).map(n => n.toFixed(1)).join(",")).join(" ");
+  const poly = vals.map((v, i) => pt(i, Rr * Math.min(1, Math.max(0, v) / max)).map(n => n.toFixed(1)).join(",")).join(" ");
+  const labels = GOALS.map((g, i) => { const [x, y] = pt(i, Rr + 20); return `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle" font-size="11" fill="var(--sub)">${g.icon}${g.short}</text>`; }).join("");
+  const dots = vals.map((v, i) => { const [x, y] = pt(i, Rr * Math.min(1, Math.max(0, v) / max)); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" fill="var(${color})" stroke="var(--card)" stroke-width="1.5"><title>${GOALS[i].label} ${fmt(v)}</title></circle>`; }).join("");
+  return `<figure class="card hex"><figcaption>${esc(title)}</figcaption><svg viewBox="0 0 ${W} ${W}" role="img" aria-label="${esc(title)}: ${GOALS.map((g, i) => g.label + " " + fmt(vals[i])).join(", ")}">
+    ${[.25, .5, .75, 1].map(f => `<polygon points="${ring(f)}" fill="none" stroke="var(--line)" stroke-width="1"/>`).join("")}
+    <polygon points="${poly}" fill="var(${color})" fill-opacity=".18" stroke="var(${color})" stroke-width="2" stroke-linejoin="round"/>${dots}${labels}</svg>
+    <div class="hexv">${GOALS.map((g, i) => `<span>${g.icon} ${fmt(vals[i])}</span>`).join("")}</div></figure>`;
+}
+
+// ---------------------------------------------------------------- 기록 화면
+const LOG_TYPES = {
+  body: [["exercise", "운동(30분 이상)"], ["race", "대회 완주"], ["fitness", "체력 측정 등급"]],
+  mind: [["win", "정신 성취"], ["pss", "월간 스트레스 점검(2분)"]],
+  craft: [["time", "시간 기록"], ["first", "처음 해 본 일"], ["project", "완성한 것"], ["level", "숙련 단계 올림"]],
+  social: [["together", "함께한 시간(모임·가족 행사·멘토링)"], ["volunteer", "봉사"], ["donate", "기부"], ["care", "기념일·마음 챙김"]],
+  career: [["study", "학습·자기계발 시간"]],
+  economy: [["saving", "월 저축률 기록"]]};
+let GLOG = null;
+function openLog(goal, type) {
+  GLOG = {goal, type: type || LOG_TYPES[goal][0][0]};
+  drawLog(); $("#sheet").hidden = false;
+}
+const opt = (list, v) => list.map(([k, l]) => `<option value="${k}"${k === v ? " selected" : ""}>${esc(l)}</option>`).join("");
+const fld = (label, html, hint) => `<div class="f"><label>${esc(label)}</label>${html}${hint ? `<small>${esc(hint)}</small>` : ""}</div>`;
+const inp = (name, v, extra) => `<input name="${name}" value="${esc(v == null ? "" : v)}" ${extra || ""}>`;
+function drawLog() {
+  const g = GLOG.goal, t = GLOG.type, mk = (h) => h;
+  let body = "";
+  if (t === "exercise") body = fld("종류", `<select name="kind">${opt([["aerobic", "유산소"], ["strength", "근력"], ["etc", "기타"]], "aerobic")}</select>`) + fld("시간(분)", inp("minutes", 30, 'inputmode="numeric"'));
+  if (t === "race") body = fld("거리", `<select name="dist">${opt([["5k", "5km"], ["10k", "10km"], ["half", "하프"], ["full", "풀코스"]], "10k")}</select>`) + fld("대회 이름", inp("text", ""));
+  if (t === "fitness") body = fld("등급", `<select name="grade">${opt([["3", "3등급"], ["2", "2등급"], ["1", "1등급"]], "3")}</select>`, "국민체력100 인증 등급");
+  if (t === "win") body = fld("영역", `<select name="sub">${opt(MIND_SUBS, "discipline")}</select>`) +
+    fld("크기", `<select name="size">${opt([["s", "작은 승리 (+5)"], ["m", "의미 있는 승리 (+15)"], ["l", "큰 돌파 (+40, 월 1회)"]], "s")}</select>`) +
+    `<div class="note" id="mindex" style="background:var(--chip);color:var(--sub)"></div>` + fld("한 줄 내용", `<textarea name="text"></textarea>`, "큰 돌파는 세 줄: 무슨 일이 있었나 · 어떻게 해냈나 · 무엇을 배웠나");
+  if (t === "pss") body = `<p class="muted">지난 한 달 동안 얼마나 자주 그랬는지 고르세요. (0 전혀 없음 · 1 거의 없음 · 2 가끔 · 3 꽤 자주 · 4 매우 자주)</p>` +
+    PSS_Q.map((q, i) => `<div class="f"><label>${i + 1}. 지난 한 달 동안 ${esc(q)} 얼마나 있었나요?</label><div class="pss">${[0, 1, 2, 3, 4].map(v =>
+      `<label><input type="radio" name="q${i}" value="${v}" required> ${v}</label>`).join("")}</div></div>`).join("") +
+    `<p class="muted">PSS-10(Cohen)을 옮긴 문항입니다. 공식 한국어판 문구와 다를 수 있습니다.</p>`;
+  if (t === "time") body = fld("분야", `<select name="field">${opt(CRAFT_FIELDS, "cook")}</select>`) +
+    fld("시간(분)", inp("minutes", 30, 'inputmode="numeric"'), "분리수거는 횟수로 기록(1회 = 15분으로 계산)") + fld("분리수거 횟수", inp("count", "", 'inputmode="numeric"'));
+  if (t === "first") body = fld("분야", `<select name="field">${opt(CRAFT_FIELDS, "cook")}</select>`) + fld("처음 해 본 일", inp("text", ""));
+  if (t === "project") body = fld("크기", `<select name="size">${opt([["s", "작은 것 (+5)"], ["m", "중간 (+15)"], ["l", "큰 프로젝트 (+40)"]], "s")}</select>`) + fld("무엇을 완성했나", inp("text", ""));
+  if (t === "level") body = fld("분야", `<select name="field">${opt(CRAFT_FIELDS, "cook")}</select>`) +
+    fld("새 단계", `<select name="stage">${opt([["2", "초급"], ["3", "능숙"], ["4", "숙련"], ["5", "전문"]], "2")}</select>`) + fld("오를 근거 한 줄", inp("text", ""));
+  if (t === "together" || t === "volunteer") body = fld("시간(분)", inp("minutes", 60, 'inputmode="numeric"')) + fld("내용", inp("text", ""));
+  if (t === "donate") body = fld("금액(원)", inp("amount", "", 'inputmode="numeric"')) + fld("어디에", inp("text", ""));
+  if (t === "care") body = fld("내용", inp("text", ""), "예: 부모님 결혼기념일 챙김");
+  if (t === "study") body = fld("시간(분)", inp("minutes", 60, 'inputmode="numeric"')) + fld("무엇을", inp("text", ""));
+  if (t === "saving") body = fld("이번 달 세후 소득(원)", inp("income", "", 'inputmode="numeric"'), "세금·사회보험료를 뺀 실수령(통계의 처분가능소득과 같은 기준)") +
+    fld("이번 달 저축·투자·대출 원금 상환(원)", inp("saving", "", 'inputmode="numeric"'), "소득에서 소비지출을 뺀 나머지(통계의 흑자액과 같은 기준)");
+  $("#form").innerHTML = mk(`<h3>${GOAL[g].icon} ${GOAL[g].label} 기록</h3>
+    ${fld("종류", `<select name="type">${opt(LOG_TYPES[g], t)}</select>`)}
+    ${fld("날짜", `<input name="date" type="date" value="${esc(DATA.today)}" max="${esc(DATA.today)}" min="${esc(addDays(DATA.today, -1))}">`, "정직한 기록을 위해 오늘·어제만 고를 수 있어요")}
+    ${body}<div class="row"><span></span><div class="row"><button class="btn" type="button" data-act="close">취소</button><button class="btn primary" type="submit">저장</button></div></div>`);
+  $("#form").dataset.mode = "log";
+  if (t === "win") mindHint();
+}
+function mindHint() {
+  const f = $("#form"), sub = f.sub.value, i = {s: 0, m: 1, l: 2}[f.size.value];
+  $("#mindex").textContent = `예시 — ${SIZE_LABEL[f.size.value]}: ${MIND_EX[sub][i]}`;
+}
+async function saveLog() {
+  const f = $("#form"), fd = new FormData(f), g = GLOG.goal, t = GLOG.type, x = {goal: g, type: t};
+  for (const [k, v] of fd.entries()) if (!["type", "date"].includes(k) && v !== "" && !/^q\d$/.test(k)) x[k] = ["minutes", "count", "amount", "income", "saving", "grade", "stage"].includes(k) ? num(v) : v;
+  let name = (LOG_TYPES[g].find(([k]) => k === t) || [, t])[1];
+  if (t === "pss") {
+    const ans = PSS_Q.map((_, i) => num(fd.get("q" + i)));
+    if (ans.some(v => v == null)) return toast("10문항 모두 골라 주세요");
+    x.score = pssScore(ans); x.answers = ans.join(","); name = `스트레스 점검 ${x.score}점`;
+  }
+  if (t === "exercise") name = `운동 ${x.minutes || 30}분 · ${{aerobic: "유산소", strength: "근력", etc: "기타"}[x.kind]}`;
+  if (t === "time") name = `${Object.fromEntries(CRAFT_FIELDS)[x.field]} ${x.field === "recycle" ? (x.count || 1) + "회" : (x.minutes || 0) + "분"}`;
+  if (t === "win") name = `${Object.fromEntries(MIND_SUBS)[x.sub]} · ${SIZE_LABEL[x.size]}`;
+  if (["first", "level"].includes(t)) name = `${Object.fromEntries(CRAFT_FIELDS)[x.field]} ${t === "first" ? "처음" : "단계 올림"}`;
+  if (t === "saving") { if (!(x.income > 0)) return toast("소득을 적어 주세요"); name = `저축률 ${Math.round((x.saving || 0) / x.income * 100)}%`; }
+  if (["together", "volunteer", "study"].includes(t)) name = `${name.split("(")[0]} ${x.minutes || 0}분`;
+  busy = true; toast("저장 중…");
+  try { await api("saveItem", {category: "log", name, date: fd.get("date") || DATA.today, f: x}); $("#sheet").hidden = true; busy = false; await loadAssets(true); toast("기록했습니다"); }
+  catch (e) { toast("저장하지 못했습니다: " + e.message, true); }
+  busy = false;
+}
+function showBench() {
+  const rows = GOALS.map(g => { const b = BENCH[g.k]; return `<div class="dday" style="display:block"><strong>${g.icon} ${g.label} · ${esc(b.title)}</strong><br>
+    <span class="muted">비교 집단: ${esc(b.group)} · 근거: ${esc(b.level)}<br>${esc(b.src)}</span></div>`; }).join("") +
+    Object.values(MILES).map(m => `<div class="dday" style="display:block"><strong>돌파 · ${esc(m.title)}</strong><br><span class="muted">근거: ${esc(m.level)} · ${esc(m.src)}</span></div>`).join("");
+  $("#form").innerHTML = `<h3>점수 기준·출처</h3><p class="muted" style="line-height:1.7">점수 = 10 × log₂(0.5 ÷ 상위 비율). 평균 0점 · 상위 10% 23점 · 1% 56점 · 0.1% 90점.
+    흐름 점수는 한 영역 한 주 최대 ${CAP}점(월 단위 지표는 주 단위로 환산), 돌파는 같은 희소도의 ${MILE}배를 한 번. 시작일 이전 업적은 ${PAST_RATE * 100}%만, 영역별 최대 ${PAST_CAP}점.
+    '추정'으로 표시된 기준은 공식 원문을 확인하는 대로 바꿉니다.</p><div class="card">${rows}</div>
+    <div class="row" style="margin-top:12px"><span></span><button class="btn" type="button" data-act="close">닫기</button></div>`;
+  $("#form").dataset.mode = "bench"; $("#sheet").hidden = false;
+}
+
+// ---------------------------------------------------------------- 이벤트
+document.addEventListener("click", async e => {
+  const v = e.target.closest("[data-gview]");
+  if (v) { GVIEW = v.dataset.gview; store.set("gview", GVIEW); renderGrowth(); return; }
+  const b = e.target.closest("[data-g]"); if (!b) return;
+  e.preventDefault();
+  const a = b.dataset.g;
+  if (a === "start") {
+    if (busy) return; busy = true; toast("시작하는 중…");
+    try { await api("saveItem", {category: "setting", name: "growth", date: DATA.today, f: {group: "male_35_39"}});
+      DATA = await api("getData"); await persistMiles(DATA.today, true); busy = false; await loadAssets(true); toast("오늘부터 점수가 쌓입니다"); }
+    catch (err) { toast("시작하지 못했습니다: " + err.message, true); }
+    busy = false;
+  }
+  if (a === "log") openLog(b.dataset.goal);
+  if (a === "bench") showBench();
+  if (a === "dellog") {
+    const l = DATA.items.find(i => i.id === b.dataset.id); if (!l || !confirm(`'${l.name}' 기록을 지울까요?`)) return;
+    try { await api("deleteItem", l.id); await loadAssets(true); toast("지웠습니다"); } catch (err) { toast("지우지 못했습니다: " + err.message, true); }
+  }
+});
+$("#form").addEventListener("change", e => {
+  if ($("#form").dataset.mode !== "log") return;
+  if (e.target.name === "type") { GLOG.type = e.target.value; drawLog(); }
+  else if (GLOG.type === "win" && ["sub", "size"].includes(e.target.name)) mindHint();
+}, true);
+$("#form").addEventListener("submit", e => {
+  if ($("#form").dataset.mode !== "log") return;
+  e.preventDefault(); e.stopImmediatePropagation(); saveLog();
+}, true);
 </script>
 </body>
 </html>
