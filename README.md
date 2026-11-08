@@ -427,8 +427,9 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_all_schedules.ps1 -Skip P
 화면 파일은 **매시간 자동으로 새로 만들어지고**(예약 작업 QuestBoardRefresh, 까만 창 없이), 열어 둔 브라우저 탭은 **5분마다 저절로 새로고침**되므로
 탭을 띄워 두기만 하면 됩니다. 지금 바로 최신으로 보고 싶을 때만 `scripts\quest_board.bat`을 실행합니다.
 
-**휴대폰·밖에서 보기(보기 전용):** PC가 매시간 보드를 내 구글 드라이브에 올리고, '나만' 접근으로 배포한 구글 Apps Script 웹앱이
-그 화면을 보여 줍니다. 최초 1회 설정: [docs/QUEST_BOARD_WEBAPP.md](docs/QUEST_BOARD_WEBAPP.md).
+**휴대폰·밖에서 보기 — 인생 대시보드 웹앱:** PC가 매시간 보드를 내 구글 드라이브에 올리고, '나만' 접근으로 배포한 구글 Apps Script 웹앱이
+[퀘스트 보드(보기 전용) | 내 자산] 두 탭으로 보여 줍니다. '내 자산'에서는 금융·부동산·사람·저작물·직위·수상을 화면에서 추가·수정·삭제하고,
+주식·코인 시세와 매일 16시 순자산 기록이 구글 서버에서 돌아갑니다(데이터는 내 비공개 시트에만). 설정: [docs/QUEST_BOARD_WEBAPP.md](docs/QUEST_BOARD_WEBAPP.md).
 (저장소가 공개라 여러 블로그 주소가 모인 보드는 GitHub Pages에 올리지 않습니다.)
 
 `scripts\quest_board.bat`으로 열면(주소 `http://127.0.0.1:8765/`, 이 PC 안에서만 열림) 카드마다 **버튼**이 붙습니다.

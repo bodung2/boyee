@@ -39,10 +39,12 @@ def main(argv: list[str] | None = None) -> int:
         print(text)
     print(f"퀘스트 보드: {out}")
     if args.upload:
-        from .drive import upload
+        from .drive import upload, upload_app
         try:
             upload(html.render(b, remote=True), paths.data / "quest_board_drive.json")
             print("휴대폰 웹앱용 화면을 구글 드라이브에 올렸습니다(quest_board.html)")
+            if upload_app(paths.data):
+                print("인생 대시보드 화면(webapp/app.html)을 새로 올렸습니다(life_dashboard_app.html)")
         except Exception as e:  # noqa: BLE001 - 올리지 못해도 PC 화면·요약은 그대로
             print(f"⚠️ 구글 드라이브에 올리지 못했습니다: {e}")
             text += f"\n⚠️ 휴대폰 웹앱 화면을 올리지 못했습니다: {str(e)[:150]}"
