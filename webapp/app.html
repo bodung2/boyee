@@ -177,8 +177,15 @@ const FIELDS = {
     {k: "memo", label: "메모", type: "area"}],
   positions: [
     {k: "org", label: "기관·소속"},
-    {k: "level", label: "직위 수준(성장 점수용)", type: "select", options: [["staff", "일반(담임·팀원)"], ["lead", "보직(부장·팀장)"],
+    {k: "job", label: "직업군(성장 점수용)", hint: "그 일의 분야. 교사는 '전문가'예요(교감·교장이 되어도 그대로 두고 아래 직위 수준만 바꿔요)", type: "select",
+      options: [["", "고르지 않음"], ["manager", "관리자(임원·관리직 자체가 직업)"], ["pro", "전문가 및 관련(교사·의료·연구·IT·법률·금융 등)"],
+        ["office", "사무"], ["machine", "장치·기계 조작·조립"], ["craft", "기능원·기능직"], ["sales", "판매"], ["service", "서비스"],
+        ["farm", "농림어업 숙련"], ["labor", "단순 노무"]]},
+    {k: "level", label: "직위 수준(성장 점수용)", hint: "같은 직업 안에서의 위치", type: "select", options: [["staff", "일반(담임·팀원)"], ["lead", "보직(부장·팀장)"],
       ["mid", "중간관리(교감·차장)"], ["head", "기관장(교장·부서장)"], ["top", "그 이상"]]},
+    {k: "employ", label: "고용 형태(성장 점수용)", type: "select", options: [["", "고르지 않음"], ["public", "공무원·교원·공공기관(정년 보장)"],
+      ["regular", "민간 정규직"], ["self", "자영업·고용주·프리랜서"], ["temp", "계약직·비정규직"]]},
+    {k: "salary", label: "연봉(세전, 원, 선택)", hint: "이 일을 시작할 때 1년 세전 소득(수당·성과급 포함)", type: "num"},
     {k: "end", label: "종료일", hint: "지금 맡고 있으면 비워 두세요", type: "date"},
     {k: "link", label: "링크(선택)", hint: "관련 페이지·계좌·문서 주소", type: "url"},
     {k: "memo", label: "메모", type: "area"}],
@@ -448,6 +455,7 @@ function itemCard(it) {
   } else if (it.category === "positions") {
     if (f.org) sub.push(f.org);
     if (it.date) sub.push(`${fmtDay(it.date)} ~ ${f.end ? fmtDay(f.end) : "지금"}`);
+    if (typeof jobShare === "function" && jobShare(it).full) sub.push("직업 " + fmtTop(jobShare(it).p));
     right = span(it.date, f.end || null);
     if (!f.end) badge = '<span class="badge">지금</span>';
   } else if (it.category === "pipeline") {
@@ -602,6 +610,7 @@ function drawForm() {
     <div class="f"><label for="date">${esc(meta.date)}</label><input id="date" name="date" type="date" value="${esc(EDIT.date)}">
       ${["positions", "awards", "works", "realestate", "people"].includes(c) ? '<small>🏅 성장 점수는 이 날짜로 계산돼요. 점수 시작일 이후면 새 성취(100%), 이전이거나 비우면 과거 업적(20%)</small>' : ""}</div>
     ${fields}
+    ${c === "positions" ? `<p class="muted" id="jobprev">${jobPreview(EDIT)}</p>` : ""}
     ${c === "pipeline" ? incomeBox() : ""}
     <div class="row"><div>${EDIT.id ? '<button class="btn danger" type="button" data-act="delete">삭제</button>' : ""}</div>
       <div class="row"><button class="btn" type="button" data-act="close">취소</button><button class="btn primary" type="submit">저장</button></div></div>`;
@@ -648,6 +657,7 @@ document.addEventListener("click", e => {
 $("#add").addEventListener("click", () => DATA ? openEditor(null) : toast("불러오는 중입니다"));
 $("#form").addEventListener("submit", save);
 $("#form").addEventListener("change", e => {
+  if (EDIT.category === "positions" && /^f_(job|level|employ|salary)$/.test(e.target.name) && $("#jobprev")) { readForm(); $("#jobprev").innerHTML = jobPreview(EDIT); }
   if (e.target.name === "category" || e.target.name === "f_kind") { readForm(); if (e.target.name === "category") EDIT.f = EDIT.category === "finance" ? {kind: "kr"} : {}; drawForm(); }
 });
 $("#sheet").addEventListener("click", e => { if (e.target.id === "sheet") $("#sheet").hidden = true; });
@@ -682,9 +692,9 @@ const BENCH = {
     mean: 76, pd: .70, cv: .8,
     src: "생활시간조사 2024(국가데이터처) 통계표 2-1: 30~39세 남자 가정관리 49분 + 가족 및 가구원 돌보기 27분 = 하루 76분(요일 평균). 참고: 25~39세 기혼·유자녀 남성은 134분. 하루 참여율 70%·분포(로그정규, 변동계수 0.8)는 추정",
     level: "평균 공식, 참여율·분포 추정"},
-  career: {title: "현재 직위(지금 맡고 있는 가장 높은 직위)", group: "교원(초·중·고)",
-    src: "교육통계서비스(KEDI) 직위별 교원수 2026: 보직교사 이상 26.5% · 교감 이상 5.2% · 교장 2.6%. 상위 %는 지금 직위로, 점수는 커리어 성취 기록과 직위·수상·저작물 돌파로 쌓임",
-    level: "공식(교원)"},
+  career: {title: "지금 하는 일(직업군 지위·연봉·고용 안정성의 평균)", group: "전체 취업자(연봉은 30대 남자로 보정)",
+    src: "지금 맡고 있는 일(종료일 없음) 중 가장 높은 것의 직업 상위 % — 기준은 아래 '돌파 · 직업'과 같음. 점수는 커리어 성취 기록과 직업·수상·저작물 돌파로 쌓임",
+    level: "공식(전체 취업자) + 추정(보정)"},
   social: {title: "하루 평균 교류·나눔 시간(만남·모임·가족 행사·멘토링·봉사)", group: "30대 남성",
     mean: 39, pd: .728, cv: .8,
     src: "생활시간조사 2024: 30~39세 남자 교제 및 참여활동 38분 + 자원봉사 1분 = 하루 39분(통계표 2-1) · 남자 교제 및 참여활동 행위자 비율 72.8%(통계표 4-2, 10세 이상 남자) · 분포는 추정",
@@ -711,7 +721,12 @@ const MILES = {
   pipeIncome: {title: "파이프라인 누적 수익 돌파(파이프라인별)", bands: [[1e4, .15], [1e5, .10], [1e6, .04], [1e7, .01], [1e8, .001]],
     src: "수익 기록을 더한 누적 금액 기준. 첫 수익(1만 원)부터 1억 원까지 — 부업 참가율 1.95%(2022, 임금 부업 한정)를 참고한 추정 구간", level: "추정"},
   income: {title: "저작물 누적 수익 돌파(작품별)", bands: [[1e5, .2], [1e6, .05], [1e7, .01], [1e8, .001]], src: "추정", level: "추정"},
-  position: {title: "직위(재직 중 비율)", p: {staff: .5, lead: .265, mid: .052, head: .0265, top: .003},
+  job: {title: "직업(취직·전직·승진) — 지위·연봉·안정성 세 지표의 평균 상위 %, 이전 최고보다 오른 만큼만",
+    src: "① 지위: 지역별고용조사 2026 상반기(국가데이터처) 직업대분류 취업자 구성비(관리자 1.5 · 전문가 23.2 · 사무 18.4 · 장치기계 10.0 · 기능원 7.6 · 판매 8.3 · 서비스 12.8 · 농림어업 4.6 · 단순노무 13.7%)를 같은 자료의 '월 500만 원 이상 비율'(82.0 · 30.1 · 22.5 · 14.9 · 13.4 · 9.5 · 3.9 · 2.0 · 0.5%) 순으로 세우고, 직업군 안에서는 직위 수준 비율로 위치를 정함 " +
+      "② 연봉: 같은 조사의 임금근로자 월 임금 구간(100만 미만 9.8 · 200만 미만 누적 19.1 · 300만 미만 48.1 · 400만 미만 70.9 · 500만 미만 82.4%)에 맞춘 로그정규분포(중앙 305만, σ 0.53)를 30대 남자 평균 보수 비율(409만 ÷ 전체 363만, 임금근로일자리 소득 2023)로 올림 → 30대 남자 중앙 연 4,120만 원 " +
+      "③ 안정성: 취업자 중 공공부문 10.0%(공공부문 일자리통계 2024) · 민간 정규직 37.5% · 비임금(자영업 등) 22.7% · 비정규직 29.7%(근로형태별 부가조사 2026.8 비정규 비중 38.5%, 지역별고용조사 2026 상반기) 순",
+    level: "공식(전체 취업자) + 추정(30대 남자 보정·직업군 순서·안정성 순서)"},
+  position: {title: "직위 수준(같은 직업 안의 위치)", q: {staff: 1, lead: .265, mid: .052, head: .0265, top: .003},
     src: "교육통계서비스(KEDI) 직위별 교원수 2026, 초·중·고 교원 43만 6,264명: 보직교사 이상(보직·수석·교감·교장) 26.5% · 교감 이상 5.2% · 교장 2.6%. '그 이상'(교육장·교육감 등)은 추정. 교원이 아닌 직장은 같은 단계의 비율로 근사",
     level: "공식(교원) + 추정(그 이상)"},
   award: {title: "수상·표창", p: {org: .3, local: .1, region: .03, nation: .005, top: .0005}, src: "수상 단계별 희소도 추정", level: "추정"},
@@ -792,11 +807,46 @@ function rangeShare(from, to, logs) {
   return out;
 }
 // 정신의 '상위 %'는 최근 31일 안의 스트레스 점검(PSS-10)으로 낸다(A안)
-// 커리어의 '상위 %'는 지금 맡고 있는 가장 높은 직위(종료일 없음)의 공식 비율
+// 커리어의 '상위 %'는 지금 맡고 있는 일(종료일 없음) 중 가장 높은 직업 상위 %
 function positionShare() {
   const now = byCat("positions").filter(i => !(i.f || {}).end || i.f.end >= DATA.today);
   if (!now.length) return {p: 1, any: false};
-  return {p: Math.min(...now.map(i => MILES.position.p[i.f.level] || .5)), any: true};
+  return {p: Math.min(...now.map(i => jobShare(i).p)), any: true};
+}
+// 직업 상위 %: ① 직업군 지위 ② 연봉 ③ 고용 안정성 — 적어 둔 지표만 평균(영역 공통 규칙: 지표는 평균)
+const JOB = {
+  groups: {manager: .015, pro: .232, office: .184, machine: .100, craft: .076, sales: .083, service: .128, farm: .046, labor: .137},   // 위에서부터 순서
+  employ: {public: .100, regular: .375, self: .227, temp: .297},
+  wageMedian: 305e4 * 409 / 363, wageSigma: .53,      // 30대 남자 월 임금 중앙값(원)
+  levels: ["staff", "lead", "mid", "head", "top"]
+};
+// 순서 있는 구성비 표에서 k의 구간 [위쪽 누적, 위쪽 누적 + 자기 몫]
+function bandOf(table, k) {
+  const keys = Object.keys(table), tot = keys.reduce((a, x) => a + table[x], 0);
+  let above = 0; for (const x of keys) { if (x === k) return {above: above / tot, size: table[x] / tot}; above += table[x]; }
+  return null;
+}
+function jobShare(i) {
+  const f = (i && i.f) || {}, parts = {}, q = MILES.position.q;
+  const lv = JOB.levels.includes(f.level) ? f.level : "staff", nxt = JOB.levels[JOB.levels.indexOf(lv) + 1];
+  const within = (q[lv] + (nxt ? q[nxt] : 0)) / 2;                  // 같은 직업 안에서 내 직위 구간의 가운데
+  const g = bandOf(JOB.groups, f.job);
+  if (g) parts.status = g.above + g.size * (f.job === "manager" ? .5 : within);
+  const sal = num(f.salary);
+  if (sal > 0) parts.wage = 1 - ncdf(Math.log(sal / 12 / JOB.wageMedian) / JOB.wageSigma);
+  const e = bandOf(JOB.employ, f.employ);
+  if (e) parts.stable = e.above + e.size / 2;
+  const v = Object.values(parts);
+  // 직업 정보를 아직 안 적은 옛 기록: 직위 수준만으로(예전 방식과 같은 근사)
+  if (!v.length) return {p: within, parts, full: false};
+  return {p: v.reduce((a, b) => a + b, 0) / v.length, parts, full: true};
+}
+function jobPreview(it) {
+  const s = jobShare(it), P = s.parts, bits = [];
+  if (P.status != null) bits.push("지위 " + fmtTop(P.status)); if (P.wage != null) bits.push("연봉 " + fmtTop(P.wage)); if (P.stable != null) bits.push("안정성 " + fmtTop(P.stable));
+  if (!bits.length) return "🏅 직업군·고용 형태·연봉을 적으면 이 일의 상위 %로 커리어 돌파 점수가 생겨요.";
+  const pts = R(s.p) * MILE;
+  return `🏅 이 일: ${bits.join(" · ")} → 평균 <b>${fmtTop(s.p)}</b> · 돌파 ${Math.round(pts)}점(지금까지 최고 직업보다 오른 만큼만 더해져요)`;
 }
 function mindShare(logs, since) {
   if (since) {          // 누적: 시작일부터 받은 스트레스 점검 점수의 평균
@@ -878,7 +928,16 @@ function milestones(start) {
   // 자산 탭 항목의 성취 날짜는 적어 둔 날짜. 비어 있으면 과거 업적(20%)으로 본다
   // (등록·수정 시각을 쓰면 옛 업적을 고치기만 해도 새 성취가 되므로 쓰지 않는다)
   const when = i => i.date || "";
-  items.filter(i => i.category === "positions").forEach(i => add(when(i), "career", MILES.position.p[i.f.level] || .5, `🎖 ${i.name}`));
+  // 직업(취직·전직·승진): 날짜순으로 보며 '지금까지 가장 높은 직업'을 넘은 만큼만 돌파 점수(같은 급 이직을 되풀이해도 늘지 않음)
+  let bestJob = 0;
+  items.filter(i => i.category === "positions").sort((a, b) => when(a) < when(b) ? -1 : 1).forEach(i => {
+    const p = jobShare(i).p, pts = R(p) * MILE;
+    if (pts > bestJob + .05) {
+      ev.push({date: when(i), goal: "career", pts: pts - bestJob, past: !when(i) || when(i) < start,
+        label: `🎖 ${i.name} (직업 ${fmtTop(p)})${bestJob ? " · 이전 최고보다 오른 만큼" : ""}`});
+      bestJob = pts;
+    }
+  });
   items.filter(i => i.category === "awards").forEach(i => add(when(i), "career",
     i.f.kind === "cert" ? (MILES.cert.p[i.f.cert_level] || .3) : (MILES.award.p[i.f.level] || .3), `🏆 ${i.name}`));
   items.filter(i => i.category === "works").forEach(i => {
@@ -1010,7 +1069,7 @@ function renderGrowth() {
   const rows = GOALS.map(g => {
     const t = T[g.k], b = BENCH[g.k];
     return `<button type="button" class="grow-row" data-g="log" data-goal="${g.k}"><span class="gi">${g.icon}</span><span class="gn">${g.label}<small>${esc(b.level)}</small></span>
-      <span class="gt ${t.any && t.p < .5 ? "up" : ""}">${t.any ? fmtTop(t.p) : (g.k === "mind" ? "점검·기록 없음" : g.k === "career" ? "직위 기록 없음" : "기록 없음")}</span>
+      <span class="gt ${t.any && t.p < .5 ? "up" : ""}">${t.any ? fmtTop(t.p) : (g.k === "mind" ? "점검·기록 없음" : g.k === "career" ? "직업 기록 없음" : "기록 없음")}</span>
       <span class="gp">${Math.round(S.byGoal[g.k])}점</span></button>`;
   }).join("");
   const feed = S.events.slice(0, 12).map(e => `<div class="dday"><span><span class="badge">${e.week ? "📈 흐름" : "🏆 돌파"}</span> ${GOAL[e.goal].icon} ${esc(e.label)}</span><b>+${Math.round(e.pts * 10) / 10}</b></div>`).join("");
