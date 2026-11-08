@@ -899,45 +899,63 @@ function weekStats(ws, logs, start) {
   by("body", "exercise").forEach(l => { if ((num(l.f.minutes) || 30) >= 30) perDay[l.date] = Math.min(2, (perDay[l.date] || 0) + 1); });
   const n = Math.min(7, Object.values(perDay).reduce((a, b) => a + b, 0));
   out.body = flow(bodyShare(n), n, `운동 ${n}회`);
+  out.body.vol = by("body", "exercise").reduce((a, l) => a + (num(l.f.minutes) || 30), 0);      // 작은 기록 적립용(30분 미만 포함)
   // 기능·영감: 가사·돌봄 시간 + 처음·완성 기록(같은 상한 안)
   const craftMin = by("craft", "time").reduce((a, l) => a + (l.f.field === "recycle" ? (num(l.f.count) || 1) * RECYCLE_MIN : (num(l.f.minutes) || 0)), 0);
   out.craft = flow(topShareTime(craftMin / 7, BENCH.craft), craftMin, `가사·돌봄 하루 평균 ${Math.round(craftMin / 7)}분`,
     by("craft", "first").length * 5 + by("craft", "project").reduce((a, l) => a + (SIZE_PTS[l.f.size] || 5), 0));
+  out.craft.vol = craftMin;
   // 성취 기록(정신·커리어 공통): 같은 종류 반복은 절반 → 0, 큰 돌파는 월 1회, 한 주 최대 CAP
+  const rep = {};          // 같은 영역 세 번째부터(0점이던 반복 성취) — 작은 기록 적립용
   const winPts = goal => {
-    let pts = 0; const seen = {};
+    let pts = 0; const seen = {}; rep[goal] = 0;
     by(goal, "win").sort((a, b) => a.date < b.date ? -1 : 1).forEach(l => {
       const sub = l.f.sub || "etc"; seen[sub] = (seen[sub] || 0) + 1;
       let p = SIZE_PTS[l.f.size] || 5;
       if (l.f.size === "l" && logs.some(o => o !== l && o.f.goal === goal && o.f.type === "win" && o.f.size === "l"
           && o.date.slice(0, 7) === l.date.slice(0, 7) && o.date < l.date)) p = SIZE_PTS.m;   // 같은 달 두 번째 큰 돌파는 의미 있는 승리로
       pts += seen[sub] === 1 ? p : seen[sub] === 2 ? p / 2 : 0;
+      if (seen[sub] > 2) rep[goal]++;
     });
     return Math.min(CAP, pts);
   };
   // 커리어: 결과(성취) 기록. 학습 시간 기록은 점수에 넣지 않는다
   const carPts = winPts("career");
-  out.career = {p: carPts ? pFromPts(carPts) : 1, pts: carPts, any: carPts > 0, what: `커리어 성취 ${by("career", "win").length}개`};
+  out.career = {p: carPts ? pFromPts(carPts) : 1, pts: carPts, any: carPts > 0, what: `커리어 성취 ${by("career", "win").length}개`, rep: rep.career};
   // 사회: 교류·나눔 시간 + 기부·기념일 챙김(작은 기록, 같은 상한 안)
   const socMin = by("social").filter(l => ["volunteer", "together"].includes(l.f.type)).reduce((a, l) => a + (num(l.f.minutes) || 0), 0);
   out.social = flow(topShareTime(socMin / 7, BENCH.social), socMin, `교류·나눔 하루 평균 ${Math.round(socMin / 7)}분`,
     by("social").filter(l => ["donate", "care"].includes(l.f.type)).length * 5);
+  out.social.vol = socMin;
   // 정신: 성취 기록 — 점수를 상위 %로 되돌려 표시(상위 %는 성적표에서 스트레스 점검으로 바꿔 보여 줌)
   const mindPts = winPts("mind");
-  out.mind = {p: mindPts ? pFromPts(mindPts) : 1, pts: mindPts, any: mindPts > 0, what: `정신 성취 ${by("mind", "win").length}개`};
+  out.mind = {p: mindPts ? pFromPts(mindPts) : 1, pts: mindPts, any: mindPts > 0, what: `정신 성취 ${by("mind", "win").length}개`, rep: rep.mind};
   // 경제: 그 주에 적은 월 저축률(한 달 점수를 주 단위로 환산해 그 주에 넣음)
   const sav = by("economy", "saving").map(l => (num(l.f.income) > 0 ? (num(l.f.saving) || 0) / num(l.f.income) : null)).filter(r => r != null);
   if (sav.length) {
     const r = Math.max(...sav), p = topShareNormal(r, BENCH.economy);
-    out.economy = {p, pts: Math.min(CAP * MONTH_W, R(p) * MONTH_W) || 1, any: true, what: `저축률 ${Math.round(r * 100)}% (월)`};
+    out.economy = {p, pts: Math.min(CAP * MONTH_W, R(p) * MONTH_W), any: true, what: `저축률 ${Math.round(r * 100)}% (월)`, low: R(p) <= 0 && Math.max(...sav) > 0};
   } else out.economy = {p: 1, pts: 0, any: false, what: ""};
   return out;
 }
 function flow(p, amount, what, extra) {
   const any = amount > 0 || extra > 0;
-  const pts = Math.min(CAP, R(p) + (extra || 0));
-  return {p, pts: any ? Math.max(1, pts) : 0, any, what};
+  const pts = Math.min(CAP, (amount > 0 ? R(p) : 0) + (extra || 0));
+  return {p, pts: any ? pts : 0, any, what};
 }
+// 작은 기록 적립: 평균에 못 미쳐 그 주 점수가 0이던 행동을 시작일부터 계속 모아, 정해 둔 양을 채울 때마다 1점(흐름 점수).
+// 1점 = 그 영역 '평균 한 주' 양의 약 1/8(작은 행동도 자주 보상받도록). 대신 한 영역 한 주 최대 SMALL_CAP점이라
+// 평균 아래인 주가 평균을 넘긴 주(상위 % 점수)보다 많이 받지는 않는다. 평균 이상인 주는 상위 % 점수를 받으므로 모으지 않는다.
+const SMALL_CAP = 3;
+const SMALL = {
+  body: {unit: 30, label: "운동", fmt: v => `${v}분`, why: "30분 = 1점(짧은 운동은 모아서 30분이 되면 1점)"},
+  craft: {unit: 60, label: "가사·돌봄", fmt: v => `${v}분`, why: "30대 남성 한 주 평균 ≈ 530분의 약 1/8. 분리수거 1회 = 15분 → 4회 = 1점, 요리·청소 1시간 = 1점"},
+  social: {unit: 30, label: "교류·나눔", fmt: v => `${v}분`, why: "30대 남성 한 주 평균 ≈ 270분의 약 1/8"},
+  mind: {unit: 1, label: "반복 성취", fmt: v => `${v}회`, why: "같은 주 같은 영역 세 번째부터(5 → 2.5 → 0점이던 것) 1회 = 1점"},
+  career: {unit: 1, label: "반복 성취", fmt: v => `${v}회`, why: "정신과 같은 규칙"},
+  check: {unit: 1, label: "점검·측정", fmt: v => `${v}회`, why: "스트레스 점검·체력 측정은 구간·등급이 오르지 않아도 1회(한 달 1회까지) 1점"},
+  economy: {unit: 1, label: "평균 아래 저축", fmt: v => `${v}달`, why: "저축률이 평균(25%) 아래라도 저축한 달 1점"}
+};
 
 // 돌파(한 번) 점수 목록: [{date, goal, pts, label, past}]
 function milestones(start) {
@@ -1039,10 +1057,22 @@ async function persistMilesOnce(start, activating) {
 function scoreAll() {
   const st = gSetting(), start = st ? st.date : DATA.today;
   const logs = gLogs(), weeks = [], byGoal = Object.fromEntries(GOALS.map(g => [g.k, 0])), events = [];
+  const acc = Object.fromEntries(GOALS.map(g => [g.k, 0])), checkMonth = new Set();
   for (let ws = weekStart(start); ws <= weekStart(DATA.today); ws = addDays(ws, 7)) {
     const w = weekStats(ws, logs, start); weeks.push({ws, w});
+    // 작은 기록 적립(평균 아래라 0점이던 것): 모아서 정해 둔 양마다 1점 — 그 주 점수에 더해 '최근 얻은 점수'에도 보인다
+    const we = addDays(ws, 6), small = {};
+    ["body", "craft", "social"].forEach(k => { if (!w[k].pts && w[k].vol > 0) acc[k] += w[k].vol; });
+    ["mind", "career"].forEach(k => { acc[k] += w[k].rep || 0; });
+    if (w.economy.low) acc.economy += 1;
+    logs.filter(l => l.date >= ws && l.date <= we && l.date >= start && ["pss", "fitness"].includes(l.f.type)).forEach(l => {
+      const key = l.f.type + l.date.slice(0, 7); if (!checkMonth.has(key)) { checkMonth.add(key); small[l.f.goal] = (small[l.f.goal] || 0) + 1; } });
+    GOALS.forEach(g => { const u = SMALL[g.k].unit, n = Math.floor(acc[g.k] / u);
+      if (n > 0) { acc[g.k] -= n * u; small[g.k] = (small[g.k] || 0) + n; }
+      if (small[g.k] > SMALL_CAP) small[g.k] = SMALL_CAP; });                 // 한 주 최대 3점(넘친 양은 버림, 1점이 안 된 나머지만 이월)
+    GOALS.forEach(g => { if (small[g.k]) { w[g.k].pts += small[g.k]; w[g.k].what += ` · 작은 기록 적립 +${small[g.k]}`; } });
     GOALS.forEach(g => { if (w[g.k].pts) { byGoal[g.k] += w[g.k].pts; events.push({date: addDays(ws, 6) > DATA.today ? DATA.today : addDays(ws, 6), goal: g.k, pts: w[g.k].pts,
-      label: `${ws.slice(5).replace("-", ".")} 주 · ${w[g.k].what} (${fmtTop(w[g.k].p)})`, week: true}); } });
+      label: `${ws.slice(5).replace("-", ".")} 주 · ${w[g.k].what}${w[g.k].p < .5 ? ` (${fmtTop(w[g.k].p)})` : ""}`, week: true}); } });
   }
   const flowTotal = Object.values(byGoal).reduce((a, b) => a + b, 0);       // 흐름 점수(매주 쌓은 것)
   milestones(start).forEach(m => {
@@ -1136,7 +1166,7 @@ async function saveTopSnap(T) {
 const fmtPct = p => p == null ? "-" : p > .5 ? "평균↓" : (p < .01 ? (p * 100).toFixed(1) : Math.round(p * 100)) + "%";
 
 // ---------------------------------------------------------------- 그리기
-let GVIEW = ["month", "all"].includes(store.get("gview")) ? store.get("gview") : "week";
+let GVIEW = ["week", "month"].includes(store.get("gview")) ? store.get("gview") : "all";
 const GVIEW_LABEL = {week: "이번 주", month: "이번 달", all: "누적(시작일부터)"};
 function renderGrowth() {
   if (!DATA || $("#growth").hidden) return;
@@ -1158,7 +1188,7 @@ function renderGrowth() {
     const was = prevSnap && prevSnap.f[g.k] != null ? num(prevSnap.f[g.k]) : null;
     const dlt = GVIEW === "all" && t.any && was != null ? Math.round((was - t.p) * 100) : 0;     // 상위 %가 줄면(좋아지면) ▲
     return `<button type="button" class="grow-row" data-g="log" data-goal="${g.k}"><span class="gi">${g.icon}</span><span class="gn">${g.label}<small>${esc(sub)}</small></span>
-      <span class="gt ${t.any && t.p < .5 ? "up" : ""}">${t.any ? fmtTop(t.p) : (g.k === "mind" ? "점검·기록 없음" : g.k === "career" ? "직업 기록 없음" : "기록 없음")}${dlt ? `<small style="display:block;font-size:11px;font-weight:400;color:var(${dlt > 0 ? "--up" : "--down"})">${dlt > 0 ? "▲" : "▼"}${Math.abs(dlt)}%p</small>` : ""}</span>
+      <span class="gt ${t.any && t.p < .5 ? "up" : ""}">${t.any ? fmtTop(t.p) : (GVIEW !== "all" ? (GVIEW === "week" ? "이번 주 기록 없음" : "이번 달 기록 없음") : g.k === "mind" ? "점검·기록 없음" : g.k === "career" ? "직업 기록 없음" : "기록 없음")}${dlt ? `<small style="display:block;font-size:11px;font-weight:400;color:var(${dlt > 0 ? "--up" : "--down"})">${dlt > 0 ? "▲" : "▼"}${Math.abs(dlt)}%p</small>` : ""}</span>
       <span class="gp">${Math.round(S.byGoal[g.k])}점</span></button>`;
   }).join("");
   const feed = S.events.slice(0, 12).map(e => `<div class="dday"><span><span class="badge">${e.week ? "📈 흐름" : "🏆 돌파"}</span> ${GOAL[e.goal].icon} ${esc(e.label)}</span><b>+${Math.round(e.pts * 10) / 10}</b></div>`).join("");
@@ -1287,8 +1317,9 @@ function showBench() {
     <span class="muted">비교 집단: ${esc(b.group)} · 근거: ${esc(b.level)}<br>${esc(b.src)}</span></div>`; }).join("") +
     Object.values(MILES).map(m => `<div class="dday" style="display:block"><strong>돌파 · ${esc(m.title)}</strong><br><span class="muted">근거: ${esc(m.level)} · ${esc(m.src)}</span></div>`).join("");
   $("#form").innerHTML = `<h3>점수 기준·출처</h3><p class="muted" style="line-height:1.7">점수 = 10 × log₂(0.5 ÷ 상위 비율). 평균 0점 · 상위 10% 23점 · 1% 56점 · 0.1% 90점.
-    흐름 점수는 한 영역 한 주 최대 ${CAP}점(월 단위 지표는 주 단위로 환산), 돌파는 같은 희소도의 ${MILE}배를 한 번. 시작일 이전 업적도 같은 점수로(줄이지 않음). 누적 상위 %는 평균 페이스와 지금까지 이룬 상태 지표(아래 돌파 기준의 상위 비율)를 영역마다 평균하고, 매주 한 번 기록해 변화를 보여 줍니다.
+    흐름 점수는 한 영역 한 주 최대 ${CAP}점(월 단위 지표는 주 단위로 환산), 돌파는 같은 희소도의 ${MILE}배를 한 번. 시작일 이전 업적도 같은 점수로(줄이지 않음). 평균에 못 미쳐 0점이던 행동은 '작은 기록 적립'으로 모아 정해 둔 양마다 1점(한 영역 한 주 최대 ${SMALL_CAP}점, 아래 표). 누적 상위 %는 평균 페이스와 지금까지 이룬 상태 지표(아래 돌파 기준의 상위 비율)를 영역마다 평균하고, 매주 한 번 기록해 변화를 보여 줍니다.
     '추정'으로 표시된 기준은 공식 원문을 확인하는 대로 바꿉니다.</p><div class="card">${rows}</div>
+    <h3>작은 기록 적립(1점에 필요한 양)</h3><div class="card">${Object.values(SMALL).map(x => `<div class="dday" style="display:block"><strong>${esc(x.label)} ${esc(x.fmt(x.unit))} = 1점</strong><br><span class="muted">${esc(x.why)}</span></div>`).join("")}</div>
     <div class="row" style="margin-top:12px"><span></span><button class="btn" type="button" data-act="close">닫기</button></div>`;
   $("#form").dataset.mode = "bench"; $("#sheet").hidden = false;
 }
