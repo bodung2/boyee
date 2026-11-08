@@ -98,15 +98,23 @@ border-radius:10px;padding:10px 12px;cursor:pointer;text-align:left;width:100%}
 .track b{display:block;font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums}.track small{font-size:11px;color:var(--mute)}
 .bar1{height:8px;border-radius:4px;background:var(--chip);overflow:hidden;margin:8px 0 6px}.bar1 i{display:block;height:100%;background:var(--s1);border-radius:4px}
 .pss{display:flex;gap:6px}.pss label{flex:1;display:flex;gap:4px;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:8px;padding:6px 0;font-weight:400}
+.tm-goals{display:grid;gap:12px}.tm-goal{display:flex;align-items:center;gap:14px;padding:22px 18px;font-size:20px;font-weight:800;border-radius:14px;
+border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;text-align:left}.tm-goal small{display:block;font-size:12px;font-weight:400;color:var(--mute);margin-top:3px}
+.tm-goal .ic{font-size:32px}.tm-acts{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0}
+.tm-act{padding:14px 10px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:15px;cursor:pointer}
+.tm-act[aria-pressed=true]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent) inset;font-weight:700}
+.tm-big{width:100%;padding:18px;font-size:20px;border-radius:14px}.tm-clock{font-size:52px;font-weight:800;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:-1px;margin:8px 0}
 @media (max-width:520px){.grid{grid-template-columns:repeat(2,1fr)}.hero .big{font-size:26px}.legend{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <div class="tabs" role="tablist">
+  <button role="tab" data-tab="timer" aria-selected="false">⏱ 기록</button>
   <button role="tab" data-tab="growth" aria-selected="false">🏅 성장</button>
-  <button role="tab" data-tab="quest" aria-selected="false">퀘스트 보드</button>
+  <button role="tab" data-tab="quest" aria-selected="false">퀘스트</button>
   <button role="tab" data-tab="assets" aria-selected="false">내 자산</button>
 </div>
+<section id="timer" hidden><main id="tmain"><p class="empty">불러오는 중…</p></main></section>
 <section id="growth" hidden><main id="gmain"><p class="empty">불러오는 중…</p></main></section>
 <section id="quest" hidden><iframe id="qframe" title="퀘스트 보드"></iframe><main id="qmsg" hidden></main></section>
 <section id="assets" hidden><main id="amain"><p class="empty">불러오는 중…</p></main>
@@ -265,9 +273,9 @@ function ago(iso) {
 // ---------------------------------------------------------------- 탭
 function showTab(name) {
   document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name));
-  $("#quest").hidden = name !== "quest"; $("#assets").hidden = name !== "assets"; $("#growth").hidden = name !== "growth";
+  $("#quest").hidden = name !== "quest"; $("#assets").hidden = name !== "assets"; $("#growth").hidden = name !== "growth"; $("#timer").hidden = name !== "timer";
   store.set("tab", name);
-  if (name === "quest") loadQuest(); else if (!DATA) loadAssets(); else if (name === "growth") renderGrowth();
+  if (name === "quest") loadQuest(); else if (!DATA) loadAssets(); else if (name === "growth") renderGrowth(); else if (name === "timer") renderTimer();
 }
 let questAt = 0;
 async function loadQuest() {
@@ -295,6 +303,7 @@ async function loadAssets(quiet) {
     DATA.oldApi = ver < NEED_API;
     render();
     if (typeof renderGrowth === "function") renderGrowth();
+    if (typeof renderTimer === "function") renderTimer();
     if (!quiet && stalePrices()) refresh(true);
   } catch (e) {
     $("#amain").innerHTML = `<div class="note">자산 데이터를 불러오지 못했습니다: ${esc(e.message)}<br>
@@ -662,7 +671,9 @@ $("#form").addEventListener("change", e => {
 });
 $("#sheet").addEventListener("click", e => { if (e.target.id === "sheet") $("#sheet").hidden = true; });
 VIEW = VIEWS.some(([k]) => k === store.get("view")) ? store.get("view") : "summary";
-showTab(["assets", "growth"].includes(store.get("tab")) ? store.get("tab") : "quest");
+showTab(["assets", "growth", "timer"].includes(store.get("tab")) ? store.get("tab") : "quest");
+// 주소 끝에 ?tab=timer 를 붙여 홈 화면에 두면 바로 ⏱ 기록 화면으로 열린다
+try { google.script.url.getLocation(loc => { const t = loc && loc.parameter && loc.parameter.tab; if (["timer", "growth", "assets", "quest"].includes(t)) showTab(t); }); } catch (e) {}
 </script>
 <script>
 "use strict";
@@ -1302,6 +1313,121 @@ $("#form").addEventListener("submit", e => {
   if ($("#form").dataset.mode !== "log") return;
   e.preventDefault(); e.stopImmediatePropagation(); saveLog();
 }, true);
+</script>
+<script>
+"use strict";
+// ================================================================ ⏱ 기록: 시작을 누르고 끝을 누르면 그 시간이 성장 기록이 된다(신체·정신·기능 3개만)
+// 돌아가는 타이머는 시트에 'timer' 항목으로 저장해 두어, 폰 화면을 끄거나 앱을 닫았다 열어도 이어진다.
+const TIMER_GOALS = ["body", "mind", "craft"];
+const TIMER_ACTS = {
+  body: [["walk", "🚶 걷기", {type: "exercise", kind: "aerobic"}], ["run", "🏃 달리기", {type: "exercise", kind: "aerobic"}],
+    ["bike", "🚴 자전거·수영", {type: "exercise", kind: "aerobic"}], ["gym", "🏋️ 근력 운동", {type: "exercise", kind: "strength"}],
+    ["sport", "⛰ 등산·구기", {type: "exercise", kind: "etc"}], ["stretch", "🤸 스트레칭·요가", {type: "exercise", kind: "etc"}]],
+  mind: [["meditate", "🧘 명상·호흡", {type: "win", sub: "heart"}], ["journal", "📓 일기·성찰", {type: "win", sub: "heart"}],
+    ["calm", "🌊 감정 다스리기", {type: "win", sub: "emotion"}], ["avoid", "🦁 미루던 일 하기", {type: "win", sub: "avoid"}],
+    ["focus", "⏰ 집중·루틴 지키기", {type: "win", sub: "discipline"}], ["detox", "🧲 유혹 참기(폰·간식 등)", {type: "win", sub: "impulse"}]],
+  craft: CRAFT_FIELDS.map(([k, l]) => [k, l, {type: "time", field: k}])
+};
+const TIMER_HINT = {body: "운동은 30분 이상이면 1회로 셉니다", mind: "끝내면 그 영역의 '작은 승리'로 기록돼요(같은 주 같은 영역은 반씩 줄어요)",
+  craft: "가사·돌봄 시간은 하루 평균 분으로 30대 남성과 비교해요"};
+let TSEL = {goal: "", act: ""}, tickId = 0, tbusy = false;
+const runningTimer = () => DATA ? byCat("timer").filter(t => num(t.f.start) > 0).sort((a, b) => num(b.f.start) - num(a.f.start))[0] : null;
+const actOf = (goal, act) => (TIMER_ACTS[goal] || []).find(a => a[0] === act);
+const hhmm = ms => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+const clock = ms => { const s = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
+  return `${h ? h + ":" : ""}${String(m).padStart(h ? 2 : 1, "0")}:${String(s % 60).padStart(2, "0")}`; };
+
+function renderTimer() {
+  if (!DATA || $("#timer").hidden) return;
+  clearInterval(tickId);
+  const run = runningTimer();
+  let html = "";
+  if (!gSetting()) html += `<div class="note">🏅 성장 탭에서 '오늘부터 시작하기'를 한 번 눌러야 기록이 점수에 들어가요.</div>`;
+  if (run) {
+    const g = GOAL[run.f.goal], a = actOf(run.f.goal, run.f.act);
+    html += `<div class="card" style="text-align:center"><div class="muted">${g.icon} ${g.label} · ${hhmm(num(run.f.start))} 시작</div>
+      <h2 style="margin:6px 0 0">${esc(a ? a[1] : run.name)}</h2>${run.f.memo ? `<div class="muted">${esc(run.f.memo)}</div>` : ""}
+      <div class="tm-clock" id="tclock">${clock(Date.now() - num(run.f.start))}</div>
+      <button class="btn primary tm-big" type="button" data-t="end">■ 끝</button>
+      <p class="muted" style="font-size:12px;margin:10px 0 4px">${esc(TIMER_HINT[run.f.goal] || "")}<br>화면을 꺼도, 앱을 닫았다 열어도 시간은 계속 흘러요.</p>
+      <button class="btn" type="button" data-t="cancel" style="margin-top:4px">기록하지 않고 취소</button></div>`;
+  } else if (TSEL.goal) {
+    const g = GOAL[TSEL.goal], acts = TIMER_ACTS[TSEL.goal], rec = TSEL.act === "recycle";
+    html += `<div class="row"><h2 style="margin:0">${g.icon} ${g.label} · 무엇을 하나요?</h2><button class="btn" type="button" data-t="back">← 뒤로</button></div>
+      <div class="tm-acts">${acts.map(([k, l]) => `<button type="button" class="tm-act" data-t="act" data-k="${k}" aria-pressed="${k === TSEL.act}">${esc(l)}</button>`).join("")}</div>
+      <div class="f"><label for="tmemo">메모(선택)</label><input id="tmemo" maxlength="100" placeholder="예: 아이와 블록 놀이" value="${esc(TSEL.memo || "")}"></div>
+      <button class="btn primary tm-big" type="button" data-t="${rec ? "once" : "start"}" ${TSEL.act ? "" : "disabled"}>${rec ? "♻️ 1회 기록" : "▶ 시작"}</button>
+      <p class="muted" style="font-size:12px">${rec ? "분리수거는 시간 대신 횟수로 기록해요(1회 = 15분으로 계산)." : esc(TIMER_HINT[TSEL.goal])}</p>`;
+  } else {
+    html += `<h2 style="margin-top:4px">무엇을 시작할까요?</h2><div class="tm-goals">${TIMER_GOALS.map(k => `<button type="button" class="tm-goal" data-t="goal" data-goal="${k}">
+      <span class="ic">${GOAL[k].icon}</span><span>${GOAL[k].label}<small>${esc(TIMER_ACTS[k].slice(0, 4).map(a => a[1].replace(/^\S+\s/, "")).join(" · "))} …</small></span></button>`).join("")}</div>`;
+  }
+  // 오늘(과 어제) 이 화면에서 남긴 기록
+  const today = gLogs().filter(l => TIMER_GOALS.includes(l.f.goal) && l.date >= addDays(DATA.today, -1)).sort((a, b) => (b.date + b.updated) < (a.date + a.updated) ? -1 : 1);
+  const mins = today.filter(l => l.date === DATA.today).reduce((a, l) => a + (num(l.f.minutes) || 0), 0);
+  if (today.length) html += `<h2>오늘·어제 기록 <span class="muted" style="font-size:13px;font-weight:400">오늘 ${mins}분</span></h2><div class="list">${today.slice(0, 12).map(l =>
+    `<div class="item" style="cursor:default"><span class="t">${GOAL[l.f.goal].icon} ${esc(l.name)}</span><span class="r">${esc(l.date === DATA.today ? "오늘" : "어제")}</span>
+      <span class="s">${esc(l.f.text || "")}</span><span class="rs"></span></div>`).join("")}</div>
+    <p class="muted" style="font-size:12px">고치거나 지우려면 🏅 성장 → 최근 기록에서 눌러요.</p>`;
+  $("#tmain").innerHTML = html;
+  if (run) tickId = setInterval(() => { const c = $("#tclock"); if (!c || $("#timer").hidden) return clearInterval(tickId); c.textContent = clock(Date.now() - num(run.f.start)); }, 1000);
+}
+// 끝낸 시간을 성장 기록(log) 한 건으로 바꾼다 — 날짜는 시작한 날
+function timerLog(goal, act, minutes, memo) {
+  const a = actOf(goal, act), spec = a[2], label = a[1], text = [label.replace(/^\S+\s/, ""), memo].filter(Boolean).join(" · ") + " (⏱)";
+  if (spec.type === "exercise") return {name: `운동 ${minutes}분 · ${label.replace(/^\S+\s/, "")}`, f: {goal, type: "exercise", kind: spec.kind, minutes, text}};
+  if (spec.type === "win") return {name: `${Object.fromEntries(MIND_SUBS)[spec.sub]} · ${SIZE_LABEL.s}`, f: {goal, type: "win", sub: spec.sub, size: "s", minutes, text: `${text} ${minutes}분`}};
+  if (spec.field === "recycle") return {name: `${label} 1회`, f: {goal, type: "time", field: "recycle", count: 1, text}};
+  return {name: `${label} ${minutes}분`, f: {goal, type: "time", field: spec.field, minutes, text}};
+}
+async function timerAct(kind) {
+  if (tbusy) return;
+  const run = runningTimer();
+  tbusy = true;
+  try {
+    if (kind === "start" || kind === "once") {
+      if (!TSEL.act) return;
+      const memo = ($("#tmemo") || {}).value || "";
+      if (kind === "once") {
+        const x = timerLog(TSEL.goal, TSEL.act, 0, memo.trim());
+        toast("기록하는 중…"); await api("saveItem", {category: "log", name: x.name, date: DATA.today, f: x.f});
+        TSEL = {goal: "", act: ""}; await loadAssets(true); toast("♻️ 기록했어요"); return;
+      }
+      const a = actOf(TSEL.goal, TSEL.act);
+      toast("시작!");
+      await api("saveItem", {category: "timer", name: a[1], date: DATA.today, f: {goal: TSEL.goal, act: TSEL.act, start: Date.now(), memo: memo.trim()}});
+      TSEL = {goal: "", act: ""}; await loadAssets(true);
+    } else if (kind === "end" && run) {
+      let minutes = Math.max(1, Math.round((Date.now() - num(run.f.start)) / 6e4));
+      if (minutes > 300) {          // 끝 누르기를 잊은 경우
+        const v = prompt(`${Math.floor(minutes / 60)}시간 넘게 켜져 있었어요. 실제로 한 시간은 몇 분인가요?`, "60");
+        if (v == null) return;
+        minutes = Math.max(1, Math.round(num(v) || 0)); if (!minutes) return;
+      }
+      const x = timerLog(run.f.goal, run.f.act, minutes, run.f.memo || "");
+      const day = new Date(num(run.f.start) + 9 * 3600e3).toISOString().slice(0, 10);   // 시작한 날(한국 시간, 서버의 오늘과 같은 기준)
+      toast("기록하는 중…");
+      await api("saveItem", {category: "log", name: x.name, date: day >= addDays(DATA.today, -1) ? day : DATA.today, f: x.f});
+      await api("deleteItem", run.id);
+      await loadAssets(true); toast(`${GOAL[run.f.goal].icon} ${minutes}분 기록했어요 · 성장에 반영됨`);
+    } else if (kind === "cancel" && run) {
+      if (!confirm("이 타이머를 기록하지 않고 지울까요?")) return;
+      await api("deleteItem", run.id); await loadAssets(true); toast("취소했어요");
+    }
+  } catch (e) { toast("저장하지 못했습니다: " + e.message, true); }
+  finally { tbusy = false; }
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-t]"); if (!b || !$("#tmain").contains(b)) return;
+  const t = b.dataset.t;
+  if (t === "goal") { TSEL = {goal: b.dataset.goal, act: ""}; renderTimer(); }
+  else if (t === "back") { TSEL = {goal: "", act: ""}; renderTimer(); }
+  else if (t === "act") { TSEL.act = b.dataset.k; TSEL.memo = ($("#tmemo") || {}).value || ""; renderTimer(); }
+  else timerAct(t);
+});
+// 다른 앱을 쓰다 돌아오면 시계를 바로 맞춘다
+document.addEventListener("visibilitychange", () => { if (!document.hidden) renderTimer(); });
+renderTimer();
 </script>
 </body>
 </html>
