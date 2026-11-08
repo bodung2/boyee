@@ -34,3 +34,5 @@ data/.drive/
 # 아이와 가볼 곳: 직접 찍은 사진·메모(아이 사진이라 절대 올리지 않는다)
 places_inbox/
 data/models/
+data/life_dashboard_app.sha256
+data/life_dashboard_app_drive.json

@@ -77,7 +77,51 @@ def test_bats_upload_and_webapp_code_shipped():
     root = schedule.ROOT
     for bat in ("run_quest_board.bat", "run_quest_board_refresh.bat"):
         assert "-m quest_board --upload %*" in (root / "scripts" / bat).read_bytes().decode("ascii")
-    gs = (root / "docs" / "quest_board_webapp.gs").read_text(encoding="utf-8")
-    assert "const FILE_NAME = 'quest_board.html'" in gs and drive.FILE_NAME == "quest_board.html"
+    gs = (root / "webapp" / "Code.gs").read_text(encoding="utf-8")
+    assert f"const QUEST_FILE = '{drive.FILE_NAME}'" in gs and f"const APP_FILE = '{drive.APP_FILE}'" in gs
     gi = (root / ".gitignore").read_text(encoding="utf-8")
     assert "data/quest_board_drive.json" in gi
+
+
+def test_app_screen_uploads_only_when_changed_or_daily(tmp_path):
+    src = tmp_path / "app.html"
+    src.write_text("<p>v1</p>", encoding="utf-8")
+    send = FakeDrive()
+    assert drive.upload_app(tmp_path, token="t", send=send, source=src, now=1000) is True
+    assert send.calls[0][0] == "POST" and b'"name": "life_dashboard_app.html"' in send.calls[0][3]
+    mark = tmp_path / "life_dashboard_app.sha256"
+    import os
+    os.utime(mark, (1000, 1000))
+    assert drive.upload_app(tmp_path, token="t", send=send, source=src, now=2000) is False     # 그대로면 안 올림
+    src.write_text("<p>v2</p>", encoding="utf-8")
+    assert drive.upload_app(tmp_path, token="t", send=send, source=src, now=3000) is True      # 바뀌면 덮어씀
+    assert send.calls[-1][0] == "PATCH" and send.calls[-1][3] == b"<p>v2</p>"
+    os.utime(mark, (3000, 3000))
+    assert drive.upload_app(tmp_path, token="t", send=send, source=src, now=3000 + 25 * 3600) is True   # 하루에 한 번은 다시
+
+
+def test_real_app_file_is_what_gets_uploaded():
+    assert drive.APP_SOURCE == schedule.ROOT / "webapp" / "app.html" and drive.APP_SOURCE.exists()
+
+
+def test_apps_script_code_passes_fake_gas_tests():
+    """webapp/Code.gs를 가짜 Apps Script(tests/webapp/fake_gas.js) 위에서 돌린다(node 필요)."""
+    import shutil
+    import subprocess
+    import pytest
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node가 없어 Apps Script 코드 테스트를 건너뜀")
+    r = subprocess.run([node, str(schedule.ROOT / "tests" / "webapp" / "test_code.js")], capture_output=True, text=True,
+                       encoding="utf-8")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_screen_and_apps_script_agree_on_api_version():
+    """Code.gs를 바꿔 API_VERSION을 올리면 화면(app.html)의 NEED_API도 같이 올려야 '새로 붙여 넣기' 안내가 맞게 뜬다."""
+    import re
+    gs = (schedule.ROOT / "webapp" / "Code.gs").read_text(encoding="utf-8")
+    app = (schedule.ROOT / "webapp" / "app.html").read_text(encoding="utf-8")
+    assert re.search(r"const API_VERSION = (\d+);", gs).group(1) == re.search(r"const NEED_API = (\d+);", app).group(1)
+    for fn in ("getData", "saveItem", "deleteItem", "refreshPrices", "apiVersion", "getQuestBoard"):
+        assert f"function {fn}(" in gs, fn

@@ -18,3 +18,6 @@
   글·게시물을 발행하는 작업이면 `quest_board/checks.py`의 `KINDS`에 발행 기록 확인 함수도 추가한다.
 - 매시간처럼 자주 도는 예약 작업은 표에 `Hidden = $true`를 붙여 까만 창 없이 돌리고(`scripts/run_hidden.vbs`),
   bat에서 `set AUTOPOST_UPDATE_QUIET=1`로 코드 업데이트 문제 알림이 매번 오지 않게 한다.
+- 인생 대시보드 웹앱: 화면은 `webapp/app.html`(PC가 드라이브에 올려 자동 반영), 서버는 `webapp/Code.gs`(사용자가 직접 붙여 넣고
+  다시 배포해야 함). `Code.gs`를 바꾸면 `API_VERSION`과 app.html의 `NEED_API`를 같이 올리고 PR에 '2-B 다시 하기'를 적는다.
+  자산·가족 정보는 사용자의 비공개 시트에만 둔다 — 실제 데이터를 저장소·테스트·스크린샷에 넣지 않는다.

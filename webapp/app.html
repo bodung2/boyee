@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>인생 대시보드</title>
+<!-- 인생 대시보드 화면(구글 Apps Script 웹앱). 집 PC가 이 파일을 드라이브의 life_dashboard_app.html로 올리고,
+     webapp/Code.gs의 doGet이 그 파일을 보여 준다. 데이터는 google.script.run으로 Code.gs의 함수를 불러 주고받는다. -->
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--ink:#1d1d1f;--sub:#6b6b70;--mute:#9a9aa0;--line:#e4e2dd;--accent:#2a78d6;
+--up:#c62f2f;--down:#2361c4;--warn:#a86400;--warn-bg:#fdf0d8;--chip:#efeeea;
+--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--s6:#008300}
+@media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1e1e21;--ink:#f1f1f3;--sub:#a1a1a8;--mute:#77777e;
+--line:#2e2e33;--accent:#3987e5;--up:#ff7a6e;--down:#7aa8ff;--warn:#f0b04d;--warn-bg:#3a2c12;--chip:#26262a;
+--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#008300}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+font:15px/1.5 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+.tabs{position:sticky;top:0;z-index:5;display:flex;gap:4px;padding:8px 12px;background:var(--bg);border-bottom:1px solid var(--line)}
+.tabs button{flex:1;border:0;background:none;padding:8px;border-radius:8px;font-weight:700;color:var(--sub);cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+main{max-width:860px;margin:0 auto;padding:16px 16px 96px}
+#qframe{width:100%;border:0;display:block;min-height:70vh;background:var(--bg)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.hero .label{color:var(--sub);font-size:13px}
+.hero .big{font-size:30px;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums;margin:2px 0}
+.delta{font-size:13px;color:var(--sub);font-variant-numeric:tabular-nums}
+.up{color:var(--up)}.down{color:var(--down)}
+.ranges{display:flex;gap:4px;margin:10px 0 2px}
+.ranges button{border:1px solid var(--line);background:none;border-radius:6px;padding:2px 10px;font-size:12px;color:var(--sub);cursor:pointer}
+.ranges button[aria-pressed=true]{background:var(--chip);color:var(--ink);font-weight:700}
+.chart{position:relative;margin-top:6px}
+.chart svg{display:block;width:100%;height:150px;touch-action:pan-y}
+.tip{position:absolute;top:0;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12px;padding:3px 8px;
+border-radius:6px;white-space:nowrap;transform:translateX(-50%);display:none}
+.empty{color:var(--sub);font-size:13px;padding:24px 0;text-align:center}
+.alloc{display:flex;height:10px;border-radius:5px;overflow:hidden;gap:2px;margin:12px 0 8px;background:var(--card)}
+.alloc i{display:block;height:100%}
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:2px 16px;font-size:13px}
+.legend span{display:flex;align-items:center;gap:6px;color:var(--sub)}
+.legend b{margin-left:auto;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.legend i{width:10px;height:10px;border-radius:3px;flex:none}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:14px 0 10px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chips button{flex:none;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer}
+.chips button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+h2{font-size:15px;margin:22px 0 8px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;text-align:left}
+.stat .n{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
+.stat .l{font-size:12px;color:var(--sub)}
+.list{display:flex;flex-direction:column;gap:8px}
+.item{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;
+grid-template-columns:1fr auto;gap:2px 12px;cursor:pointer;text-align:left;width:100%}
+.item .t{font-weight:700;overflow-wrap:anywhere}.item .s{color:var(--sub);font-size:13px;overflow-wrap:anywhere}
+.item .r{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+.item .rs{text-align:right;font-size:12px;color:var(--sub);white-space:nowrap}
+.item a{color:var(--accent)}
+.badge{display:inline-block;font-size:11px;font-weight:700;border-radius:4px;padding:0 6px;margin-left:6px;background:var(--chip);color:var(--sub)}
+.badge.warn{background:var(--warn-bg);color:var(--warn)}
+.group{font-size:12px;color:var(--sub);font-weight:700;margin:14px 0 6px}
+.dday{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+.dday:last-child{border-bottom:0}.dday b{font-variant-numeric:tabular-nums;white-space:nowrap}
+.year{font-weight:800;font-size:15px;margin:18px 0 6px}
+.tl{display:flex;gap:10px;padding:6px 0;border-left:2px solid var(--line);margin-left:6px;padding-left:12px;font-size:14px}
+.tl .d{color:var(--sub);font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13px}
+.note{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:12px}
+.row{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+.btn.danger{color:var(--up)}
+.fab{position:fixed;right:16px;bottom:20px;z-index:6;border:0;border-radius:999px;padding:12px 18px;background:var(--accent);
+color:#fff;font-weight:800;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer}
+.sheet{position:fixed;inset:0;z-index:10;background:rgba(0,0,0,.4);display:flex;align-items:flex-end;justify-content:center}
+.sheet[hidden]{display:none}
+.sheet form{background:var(--card);width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:18px 16px 24px}
+.sheet h3{margin:0 0 12px;font-size:17px}
+.f{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.f label{font-size:13px;font-weight:700}
+.f small{color:var(--sub);font-size:12px}
+.f input,.f select,.f textarea{border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:var(--bg);width:100%}
+.f textarea{min-height:70px;resize:vertical}
+.sheet .row{margin-top:8px}
+#toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);z-index:20;background:var(--ink);color:var(--bg);
+padding:10px 16px;border-radius:8px;font-size:14px;max-width:calc(100% - 32px);display:none}
+.muted{color:var(--sub);font-size:12px}
+.mini{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:2px 2px 0;font-size:13px;color:var(--sub)}
+.mini b{font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums}
+@media (max-width:520px){.grid{grid-template-columns:repeat(2,1fr)}.hero .big{font-size:26px}.legend{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="tabs" role="tablist">
+  <button role="tab" data-tab="quest" aria-selected="false">퀘스트 보드</button>
+  <button role="tab" data-tab="assets" aria-selected="false">내 자산</button>
+</div>
+<section id="quest" hidden><iframe id="qframe" title="퀘스트 보드"></iframe><main id="qmsg" hidden></main></section>
+<section id="assets" hidden><main id="amain"><p class="empty">불러오는 중…</p></main>
+  <button class="fab" type="button" id="add">＋ 추가</button></section>
+<div class="sheet" id="sheet" hidden><form id="form" autocomplete="off"></form></div>
+<div id="toast" role="status"></div>
+<script>
+"use strict";
+const NEED_API = 1;
+const CATS = {
+  finance: {icon: "💰", label: "금융", name: "이름", nameHint: "예: 삼성전자, 비상금 통장", date: "매수일(선택)"},
+  realestate: {icon: "🏠", label: "부동산", name: "이름", nameHint: "예: 우리 집", date: "매입일"},
+  people: {icon: "👨‍👩‍👧", label: "사람", name: "이름", nameHint: "", date: "생일(양력)"},
+  works: {icon: "✍️", label: "저작물", name: "제목", nameHint: "", date: "발표일"},
+  positions: {icon: "🎖", label: "직위", name: "직위·역할", nameHint: "예: 6학년 부장", date: "시작일"},
+  awards: {icon: "🏆", label: "수상·자격", name: "이름", nameHint: "예: 교육감 표창", date: "받은 날"}
+};
+const KINDS = [["kr", "국내 주식·ETF"], ["us", "미국 주식·ETF"], ["coin", "코인"], ["cash", "예적금·현금"], ["pension", "연금"], ["etc", "기타"]];
+const KIND_LABEL = Object.fromEntries(KINDS);
+const PRICED = ["kr", "us", "coin"];
+const priced = f => PRICED.includes(f.kind);
+const FIELDS = {
+  finance: [
+    {k: "kind", label: "종류", type: "select", options: KINDS},
+    {k: "ticker", label: "종목코드", hint: "국내 6자리(005930) · 미국 티커(AAPL) · 코인(BTC)", show: priced},
+    {k: "qty", label: "수량", type: "num", show: priced},
+    {k: "avg", label: "평단가", hint: "국내·코인은 원, 미국은 달러", type: "num", show: priced},
+    {k: "amount", label: "금액(원)", type: "num", show: f => !priced(f)},
+    {k: "cost", label: "넣은 원금(선택, 수익률 계산용)", type: "num", show: f => !priced(f)},
+    {k: "amount", label: "평가금액 직접 입력(선택)", hint: "시세를 못 받는 종목만. 비우면 시세로 계산", type: "num", show: priced, alt: true},
+    {k: "account", label: "계좌·기관(선택)"},
+    {k: "memo", label: "메모", type: "area"}],
+  realestate: [
+    {k: "buy", label: "매입가(원)", type: "num"},
+    {k: "price", label: "현재 시세(원)", hint: "가끔 직접 고쳐 주세요(실거래가·호가 참고)", type: "num"},
+    {k: "loan", label: "대출 잔액(원, 선택)", type: "num"},
+    {k: "place", label: "위치(선택)"},
+    {k: "memo", label: "메모", type: "area"}],
+  people: [
+    {k: "relation", label: "관계", hint: "예: 배우자, 첫째, 어머니"},
+    {k: "anniv_label", label: "기념일 이름(선택)", hint: "예: 결혼기념일"},
+    {k: "anniv_date", label: "기념일 날짜(선택)", type: "date"},
+    {k: "memo", label: "메모", type: "area"}],
+  works: [
+    {k: "kind", label: "종류", type: "select", options: [["book", "책"], ["paper", "논문"], ["research", "연구"], ["workbook", "워크북·교재"], ["writing", "글·칼럼"], ["talk", "강연·발표"], ["etc", "기타"]]},
+    {k: "link", label: "링크(선택)", type: "url"},
+    {k: "income", label: "수익(원, 선택)", type: "num"},
+    {k: "memo", label: "메모", type: "area"}],
+  positions: [
+    {k: "org", label: "기관·소속"},
+    {k: "end", label: "종료일", hint: "지금 맡고 있으면 비워 두세요", type: "date"},
+    {k: "memo", label: "메모", type: "area"}],
+  awards: [
+    {k: "kind", label: "종류", type: "select", options: [["award", "상"], ["cert", "자격증"], ["honor", "표창"], ["etc", "기타"]]},
+    {k: "org", label: "수여 기관"},
+    {k: "link", label: "증빙 링크(선택)", type: "url"},
+    {k: "memo", label: "메모", type: "area"}]
+};
+const ORDER = ["finance", "realestate", "people", "works", "positions", "awards"];
+const VIEWS = [["summary", "요약"], ...ORDER.map(c => [c, CATS[c].icon + " " + CATS[c].label]), ["timeline", "📜 연표"]];
+const SERIES = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6"];
+
+let DATA = null, VIEW = "summary", RANGE = "3M", busy = false;
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const store = {get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+               set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* 저장 못 해도 동작 */ } }};
+
+function api(fn, ...args) {
+  return new Promise((ok, fail) => {
+    if (!window.google || !google.script) return fail(new Error("구글 웹앱 안에서 열어 주세요"));
+    google.script.run.withSuccessHandler(ok).withFailureHandler(e => fail(e instanceof Error ? e : new Error(String(e && e.message || e))))[fn](...args);
+  });
+}
+function toast(msg, long) {
+  const t = $("#toast"); t.textContent = msg; t.style.display = "block";
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = "none", long ? 6000 : 2500);
+}
+
+// ---------------------------------------------------------------- 숫자·날짜
+function won(n, sign) {
+  if (n == null || !isFinite(n)) return "-";
+  const s = n < 0 ? "−" : (sign && n > 0 ? "+" : "");
+  n = Math.abs(Math.round(n));
+  const eok = Math.floor(n / 1e8), man = Math.floor((n % 1e8) / 1e4);
+  if (eok) return s + eok.toLocaleString("ko-KR") + "억" + (man ? " " + man.toLocaleString("ko-KR") + "만" : "") + "원";
+  if (man) return s + man.toLocaleString("ko-KR") + "만원";
+  return s + n.toLocaleString("ko-KR") + "원";
+}
+const pct = n => n == null || !isFinite(n) ? "" : (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(1) + "%";
+const tone = n => n > 0 ? "up" : n < 0 ? "down" : "";
+const num = v => { const n = Number(String(v == null ? "" : v).replace(/[,\s원$₩]/g, "")); return v === "" || v == null || !isFinite(n) ? null : n; };
+function parseDay(s) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ""); return m ? new Date(+m[1], m[2] - 1, +m[3]) : null; }
+function today() { return parseDay(DATA && DATA.today) || new Date(new Date().toDateString()); }
+const fmtDay = s => { const d = parseDay(s); return d ? `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}` : ""; };
+function age(s) {
+  const b = parseDay(s), t = today(); if (!b) return null;
+  let a = t.getFullYear() - b.getFullYear();
+  if (t.getMonth() < b.getMonth() || (t.getMonth() === b.getMonth() && t.getDate() < b.getDate())) a--;
+  return a;
+}
+function nextDday(s) {
+  const d = parseDay(s), t = today(); if (!d) return null;
+  let n = new Date(t.getFullYear(), d.getMonth(), d.getDate());
+  if (n < t) n = new Date(t.getFullYear() + 1, d.getMonth(), d.getDate());
+  return {days: Math.round((n - t) / 864e5), years: n.getFullYear() - d.getFullYear()};
+}
+function span(from, to) {
+  const a = parseDay(from), b = to ? parseDay(to) : today(); if (!a || !b) return "";
+  let m = (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth();
+  if (b.getDate() < a.getDate()) m--;
+  if (m < 1) return "1개월 미만";
+  return (m >= 12 ? Math.floor(m / 12) + "년 " : "") + (m % 12 ? m % 12 + "개월" : "").trim();
+}
+function ago(iso) {
+  const t = Date.parse(iso); if (!t) return "";
+  const m = Math.round((Date.now() - t) / 6e4);
+  return m < 1 ? "방금" : m < 60 ? m + "분 전" : m < 1440 ? Math.round(m / 60) + "시간 전" : Math.round(m / 1440) + "일 전";
+}
+
+// ---------------------------------------------------------------- 탭
+function showTab(name) {
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name));
+  $("#quest").hidden = name !== "quest"; $("#assets").hidden = name !== "assets";
+  store.set("tab", name);
+  if (name === "quest") loadQuest(); else if (!DATA) loadAssets();
+}
+let questAt = 0;
+async function loadQuest() {
+  if (Date.now() - questAt < 60000) return;
+  questAt = Date.now();
+  try {
+    const html = await api("getQuestBoard");
+    const f = $("#qframe");
+    if (!html) { f.hidden = true; $("#qmsg").hidden = false; $("#qmsg").innerHTML = '<p class="empty">아직 집 PC가 퀘스트 보드를 올리지 않았습니다.</p>'; return; }
+    f.hidden = false; $("#qmsg").hidden = true;
+    f.onload = () => fit(f);
+    f.srcdoc = html.replace("<head>", '<head><base target="_blank">');
+  } catch (e) { toast("퀘스트 보드를 불러오지 못했습니다: " + e.message, true); }
+}
+function fit(f) {
+  const go = () => { try { f.style.height = f.contentDocument.documentElement.scrollHeight + "px"; } catch (e) { /* 다른 출처 */ } };
+  go(); setTimeout(go, 300); setTimeout(go, 1500);
+}
+
+// ---------------------------------------------------------------- 자산 데이터
+async function loadAssets(quiet) {
+  try {
+    const ver = await api("apiVersion");
+    DATA = await api("getData");
+    DATA.oldApi = ver < NEED_API;
+    render();
+    if (!quiet && stalePrices()) refresh(true);
+  } catch (e) {
+    $("#amain").innerHTML = `<div class="note">자산 데이터를 불러오지 못했습니다: ${esc(e.message)}<br>
+      웹앱 코드(Code.gs)를 새 버전으로 붙여 넣고 '새 버전'으로 다시 배포했는지 확인해 주세요.</div>`;
+  }
+}
+function stalePrices() {
+  const hasPriced = DATA.items.some(it => it.category === "finance" && priced(it.f || {}) && (it.f.ticker || "").trim());
+  return hasPriced && (!DATA.pricesAt || Date.now() - Date.parse(DATA.pricesAt) > 30 * 6e4);
+}
+async function refresh(auto) {
+  if (busy) return; busy = true;
+  if (!auto) toast("시세를 받는 중…");
+  try {
+    const r = await api("refreshPrices");
+    await loadAssets(true);
+    if (!auto || r.missing.length) toast(r.missing.length ? `시세를 못 받은 종목: ${r.missing.join(", ")} (지난 값·평단가로 계산)` : "시세를 새로 받았습니다", r.missing.length);
+  } catch (e) { toast("시세를 받지 못했습니다: " + e.message, true); }
+  busy = false;
+}
+const byCat = c => DATA.items.filter(it => it.category === c);
+
+// ---------------------------------------------------------------- 그리기
+function render() {
+  const old = DATA.oldApi ? '<div class="note">웹앱 코드(Code.gs)가 예전 버전입니다. 저장소의 webapp/Code.gs를 붙여 넣고 새 버전으로 배포해 주세요.</div>' : "";
+  const chips = `<nav class="chips" aria-label="분류">${VIEWS.map(([k, l]) =>
+    `<button type="button" data-view="${k}" aria-pressed="${k === VIEW}">${esc(l)}</button>`).join("")}</nav>`;
+  const body = VIEW === "summary" ? summary() : VIEW === "timeline" ? timeline() : category(VIEW);
+  const top = VIEW === "summary" ? hero() : `<div class="mini"><span>순자산</span><b>${won(DATA.totals.net)}</b></div>`;   // 그래프는 요약에서만
+  $("#amain").innerHTML = old + top + chips + body;
+  drawChart();
+}
+
+function hero() {
+  const t = DATA.totals, h = DATA.history;
+  const prev = h.length > 1 ? h[h.length - 2] : null;
+  const back = pick30(h);
+  const d1 = prev ? t.net - prev.net : null, d30 = back ? t.net - back.net : null;
+  const deltas = [d1 != null ? `어제보다 <span class="${tone(d1)}">${won(d1, true)}</span>` : "",
+                  d30 != null ? `30일 전보다 <span class="${tone(d30)}">${won(d30, true)}</span>` : ""].filter(Boolean).join(" · ");
+  return `<div class="card hero"><div class="row"><span class="label">순자산 (금융 + 부동산 − 대출)</span>
+    <button class="btn" type="button" data-act="refresh">시세 새로고침</button></div>
+    <div class="big">${won(t.net)}</div><div class="delta">${deltas || "매일 " + DATA.snapshotHour + "시에 기록이 쌓이면 변화가 보입니다"}</div>
+    <div class="ranges" role="group" aria-label="기간">${["1M", "3M", "1Y", "ALL"].map(r =>
+      `<button type="button" data-range="${r}" aria-pressed="${r === RANGE}">${{"1M": "1개월", "3M": "3개월", "1Y": "1년", "ALL": "전체"}[r]}</button>`).join("")}</div>
+    <div class="chart" id="chart"></div>
+    <div class="muted">${DATA.pricesAt ? "시세 " + ago(DATA.pricesAt) + " 기준 · " : ""}매일 ${DATA.snapshotHour}시 자동 기록</div></div>`;
+}
+function pick30(h) {
+  if (h.length < 2) return null;
+  const want = new Date(today() - 30 * 864e5);
+  let best = null;
+  h.forEach(p => { const d = parseDay(p.date); if (d && d <= want) best = p; });
+  return best;
+}
+
+function drawChart() {
+  const box = $("#chart"); if (!box) return;
+  const days = {"1M": 31, "3M": 92, "1Y": 366, "ALL": 1e6}[RANGE];
+  const from = new Date(today() - days * 864e5);
+  const pts = DATA.history.filter(p => { const d = parseDay(p.date); return d && d >= from && isFinite(p.net); });
+  if (pts.length < 2) { box.innerHTML = '<p class="empty">기록이 이틀 이상 쌓이면 추이 그래프가 나옵니다</p>'; return; }
+  const W = 600, H = 150, P = 6;
+  const xs = pts.map(p => parseDay(p.date).getTime()), ys = pts.map(p => p.net);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  let y0 = Math.min(...ys), y1 = Math.max(...ys); if (y0 === y1) { y0 -= 1; y1 += 1; }
+  const X = x => P + (x - x0) / (x1 - x0 || 1) * (W - 2 * P), Y = y => H - P - (y - y0) / (y1 - y0) * (H - 2 * P - 14);
+  const path = pts.map((p, i) => (i ? "L" : "M") + X(xs[i]).toFixed(1) + " " + Y(p.net).toFixed(1)).join(" ");
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="순자산 추이">
+    <line x1="${P}" x2="${W - P}" y1="${H - P}" y2="${H - P}" stroke="var(--line)" stroke-width="1"/>
+    <path d="${path}" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+    <line id="cx" y1="0" y2="${H}" stroke="var(--mute)" stroke-width="1" vector-effect="non-scaling-stroke" visibility="hidden"/>
+    <circle id="cd" r="4" fill="var(--s1)" stroke="var(--card)" stroke-width="2" visibility="hidden"/></svg>
+    <div class="tip" id="tip"></div><div class="muted row"><span>${fmtDay(pts[0].date)}</span><span>${fmtDay(pts[pts.length - 1].date)}</span></div>`;
+  const svg = box.querySelector("svg"), tip = $("#tip");
+  const move = e => {
+    const r = svg.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width * W;
+    let i = 0; xs.forEach((x, k) => { if (Math.abs(X(x) - fx) < Math.abs(X(xs[i]) - fx)) i = k; });
+    const cx = X(xs[i]), cy = Y(pts[i].net);
+    ["cx", "cd"].forEach(id => svg.getElementById(id).setAttribute("visibility", "visible"));
+    svg.getElementById("cx").setAttribute("x1", cx); svg.getElementById("cx").setAttribute("x2", cx);
+    svg.getElementById("cd").setAttribute("cx", cx); svg.getElementById("cd").setAttribute("cy", cy);
+    tip.style.display = "block"; tip.style.left = Math.min(Math.max(cx / W * r.width, 60), r.width - 60) + "px";
+    tip.textContent = `${fmtDay(pts[i].date)} ${won(pts[i].net)}`;
+  };
+  svg.addEventListener("pointermove", move); svg.addEventListener("pointerdown", move);
+  svg.addEventListener("pointerleave", () => { tip.style.display = "none"; ["cx", "cd"].forEach(id => svg.getElementById(id).setAttribute("visibility", "hidden")); });
+}
+
+function summary() {
+  const t = DATA.totals;
+  const kinds = KINDS.map(([k, l], i) => ({k, l, v: t.byKind[k] || 0, c: SERIES[i]})).filter(x => x.v > 0);
+  const tot = kinds.reduce((a, x) => a + x.v, 0);
+  const alloc = tot ? `<h2>금융 자산 구성</h2><div class="card"><div class="alloc" role="img" aria-label="금융 자산 구성">${kinds.map(x =>
+      `<i style="width:${(x.v / tot * 100).toFixed(2)}%;background:var(${x.c})" title="${esc(x.l)}"></i>`).join("")}</div>
+      <div class="legend">${kinds.map(x => `<span><i style="background:var(${x.c})"></i>${esc(x.l)}<b>${won(x.v)} · ${(x.v / tot * 100).toFixed(0)}%</b></span>`).join("")}</div>
+      ${t.realestate ? `<div class="legend" style="margin-top:8px"><span>🏠 부동산<b>${won(t.realestate)}</b></span><span>대출<b>${won(-t.loan)}</b></span></div>` : ""}</div>` : "";
+  const stats = ORDER.map(c => {
+    const list = byCat(c);
+    let n = list.length + "", l = CATS[c].label;
+    if (c === "finance") { n = won(t.finance); l = `금융 ${list.length}개`; }
+    if (c === "realestate" && list.length) { n = won(t.realestate - t.loan); l = `부동산 ${list.length}곳(순)`; }
+    if (c === "people") l = "사람";
+    if (c === "positions") { const cur = list.filter(x => !(x.f || {}).end).length; l = `직위 · 지금 ${cur}개`; }
+    return `<button type="button" class="stat" data-view="${c}"><div class="l">${CATS[c].icon} ${esc(l)}</div><div class="n">${esc(n)}</div></button>`;
+  }).join("");
+  const dd = upcoming(60);
+  const days = dd.length ? `<h2>다가오는 날</h2><div class="card">${dd.map(x =>
+      `<div class="dday"><span>${esc(x.text)}</span><b>${x.days ? "D-" + x.days : "오늘"}</b></div>`).join("")}</div>` : "";
+  const now = byCat("positions").filter(x => !(x.f || {}).end).sort((a, b) => a.date < b.date ? 1 : -1);
+  const pos = now.length ? `<h2>지금 맡고 있는 일</h2><div class="list">${now.map(itemCard).join("")}</div>` : "";
+  const empty = DATA.items.length ? "" : `<div class="card" style="margin-top:12px"><p class="empty" style="padding:8px 0">아직 기록이 없습니다.<br>
+      오른쪽 아래 <b>＋ 추가</b>로 첫 기록을 남겨 보세요. 돈으로 셀 수 있는 것뿐 아니라 사람·저작물·직위·수상도 함께 쌓입니다.</p></div>`;
+  return `${empty}<h2>한눈에</h2><div class="grid">${stats}</div>${days}${alloc}${pos}
+    <p class="muted" style="margin-top:20px">데이터는 이 구글 계정의 비공개 시트에만 저장됩니다 · <a href="${esc(DATA.sheetUrl)}" target="_blank" rel="noopener">시트 열기</a></p>`;
+}
+function upcoming(within) {
+  const out = [];
+  byCat("people").forEach(p => {
+    const b = nextDday(p.date);
+    if (b && b.days <= within) out.push({days: b.days, text: `🎂 ${p.name}${p.f.relation ? "(" + p.f.relation + ")" : ""} 생일 · ${b.years}번째`});
+    const a = nextDday(p.f.anniv_date);
+    if (a && a.days <= within) out.push({days: a.days, text: `💐 ${p.name} ${p.f.anniv_label || "기념일"} · ${a.years}주년`});
+  });
+  return out.sort((x, y) => x.days - y.days);
+}
+
+function itemCard(it) {
+  const f = it.f || {}, v = it.v || {};
+  let sub = [], right = "", rsub = "", badge = "";
+  if (it.category === "finance") {
+    if (VIEW !== "finance") sub.push(KIND_LABEL[f.kind] || "기타");      // 금융 목록은 종류별 묶음 제목이 있다
+    if (priced(f)) {
+      if (f.qty) sub.push(`${Number(f.qty).toLocaleString("ko-KR")}${f.kind === "coin" ? "개" : "주"}`);
+      if (isFinite(v.price)) sub.push("현재가 " + (f.kind === "us" ? "$" + Number(v.price).toLocaleString("en-US") : Number(v.price).toLocaleString("ko-KR") + "원"));
+      if (v.stale) badge = '<span class="badge warn">시세 없음 · 평단가로 계산</span>';
+      if (v.manual) badge = '<span class="badge">직접 입력 금액</span>';
+    }
+    if (f.account) sub.push(f.account);
+    right = won(v.value);
+    if (isFinite(v.gainPct)) rsub = `<span class="${tone(v.gainPct)}">${pct(v.gainPct)}${isFinite(v.gain) ? " · " + won(v.gain, true) : ""}</span>`;
+  } else if (it.category === "realestate") {
+    if (f.place) sub.push(f.place);
+    if (it.date) sub.push(fmtDay(it.date) + " 매입 · " + span(it.date));
+    if (v.loan) sub.push("대출 " + won(v.loan));
+    right = won(v.value);
+    if (isFinite(v.gainPct)) rsub = `<span class="${tone(v.gain)}">매입가 대비 ${pct(v.gainPct)}</span>`;
+  } else if (it.category === "people") {
+    if (f.relation) sub.push(f.relation);
+    const a = age(it.date); if (a != null) sub.push(`만 ${a}세`);
+    const b = nextDday(it.date); if (b) right = b.days ? "생일 D-" + b.days : "오늘 생일";
+    if (f.anniv_date) { const n = nextDday(f.anniv_date); rsub = `${esc(f.anniv_label || "기념일")} ${n ? (n.days ? "D-" + n.days : "오늘") : ""}`; }
+  } else if (it.category === "works") {
+    const kinds = Object.fromEntries(FIELDS.works[0].options); sub.push(kinds[f.kind] || "저작물");
+    if (it.date) sub.push(fmtDay(it.date));
+    if (num(f.income)) right = won(num(f.income));
+  } else if (it.category === "positions") {
+    if (f.org) sub.push(f.org);
+    if (it.date) sub.push(`${fmtDay(it.date)} ~ ${f.end ? fmtDay(f.end) : "지금"}`);
+    right = span(it.date, f.end || null);
+    if (!f.end) badge = '<span class="badge">지금</span>';
+  } else if (it.category === "awards") {
+    const kinds = Object.fromEntries(FIELDS.awards[0].options); sub.push(kinds[f.kind] || "수상");
+    if (f.org) sub.push(f.org);
+    if (it.date) right = fmtDay(it.date);
+  }
+  const link = f.link ? ` · <a href="${esc(f.link)}" target="_blank" rel="noopener" data-stop>링크</a>` : "";
+  return `<button type="button" class="item" data-edit="${esc(it.id)}"><span class="t">${esc(it.name)}${badge}</span>
+    <span class="r">${esc(right)}</span><span class="s">${sub.map(esc).join(" · ")}${link}</span><span class="rs">${rsub}</span></button>`;
+}
+
+function category(c) {
+  let list = byCat(c).slice();
+  const head = `<div class="row"><h2>${CATS[c].icon} ${esc(CATS[c].label)} <span class="muted">${list.length}</span></h2>
+    ${c === "finance" ? '<button class="btn" type="button" data-act="refresh">시세 새로고침</button>' : ""}</div>`;
+  if (!list.length) return head + `<p class="empty">아직 없습니다. ＋ 추가로 기록해 보세요.</p>`;
+  if (c === "finance") {
+    list.sort((a, b) => (b.v.value || 0) - (a.v.value || 0));
+    return head + KINDS.map(([k, l]) => {
+      const g = list.filter(x => (x.f.kind || "etc") === k); if (!g.length) return "";
+      const sum = g.reduce((a, x) => a + (x.v.value || 0), 0);
+      return `<div class="group row"><span>${esc(l)}</span><span>${won(sum)}</span></div><div class="list">${g.map(itemCard).join("")}</div>`;
+    }).join("");
+  }
+  if (c === "people") list.sort((a, b) => (nextDday(a.date) || {days: 999}).days - (nextDday(b.date) || {days: 999}).days);
+  else if (c === "positions") list.sort((a, b) => (!!a.f.end - !!b.f.end) || ((a.date || "") < (b.date || "") ? 1 : -1));   // 지금 맡은 일 먼저
+  else list.sort((a, b) => (a.date || "") < (b.date || "") ? 1 : -1);
+  if (c === "awards" || c === "works") {
+    const years = {};
+    list.forEach(x => { const y = (x.date || "").slice(0, 4) || "날짜 없음"; (years[y] = years[y] || []).push(x); });
+    return head + Object.keys(years).sort().reverse().map(y =>
+      `<div class="group">${esc(y)} · ${years[y].length}개</div><div class="list">${years[y].map(itemCard).join("")}</div>`).join("");
+  }
+  return head + `<div class="list">${list.map(itemCard).join("")}</div>`;
+}
+
+function timeline() {
+  const ev = [];
+  DATA.items.forEach(it => {
+    const f = it.f || {}, c = CATS[it.category];
+    if (it.category === "people") {
+      if (f.anniv_date) ev.push({d: f.anniv_date, t: `💐 ${it.name} · ${f.anniv_label || "기념일"}`, id: it.id});
+      return;
+    }
+    if (!it.date) return;
+    const what = {finance: "매수", realestate: "매입", works: "발표", positions: "시작", awards: ""}[it.category];
+    ev.push({d: it.date, t: `${c.icon} ${it.name}${what ? " " + what : ""}${f.org ? " · " + f.org : ""}`, id: it.id});
+    if (it.category === "positions" && f.end) ev.push({d: f.end, t: `${c.icon} ${it.name} 마침`, id: it.id});
+  });
+  if (!ev.length) return '<h2>📜 인생 연표</h2><p class="empty">날짜가 있는 기록이 쌓이면 연도별로 모아 보여 줍니다.</p>';
+  ev.sort((a, b) => a.d < b.d ? 1 : -1);
+  const years = {};
+  ev.forEach(e => (years[e.d.slice(0, 4)] = years[e.d.slice(0, 4)] || []).push(e));
+  return '<h2>📜 인생 연표</h2>' + Object.keys(years).sort().reverse().map(y => `<div class="year">${y} <span class="muted">${years[y].length}개</span></div>` +
+    years[y].map(e => `<div class="tl" data-edit="${esc(e.id)}"><span class="d">${e.d.slice(5).replace("-", ".")}</span><span>${esc(e.t)}</span></div>`).join("")).join("");
+}
+
+// ---------------------------------------------------------------- 추가·수정 화면
+let EDIT = null;
+function openEditor(it) {
+  const cat = it ? it.category : (ORDER.includes(VIEW) ? VIEW : "finance");
+  EDIT = it ? JSON.parse(JSON.stringify(it)) : {id: "", category: cat, name: "", date: "", f: cat === "finance" ? {kind: "kr"} : {}};
+  drawForm(); $("#sheet").hidden = false;
+  setTimeout(() => { const n = $("#form [name=name]"); if (n && !it) n.focus(); }, 50);
+}
+function readForm() {
+  const fd = new FormData($("#form"));
+  EDIT.category = fd.get("category") || EDIT.category;
+  EDIT.name = (fd.get("name") || "").trim(); EDIT.date = fd.get("date") || "";
+  const f = {};
+  for (const [k, v] of fd.entries()) {
+    if (!k.startsWith("f_")) continue;
+    const key = k.slice(2), def = FIELDS[EDIT.category].find(x => x.k === key);
+    if (v === "") continue;
+    f[key] = def && def.type === "num" ? num(v) : v.trim();
+  }
+  EDIT.f = f;
+}
+function drawForm() {
+  const c = EDIT.category, meta = CATS[c], f = EDIT.f || {};
+  const seen = new Set();
+  const fields = FIELDS[c].filter(d => !d.show || d.show(f)).filter(d => !seen.has(d.k) && seen.add(d.k)).map(d => {
+    const v = f[d.k] == null ? "" : f[d.k], id = "f_" + d.k;
+    let input;
+    if (d.type === "select") input = `<select id="${id}" name="${id}">${d.options.map(([k, l]) => `<option value="${k}"${k === (v || d.options[0][0]) ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
+    else if (d.type === "area") input = `<textarea id="${id}" name="${id}">${esc(v)}</textarea>`;
+    else input = `<input id="${id}" name="${id}" value="${esc(d.type === "num" && v !== "" ? Number(v).toLocaleString("ko-KR", {maximumFractionDigits: 8}) : v)}"
+      ${d.type === "num" ? 'inputmode="decimal"' : d.type === "date" ? 'type="date"' : d.type === "url" ? 'type="url" inputmode="url"' : ""}>`;
+    return `<div class="f"><label for="${id}">${esc(d.label)}</label>${input}${d.hint ? `<small>${esc(d.hint)}</small>` : ""}</div>`;
+  }).join("");
+  $("#form").innerHTML = `<h3>${EDIT.id ? "수정" : "추가"}</h3>
+    <div class="f"><label for="category">분류</label><select id="category" name="category"${EDIT.id ? " disabled" : ""}>${ORDER.map(k =>
+      `<option value="${k}"${k === c ? " selected" : ""}>${CATS[k].icon} ${esc(CATS[k].label)}</option>`).join("")}</select></div>
+    <div class="f"><label for="name">${esc(meta.name)}</label><input id="name" name="name" required maxlength="200" value="${esc(EDIT.name)}" placeholder="${esc(meta.nameHint)}"></div>
+    <div class="f"><label for="date">${esc(meta.date)}</label><input id="date" name="date" type="date" value="${esc(EDIT.date)}"></div>
+    ${fields}
+    <div class="row"><div>${EDIT.id ? '<button class="btn danger" type="button" data-act="delete">삭제</button>' : ""}</div>
+      <div class="row"><button class="btn" type="button" data-act="close">취소</button><button class="btn primary" type="submit">저장</button></div></div>`;
+}
+async function save(e) {
+  e.preventDefault(); if (busy) return;
+  readForm();
+  if (!EDIT.name) return toast("이름을 적어 주세요");
+  busy = true; toast("저장 중…");
+  try {
+    await api("saveItem", EDIT);
+    $("#sheet").hidden = true;
+    const needPrice = EDIT.category === "finance" && priced(EDIT.f) && EDIT.f.ticker;
+    busy = false;
+    if (needPrice) await refresh(true); else await loadAssets(true);
+    toast("저장했습니다");
+  } catch (err) { toast("저장하지 못했습니다: " + err.message, true); }
+  busy = false;
+}
+async function remove() {
+  if (!confirm(`'${EDIT.name}'을(를) 지울까요? 되돌릴 수 없습니다.`)) return;
+  busy = true;
+  try { await api("deleteItem", EDIT.id); $("#sheet").hidden = true; busy = false; await loadAssets(true); toast("지웠습니다"); }
+  catch (err) { toast("지우지 못했습니다: " + err.message, true); }
+  busy = false;
+}
+
+// ---------------------------------------------------------------- 이벤트
+document.addEventListener("click", e => {
+  const t = e.target;
+  if (t.closest("[data-stop]")) return;
+  const tab = t.closest(".tabs button"); if (tab) return showTab(tab.dataset.tab);
+  const v = t.closest("[data-view]"); if (v) { VIEW = v.dataset.view; store.set("view", VIEW); render(); window.scrollTo(0, 0); return; }
+  const r = t.closest("[data-range]"); if (r) { RANGE = r.dataset.range; render(); return; }
+  const ed = t.closest("[data-edit]"); if (ed) { const it = DATA.items.find(x => x.id === ed.dataset.edit); if (it) openEditor(it); return; }
+  const a = t.closest("[data-act]"); if (!a) return;
+  if (a.dataset.act === "refresh") refresh(false);
+  if (a.dataset.act === "close") $("#sheet").hidden = true;
+  if (a.dataset.act === "delete") remove();
+});
+$("#add").addEventListener("click", () => DATA ? openEditor(null) : toast("불러오는 중입니다"));
+$("#form").addEventListener("submit", save);
+$("#form").addEventListener("change", e => {
+  if (e.target.name === "category" || e.target.name === "f_kind") { readForm(); if (e.target.name === "category") EDIT.f = EDIT.category === "finance" ? {kind: "kr"} : {}; drawForm(); }
+});
+$("#sheet").addEventListener("click", e => { if (e.target.id === "sheet") $("#sheet").hidden = true; });
+VIEW = VIEWS.some(([k]) => k === store.get("view")) ? store.get("view") : "summary";
+showTab(store.get("tab") === "assets" ? "assets" : "quest");
+</script>
+</body>
+</html>
