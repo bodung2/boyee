@@ -92,12 +92,25 @@ test('수정·삭제와 입력 검사, 수식처럼 보이는 이름도 글자�
   it = gas.getData().items;
   assert.equal(it.length, 1);
   assert.equal(it[0].name, '교육감 표창');
-  assert.throws(() => gas.saveItem({ category: 'nope', name: 'x' }), /분류/);
+  assert.throws(() => gas.saveItem({ category: 'Bad-Cat', name: 'x' }), /분류/);
+  assert.throws(() => gas.saveItem({ category: '', name: 'x' }), /분류/);
   assert.throws(() => gas.saveItem({ category: 'people', name: '  ' }), /이름/);
   assert.throws(() => gas.saveItem({ category: 'people', name: '첫째', date: '2020/1/1' }), /날짜/);
   assert.equal(gas.deleteItem(id), true);
   assert.equal(gas.getData().items.length, 0);
   assert.throws(() => gas.deleteItem(id), /이미 지워진/);
+});
+
+test('새 분류(파이프라인)와 모든 분류의 링크는 화면만 바꿔도 저장된다', () => {
+  const { gas } = load();
+  gas.saveItem({ category: 'pipeline', name: '블로그 광고', date: '2025-01-01',
+                 f: { kind: 'ads', status: 'on', monthly: 320000, link: 'https://example.com/a' } });
+  gas.saveItem({ category: 'people', name: '가족 A', f: { relation: '배우자', link: 'https://example.com/p' } });
+  const d = gas.getData();
+  const p = d.items.find(i => i.category === 'pipeline');
+  assert.deepEqual(p.f, { kind: 'ads', status: 'on', monthly: 320000, link: 'https://example.com/a' });
+  assert.equal(d.items.find(i => i.category === 'people').f.link, 'https://example.com/p');
+  assert.equal(d.totals.net, 0, '파이프라인 월수입은 순자산에 더하지 않는다');
 });
 
 test('같은 날 기록은 덮어쓰고 날짜순으로 쌓는다', () => {

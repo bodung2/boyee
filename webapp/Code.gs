@@ -2,7 +2,8 @@
  * 인생 대시보드 웹앱 (구글 Apps Script, '나만' 접근으로 배포)
  *
  * 탭 1. 퀘스트 보드: 집 PC가 매시간 드라이브에 올리는 quest_board.html(보기 전용)
- * 탭 2. 내 자산: 금융·부동산·사람·저작물·직위·수상을 기록하는 곳. 화면에서 추가·수정·삭제한다.
+ * 탭 2. 내 자산: 금융·파이프라인(부가수입)·부동산·사람·저작물·직위·수상을 기록하는 곳. 화면에서 추가·수정·삭제한다.
+ *        분류 목록은 화면(app.html)이 정한다. 이 코드는 분류 이름 형식만 검사하므로 분류를 더해도 다시 붙여 넣을 필요가 없다.
  *
  * - 자산 데이터는 이 구글 계정의 비공개 시트 '인생 자산 대시보드 (웹앱 데이터)'에만 저장된다(처음 열 때 자동 생성).
  *   GitHub(공개 저장소)에는 이 코드와 화면만 있고 데이터는 올라가지 않는다.
@@ -12,13 +13,13 @@
  *   이 코드를 다시 붙여 넣을 필요가 없다. 이 코드가 바뀌면 API_VERSION이 올라가고 화면이 '새로 붙여 넣기'를 알린다.
  * 설치·갱신 방법: docs/QUEST_BOARD_WEBAPP.md
  */
-const API_VERSION = 1;
+const API_VERSION = 2;
 const QUEST_FILE = 'quest_board.html';
 const APP_FILE = 'life_dashboard_app.html';
 const BOOK_NAME = '인생 자산 대시보드 (웹앱 데이터)';
 const TZ = 'Asia/Seoul';
 const SNAPSHOT_HOUR = 16;
-const CATEGORIES = ['finance', 'realestate', 'people', 'works', 'positions', 'awards'];
+const CATEGORY_RE = /^[a-z_]{2,30}$/;           // finance, pipeline, realestate, people, works, positions, awards …
 const PRICED = ['kr', 'us', 'coin'];
 const ITEM_HEAD = ['id', '분류', '이름', '날짜', '데이터', '수정시각'];
 const PRICE_HEAD = ['키', '가격', '통화', '갱신'];
@@ -129,7 +130,7 @@ function writeItems_(items) {
 }
 
 function clean_(item) {
-  if (!item || CATEGORIES.indexOf(item.category) < 0) throw new Error('분류가 올바르지 않습니다');
+  if (!item || !CATEGORY_RE.test(String(item.category || ''))) throw new Error('분류가 올바르지 않습니다');
   const name = String(item.name || '').trim().slice(0, 200);
   if (!name) throw new Error('이름을 적어 주세요');
   const date = String(item.date || '').trim();

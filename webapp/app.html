@@ -102,9 +102,10 @@ padding:10px 16px;border-radius:8px;font-size:14px;max-width:calc(100% - 32px);d
 <div id="toast" role="status"></div>
 <script>
 "use strict";
-const NEED_API = 1;
+const NEED_API = 2;
 const CATS = {
   finance: {icon: "💰", label: "금융", name: "이름", nameHint: "예: 삼성전자, 비상금 통장", date: "매수일(선택)"},
+  pipeline: {icon: "💵", label: "파이프라인", name: "이름", nameHint: "예: 교육 블로그 애드포스트", date: "시작일"},
   realestate: {icon: "🏠", label: "부동산", name: "이름", nameHint: "예: 우리 집", date: "매입일"},
   people: {icon: "👨‍👩‍👧", label: "사람", name: "이름", nameHint: "", date: "생일(양력)"},
   works: {icon: "✍️", label: "저작물", name: "제목", nameHint: "", date: "발표일"},
@@ -115,6 +116,12 @@ const KINDS = [["kr", "국내 주식·ETF"], ["us", "미국 주식·ETF"], ["coi
 const KIND_LABEL = Object.fromEntries(KINDS);
 const PRICED = ["kr", "us", "coin"];
 const priced = f => PRICED.includes(f.kind);
+const PIPE_KINDS = [["ads", "광고 수익(애드센스·애드포스트)"], ["affiliate", "제휴 마케팅(쿠팡파트너스 등)"], ["royalty", "인세·저작권료"],
+  ["teach", "강의·강연"], ["freelance", "외주·프리랜스"], ["product", "콘텐츠 판매(전자책·템플릿)"], ["dividend", "배당·이자"],
+  ["rent", "임대"], ["etc", "기타"]];
+const PIPE_STATUS = [["on", "운영 중"], ["prep", "준비 중"], ["pause", "쉬는 중"], ["off", "접음"]];
+const PIPE_KIND = Object.fromEntries(PIPE_KINDS), PIPE_STAT = Object.fromEntries(PIPE_STATUS);
+const monthly = it => (it.f.status || "on") === "on" ? (num(it.f.monthly) || 0) : 0;
 const FIELDS = {
   finance: [
     {k: "kind", label: "종류", type: "select", options: KINDS},
@@ -125,17 +132,26 @@ const FIELDS = {
     {k: "cost", label: "넣은 원금(선택, 수익률 계산용)", type: "num", show: f => !priced(f)},
     {k: "amount", label: "평가금액 직접 입력(선택)", hint: "시세를 못 받는 종목만. 비우면 시세로 계산", type: "num", show: priced, alt: true},
     {k: "account", label: "계좌·기관(선택)"},
+    {k: "link", label: "링크(선택)", hint: "관련 페이지·계좌·문서 주소", type: "url"},
+    {k: "memo", label: "메모", type: "area"}],
+  pipeline: [
+    {k: "kind", label: "종류", type: "select", options: PIPE_KINDS},
+    {k: "status", label: "상태", type: "select", options: PIPE_STATUS},
+    {k: "monthly", label: "월 수입(원)", hint: "최근 몇 달 평균. 바뀌면 고쳐 주세요", type: "num"},
+    {k: "link", label: "링크(선택)", hint: "관련 페이지·계좌·문서 주소", type: "url"},
     {k: "memo", label: "메모", type: "area"}],
   realestate: [
     {k: "buy", label: "매입가(원)", type: "num"},
     {k: "price", label: "현재 시세(원)", hint: "가끔 직접 고쳐 주세요(실거래가·호가 참고)", type: "num"},
     {k: "loan", label: "대출 잔액(원, 선택)", type: "num"},
     {k: "place", label: "위치(선택)"},
+    {k: "link", label: "링크(선택)", hint: "관련 페이지·계좌·문서 주소", type: "url"},
     {k: "memo", label: "메모", type: "area"}],
   people: [
     {k: "relation", label: "관계", hint: "예: 배우자, 첫째, 어머니"},
     {k: "anniv_label", label: "기념일 이름(선택)", hint: "예: 결혼기념일"},
     {k: "anniv_date", label: "기념일 날짜(선택)", type: "date"},
+    {k: "link", label: "링크(선택)", hint: "관련 페이지·계좌·문서 주소", type: "url"},
     {k: "memo", label: "메모", type: "area"}],
   works: [
     {k: "kind", label: "종류", type: "select", options: [["book", "책"], ["paper", "논문"], ["research", "연구"], ["workbook", "워크북·교재"], ["writing", "글·칼럼"], ["talk", "강연·발표"], ["etc", "기타"]]},
@@ -145,6 +161,7 @@ const FIELDS = {
   positions: [
     {k: "org", label: "기관·소속"},
     {k: "end", label: "종료일", hint: "지금 맡고 있으면 비워 두세요", type: "date"},
+    {k: "link", label: "링크(선택)", hint: "관련 페이지·계좌·문서 주소", type: "url"},
     {k: "memo", label: "메모", type: "area"}],
   awards: [
     {k: "kind", label: "종류", type: "select", options: [["award", "상"], ["cert", "자격증"], ["honor", "표창"], ["etc", "기타"]]},
@@ -152,7 +169,7 @@ const FIELDS = {
     {k: "link", label: "증빙 링크(선택)", type: "url"},
     {k: "memo", label: "메모", type: "area"}]
 };
-const ORDER = ["finance", "realestate", "people", "works", "positions", "awards"];
+const ORDER = ["finance", "pipeline", "realestate", "people", "works", "positions", "awards"];
 const VIEWS = [["summary", "요약"], ...ORDER.map(c => [c, CATS[c].icon + " " + CATS[c].label]), ["timeline", "📜 연표"]];
 const SERIES = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6"];
 
@@ -180,7 +197,8 @@ function won(n, sign) {
   n = Math.abs(Math.round(n));
   const eok = Math.floor(n / 1e8), man = Math.floor((n % 1e8) / 1e4);
   if (eok) return s + eok.toLocaleString("ko-KR") + "억" + (man ? " " + man.toLocaleString("ko-KR") + "만" : "") + "원";
-  if (man) return s + man.toLocaleString("ko-KR") + "만원";
+  const rest = n % 1e4;                          // 천만 원 아래는 끝자리까지(월 수입 등)
+  if (man) return s + man.toLocaleString("ko-KR") + "만" + (rest && n < 1e7 ? " " + rest.toLocaleString("ko-KR") + "원" : "원");
   return s + n.toLocaleString("ko-KR") + "원";
 }
 const pct = n => n == null || !isFinite(n) ? "" : (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(1) + "%";
@@ -270,7 +288,7 @@ const byCat = c => DATA.items.filter(it => it.category === c);
 
 // ---------------------------------------------------------------- 그리기
 function render() {
-  const old = DATA.oldApi ? '<div class="note">웹앱 코드(Code.gs)가 예전 버전입니다. 저장소의 webapp/Code.gs를 붙여 넣고 새 버전으로 배포해 주세요.</div>' : "";
+  const old = DATA.oldApi ? '<div class="note">웹앱 코드(Code.gs)가 예전 버전입니다(새 분류 저장이 안 될 수 있어요). 저장소의 webapp/Code.gs를 붙여 넣고 배포 관리에서 새 버전으로 배포해 주세요.</div>' : "";
   const chips = `<nav class="chips" aria-label="분류">${VIEWS.map(([k, l]) =>
     `<button type="button" data-view="${k}" aria-pressed="${k === VIEW}">${esc(l)}</button>`).join("")}</nav>`;
   const body = VIEW === "summary" ? summary() : VIEW === "timeline" ? timeline() : category(VIEW);
@@ -347,6 +365,7 @@ function summary() {
     const list = byCat(c);
     let n = list.length + "", l = CATS[c].label;
     if (c === "finance") { n = won(t.finance); l = `금융 ${list.length}개`; }
+    if (c === "pipeline") { n = won(list.reduce((a, x) => a + monthly(x), 0)) + "/월"; l = `파이프라인 ${list.filter(x => (x.f.status || "on") === "on").length}개 운영`; }
     if (c === "realestate" && list.length) { n = won(t.realestate - t.loan); l = `부동산 ${list.length}곳(순)`; }
     if (c === "people") l = "사람";
     if (c === "positions") { const cur = list.filter(x => !(x.f || {}).end).length; l = `직위 · 지금 ${cur}개`; }
@@ -407,6 +426,12 @@ function itemCard(it) {
     if (it.date) sub.push(`${fmtDay(it.date)} ~ ${f.end ? fmtDay(f.end) : "지금"}`);
     right = span(it.date, f.end || null);
     if (!f.end) badge = '<span class="badge">지금</span>';
+  } else if (it.category === "pipeline") {
+    sub.push(PIPE_KIND[f.kind] || "기타");
+    if (it.date) sub.push(fmtDay(it.date) + " 시작 · " + span(it.date));
+    const st = f.status || "on";
+    if (st !== "on") badge = `<span class="badge${st === "prep" ? " warn" : ""}">${esc(PIPE_STAT[st])}</span>`;
+    if (num(f.monthly)) { right = won(num(f.monthly)) + "/월"; rsub = st === "on" ? "연 " + won(num(f.monthly) * 12) : ""; }
   } else if (it.category === "awards") {
     const kinds = Object.fromEntries(FIELDS.awards[0].options); sub.push(kinds[f.kind] || "수상");
     if (f.org) sub.push(f.org);
@@ -430,6 +455,15 @@ function category(c) {
       return `<div class="group row"><span>${esc(l)}</span><span>${won(sum)}</span></div><div class="list">${g.map(itemCard).join("")}</div>`;
     }).join("");
   }
+  if (c === "pipeline") {
+    const total = list.reduce((a, x) => a + monthly(x), 0);
+    const top = `<div class="card" style="margin-bottom:6px"><div class="row"><span class="muted">운영 중인 파이프라인 월 합계</span>
+      <b style="font-size:18px">${won(total)}</b></div><div class="muted">연으로 치면 ${won(total * 12)} · 순자산에는 더하지 않습니다</div></div>`;
+    return head + top + PIPE_STATUS.map(([k, l]) => {
+      const g = list.filter(x => (x.f.status || "on") === k).sort((a, b) => (num(b.f.monthly) || 0) - (num(a.f.monthly) || 0));
+      return g.length ? `<div class="group">${esc(l)} · ${g.length}개</div><div class="list">${g.map(itemCard).join("")}</div>` : "";
+    }).join("");
+  }
   if (c === "people") list.sort((a, b) => (nextDday(a.date) || {days: 999}).days - (nextDday(b.date) || {days: 999}).days);
   else if (c === "positions") list.sort((a, b) => (!!a.f.end - !!b.f.end) || ((a.date || "") < (b.date || "") ? 1 : -1));   // 지금 맡은 일 먼저
   else list.sort((a, b) => (a.date || "") < (b.date || "") ? 1 : -1);
@@ -451,7 +485,7 @@ function timeline() {
       return;
     }
     if (!it.date) return;
-    const what = {finance: "매수", realestate: "매입", works: "발표", positions: "시작", awards: ""}[it.category];
+    const what = {finance: "매수", pipeline: "시작", realestate: "매입", works: "발표", positions: "시작", awards: ""}[it.category] || "";
     ev.push({d: it.date, t: `${c.icon} ${it.name}${what ? " " + what : ""}${f.org ? " · " + f.org : ""}`, id: it.id});
     if (it.category === "positions" && f.end) ev.push({d: f.end, t: `${c.icon} ${it.name} 마침`, id: it.id});
   });
@@ -469,7 +503,8 @@ function openEditor(it) {
   const cat = it ? it.category : (ORDER.includes(VIEW) ? VIEW : "finance");
   EDIT = it ? JSON.parse(JSON.stringify(it)) : {id: "", category: cat, name: "", date: "", f: cat === "finance" ? {kind: "kr"} : {}};
   drawForm(); $("#sheet").hidden = false;
-  setTimeout(() => { const n = $("#form [name=name]"); if (n && !it) n.focus(); }, 50);
+  // 새로 추가할 때만 이름 칸에 커서를 둔다(이미 다른 칸을 누르고 있으면 건드리지 않음)
+  setTimeout(() => { const n = $("#form [name=name]"); if (n && !it && !$("#form").contains(document.activeElement)) n.focus(); }, 50);
 }
 function readForm() {
   const fd = new FormData($("#form"));
