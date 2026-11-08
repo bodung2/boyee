@@ -113,6 +113,22 @@ test('같은 날 기록은 덮어쓰고 날짜순으로 쌓는다', () => {
   assert.equal(h[0].date, '2026-11-01');
 });
 
+test('시트가 날짜처럼 생긴 글자를 날짜로 바꿔도 기록 순서와 시세 시각(시·분)이 유지된다', () => {
+  const { gas, fake } = load({ gf: { 'KRX:005930': 75000 } });
+  gas.saveItem({ category: 'finance', name: '삼성전자', f: { kind: 'kr', ticker: '005930', qty: 1 } });
+  gas.dailySnapshot();
+  const book = Object.values(fake.books)[0];
+  const hist = book.sheets['기록'];
+  hist.data.push(['2026-10-01', 10, 10, 0, 0, '{}']);          // 예전 줄(시트가 날짜로 바꿔 둔 상태처럼)
+  hist.getRange(hist.data.length, 1, 1, 1).setValues([['2026-10-01']]);
+  gas.dailySnapshot();
+  const firstCol = hist.getDataRange().getValues().slice(1).map(r => (r[0] instanceof Date ? 'DATE' : String(r[0])));
+  assert.ok(!firstCol.includes('DATE'), '날짜 칸은 글자로 남아야 함: ' + firstCol);
+  assert.deepEqual(firstCol, firstCol.slice().sort(), '시트 안에서도 날짜순');
+  const at = book.sheets['시세'].getDataRange().getValues()[1][3];
+  assert.ok(typeof at === 'string' && /T\d{2}:\d{2}/.test(at), '시세 시각에 시·분이 남아야 함: ' + at);
+});
+
 test('화면 파일이 있으면 그것을, 없으면 퀘스트 보드를 보여 준다', () => {
   let { gas } = load({ files: { 'quest_board.html': '<p>보드</p>', 'life_dashboard_app.html': '<p>앱</p>' } });
   assert.equal(gas.doGet().html, '<p>앱</p>');
