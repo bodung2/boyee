@@ -948,7 +948,7 @@ function flow(p, amount, what, extra) {
 // 평균 아래인 주가 평균을 넘긴 주(상위 % 점수)보다 많이 받지는 않는다. 평균 이상인 주는 상위 % 점수를 받으므로 모으지 않는다.
 const SMALL_CAP = 3;
 const SMALL = {
-  body: {unit: 15, label: "운동", fmt: v => `${v}분`, why: "30분 미만 운동도 포함. 15분 = 1점"},
+  body: {unit: 30, label: "운동", fmt: v => `${v}분`, why: "30분 = 1점(짧은 운동은 모아서 30분이 되면 1점)"},
   craft: {unit: 60, label: "가사·돌봄", fmt: v => `${v}분`, why: "30대 남성 한 주 평균 ≈ 530분의 약 1/8. 분리수거 1회 = 15분 → 4회 = 1점, 요리·청소 1시간 = 1점"},
   social: {unit: 30, label: "교류·나눔", fmt: v => `${v}분`, why: "30대 남성 한 주 평균 ≈ 270분의 약 1/8"},
   mind: {unit: 1, label: "반복 성취", fmt: v => `${v}회`, why: "같은 주 같은 영역 세 번째부터(5 → 2.5 → 0점이던 것) 1회 = 1점"},
