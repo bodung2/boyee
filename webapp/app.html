@@ -104,6 +104,14 @@ border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:poin
 .tm-act{padding:14px 10px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:15px;cursor:pointer}
 .tm-act[aria-pressed=true]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent) inset;font-weight:700}
 .tm-big{width:100%;padding:18px;font-size:20px;border-radius:14px}.tm-clock{font-size:52px;font-weight:800;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:-1px;margin:8px 0}
+#runbar{position:fixed;left:0;right:0;bottom:0;z-index:8;background:var(--card);border-top:2px solid var(--accent);box-shadow:0 -4px 14px rgba(0,0,0,.12);
+padding:8px 12px calc(8px + env(safe-area-inset-bottom));display:grid;gap:6px}
+.rb-row{display:grid;grid-template-columns:10px 1fr auto auto;gap:10px;align-items:center;max-width:720px;margin:0 auto;width:100%}
+.rb-dot{width:10px;height:10px;border-radius:50%;background:var(--up);animation:rbp 1.4s infinite}@keyframes rbp{50%{opacity:.25}}
+.rb-name{font-weight:700;font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rb-name small{display:block;font-weight:400;font-size:11px;color:var(--mute)}
+.rb-clock{font-size:20px;font-variant-numeric:tabular-nums}
+body.has-run #toast{bottom:auto;top:64px}body.has-run{padding-bottom:calc(76px + env(safe-area-inset-bottom))}body.has-run .fab{bottom:calc(84px + env(safe-area-inset-bottom))}
+.tm-rec .rs{display:flex;gap:6px;justify-content:flex-end}.tm-rec .rs .btn{padding:4px 10px;font-size:12px}
 @media (max-width:520px){.grid{grid-template-columns:repeat(2,1fr)}.hero .big{font-size:26px}.legend{grid-template-columns:1fr}}
 </style>
 </head>
@@ -119,6 +127,7 @@ border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:poin
 <section id="quest" hidden><iframe id="qframe" title="퀘스트 보드"></iframe><main id="qmsg" hidden></main></section>
 <section id="assets" hidden><main id="amain"><p class="empty">불러오는 중…</p></main>
   <button class="fab" type="button" id="add">＋ 추가</button></section>
+<div id="runbar" hidden></div>
 <div class="sheet" id="sheet" hidden><form id="form" autocomplete="off"></form></div>
 <div id="toast" role="status"></div>
 <script>
@@ -666,7 +675,8 @@ document.addEventListener("click", e => {
 $("#add").addEventListener("click", () => DATA ? openEditor(null) : toast("불러오는 중입니다"));
 $("#form").addEventListener("submit", save);
 $("#form").addEventListener("change", e => {
-  if (EDIT.category === "positions" && /^f_(job|level|employ|salary)$/.test(e.target.name) && $("#jobprev")) { readForm(); $("#jobprev").innerHTML = jobPreview(EDIT); }
+  if ($("#form").dataset.mode === "item" && EDIT && EDIT.category === "positions" && /^f_(job|level|employ|salary)$/.test(e.target.name) && $("#jobprev")) { readForm(); $("#jobprev").innerHTML = jobPreview(EDIT); }
+  if ($("#form").dataset.mode !== "item") return;
   if (e.target.name === "category" || e.target.name === "f_kind") { readForm(); if (e.target.name === "category") EDIT.f = EDIT.category === "finance" ? {kind: "kr"} : {}; drawForm(); }
 });
 $("#sheet").addEventListener("click", e => { if (e.target.id === "sheet") $("#sheet").hidden = true; });
@@ -1331,27 +1341,40 @@ const TIMER_ACTS = {
 const TIMER_HINT = {body: "운동은 30분 이상이면 1회로 셉니다", mind: "끝내면 그 영역의 '작은 승리'로 기록돼요(같은 주 같은 영역은 반씩 줄어요)",
   craft: "가사·돌봄 시간은 하루 평균 분으로 30대 남성과 비교해요"};
 let TSEL = {goal: "", act: ""}, tickId = 0, tbusy = false;
-const runningTimer = () => DATA ? byCat("timer").filter(t => num(t.f.start) > 0).sort((a, b) => num(b.f.start) - num(a.f.start))[0] : null;
+// 진행 중인 타이머: 시트의 'timer' 항목. 새로고침·재실행 직후(데이터를 받기 전)에도 바로 보이게 이 기기에 사본을 둔다
+function runningTimers() {
+  if (DATA) {
+    const list = byCat("timer").filter(t => num(t.f.start) > 0).sort((a, b) => num(a.f.start) - num(b.f.start));
+    store.set("timers", JSON.stringify(list.map(t => ({id: t.id, name: t.name, f: t.f}))));
+    return list;
+  }
+  try { return JSON.parse(store.get("timers") || "[]"); } catch (e) { return []; }
+}
 const actOf = (goal, act) => (TIMER_ACTS[goal] || []).find(a => a[0] === act);
 const hhmm = ms => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
 const clock = ms => { const s = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
   return `${h ? h + ":" : ""}${String(m).padStart(h ? 2 : 1, "0")}:${String(s % 60).padStart(2, "0")}`; };
+const goalIcon = g => (GOAL[g] || {}).icon || "⏱";
+
+// 화면 아래 '진행 중' 막대: 어느 탭에 있든, 새로고침해도 보이고 여기서 바로 끝낼 수 있다
+function renderRunBar() {
+  const list = runningTimers(), bar = $("#runbar");
+  bar.hidden = !list.length; document.body.classList.toggle("has-run", !!list.length);
+  bar.innerHTML = list.map(t => { const a = actOf(t.f.goal, t.f.act);
+    return `<div class="rb-row"><span class="rb-dot"></span><span class="rb-name">${goalIcon(t.f.goal)} ${esc(a ? a[1].replace(/^\S+\s/, "") : t.name)}<small>진행 중 · ${hhmm(num(t.f.start))} 시작</small></span>
+      <b class="rb-clock" data-start="${num(t.f.start)}">${clock(Date.now() - num(t.f.start))}</b>
+      <button type="button" class="btn primary" data-t="end" data-id="${esc(t.id)}">■ 끝</button></div>`; }).join("");
+  clearInterval(tickId);
+  if (list.length) tickId = setInterval(() => document.querySelectorAll("#runbar .rb-clock").forEach(c => { c.textContent = clock(Date.now() - num(c.dataset.start)); }), 1000);
+}
 
 function renderTimer() {
+  renderRunBar();
   if (!DATA || $("#timer").hidden) return;
-  clearInterval(tickId);
-  const run = runningTimer();
+  const run = runningTimers();
   let html = "";
   if (!gSetting()) html += `<div class="note">🏅 성장 탭에서 '오늘부터 시작하기'를 한 번 눌러야 기록이 점수에 들어가요.</div>`;
-  if (run) {
-    const g = GOAL[run.f.goal], a = actOf(run.f.goal, run.f.act);
-    html += `<div class="card" style="text-align:center"><div class="muted">${g.icon} ${g.label} · ${hhmm(num(run.f.start))} 시작</div>
-      <h2 style="margin:6px 0 0">${esc(a ? a[1] : run.name)}</h2>${run.f.memo ? `<div class="muted">${esc(run.f.memo)}</div>` : ""}
-      <div class="tm-clock" id="tclock">${clock(Date.now() - num(run.f.start))}</div>
-      <button class="btn primary tm-big" type="button" data-t="end">■ 끝</button>
-      <p class="muted" style="font-size:12px;margin:10px 0 4px">${esc(TIMER_HINT[run.f.goal] || "")}<br>화면을 꺼도, 앱을 닫았다 열어도 시간은 계속 흘러요.</p>
-      <button class="btn" type="button" data-t="cancel" style="margin-top:4px">기록하지 않고 취소</button></div>`;
-  } else if (TSEL.goal) {
+  if (TSEL.goal) {
     const g = GOAL[TSEL.goal], acts = TIMER_ACTS[TSEL.goal], rec = TSEL.act === "recycle";
     html += `<div class="row"><h2 style="margin:0">${g.icon} ${g.label} · 무엇을 하나요?</h2><button class="btn" type="button" data-t="back">← 뒤로</button></div>
       <div class="tm-acts">${acts.map(([k, l]) => `<button type="button" class="tm-act" data-t="act" data-k="${k}" aria-pressed="${k === TSEL.act}">${esc(l)}</button>`).join("")}</div>
@@ -1360,17 +1383,21 @@ function renderTimer() {
       <p class="muted" style="font-size:12px">${rec ? "분리수거는 시간 대신 횟수로 기록해요(1회 = 15분으로 계산)." : esc(TIMER_HINT[TSEL.goal])}</p>`;
   } else {
     html += `<h2 style="margin-top:4px">무엇을 시작할까요?</h2><div class="tm-goals">${TIMER_GOALS.map(k => `<button type="button" class="tm-goal" data-t="goal" data-goal="${k}">
-      <span class="ic">${GOAL[k].icon}</span><span>${GOAL[k].label}<small>${esc(TIMER_ACTS[k].slice(0, 4).map(a => a[1].replace(/^\S+\s/, "")).join(" · "))} …</small></span></button>`).join("")}</div>`;
+      <span class="ic">${GOAL[k].icon}</span><span>${GOAL[k].label}<small>${esc(TIMER_ACTS[k].slice(0, 4).map(a => a[1].replace(/^\S+\s/, "")).join(" · "))} …</small></span></button>`).join("")}</div>
+      ${run.length ? `<p class="muted" style="font-size:12px">진행 중인 일은 화면 아래에 있어요. 다른 일을 함께 시작할 수도 있어요. 화면을 끄거나 앱을 닫아도 시간은 계속 흘러요.</p>` : ""}`;
   }
-  // 오늘(과 어제) 이 화면에서 남긴 기록
-  const today = gLogs().filter(l => TIMER_GOALS.includes(l.f.goal) && l.date >= addDays(DATA.today, -1)).sort((a, b) => (b.date + b.updated) < (a.date + a.updated) ? -1 : 1);
-  const mins = today.filter(l => l.date === DATA.today).reduce((a, l) => a + (num(l.f.minutes) || 0), 0);
-  if (today.length) html += `<h2>오늘·어제 기록 <span class="muted" style="font-size:13px;font-weight:400">오늘 ${mins}분</span></h2><div class="list">${today.slice(0, 12).map(l =>
-    `<div class="item" style="cursor:default"><span class="t">${GOAL[l.f.goal].icon} ${esc(l.name)}</span><span class="r">${esc(l.date === DATA.today ? "오늘" : "어제")}</span>
-      <span class="s">${esc(l.f.text || "")}</span><span class="rs"></span></div>`).join("")}</div>
-    <p class="muted" style="font-size:12px">고치거나 지우려면 🏅 성장 → 최근 기록에서 눌러요.</p>`;
+  // 최근 기록 10개: 시간 변경·삭제
+  const recent = gLogs().filter(l => TIMER_GOALS.includes(l.f.goal)).sort((a, b) => (b.date + b.updated) < (a.date + a.updated) ? -1 : 1).slice(0, 10);
+  const mins = gLogs().filter(l => TIMER_GOALS.includes(l.f.goal) && l.date === DATA.today).reduce((a, l) => a + (num(l.f.minutes) || 0), 0);
+  html += `<h2>최근 기록 <span class="muted" style="font-size:13px;font-weight:400">오늘 ${mins}분</span></h2>`;
+  html += recent.length ? `<div class="list">${recent.map(l => { const m = num(l.f.minutes), c = num(l.f.count);
+    return `<div class="item tm-rec" style="cursor:default"><span class="t">${goalIcon(l.f.goal)} ${esc(l.name)}</span>
+      <span class="r">${esc(l.date === DATA.today ? "오늘" : l.date === addDays(DATA.today, -1) ? "어제" : fmtDay(l.date))}</span>
+      <span class="s">${esc(l.f.text || "")}</span>
+      <span class="rs"><button class="btn" type="button" data-t="edit" data-id="${esc(l.id)}">${m != null || c != null ? "시간 변경" : "고치기"}</button>
+        <button class="btn danger" type="button" data-t="del" data-id="${esc(l.id)}">삭제</button></span></div>`; }).join("")}</div>`
+    : `<p class="muted">아직 기록이 없어요. 위에서 하나를 골라 시작해 보세요.</p>`;
   $("#tmain").innerHTML = html;
-  if (run) tickId = setInterval(() => { const c = $("#tclock"); if (!c || $("#timer").hidden) return clearInterval(tickId); c.textContent = clock(Date.now() - num(run.f.start)); }, 1000);
 }
 // 끝낸 시간을 성장 기록(log) 한 건으로 바꾼다 — 날짜는 시작한 날
 function timerLog(goal, act, minutes, memo) {
@@ -1380,24 +1407,57 @@ function timerLog(goal, act, minutes, memo) {
   if (spec.field === "recycle") return {name: `${label} 1회`, f: {goal, type: "time", field: "recycle", count: 1, text}};
   return {name: `${label} ${minutes}분`, f: {goal, type: "time", field: spec.field, minutes, text}};
 }
-async function timerAct(kind) {
+// 기록 고치기(시간·횟수·날짜)
+let TEDIT = null;
+function openTimeEdit(id) {
+  const l = gLogs().find(x => x.id === id); if (!l) return;
+  TEDIT = l; const rec = l.f.field === "recycle";
+  $("#form").innerHTML = `<h3>${goalIcon(l.f.goal)} ${esc(l.name)}</h3>
+    <div class="f"><label for="te_val">${rec ? "횟수" : "시간(분)"}</label><input id="te_val" name="val" inputmode="numeric" required value="${esc(String(rec ? (num(l.f.count) || 1) : (num(l.f.minutes) || 0)))}"></div>
+    <div class="f"><label for="te_date">날짜</label><input id="te_date" name="date" type="date" value="${esc(l.date)}" max="${esc(DATA.today)}" min="${esc(l.date < addDays(DATA.today, -1) ? l.date : addDays(DATA.today, -1))}">
+      <small>오늘·어제(또는 원래 날짜)만 고를 수 있어요</small></div>
+    <div class="row"><button class="btn danger" type="button" data-t="del" data-id="${esc(l.id)}">삭제</button>
+      <div class="row"><button class="btn" type="button" data-act="close">취소</button><button class="btn primary" type="submit">저장</button></div></div>`;
+  $("#form").dataset.mode = "tedit"; $("#sheet").hidden = false;
+}
+async function saveTimeEdit() {
+  const l = TEDIT; if (!l || tbusy) return;
+  const v = Math.round(num($("#te_val").value) || 0), d = $("#te_date").value || l.date;
+  if (!(v > 0)) return toast("1 이상으로 적어 주세요");
+  const f = {...l.f}; let name = l.name;
+  if (f.field === "recycle") { f.count = v; name = name.replace(/\d+회/, v + "회"); }
+  else { f.minutes = v; name = name.replace(/\d+분/, v + "분"); if (f.text) f.text = f.text.replace(/\d+분/, v + "분"); }
+  tbusy = true;
+  try { await api("saveItem", {id: l.id, category: "log", name, date: d, f}); $("#sheet").hidden = true; await loadAssets(true); toast("고쳤어요"); }
+  catch (e) { toast("저장하지 못했습니다: " + e.message, true); }
+  finally { tbusy = false; }
+}
+async function timerAct(kind, id) {
   if (tbusy) return;
-  const run = runningTimer();
   tbusy = true;
   try {
+    if (!DATA && (kind === "end" || kind === "del")) { toast("불러오는 중…"); await loadAssets(true); }
+    const run = runningTimers().find(t => t.id === id);
     if (kind === "start" || kind === "once") {
       if (!TSEL.act) return;
-      const memo = ($("#tmemo") || {}).value || "";
+      const memo = (($("#tmemo") || {}).value || "").trim();
       if (kind === "once") {
-        const x = timerLog(TSEL.goal, TSEL.act, 0, memo.trim());
+        const x = timerLog(TSEL.goal, TSEL.act, 0, memo);
         toast("기록하는 중…"); await api("saveItem", {category: "log", name: x.name, date: DATA.today, f: x.f});
         TSEL = {goal: "", act: ""}; await loadAssets(true); toast("♻️ 기록했어요"); return;
       }
-      const a = actOf(TSEL.goal, TSEL.act);
-      toast("시작!");
-      await api("saveItem", {category: "timer", name: a[1], date: DATA.today, f: {goal: TSEL.goal, act: TSEL.act, start: Date.now(), memo: memo.trim()}});
-      TSEL = {goal: "", act: ""}; await loadAssets(true);
+      const a = actOf(TSEL.goal, TSEL.act), f = {goal: TSEL.goal, act: TSEL.act, start: Date.now(), memo};
+      TSEL = {goal: "", act: ""};
+      // 저장을 기다리지 않고 바로 '진행 중'을 보여 준다
+      const tmp = {id: "tmp-" + f.start, name: a[1], f};
+      store.set("timers", JSON.stringify([...runningTimers().map(t => ({id: t.id, name: t.name, f: t.f})), tmp]));
+      DATA.items.push({...tmp, category: "timer", date: DATA.today, updated: ""});
+      renderTimer(); toast("시작! 끝나면 아래 ■ 끝을 눌러요");
+      const realId = await api("saveItem", {category: "timer", name: a[1], date: DATA.today, f});
+      const it = DATA.items.find(x => x.id === tmp.id); if (it) it.id = realId;
+      await loadAssets(true);
     } else if (kind === "end" && run) {
+      if (String(run.id).startsWith("tmp-")) return toast("아직 저장 중이에요. 잠시 뒤에 눌러 주세요");
       let minutes = Math.max(1, Math.round((Date.now() - num(run.f.start)) / 6e4));
       if (minutes > 300) {          // 끝 누르기를 잊은 경우
         const v = prompt(`${Math.floor(minutes / 60)}시간 넘게 켜져 있었어요. 실제로 한 시간은 몇 분인가요?`, "60");
@@ -1408,25 +1468,31 @@ async function timerAct(kind) {
       const day = new Date(num(run.f.start) + 9 * 3600e3).toISOString().slice(0, 10);   // 시작한 날(한국 시간, 서버의 오늘과 같은 기준)
       toast("기록하는 중…");
       await api("saveItem", {category: "log", name: x.name, date: day >= addDays(DATA.today, -1) ? day : DATA.today, f: x.f});
-      await api("deleteItem", run.id);
-      await loadAssets(true); toast(`${GOAL[run.f.goal].icon} ${minutes}분 기록했어요 · 성장에 반영됨`);
-    } else if (kind === "cancel" && run) {
-      if (!confirm("이 타이머를 기록하지 않고 지울까요?")) return;
-      await api("deleteItem", run.id); await loadAssets(true); toast("취소했어요");
+      await api("deleteItem", run.id).catch(() => {});
+      await loadAssets(true); toast(`${goalIcon(run.f.goal)} ${minutes}분 기록했어요 · 성장에 반영됨`);
+    } else if (kind === "del") {
+      const l = gLogs().find(x => x.id === id); if (!l) return;
+      if (!confirm(`'${l.name}' 기록을 지울까요?`)) return;
+      await api("deleteItem", id); $("#sheet").hidden = true; await loadAssets(true); toast("지웠어요");
     }
   } catch (e) { toast("저장하지 못했습니다: " + e.message, true); }
   finally { tbusy = false; }
 }
 document.addEventListener("click", e => {
-  const b = e.target.closest("[data-t]"); if (!b || !$("#tmain").contains(b)) return;
+  const b = e.target.closest("[data-t]"); if (!b || !(b.closest("#tmain") || b.closest("#runbar") || b.closest("#form"))) return;
   const t = b.dataset.t;
   if (t === "goal") { TSEL = {goal: b.dataset.goal, act: ""}; renderTimer(); }
   else if (t === "back") { TSEL = {goal: "", act: ""}; renderTimer(); }
   else if (t === "act") { TSEL.act = b.dataset.k; TSEL.memo = ($("#tmemo") || {}).value || ""; renderTimer(); }
-  else timerAct(t);
+  else if (t === "edit") openTimeEdit(b.dataset.id);
+  else timerAct(t, b.dataset.id);
 });
+$("#form").addEventListener("submit", e => {
+  if ($("#form").dataset.mode !== "tedit") return;
+  e.preventDefault(); e.stopImmediatePropagation(); saveTimeEdit();
+}, true);
 // 다른 앱을 쓰다 돌아오면 시계를 바로 맞춘다
-document.addEventListener("visibilitychange", () => { if (!document.hidden) renderTimer(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) renderRunBar(); });
 renderTimer();
 </script>
 </body>
