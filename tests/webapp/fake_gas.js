@@ -53,7 +53,10 @@
             vals.forEach((row, i) => row.forEach((v, j) => {
               while (self.data.length < r + i) self.data.push([]);
               const line = self.data[r + i - 1];
-              line[c + j - 1] = typeof v === 'string' && v[0] === "'" ? new Text(v.slice(1)) : v;
+              // 실제 시트처럼: '로 시작하면 글자, 날짜처럼 생긴 글자는 날짜(Date)로 바뀐다
+              line[c + j - 1] = typeof v === 'string' && v[0] === "'" ? new Text(v.slice(1))
+                : typeof v === 'string' && /^\d{4}-\d{2}-\d{2}(T[\d:]+([+-]\d{2}:\d{2})?)?$/.test(v)
+                  ? new Date(v.length === 10 ? v + 'T00:00:00+09:00' : v) : v;
             }));
           },
           getValues() {

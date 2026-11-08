@@ -124,7 +124,7 @@ function readItems_() {
 function writeItems_(items) {
   rewrite_(sheet_('항목', ITEM_HEAD), ITEM_HEAD, items.map(function (it) {
     // 날짜·이름이 숫자·날짜로 바뀌지 않게 앞에 '를 붙여 글자로 저장한다
-    return [it.id, it.category, "'" + it.name, it.date ? "'" + it.date : '', JSON.stringify(it.f), it.updated];
+    return [it.id, it.category, "'" + it.name, it.date ? "'" + it.date : '', JSON.stringify(it.f), "'" + it.updated];
   }));
 }
 
@@ -289,7 +289,7 @@ function refreshPrices() {
       prices[k] = { v: got[k], cur: k.indexOf('US:') === 0 ? 'USD' : 'KRW', at: at };
     });
     rewrite_(sheet_('시세', PRICE_HEAD), PRICE_HEAD, Object.keys(prices).sort().map(function (k) {
-      return [k, prices[k].v, prices[k].cur, prices[k].at];
+      return [k, prices[k].v, prices[k].cur, "'" + prices[k].at];      // 시트가 날짜로 바꿔 시·분을 잃지 않게
     }));
     PropertiesService.getScriptProperties().setProperty('PRICES_AT', at);
     return { ok: Object.keys(got).length, missing: all.filter(function (k) { return !(k in got); }), at: at };
@@ -381,7 +381,9 @@ function dailySnapshot() {
   const detail = {};
   d.items.forEach(function (it) { if (isFinite(it.v.value)) detail[it.id] = Math.round(it.v.value); });
   const sh = sheet_('기록', HIST_HEAD);
-  const rows = rows_(sh).filter(function (r) { return dateStr_(r[0]) !== day; });
+  // 날짜 칸은 항상 '를 붙여 글자로 다시 쓴다(시트가 날짜로 바꿔 두면 순서가 섞인다)
+  const rows = rows_(sh).map(function (r) { return ["'" + dateStr_(r[0])].concat(r.slice(1)); })
+    .filter(function (r) { return r[0] !== "'" + day; });
   rows.push(["'" + day, Math.round(d.totals.net), Math.round(d.totals.finance), Math.round(d.totals.realestate),
              Math.round(d.totals.loan), JSON.stringify(detail)]);
   rows.sort(function (a, b) { return String(a[0]) < String(b[0]) ? -1 : 1; });
