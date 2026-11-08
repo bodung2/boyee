@@ -476,25 +476,35 @@ function category(c) {
   return head + `<div class="list">${list.map(itemCard).join("")}</div>`;
 }
 
+// 연표 날짜: 2024-3-1처럼 적힌 것도 2024-03-01로 맞춰 정렬한다(날짜가 아니면 뺀다)
+function normDay(v) {
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(v || "").trim());
+  return m ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` : "";
+}
+let TL_NEW = store.get("tlOrder") === "new";      // 기본: 오래된 것부터(연도·날짜 순)
 function timeline() {
   const ev = [];
+  const add = (d, t, id) => { d = normDay(d); if (d) ev.push({d, t, id}); };
   DATA.items.forEach(it => {
-    const f = it.f || {}, c = CATS[it.category];
+    const f = it.f || {}, c = CATS[it.category] || {icon: "•"};
     if (it.category === "people") {
-      if (f.anniv_date) ev.push({d: f.anniv_date, t: `💐 ${it.name} · ${f.anniv_label || "기념일"}`, id: it.id});
+      if (f.anniv_date) add(f.anniv_date, `💐 ${it.name} · ${f.anniv_label || "기념일"}`, it.id);
       return;
     }
-    if (!it.date) return;
     const what = {finance: "매수", pipeline: "시작", realestate: "매입", works: "발표", positions: "시작", awards: ""}[it.category] || "";
-    ev.push({d: it.date, t: `${c.icon} ${it.name}${what ? " " + what : ""}${f.org ? " · " + f.org : ""}`, id: it.id});
-    if (it.category === "positions" && f.end) ev.push({d: f.end, t: `${c.icon} ${it.name} 마침`, id: it.id});
+    add(it.date, `${c.icon} ${it.name}${what ? " " + what : ""}${f.org ? " · " + f.org : ""}`, it.id);
+    if (it.category === "positions" && f.end) add(f.end, `${c.icon} ${it.name} 마침`, it.id);
   });
   if (!ev.length) return '<h2>📜 인생 연표</h2><p class="empty">날짜가 있는 기록이 쌓이면 연도별로 모아 보여 줍니다.</p>';
-  ev.sort((a, b) => a.d < b.d ? 1 : -1);
-  const years = {};
-  ev.forEach(e => (years[e.d.slice(0, 4)] = years[e.d.slice(0, 4)] || []).push(e));
-  return '<h2>📜 인생 연표</h2>' + Object.keys(years).sort().reverse().map(y => `<div class="year">${y} <span class="muted">${years[y].length}개</span></div>` +
-    years[y].map(e => `<div class="tl" data-edit="${esc(e.id)}"><span class="d">${e.d.slice(5).replace("-", ".")}</span><span>${esc(e.t)}</span></div>`).join("")).join("");
+  // 날짜(연·월·일) 순, 같은 날은 이름 순. 최신순이면 뒤집는다
+  ev.sort((a, b) => a.d.localeCompare(b.d) || a.t.localeCompare(b.t, "ko"));
+  if (TL_NEW) ev.reverse();
+  const years = [];
+  ev.forEach(e => { const y = e.d.slice(0, 4); if (!years.length || years[years.length - 1].y !== y) years.push({y, list: []}); years[years.length - 1].list.push(e); });
+  const toggle = `<button class="btn" type="button" data-act="tl-order">${TL_NEW ? "오래된 순으로" : "최신 순으로"}</button>`;
+  return `<div class="row"><h2>📜 인생 연표 <span class="muted">${TL_NEW ? "최신 순" : "오래된 순"}</span></h2>${toggle}</div>` +
+    years.map(g => `<div class="year">${g.y} <span class="muted">${g.list.length}개</span></div>` +
+      g.list.map(e => `<div class="tl" data-edit="${esc(e.id)}"><span class="d">${+e.d.slice(5, 7)}.${+e.d.slice(8)}</span><span>${esc(e.t)}</span></div>`).join("")).join("");
 }
 
 // ---------------------------------------------------------------- 추가·수정 화면
@@ -573,6 +583,7 @@ document.addEventListener("click", e => {
   const ed = t.closest("[data-edit]"); if (ed) { const it = DATA.items.find(x => x.id === ed.dataset.edit); if (it) openEditor(it); return; }
   const a = t.closest("[data-act]"); if (!a) return;
   if (a.dataset.act === "refresh") refresh(false);
+  if (a.dataset.act === "tl-order") { TL_NEW = !TL_NEW; store.set("tlOrder", TL_NEW ? "new" : "old"); render(); }
   if (a.dataset.act === "close") $("#sheet").hidden = true;
   if (a.dataset.act === "delete") remove();
 });
