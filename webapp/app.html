@@ -736,11 +736,15 @@ function rangeShare(from, to, logs) {
     social: (m => ({p: topShareTime(m / days, BENCH.social), any: m > 0}))(sumMin(by("social", ["volunteer", "together"])))
   };
   const sav = by("economy", ["saving"]).map(l => num(l.f.income) > 0 ? (num(l.f.saving) || 0) / num(l.f.income) : null).filter(r => r != null);
-  out.economy = sav.length ? {p: topShareNormal(Math.max(...sav), BENCH.economy), any: true} : {p: 1, any: false};
+  out.economy = sav.length ? {p: topShareNormal(sav.reduce((a, b) => a + b, 0) / sav.length, BENCH.economy), any: true} : {p: 1, any: false};   // 여러 달이면 평균
   return out;
 }
 // 정신의 '상위 %'는 최근 31일 안의 스트레스 점검(PSS-10)으로 낸다(A안)
-function mindShare(logs) {
+function mindShare(logs, since) {
+  if (since) {          // 누적: 시작일부터 받은 스트레스 점검 점수의 평균
+    const list = logs.filter(x => x.f.type === "pss" && x.date >= since).map(x => num(x.f.score)).filter(v => v != null);
+    return list.length ? {p: topShareNormal(list.reduce((a, b) => a + b, 0) / list.length, BENCH.mind, true), any: true, pss: true} : {p: 1, any: false};
+  }
   const from = addDays(DATA.today, -31), l = logs.filter(x => x.f.type === "pss" && x.date >= from).sort((a, b) => a.date < b.date ? 1 : -1)[0];
   return l ? {p: topShareNormal(num(l.f.score), BENCH.mind, true), any: true, pss: true} : {p: 1, any: false};
 }
@@ -888,19 +892,22 @@ function scoreAll() {
 // 기간(이번 주 / 이번 달)의 상위 %(실제 기록 기준)와 그 기간에 얻은 점수
 function periodTop(S, mode) {
   const logs = gLogs(), ws = weekStart(DATA.today), m = DATA.today.slice(0, 7);
-  const from = mode === "week" ? ws : m + "-01", to = DATA.today;
+  // 누적(all): 시작일부터 오늘까지의 평균 페이스를 같은 통계와 비교(운동은 주당 횟수, 시간은 하루 평균, 저축률·스트레스는 평균)
+  const from = mode === "week" ? ws : mode === "month" ? m + "-01" : S.start, to = DATA.today;
   const shares = rangeShare(from < S.start ? S.start : from, to, logs);
-  shares.mind = mindShare(logs);
+  shares.mind = mindShare(logs, mode === "all" ? S.start : "");
   const out = {};
   GOALS.forEach(g => {
-    const pts = S.weeks.filter(x => mode === "week" ? x.ws === ws : (x.ws.slice(0, 7) === m)).reduce((a, x) => a + x.w[g.k].pts, 0);
+    const pts = mode === "all" ? S.byGoal[g.k]
+      : S.weeks.filter(x => mode === "week" ? x.ws === ws : (x.ws.slice(0, 7) === m)).reduce((a, x) => a + x.w[g.k].pts, 0);
     out[g.k] = {...shares[g.k], pts};
   });
   return out;
 }
 
 // ---------------------------------------------------------------- 그리기
-let GVIEW = store.get("gview") === "month" ? "month" : "week";
+let GVIEW = ["month", "all"].includes(store.get("gview")) ? store.get("gview") : "week";
+const GVIEW_LABEL = {week: "이번 주", month: "이번 달", all: "누적(시작일부터)"};
 function renderGrowth() {
   if (!DATA || $("#growth").hidden) return;
   const st = gSetting();
@@ -929,11 +936,12 @@ function renderGrowth() {
       <div class="bar1"><i style="width:${Math.min(100, (S.total - cur) / (nextLv - cur) * 100).toFixed(1)}%"></i></div>
       <div class="delta">다음 레벨까지 ${Math.ceil(nextLv - S.total).toLocaleString("ko-KR")}점 · 이번 주 +${Math.round(thisWeek)}점</div></div>
     <div class="hex2">${hexagon("쌓은 점수", GOALS.map(g => S.byGoal[g.k]), "--s1", v => Math.round(v) + "")}
-      ${hexagon(GVIEW === "week" ? "이번 주 상위 %" : "이번 달 상위 %", GOALS.map(g => T[g.k].any ? 1 - T[g.k].p : 0), "--s3", v => v <= 0 ? "-" : v < .5 ? "평균↓" : Math.max(1, Math.round((1 - v) * 100)) + "%", 1)}</div>
-    <div class="row" style="margin-top:14px"><h2 style="margin:0">${GVIEW === "week" ? "이번 주" : "이번 달"} 성적표</h2>
-      <div class="ranges" role="group">${[["week", "주간"], ["month", "월간"]].map(([k, l]) => `<button type="button" data-gview="${k}" aria-pressed="${k === GVIEW}">${l}</button>`).join("")}</div></div>
+      ${hexagon(GVIEW === "all" ? "누적 상위 %" : GVIEW_LABEL[GVIEW] + " 상위 %", GOALS.map(g => T[g.k].any ? 1 - T[g.k].p : 0), "--s3", v => v <= 0 ? "-" : v < .5 ? "평균↓" : Math.max(1, Math.round((1 - v) * 100)) + "%", 1)}</div>
+    <div class="row" style="margin-top:14px"><h2 style="margin:0">${GVIEW_LABEL[GVIEW]} 성적표</h2>
+      <div class="ranges" role="group">${[["week", "주간"], ["month", "월간"], ["all", "누적"]].map(([k, l]) => `<button type="button" data-gview="${k}" aria-pressed="${k === GVIEW}">${l}</button>`).join("")}</div></div>
     <div class="grow-row" style="cursor:default;border:0;background:none;padding:2px 12px;font-size:11px;color:var(--mute)"><span></span><span>영역 · 근거</span><span>상위 %</span><span style="text-align:right">쌓은 점수</span></div>
     <div class="list">${rows}</div>
+    ${GVIEW === "all" ? `<p class="muted">누적 = ${fmtDay(S.start)}부터 ${Math.round((parseDay(DATA.today) - parseDay(S.start)) / 864e5) + 1}일 동안의 평균 페이스(운동은 주당 횟수, 시간은 하루 평균, 저축률·스트레스 점검은 평균)를 같은 통계와 비교합니다. 기록을 빠뜨린 주도 평균에 들어갑니다.</p>` : ""}
     <p class="muted">줄을 누르면 그 영역을 기록합니다 · 비교 기준: 30대 후반 남성 · <a href="#" data-g="bench">점수 기준·출처 보기</a></p>
     <h2>빠르게 기록</h2><div class="grid">${GOALS.map(g => `<button type="button" class="stat" data-g="log" data-goal="${g.k}"><div class="l">${g.icon} ${g.label}</div><div class="n" style="font-size:15px">＋ 기록</div></button>`).join("")}</div>
     ${feed ? `<h2>최근 얻은 점수</h2><div class="card">${feed}</div>` : ""}
