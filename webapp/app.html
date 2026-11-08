@@ -608,7 +608,7 @@ function drawForm() {
       `<option value="${k}"${k === c ? " selected" : ""}>${CATS[k].icon} ${esc(CATS[k].label)}</option>`).join("")}</select></div>
     <div class="f"><label for="name">${esc(meta.name)}</label><input id="name" name="name" required maxlength="200" value="${esc(EDIT.name)}" placeholder="${esc(meta.nameHint)}"></div>
     <div class="f"><label for="date">${esc(meta.date)}</label><input id="date" name="date" type="date" value="${esc(EDIT.date)}">
-      ${["positions", "awards", "works", "realestate", "people"].includes(c) ? '<small>🏅 성장 점수는 이 날짜로 계산돼요. 점수 시작일 이후면 새 성취(100%), 이전이거나 비우면 과거 업적(20%)</small>' : ""}</div>
+      ${["positions", "awards", "works", "realestate", "people"].includes(c) ? '<small>🏅 성장 점수는 이 날짜로 계산돼요. 시작일 이전이거나 비워 두면 과거 업적으로 표시되고, 점수는 똑같이 100% 들어가요</small>' : ""}</div>
     ${fields}
     ${c === "positions" ? `<p class="muted" id="jobprev">${jobPreview(EDIT)}</p>` : ""}
     ${c === "pipeline" ? incomeBox() : ""}
@@ -670,14 +670,14 @@ showTab(["assets", "growth"].includes(store.get("tab")) ? store.get("tab") : "qu
 // 모든 기록을 '30대 후반 남성 중 상위 몇 %인가'로 바꾸고, 같은 공식(R)으로 점수를 매긴다(영역 사이 형평성).
 //   흐름 점수: 매주 그 주의 기록이 상위 몇 %인지 → R(p), 한 영역 한 주 최대 CAP(상위 1%)
 //   돌파 점수: 처음 그 구간을 넘었을 때 한 번 → R(p) × MILE
-//   시작일 이전 업적: PAST_RATE만, 영역별 PAST_CAP까지
+//   시작일 이전 업적도 그대로 100%(과거의 성취도 나다) — '과거 업적' 표시만 붙음
 // 기준 숫자는 BENCH에 출처·근거 수준과 함께 모아 둔다(화면의 '점수 기준'에 그대로 보인다).
 const GOALS = [
   {k: "body", icon: "💪", label: "신체", short: "신체"}, {k: "mind", icon: "🧘", label: "정신", short: "정신"},
   {k: "craft", icon: "🎨", label: "기능·영감", short: "기능"}, {k: "social", icon: "🤝", label: "사회", short: "사회"},
   {k: "career", icon: "🎖", label: "커리어", short: "커리어"}, {k: "economy", icon: "💰", label: "경제", short: "경제"}];
 const GOAL = Object.fromEntries(GOALS.map(g => [g.k, g]));
-const CAP = 56, MILE = 4, PAST_RATE = 0.2, PAST_CAP = 100, MONTH_W = 52 / 12;
+const CAP = 56, MILE = 4, MONTH_W = 52 / 12;
 const R = p => p >= 0.5 ? 0 : 10 * Math.log2(0.5 / Math.max(p, 0.001));      // 상위 50% = 0, 10% = 23, 1% = 56, 0.1% = 90
 const pFromPts = pts => 0.5 / Math.pow(2, pts / 10);
 const LV = n => 25 * n * n;                                                     // 레벨 n에 필요한 누적 점수
@@ -925,7 +925,7 @@ function milestones(start) {
     if (pts > 0) ev.push({date: date || "", goal, pts, label: `${label} (${fmtTop(p)})`, past: !date || date < start});
   };
   const items = DATA.items;
-  // 자산 탭 항목의 성취 날짜는 적어 둔 날짜. 비어 있으면 과거 업적(20%)으로 본다
+  // 자산 탭 항목의 성취 날짜는 적어 둔 날짜. 비어 있으면 과거 업적으로 본다(점수는 같음)
   // (등록·수정 시각을 쓰면 옛 업적을 고치기만 해도 새 성취가 되므로 쓰지 않는다)
   const when = i => i.date || "";
   // 직업(취직·전직·승진): 날짜순으로 보며 '지금까지 가장 높은 직업'을 넘은 만큼만 돌파 점수(같은 급 이직을 되풀이해도 늘지 않음)
@@ -1024,11 +1024,8 @@ function scoreAll() {
       label: `${ws.slice(5).replace("-", ".")} 주 · ${w[g.k].what} (${fmtTop(w[g.k].p)})`, week: true}); } });
   }
   const flowTotal = Object.values(byGoal).reduce((a, b) => a + b, 0);       // 흐름 점수(매주 쌓은 것)
-  const past = Object.fromEntries(GOALS.map(g => [g.k, 0]));
   milestones(start).forEach(m => {
-    if (m.past) { const add = Math.min(PAST_CAP - past[m.goal], m.pts * PAST_RATE); past[m.goal] += add; byGoal[m.goal] += add;
-      if (add > 0) events.push({...m, pts: add, label: m.label + " · 과거 업적 20%"}); }
-    else { byGoal[m.goal] += m.pts; events.push(m); }
+    byGoal[m.goal] += m.pts; events.push(m.past ? {...m, label: m.label + " · 과거 업적"} : m);
   });
   const total = Object.values(byGoal).reduce((a, b) => a + b, 0);
   return {start, weeks, byGoal, events: events.sort((a, b) => a.date < b.date ? 1 : -1), total, flowTotal, mileTotal: total - flowTotal};
@@ -1059,7 +1056,7 @@ function renderGrowth() {
   if (!st) {
     $("#gmain").innerHTML = `<div class="card"><h2 style="margin-top:0">🏅 6대 목표 성장 점수</h2>
       <p class="muted" style="font-size:14px;line-height:1.7">신체 · 정신 · 기능·영감 · 사회 · 커리어 · 경제의 기록을 <b>30대 후반 남성 중 상위 몇 %</b>인지로 바꿔 같은 기준으로 점수를 쌓습니다.
-      평균(상위 50%)은 0점, 상위 10%는 23점, 상위 1%는 56점. 지금까지 쌓아 둔 업적은 20%만(영역별 최대 ${PAST_CAP}점) 들어가고, 오늘부터의 성취가 점수를 만듭니다.</p>
+      평균(상위 50%)은 0점, 상위 10%는 23점, 상위 1%는 56점. 지금까지 이룬 업적도 그대로 들어가고, 오늘부터의 성취가 그 위에 쌓입니다.</p>
       <button class="btn primary" type="button" data-g="start">오늘부터 시작하기</button></div>`;
     return;
   }
@@ -1192,7 +1189,7 @@ function showBench() {
     <span class="muted">비교 집단: ${esc(b.group)} · 근거: ${esc(b.level)}<br>${esc(b.src)}</span></div>`; }).join("") +
     Object.values(MILES).map(m => `<div class="dday" style="display:block"><strong>돌파 · ${esc(m.title)}</strong><br><span class="muted">근거: ${esc(m.level)} · ${esc(m.src)}</span></div>`).join("");
   $("#form").innerHTML = `<h3>점수 기준·출처</h3><p class="muted" style="line-height:1.7">점수 = 10 × log₂(0.5 ÷ 상위 비율). 평균 0점 · 상위 10% 23점 · 1% 56점 · 0.1% 90점.
-    흐름 점수는 한 영역 한 주 최대 ${CAP}점(월 단위 지표는 주 단위로 환산), 돌파는 같은 희소도의 ${MILE}배를 한 번. 시작일 이전 업적은 ${PAST_RATE * 100}%만, 영역별 최대 ${PAST_CAP}점.
+    흐름 점수는 한 영역 한 주 최대 ${CAP}점(월 단위 지표는 주 단위로 환산), 돌파는 같은 희소도의 ${MILE}배를 한 번. 시작일 이전 업적도 같은 점수로(줄이지 않음).
     '추정'으로 표시된 기준은 공식 원문을 확인하는 대로 바꿉니다.</p><div class="card">${rows}</div>
     <div class="row" style="margin-top:12px"><span></span><button class="btn" type="button" data-act="close">닫기</button></div>`;
   $("#form").dataset.mode = "bench"; $("#sheet").hidden = false;
