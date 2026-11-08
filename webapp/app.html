@@ -564,7 +564,8 @@ function drawForm() {
     <div class="f"><label for="category">분류</label><select id="category" name="category"${EDIT.id ? " disabled" : ""}>${ORDER.map(k =>
       `<option value="${k}"${k === c ? " selected" : ""}>${CATS[k].icon} ${esc(CATS[k].label)}</option>`).join("")}</select></div>
     <div class="f"><label for="name">${esc(meta.name)}</label><input id="name" name="name" required maxlength="200" value="${esc(EDIT.name)}" placeholder="${esc(meta.nameHint)}"></div>
-    <div class="f"><label for="date">${esc(meta.date)}</label><input id="date" name="date" type="date" value="${esc(EDIT.date)}"></div>
+    <div class="f"><label for="date">${esc(meta.date)}</label><input id="date" name="date" type="date" value="${esc(EDIT.date)}">
+      ${["positions", "awards", "works", "realestate", "people"].includes(c) ? '<small>🏅 성장 점수는 이 날짜로 계산돼요. 점수 시작일 이후면 새 성취(100%), 이전이거나 비우면 과거 업적(20%)</small>' : ""}</div>
     ${fields}
     <div class="row"><div>${EDIT.id ? '<button class="btn danger" type="button" data-act="delete">삭제</button>' : ""}</div>
       <div class="row"><button class="btn" type="button" data-act="close">취소</button><button class="btn primary" type="submit">저장</button></div></div>`;
@@ -643,10 +644,9 @@ const BENCH = {
     mean: 76, pd: .70, cv: .8,
     src: "생활시간조사 2024(국가데이터처) 통계표 2-1: 30~39세 남자 가정관리 49분 + 가족 및 가구원 돌보기 27분 = 하루 76분(요일 평균). 참고: 25~39세 기혼·유자녀 남성은 134분. 하루 참여율 70%·분포(로그정규, 변동계수 0.8)는 추정",
     level: "평균 공식, 참여율·분포 추정"},
-  career: {title: "하루 평균 학습·자기계발 시간(연수·공부·업무 학습)", group: "30대 남성",
-    mean: 19, pd: .15, cv: .8,
-    src: "생활시간조사 2024 통계표 2-1: 30~39세 남자 학습 하루 19분(학교활동 외 학습 18분). 하루 참여율 15%·분포는 추정",
-    level: "평균 공식, 참여율·분포 추정"},
+  career: {title: "현재 직위(지금 맡고 있는 가장 높은 직위)", group: "교원(초·중·고)",
+    src: "교육통계서비스(KEDI) 직위별 교원수 2026: 보직교사 이상 26.5% · 교감 이상 5.2% · 교장 2.6%. 상위 %는 지금 직위로, 점수는 커리어 성취 기록과 직위·수상·저작물 돌파로 쌓임",
+    level: "공식(교원)"},
   social: {title: "하루 평균 교류·나눔 시간(만남·모임·가족 행사·멘토링·봉사)", group: "30대 남성",
     mean: 39, pd: .728, cv: .8,
     src: "생활시간조사 2024: 30~39세 남자 교제 및 참여활동 38분 + 자원봉사 1분 = 하루 39분(통계표 2-1) · 남자 교제 및 참여활동 행위자 비율 72.8%(통계표 4-2, 10세 이상 남자) · 분포는 추정",
@@ -665,8 +665,11 @@ const MILES = {
   networth: {title: "순자산 구간 돌파(가구)", bands: [[2.386e8, .5], [3.305e8, .4], [4.618e8, .3], [6.938e8, .2], [11.002e8, .10], [17.4e8, .05], [51e8, .01]],
     src: "가계금융복지조사 2025(국가데이터처 부록 통계표 12, 2025.3월말): 순자산 경계값 P50 2억 3,860만 · P60 3억 3,050만 · P70 4억 6,180만 · P80 6억 9,380만 · P90 11억 20만 원. 상위 5%·1%는 P80·P90에서 외삽(추정). 전체 가구 기준이라 30대 기준보다 엄격",
     level: "공식(상위 10%까지) + 추정(5%·1%)"},
-  pipeline: {title: "파이프라인 월수입(운영 중 합계) 돌파", bands: [[1e5, .10], [5e5, .04], [1e6, .02], [3e6, .006], [1e7, .001]],
-    src: "부업 참가율 1.95%(2022, 임금 부업 한정)를 참고한 추정 구간", level: "추정"},
+  pipeline: {title: "파이프라인 월수입(운영 중 합계) 돌파", bands: [[1e4, .15], [1e5, .10], [5e5, .04], [1e6, .02], [3e6, .006], [1e7, .001]],
+    src: "첫 부수입(월 1만 원)부터 구간별 — 부업 참가율 1.95%(2022, 임금 부업 한정)를 참고한 추정 구간", level: "추정"},
+  home: {title: "첫 내 집 마련", p: .36, src: "주택소유통계 2024(국가데이터처, 2025.11 발표): 30대 주택 소유율 36%", level: "공식(30대)"},
+  marriage: {title: "결혼", p: .487, src: "인구주택총조사 확대 공표 2023: 30대 미혼율 51.3% → 기혼 48.7%(30대 전체, 성별·35~39세 구분 원문 확인 필요). 평균 수준이라 점수는 거의 없음", level: "공식(30대 전체)"},
+  child: {title: "자녀(태어난 순서)", p: {1: .45, 2: .25, 3: .04}, src: "30대 후반 남성 중 자녀 1명 이상 45%·2명 이상 25%·3명 이상 4%로 추정(합계출산율 0.75, 신혼부부 무자녀 47.5% 참고). 공식 분포 확인 필요", level: "추정"},
   income: {title: "저작물 누적 수익 돌파(작품별)", bands: [[1e5, .2], [1e6, .05], [1e7, .01], [1e8, .001]], src: "추정", level: "추정"},
   position: {title: "직위(재직 중 비율)", p: {staff: .5, lead: .265, mid: .052, head: .0265, top: .003},
     src: "교육통계서비스(KEDI) 직위별 교원수 2026, 초·중·고 교원 43만 6,264명: 보직교사 이상(보직·수석·교감·교장) 26.5% · 교감 이상 5.2% · 교장 2.6%. '그 이상'(교육장·교육감 등)은 추정. 교원이 아닌 직장은 같은 단계의 비율로 근사",
@@ -685,6 +688,16 @@ const MILES = {
 const SIZE_PTS = {s: 5, m: 15, l: 40};            // 작은 승리 ≈ 상위 35%, 의미 있는 ≈ 17%, 큰 돌파 ≈ 3%
 const SIZE_LABEL = {s: "작은 승리", m: "의미 있는 승리", l: "큰 돌파"};
 const MIND_SUBS = [["discipline", "⏰ 규율"], ["emotion", "🌊 감정 조절"], ["impulse", "🧲 충동 조절"], ["avoid", "🦁 회피 극복"], ["heart", "🧘 마음 단련"]];
+const CAREER_SUBS = [["work", "🎯 업무 성과"], ["craft", "👩‍🏫 본업 전문성"], ["people", "🌱 사람을 키운 성과"], ["lead", "🧭 리더십·영향력"],
+  ["innovate", "💡 혁신·개선"], ["public", "📢 대외 활동·인정"]];
+const CAREER_EX = {
+  work: ["맡은 일을 기한 안에 깔끔하게 끝냄", "행사·프로젝트를 주도해 성공시킴", "기관을 대표하는 사업을 성공시킴, 대외 성과"],
+  craft: ["새 수업 방법을 시도해 반응이 좋았음", "공개수업·수업 개선 성과, 전문 과정 수료", "우수 수업·연구 선정, 학위·상위 자격 취득"],
+  people: ["학생(동료) 한 명이 눈에 띄게 달라짐", "지도한 학생·학급이 성과를 냄", "지도 학생의 큰 대회 입상, 제자의 진로 성공"],
+  lead: ["동료를 돕거나 갈등을 조율함", "학년·팀을 이끌어 성과를 냄", "조직의 방향·문화를 바꾸는 변화를 주도함"],
+  innovate: ["업무 방식을 개선해 시간을 줄임", "내 제안이 학교·부서에 채택됨", "내 개선안이 기관 전체·지역에 도입됨"],
+  public: ["외부 요청(자문·원고)을 받아 해냄", "강연·연수 강사·기고", "전국 단위 강연, 정책 참여, 언론 소개"]};
+const WIN_SUBS = {mind: MIND_SUBS, career: CAREER_SUBS};
 const MIND_EX = {
   discipline: ["피곤했지만 계획한 일을 해냄", "한 달 내내 루틴을 지킴", "몇 년간 못 바꾸던 습관을 바꿈"],
   emotion: ["화날 상황에서 차분히 말함", "갈등을 대화로 풀어냄", "오래된 관계의 갈등을 회복함"],
@@ -732,7 +745,6 @@ function rangeShare(from, to, logs) {
   const out = {
     body: {p: bodyShare(sessions * 7 / days), any: sessions > 0},
     craft: (m => ({p: topShareTime(m / days, BENCH.craft), any: m > 0}))(sumMin(by("craft", ["time"]))),
-    career: (m => ({p: topShareTime(m / days, BENCH.career), any: m > 0}))(sumMin(by("career", ["study"]))),
     social: (m => ({p: topShareTime(m / days, BENCH.social), any: m > 0}))(sumMin(by("social", ["volunteer", "together"])))
   };
   const sav = by("economy", ["saving"]).map(l => num(l.f.income) > 0 ? (num(l.f.saving) || 0) / num(l.f.income) : null).filter(r => r != null);
@@ -740,6 +752,12 @@ function rangeShare(from, to, logs) {
   return out;
 }
 // 정신의 '상위 %'는 최근 31일 안의 스트레스 점검(PSS-10)으로 낸다(A안)
+// 커리어의 '상위 %'는 지금 맡고 있는 가장 높은 직위(종료일 없음)의 공식 비율
+function positionShare() {
+  const now = byCat("positions").filter(i => !(i.f || {}).end || i.f.end >= DATA.today);
+  if (!now.length) return {p: 1, any: false};
+  return {p: Math.min(...now.map(i => MILES.position.p[i.f.level] || .5)), any: true};
+}
 function mindShare(logs, since) {
   if (since) {          // 누적: 시작일부터 받은 스트레스 점검 점수의 평균
     const list = logs.filter(x => x.f.type === "pss" && x.date >= since).map(x => num(x.f.score)).filter(v => v != null);
@@ -774,23 +792,27 @@ function weekStats(ws, logs, start) {
   const craftMin = by("craft", "time").reduce((a, l) => a + (l.f.field === "recycle" ? (num(l.f.count) || 1) * RECYCLE_MIN : (num(l.f.minutes) || 0)), 0);
   out.craft = flow(topShareTime(craftMin / 7, BENCH.craft), craftMin, `가사·돌봄 하루 평균 ${Math.round(craftMin / 7)}분`,
     by("craft", "first").length * 5 + by("craft", "project").reduce((a, l) => a + (SIZE_PTS[l.f.size] || 5), 0));
-  // 커리어: 학습·자기계발 시간
-  const studyMin = by("career", "study").reduce((a, l) => a + (num(l.f.minutes) || 0), 0);
-  out.career = flow(topShareTime(studyMin / 7, BENCH.career), studyMin, `학습 하루 평균 ${Math.round(studyMin / 7)}분`);
+  // 성취 기록(정신·커리어 공통): 같은 종류 반복은 절반 → 0, 큰 돌파는 월 1회, 한 주 최대 CAP
+  const winPts = goal => {
+    let pts = 0; const seen = {};
+    by(goal, "win").sort((a, b) => a.date < b.date ? -1 : 1).forEach(l => {
+      const sub = l.f.sub || "etc"; seen[sub] = (seen[sub] || 0) + 1;
+      let p = SIZE_PTS[l.f.size] || 5;
+      if (l.f.size === "l" && logs.some(o => o !== l && o.f.goal === goal && o.f.type === "win" && o.f.size === "l"
+          && o.date.slice(0, 7) === l.date.slice(0, 7) && o.date < l.date)) p = SIZE_PTS.m;   // 같은 달 두 번째 큰 돌파는 의미 있는 승리로
+      pts += seen[sub] === 1 ? p : seen[sub] === 2 ? p / 2 : 0;
+    });
+    return Math.min(CAP, pts);
+  };
+  // 커리어: 결과(성취) 기록. 학습 시간 기록은 점수에 넣지 않는다
+  const carPts = winPts("career");
+  out.career = {p: carPts ? pFromPts(carPts) : 1, pts: carPts, any: carPts > 0, what: `커리어 성취 ${by("career", "win").length}개`};
   // 사회: 교류·나눔 시간 + 기부·기념일 챙김(작은 기록, 같은 상한 안)
   const socMin = by("social").filter(l => ["volunteer", "together"].includes(l.f.type)).reduce((a, l) => a + (num(l.f.minutes) || 0), 0);
   out.social = flow(topShareTime(socMin / 7, BENCH.social), socMin, `교류·나눔 하루 평균 ${Math.round(socMin / 7)}분`,
     by("social").filter(l => ["donate", "care"].includes(l.f.type)).length * 5);
-  // 정신: 성취 기록(같은 영역 반복은 절반 → 0, 큰 돌파는 월 1회) — 점수를 상위 %로 되돌려 표시
-  let mindPts = 0; const seen = {};
-  by("mind", "win").sort((a, b) => a.date < b.date ? -1 : 1).forEach(l => {
-    const sub = l.f.sub || "heart"; seen[sub] = (seen[sub] || 0) + 1;
-    let pts = SIZE_PTS[l.f.size] || 5;
-    if (l.f.size === "l" && logs.some(o => o !== l && o.f.goal === "mind" && o.f.type === "win" && o.f.size === "l"
-        && o.date.slice(0, 7) === l.date.slice(0, 7) && o.date < l.date)) pts = SIZE_PTS.m;   // 같은 달 두 번째 큰 돌파는 의미 있는 승리로
-    mindPts += seen[sub] === 1 ? pts : seen[sub] === 2 ? pts / 2 : 0;
-  });
-  mindPts = Math.min(CAP, mindPts);
+  // 정신: 성취 기록 — 점수를 상위 %로 되돌려 표시(상위 %는 성적표에서 스트레스 점검으로 바꿔 보여 줌)
+  const mindPts = winPts("mind");
   out.mind = {p: mindPts ? pFromPts(mindPts) : 1, pts: mindPts, any: mindPts > 0, what: `정신 성취 ${by("mind", "win").length}개`};
   // 경제: 그 주에 적은 월 저축률(한 달 점수를 주 단위로 환산해 그 주에 넣음)
   const sav = by("economy", "saving").map(l => (num(l.f.income) > 0 ? (num(l.f.saving) || 0) / num(l.f.income) : null)).filter(r => r != null);
@@ -813,13 +835,27 @@ function milestones(start) {
     if (pts > 0) ev.push({date: date || "", goal, pts, label: `${label} (${fmtTop(p)})`, past: !date || date < start});
   };
   const items = DATA.items;
-  items.filter(i => i.category === "positions").forEach(i => add(i.date, "career", MILES.position.p[i.f.level] || .5, `🎖 ${i.name}`));
-  items.filter(i => i.category === "awards").forEach(i => add(i.date, "career",
+  // 자산 탭 항목의 성취 날짜는 적어 둔 날짜. 비어 있으면 과거 업적(20%)으로 본다
+  // (등록·수정 시각을 쓰면 옛 업적을 고치기만 해도 새 성취가 되므로 쓰지 않는다)
+  const when = i => i.date || "";
+  items.filter(i => i.category === "positions").forEach(i => add(when(i), "career", MILES.position.p[i.f.level] || .5, `🎖 ${i.name}`));
+  items.filter(i => i.category === "awards").forEach(i => add(when(i), "career",
     i.f.kind === "cert" ? (MILES.cert.p[i.f.cert_level] || .3) : (MILES.award.p[i.f.level] || .3), `🏆 ${i.name}`));
   items.filter(i => i.category === "works").forEach(i => {
-    add(i.date, "career", MILES.work.p[i.f.kind] || .2, `✍️ ${i.name}`);
-    MILES.income.bands.forEach(([v, p]) => { if ((num(i.f.income) || 0) >= v) add(i.date, "economy", p, `✍️ ${i.name} 수익 ${won(v)} 돌파`); });
+    add(when(i), "career", MILES.work.p[i.f.kind] || .2, `✍️ ${i.name}`);
+    MILES.income.bands.forEach(([v, p]) => { if ((num(i.f.income) || 0) >= v) add(when(i), "economy", p, `✍️ ${i.name} 수익 ${won(v)} 돌파`); });
   });
+  // 부동산: 첫 내 집 마련(가장 이른 매입)
+  const homes = items.filter(i => i.category === "realestate").sort((a, b) => when(a) < when(b) ? -1 : 1);
+  if (homes.length) add(when(homes[0]), "economy", MILES.home.p, `🏠 첫 내 집 마련 · ${homes[0].name}`);
+  // 사람: 결혼(배우자 + 결혼기념일), 자녀(태어난 순서)
+  const people = items.filter(i => i.category === "people");
+  people.filter(i => /배우자|아내|남편|부인/.test(i.f.relation || "")).slice(0, 1).forEach(i => {
+    const d = /결혼/.test(i.f.anniv_label || "") ? i.f.anniv_date : "";
+    add(d || "", "social", MILES.marriage.p, `💍 결혼 · ${i.name}`);
+  });
+  people.filter(i => /자녀|아들|딸|첫째|둘째|셋째|넷째|막내/.test(i.f.relation || "")).sort((a, b) => (a.date || "9") < (b.date || "9") ? -1 : 1)
+    .forEach((i, k) => add(i.date || "", "social", MILES.child.p[Math.min(k + 1, 3)], `👶 ${k + 1}번째 자녀 · ${i.name}`));
   // 순자산: 매일 기록에서 처음 넘은 날. 시작일에 이미 넘어 있던 구간은 과거 업적
   const h = DATA.history.filter(x => isFinite(x.net));
   MILES.networth.bands.forEach(([v, p]) => {
@@ -896,6 +932,7 @@ function periodTop(S, mode) {
   const from = mode === "week" ? ws : mode === "month" ? m + "-01" : S.start, to = DATA.today;
   const shares = rangeShare(from < S.start ? S.start : from, to, logs);
   shares.mind = mindShare(logs, mode === "all" ? S.start : "");
+  shares.career = positionShare();
   const out = {};
   GOALS.forEach(g => {
     const pts = mode === "all" ? S.byGoal[g.k]
@@ -924,7 +961,7 @@ function renderGrowth() {
   const rows = GOALS.map(g => {
     const t = T[g.k], b = BENCH[g.k];
     return `<button type="button" class="grow-row" data-g="log" data-goal="${g.k}"><span class="gi">${g.icon}</span><span class="gn">${g.label}<small>${esc(b.level)}</small></span>
-      <span class="gt ${t.any && t.p < .5 ? "up" : ""}">${t.any ? fmtTop(t.p) : (g.k === "mind" ? "점검·기록 없음" : "기록 없음")}</span>
+      <span class="gt ${t.any && t.p < .5 ? "up" : ""}">${t.any ? fmtTop(t.p) : (g.k === "mind" ? "점검·기록 없음" : g.k === "career" ? "직위 기록 없음" : "기록 없음")}</span>
       <span class="gp">${Math.round(S.byGoal[g.k])}점</span></button>`;
   }).join("");
   const feed = S.events.slice(0, 12).map(e => `<div class="dday"><span>${GOAL[e.goal].icon} ${esc(e.label)}</span><b>+${Math.round(e.pts * 10) / 10}</b></div>`).join("");
@@ -968,7 +1005,7 @@ const LOG_TYPES = {
   mind: [["win", "정신 성취"], ["pss", "월간 스트레스 점검(2분)"]],
   craft: [["time", "시간 기록"], ["first", "처음 해 본 일"], ["project", "완성한 것"], ["level", "숙련 단계 올림"]],
   social: [["together", "함께한 시간(모임·가족 행사·멘토링)"], ["volunteer", "봉사"], ["donate", "기부"], ["care", "기념일·마음 챙김"]],
-  career: [["study", "학습·자기계발 시간"]],
+  career: [["win", "커리어 성취"]],
   economy: [["saving", "월 저축률 기록"]]};
 let GLOG = null;
 function openLog(goal, type) {
@@ -984,7 +1021,7 @@ function drawLog() {
   if (t === "exercise") body = fld("종류", `<select name="kind">${opt([["aerobic", "유산소"], ["strength", "근력"], ["etc", "기타"]], "aerobic")}</select>`) + fld("시간(분)", inp("minutes", 30, 'inputmode="numeric"'));
   if (t === "race") body = fld("거리", `<select name="dist">${opt([["5k", "5km"], ["10k", "10km"], ["half", "하프"], ["full", "풀코스"]], "10k")}</select>`) + fld("대회 이름", inp("text", ""));
   if (t === "fitness") body = fld("등급", `<select name="grade">${opt([["3", "3등급"], ["2", "2등급"], ["1", "1등급"]], "3")}</select>`, "국민체력100 인증 등급");
-  if (t === "win") body = fld("영역", `<select name="sub">${opt(MIND_SUBS, "discipline")}</select>`) +
+  if (t === "win") body = fld(g === "career" ? "종류" : "영역", `<select name="sub">${opt(WIN_SUBS[g], WIN_SUBS[g][0][0])}</select>`) +
     fld("크기", `<select name="size">${opt([["s", "작은 승리 (+5)"], ["m", "의미 있는 승리 (+15)"], ["l", "큰 돌파 (+40, 월 1회)"]], "s")}</select>`) +
     `<div class="note" id="mindex" style="background:var(--chip);color:var(--sub)"></div>` + fld("한 줄 내용", `<textarea name="text"></textarea>`, "큰 돌파는 세 줄: 무슨 일이 있었나 · 어떻게 해냈나 · 무엇을 배웠나");
   if (t === "pss") body = `<p class="muted">지난 한 달 동안 얼마나 자주 그랬는지 고르세요. (0 전혀 없음 · 1 거의 없음 · 2 가끔 · 3 꽤 자주 · 4 매우 자주)</p>` +
@@ -1000,7 +1037,6 @@ function drawLog() {
   if (t === "together" || t === "volunteer") body = fld("시간(분)", inp("minutes", 60, 'inputmode="numeric"')) + fld("내용", inp("text", ""));
   if (t === "donate") body = fld("금액(원)", inp("amount", "", 'inputmode="numeric"')) + fld("어디에", inp("text", ""));
   if (t === "care") body = fld("내용", inp("text", ""), "예: 부모님 결혼기념일 챙김");
-  if (t === "study") body = fld("시간(분)", inp("minutes", 60, 'inputmode="numeric"')) + fld("무엇을", inp("text", ""));
   if (t === "saving") body = fld("이번 달 세후 소득(원)", inp("income", "", 'inputmode="numeric"'), "세금·사회보험료를 뺀 실수령(통계의 처분가능소득과 같은 기준)") +
     fld("이번 달 저축·투자·대출 원금 상환(원)", inp("saving", "", 'inputmode="numeric"'), "소득에서 소비지출을 뺀 나머지(통계의 흑자액과 같은 기준)");
   $("#form").innerHTML = mk(`<h3>${GOAL[g].icon} ${GOAL[g].label} 기록</h3>
@@ -1012,7 +1048,7 @@ function drawLog() {
 }
 function mindHint() {
   const f = $("#form"), sub = f.sub.value, i = {s: 0, m: 1, l: 2}[f.size.value];
-  $("#mindex").textContent = `예시 — ${SIZE_LABEL[f.size.value]}: ${MIND_EX[sub][i]}`;
+  $("#mindex").textContent = `예시 — ${SIZE_LABEL[f.size.value]}: ${(GLOG.goal === "career" ? CAREER_EX : MIND_EX)[sub][i]}`;
 }
 async function saveLog() {
   const f = $("#form"), fd = new FormData(f), g = GLOG.goal, t = GLOG.type, x = {goal: g, type: t};
@@ -1025,7 +1061,7 @@ async function saveLog() {
   }
   if (t === "exercise") name = `운동 ${x.minutes || 30}분 · ${{aerobic: "유산소", strength: "근력", etc: "기타"}[x.kind]}`;
   if (t === "time") name = `${Object.fromEntries(CRAFT_FIELDS)[x.field]} ${x.field === "recycle" ? (x.count || 1) + "회" : (x.minutes || 0) + "분"}`;
-  if (t === "win") name = `${Object.fromEntries(MIND_SUBS)[x.sub]} · ${SIZE_LABEL[x.size]}`;
+  if (t === "win") name = `${Object.fromEntries(WIN_SUBS[g])[x.sub]} · ${SIZE_LABEL[x.size]}`;
   if (["first", "level"].includes(t)) name = `${Object.fromEntries(CRAFT_FIELDS)[x.field]} ${t === "first" ? "처음" : "단계 올림"}`;
   if (t === "saving") { if (!(x.income > 0)) return toast("소득을 적어 주세요"); name = `저축률 ${Math.round((x.saving || 0) / x.income * 100)}%`; }
   if (["together", "volunteer", "study"].includes(t)) name = `${name.split("(")[0]} ${x.minutes || 0}분`;
