@@ -944,13 +944,15 @@ function flow(p, amount, what, extra) {
   return {p, pts: any ? pts : 0, any, what};
 }
 // 작은 기록 적립: 평균에 못 미쳐 그 주 점수가 0이던 행동을 시작일부터 계속 모아, 정해 둔 양을 채울 때마다 1점(흐름 점수).
-// 1점 = 그 영역 '평균 한 주' 양의 절반 정도(평균 바로 위 주의 점수와 이어지도록). 평균 이상인 주는 상위 % 점수를 받으므로 모으지 않는다.
+// 1점 = 그 영역 '평균 한 주' 양의 약 1/8(작은 행동도 자주 보상받도록). 대신 한 영역 한 주 최대 SMALL_CAP점이라
+// 평균 아래인 주가 평균을 넘긴 주(상위 % 점수)보다 많이 받지는 않는다. 평균 이상인 주는 상위 % 점수를 받으므로 모으지 않는다.
+const SMALL_CAP = 3;
 const SMALL = {
-  body: {unit: 30, label: "운동", fmt: v => `${v}분`, why: "주 평균 약 2회(30분 이상) → 절반 = 30분"},
-  craft: {unit: 240, label: "가사·돌봄", fmt: v => `${v}분`, why: "30대 남성 하루 76분 × 7일 ≈ 530분 → 절반 ≈ 240분(분리수거 1회 = 15분 → 16회)"},
-  social: {unit: 120, label: "교류·나눔", fmt: v => `${v}분`, why: "30대 남성 하루 39분 × 7일 ≈ 270분 → 절반 ≈ 120분"},
-  mind: {unit: 2, label: "반복 성취", fmt: v => `${v}회`, why: "같은 주 같은 영역 세 번째부터(5 → 2.5 → 0점이던 것) 2회"},
-  career: {unit: 2, label: "반복 성취", fmt: v => `${v}회`, why: "정신과 같은 규칙"},
+  body: {unit: 15, label: "운동", fmt: v => `${v}분`, why: "30분 미만 운동도 포함. 15분 = 1점"},
+  craft: {unit: 60, label: "가사·돌봄", fmt: v => `${v}분`, why: "30대 남성 한 주 평균 ≈ 530분의 약 1/8. 분리수거 1회 = 15분 → 4회 = 1점, 요리·청소 1시간 = 1점"},
+  social: {unit: 30, label: "교류·나눔", fmt: v => `${v}분`, why: "30대 남성 한 주 평균 ≈ 270분의 약 1/8"},
+  mind: {unit: 1, label: "반복 성취", fmt: v => `${v}회`, why: "같은 주 같은 영역 세 번째부터(5 → 2.5 → 0점이던 것) 1회 = 1점"},
+  career: {unit: 1, label: "반복 성취", fmt: v => `${v}회`, why: "정신과 같은 규칙"},
   check: {unit: 1, label: "점검·측정", fmt: v => `${v}회`, why: "스트레스 점검·체력 측정은 구간·등급이 오르지 않아도 1회(한 달 1회까지) 1점"},
   economy: {unit: 1, label: "평균 아래 저축", fmt: v => `${v}달`, why: "저축률이 평균(25%) 아래라도 저축한 달 1점"}
 };
@@ -1065,7 +1067,9 @@ function scoreAll() {
     if (w.economy.low) acc.economy += 1;
     logs.filter(l => l.date >= ws && l.date <= we && l.date >= start && ["pss", "fitness"].includes(l.f.type)).forEach(l => {
       const key = l.f.type + l.date.slice(0, 7); if (!checkMonth.has(key)) { checkMonth.add(key); small[l.f.goal] = (small[l.f.goal] || 0) + 1; } });
-    GOALS.forEach(g => { const u = SMALL[g.k].unit, n = Math.floor(acc[g.k] / u); if (n > 0) { acc[g.k] -= n * u; small[g.k] = (small[g.k] || 0) + n; } });
+    GOALS.forEach(g => { const u = SMALL[g.k].unit, n = Math.floor(acc[g.k] / u);
+      if (n > 0) { acc[g.k] -= n * u; small[g.k] = (small[g.k] || 0) + n; }
+      if (small[g.k] > SMALL_CAP) small[g.k] = SMALL_CAP; });                 // 한 주 최대 3점(넘친 양은 버림, 1점이 안 된 나머지만 이월)
     GOALS.forEach(g => { if (small[g.k]) { w[g.k].pts += small[g.k]; w[g.k].what += ` · 작은 기록 적립 +${small[g.k]}`; } });
     GOALS.forEach(g => { if (w[g.k].pts) { byGoal[g.k] += w[g.k].pts; events.push({date: addDays(ws, 6) > DATA.today ? DATA.today : addDays(ws, 6), goal: g.k, pts: w[g.k].pts,
       label: `${ws.slice(5).replace("-", ".")} 주 · ${w[g.k].what}${w[g.k].p < .5 ? ` (${fmtTop(w[g.k].p)})` : ""}`, week: true}); } });
@@ -1313,7 +1317,7 @@ function showBench() {
     <span class="muted">비교 집단: ${esc(b.group)} · 근거: ${esc(b.level)}<br>${esc(b.src)}</span></div>`; }).join("") +
     Object.values(MILES).map(m => `<div class="dday" style="display:block"><strong>돌파 · ${esc(m.title)}</strong><br><span class="muted">근거: ${esc(m.level)} · ${esc(m.src)}</span></div>`).join("");
   $("#form").innerHTML = `<h3>점수 기준·출처</h3><p class="muted" style="line-height:1.7">점수 = 10 × log₂(0.5 ÷ 상위 비율). 평균 0점 · 상위 10% 23점 · 1% 56점 · 0.1% 90점.
-    흐름 점수는 한 영역 한 주 최대 ${CAP}점(월 단위 지표는 주 단위로 환산), 돌파는 같은 희소도의 ${MILE}배를 한 번. 시작일 이전 업적도 같은 점수로(줄이지 않음). 평균에 못 미쳐 0점이던 행동은 '작은 기록 적립'으로 모아 정해 둔 양마다 1점(아래 표). 누적 상위 %는 평균 페이스와 지금까지 이룬 상태 지표(아래 돌파 기준의 상위 비율)를 영역마다 평균하고, 매주 한 번 기록해 변화를 보여 줍니다.
+    흐름 점수는 한 영역 한 주 최대 ${CAP}점(월 단위 지표는 주 단위로 환산), 돌파는 같은 희소도의 ${MILE}배를 한 번. 시작일 이전 업적도 같은 점수로(줄이지 않음). 평균에 못 미쳐 0점이던 행동은 '작은 기록 적립'으로 모아 정해 둔 양마다 1점(한 영역 한 주 최대 ${SMALL_CAP}점, 아래 표). 누적 상위 %는 평균 페이스와 지금까지 이룬 상태 지표(아래 돌파 기준의 상위 비율)를 영역마다 평균하고, 매주 한 번 기록해 변화를 보여 줍니다.
     '추정'으로 표시된 기준은 공식 원문을 확인하는 대로 바꿉니다.</p><div class="card">${rows}</div>
     <h3>작은 기록 적립(1점에 필요한 양)</h3><div class="card">${Object.values(SMALL).map(x => `<div class="dday" style="display:block"><strong>${esc(x.label)} ${esc(x.fmt(x.unit))} = 1점</strong><br><span class="muted">${esc(x.why)}</span></div>`).join("")}</div>
     <div class="row" style="margin-top:12px"><span></span><button class="btn" type="button" data-act="close">닫기</button></div>`;
