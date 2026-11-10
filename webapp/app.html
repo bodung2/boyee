@@ -698,7 +698,7 @@ const GOALS = [
   {k: "craft", icon: "🎨", label: "기능·영감", short: "기능"}, {k: "social", icon: "🤝", label: "사회", short: "사회"},
   {k: "career", icon: "🎖", label: "커리어", short: "커리어"}, {k: "economy", icon: "💰", label: "경제", short: "경제"}];
 const GOAL = Object.fromEntries(GOALS.map(g => [g.k, g]));
-const CAP = 56, MILE = 4, MONTH_W = 52 / 12;
+const CAP = 56, MILE = 4, MONTH_W = 52 / 12, ETC_UNIT = 40, ETC_DAY_CAP = 2;
 const R = p => p >= 0.5 ? 0 : 10 * Math.log2(0.5 / Math.max(p, 0.001));      // 상위 50% = 0, 10% = 23, 1% = 56, 0.1% = 90
 const pFromPts = pts => 0.5 / Math.pow(2, pts / 10);
 const LV = n => 25 * n * n;                                                     // 레벨 n에 필요한 누적 점수
@@ -902,8 +902,12 @@ function weekStats(ws, logs, start) {
   out.body.vol = by("body", "exercise").reduce((a, l) => a + (num(l.f.minutes) || 30), 0);      // 작은 기록 적립용(30분 미만 포함)
   // 기능·영감: 가사·돌봄 시간 + 처음·완성 기록(같은 상한 안)
   const craftMin = by("craft", "time").reduce((a, l) => a + (l.f.field === "recycle" ? (num(l.f.count) || 1) * RECYCLE_MIN : (num(l.f.minutes) || 0)), 0);
-  out.craft = flow(topShareTime(craftMin / 7, BENCH.craft), craftMin, `가사·돌봄 하루 평균 ${Math.round(craftMin / 7)}분`,
-    by("craft", "first").length * 5 + by("craft", "project").reduce((a, l) => a + (SIZE_PTS[l.f.size] || 5), 0));
+  // 기타(직접 적은 기능·영감 활동): 하루에 40분마다 1점, 하루 최대 2점(가사·돌봄 시간과 따로)
+  const etcDay = {};
+  by("craft", "etc").forEach(l => { etcDay[l.date] = (etcDay[l.date] || 0) + (num(l.f.minutes) || 0); });
+  const etcMin = Object.values(etcDay).reduce((a, m) => a + m, 0), etcPts = Object.values(etcDay).reduce((a, m) => a + Math.min(ETC_DAY_CAP, Math.floor(m / ETC_UNIT)), 0);
+  out.craft = flow(topShareTime(craftMin / 7, BENCH.craft), craftMin, `가사·돌봄 하루 평균 ${Math.round(craftMin / 7)}분${etcMin ? ` · 기타 ${etcMin}분` : ""}`,
+    by("craft", "first").length * 5 + by("craft", "project").reduce((a, l) => a + (SIZE_PTS[l.f.size] || 5), 0) + etcPts);
   out.craft.vol = craftMin;
   // 성취 기록(정신·커리어 공통): 같은 종류 반복은 절반 → 0, 큰 돌파는 월 1회, 한 주 최대 CAP
   const rep = {};          // 같은 영역 세 번째부터(0점이던 반복 성취) — 작은 기록 적립용
@@ -940,8 +944,8 @@ function weekStats(ws, logs, start) {
 }
 function flow(p, amount, what, extra) {
   const any = amount > 0 || extra > 0;
-  const pts = Math.min(CAP, (amount > 0 ? R(p) : 0) + (extra || 0));
-  return {p, pts: any ? pts : 0, any, what};
+  const rp = amount > 0 ? R(p) : 0, pts = Math.min(CAP, rp + (extra || 0));
+  return {p, pts: any ? pts : 0, any, what, rp};
 }
 // 작은 기록 적립: 평균에 못 미쳐 그 주 점수가 0이던 행동을 시작일부터 계속 모아, 정해 둔 양을 채울 때마다 1점(흐름 점수).
 // 1점 = 그 영역 '평균 한 주' 양의 약 1/8(작은 행동도 자주 보상받도록). 대신 한 영역 한 주 최대 SMALL_CAP점이라
@@ -1062,7 +1066,7 @@ function scoreAll() {
     const w = weekStats(ws, logs, start); weeks.push({ws, w});
     // 작은 기록 적립(평균 아래라 0점이던 것): 모아서 정해 둔 양마다 1점 — 그 주 점수에 더해 '최근 얻은 점수'에도 보인다
     const we = addDays(ws, 6), small = {};
-    ["body", "craft", "social"].forEach(k => { if (!w[k].pts && w[k].vol > 0) acc[k] += w[k].vol; });
+    ["body", "craft", "social"].forEach(k => { if (!w[k].rp && w[k].vol > 0) acc[k] += w[k].vol; });     // 상위 % 점수가 0인 주만
     ["mind", "career"].forEach(k => { acc[k] += w[k].rep || 0; });
     if (w.economy.low) acc.economy += 1;
     logs.filter(l => l.date >= ws && l.date <= we && l.date >= start && ["pss", "fitness"].includes(l.f.type)).forEach(l => {
@@ -1187,7 +1191,7 @@ function renderGrowth() {
     const sub = GVIEW === "all" && t.parts && t.parts.length ? t.parts.map(x => `${x.label} ${fmtPct(x.p)}`).join(" · ") : b.level;
     const was = prevSnap && prevSnap.f[g.k] != null ? num(prevSnap.f[g.k]) : null;
     const dlt = GVIEW === "all" && t.any && was != null ? Math.round((was - t.p) * 100) : 0;     // 상위 %가 줄면(좋아지면) ▲
-    return `<button type="button" class="grow-row" data-g="log" data-goal="${g.k}"><span class="gi">${g.icon}</span><span class="gn">${g.label}<small>${esc(sub)}</small></span>
+    return `<button type="button" class="grow-row" data-g="detail" data-goal="${g.k}"><span class="gi">${g.icon}</span><span class="gn">${g.label}<small>${esc(sub)}</small></span>
       <span class="gt ${t.any && t.p < .5 ? "up" : ""}">${t.any ? fmtTop(t.p) : (GVIEW !== "all" ? (GVIEW === "week" ? "이번 주 기록 없음" : "이번 달 기록 없음") : g.k === "mind" ? "점검·기록 없음" : g.k === "career" ? "직업 기록 없음" : "기록 없음")}${dlt ? `<small style="display:block;font-size:11px;font-weight:400;color:var(${dlt > 0 ? "--up" : "--down"})">${dlt > 0 ? "▲" : "▼"}${Math.abs(dlt)}%p</small>` : ""}</span>
       <span class="gp">${Math.round(S.byGoal[g.k])}점</span></button>`;
   }).join("");
@@ -1214,7 +1218,7 @@ function renderGrowth() {
         <tr><th style="text-align:left;padding:3px 4px">주</th>${GOALS.map(g => `<th style="padding:3px 4px">${g.icon}</th>`).join("")}</tr>
         ${snaps.slice(-12).reverse().map(x => `<tr><td style="padding:3px 4px;white-space:nowrap">${esc(x.date.slice(2).replace(/-/g, "."))}</td>${GOALS.map(g => `<td style="text-align:center;padding:3px 4px">${fmtPct(x.f[g.k] != null ? num(x.f[g.k]) : null)}</td>`).join("")}</tr>`).join("")}
       </table></div>` : ""}` : ""}
-    <p class="muted">줄을 누르면 그 영역을 기록합니다 · 비교 기준: 30대 후반 남성 · <a href="#" data-g="bench">점수 기준·출처 보기</a></p>
+    <p class="muted">줄을 누르면 그 영역의 점수 내역과 기록이 나와요 · 비교 기준: 30대 후반 남성 · <a href="#" data-g="bench">점수 기준·출처 보기</a></p>
     <h2>빠르게 기록</h2><div class="grid">${GOALS.map(g => `<button type="button" class="stat" data-g="log" data-goal="${g.k}"><div class="l">${g.icon} ${g.label}</div><div class="n" style="font-size:15px">＋ 기록</div></button>`).join("")}</div>
     ${feed ? `<h2>최근 얻은 점수</h2><div class="card">${feed}</div>` : ""}
     ${recent ? `<h2>최근 기록</h2><div class="list">${recent}</div>` : ""}`;
@@ -1245,7 +1249,7 @@ function hexagon(title, vals, color, fmt, fixedMax, opts) {
 const LOG_TYPES = {
   body: [["exercise", "운동(30분 이상)"], ["race", "대회 완주"], ["fitness", "체력 측정 등급"]],
   mind: [["win", "정신 성취"], ["pss", "월간 스트레스 점검(2분)"]],
-  craft: [["time", "시간 기록"], ["first", "처음 해 본 일"], ["project", "완성한 것"], ["level", "숙련 단계 올림"]],
+  craft: [["time", "시간 기록"], ["etc", "기타(직접 적기)"], ["first", "처음 해 본 일"], ["project", "완성한 것"], ["level", "숙련 단계 올림"]],
   social: [["together", "함께한 시간(모임·가족 행사·멘토링)"], ["volunteer", "봉사"], ["donate", "기부"], ["care", "기념일·마음 챙김"]],
   career: [["win", "커리어 성취"]],
   economy: [["saving", "월 저축률 기록"]]};
@@ -1272,6 +1276,7 @@ function drawLog() {
     `<p class="muted">PSS-10(Cohen)을 옮긴 문항입니다. 공식 한국어판 문구와 다를 수 있습니다.</p>`;
   if (t === "time") body = fld("분야", `<select name="field">${opt(CRAFT_FIELDS, "cook")}</select>`) +
     fld("시간(분)", inp("minutes", 30, 'inputmode="numeric"'), "분리수거는 횟수로 기록(1회 = 15분으로 계산)") + fld("분리수거 횟수", inp("count", "", 'inputmode="numeric"'));
+  if (t === "etc") body = fld("무엇을 했나", inp("text", ""), "예: 기타 연습, 그림, 목공") + fld("시간(분)", inp("minutes", 40, 'inputmode="numeric"'), "40분마다 1점, 하루 최대 2점");
   if (t === "first") body = fld("분야", `<select name="field">${opt(CRAFT_FIELDS, "cook")}</select>`) + fld("처음 해 본 일", inp("text", ""));
   if (t === "project") body = fld("크기", `<select name="size">${opt([["s", "작은 것 (+5)"], ["m", "중간 (+15)"], ["l", "큰 프로젝트 (+40)"]], "s")}</select>`) + fld("무엇을 완성했나", inp("text", ""));
   if (t === "level") body = fld("분야", `<select name="field">${opt(CRAFT_FIELDS, "cook")}</select>`) +
@@ -1302,6 +1307,7 @@ async function saveLog() {
     x.score = pssScore(ans); x.answers = ans.join(","); name = `스트레스 점검 ${x.score}점`;
   }
   if (t === "exercise") name = `운동 ${x.minutes || 30}분 · ${{aerobic: "유산소", strength: "근력", etc: "기타"}[x.kind]}`;
+  if (t === "etc") { if (!(x.text || "").trim()) return toast("무엇을 했는지 적어 주세요"); name = `✏️ ${x.text.trim()} ${x.minutes || 0}분`; }
   if (t === "time") name = `${Object.fromEntries(CRAFT_FIELDS)[x.field]} ${x.field === "recycle" ? (x.count || 1) + "회" : (x.minutes || 0) + "분"}`;
   if (t === "win") name = `${Object.fromEntries(WIN_SUBS[g])[x.sub]} · ${SIZE_LABEL[x.size]}`;
   if (["first", "level"].includes(t)) name = `${Object.fromEntries(CRAFT_FIELDS)[x.field]} ${t === "first" ? "처음" : "단계 올림"}`;
@@ -1311,6 +1317,29 @@ async function saveLog() {
   try { await api("saveItem", {category: "log", name, date: fd.get("date") || DATA.today, f: x}); $("#sheet").hidden = true; busy = false; await loadAssets(true); toast("기록했습니다"); }
   catch (e) { toast("저장하지 못했습니다: " + e.message, true); }
   busy = false;
+}
+// 영역 상세: 쌓은 점수(흐름·돌파), 상위 % 근거, 점수 내역 전체, 이 영역의 기록(지우기)
+let DETAIL = "";
+function showGoalDetail(goal) {
+  DETAIL = goal;
+  const g = GOAL[goal], S = scoreAll(), T = periodTop(S, "all")[goal];
+  const ev = S.events.filter(e => e.goal === goal), flowPts = ev.filter(e => e.week).reduce((a, e) => a + e.pts, 0), milePts = S.byGoal[goal] - flowPts;
+  const logs = gLogs().filter(l => l.f.goal === goal).sort((a, b) => (b.date + b.updated) < (a.date + a.updated) ? -1 : 1);
+  const evRows = ev.map(e => `<div class="dday"><span><span class="badge">${e.week ? "📈 흐름" : "🏆 돌파"}</span> ${esc(e.label)}<br><small class="muted">${esc(e.date ? fmtDay(e.date) : "날짜 없음")}</small></span><b>+${Math.round(e.pts * 10) / 10}</b></div>`).join("");
+  const logRows = logs.map(l => `<button type="button" class="item" data-g="dellog" data-id="${esc(l.id)}"><span class="t">${esc(l.name)}</span>
+    <span class="r">${esc(fmtDay(l.date))}</span><span class="s">${esc(l.f.text || "")}</span><span class="rs">눌러서 지우기</span></button>`).join("");
+  $("#form").innerHTML = `<div class="row"><h3 style="margin:0">${g.icon} ${g.label}</h3><button class="btn" type="button" data-act="close">닫기</button></div>
+    <div class="track" style="margin:10px 0;grid-template-columns:repeat(3,1fr)"><span>쌓은 점수 <b>${Math.round(S.byGoal[goal]).toLocaleString("ko-KR")}</b><small>이 영역 전체</small></span>
+      <span>📈 흐름 <b>${Math.round(flowPts)}</b><small>매주 쌓은 것</small></span><span>🏆 돌파 <b>${Math.round(milePts)}</b><small>업적</small></span></div>
+    <div class="card"><b>누적 상위 % · ${T.any ? fmtTop(T.p) : "기록 없음"}</b>
+      ${T.parts && T.parts.length ? `<div class="muted" style="font-size:13px;margin-top:4px">${T.parts.map(x => `${esc(x.label)} ${fmtPct(x.p)}`).join(" · ")}</div>` : ""}</div>
+    <div class="row" style="margin-top:12px"><h3 style="margin:0">점수 내역 <span class="muted" style="font-size:13px;font-weight:400">${ev.length}건</span></h3>
+      <button class="btn primary" type="button" data-g="log" data-goal="${goal}">＋ 기록</button></div>
+    <div class="card">${evRows || '<p class="muted">아직 점수가 없어요.</p>'}</div>
+    <h3>내 기록 <span class="muted" style="font-size:13px;font-weight:400">${logs.length}건</span></h3>
+    ${logRows ? `<div class="list">${logRows}</div>` : '<p class="muted">아직 기록이 없어요.</p>'}
+    ${["career", "economy", "social"].includes(goal) ? `<p class="muted" style="font-size:12px">직위·수상·저작물·순자산·파이프라인·가족 같은 업적은 '내 자산' 탭에서 고쳐요.</p>` : ""}`;
+  $("#form").dataset.mode = "detail"; $("#sheet").hidden = false;
 }
 function showBench() {
   const rows = GOALS.map(g => { const b = BENCH[g.k]; return `<div class="dday" style="display:block"><strong>${g.icon} ${g.label} · ${esc(b.title)}</strong><br>
@@ -1339,10 +1368,12 @@ document.addEventListener("click", async e => {
     busy = false;
   }
   if (a === "log") openLog(b.dataset.goal);
+  if (a === "detail") showGoalDetail(b.dataset.goal);
   if (a === "bench") showBench();
   if (a === "dellog") {
     const l = DATA.items.find(i => i.id === b.dataset.id); if (!l || !confirm(`'${l.name}' 기록을 지울까요?`)) return;
-    try { await api("deleteItem", l.id); await loadAssets(true); toast("지웠습니다"); } catch (err) { toast("지우지 못했습니다: " + err.message, true); }
+    try { await api("deleteItem", l.id); await loadAssets(true); toast("지웠습니다");
+      if (!$("#sheet").hidden && $("#form").dataset.mode === "detail") showGoalDetail(DETAIL); } catch (err) { toast("지우지 못했습니다: " + err.message, true); }
   }
 });
 $("#form").addEventListener("change", e => {
@@ -1367,7 +1398,7 @@ const TIMER_ACTS = {
   mind: [["meditate", "🧘 명상·호흡", {type: "win", sub: "heart"}], ["journal", "📓 일기·성찰", {type: "win", sub: "heart"}],
     ["calm", "🌊 감정 다스리기", {type: "win", sub: "emotion"}], ["avoid", "🦁 미루던 일 하기", {type: "win", sub: "avoid"}],
     ["focus", "⏰ 집중·루틴 지키기", {type: "win", sub: "discipline"}], ["detox", "🧲 유혹 참기(폰·간식 등)", {type: "win", sub: "impulse"}]],
-  craft: CRAFT_FIELDS.map(([k, l]) => [k, l, {type: "time", field: k}])
+  craft: [...CRAFT_FIELDS.map(([k, l]) => [k, l, {type: "time", field: k}]), ["etc", "✏️ 기타(직접 적기)", {type: "etc"}]]
 };
 const TIMER_HINT = {body: "운동은 30분 이상이면 1회로 셉니다", mind: "끝내면 그 영역의 '작은 승리'로 기록돼요(같은 주 같은 영역은 반씩 줄어요)",
   craft: "가사·돌봄 시간은 하루 평균 분으로 30대 남성과 비교해요"};
@@ -1392,7 +1423,7 @@ function renderRunBar() {
   const list = runningTimers(), bar = $("#runbar");
   bar.hidden = !list.length; document.body.classList.toggle("has-run", !!list.length);
   bar.innerHTML = list.map(t => { const a = actOf(t.f.goal, t.f.act);
-    return `<div class="rb-row"><span class="rb-dot"></span><span class="rb-name">${goalIcon(t.f.goal)} ${esc(a ? a[1].replace(/^\S+\s/, "") : t.name)}<small>진행 중 · ${hhmm(num(t.f.start))} 시작</small></span>
+    return `<div class="rb-row"><span class="rb-dot"></span><span class="rb-name">${goalIcon(t.f.goal)} ${esc(t.f.act === "etc" ? (t.f.memo || "기타") : a ? a[1].replace(/^\S+\s/, "") : t.name)}<small>진행 중 · ${hhmm(num(t.f.start))} 시작</small></span>
       <b class="rb-clock" data-start="${num(t.f.start)}">${clock(Date.now() - num(t.f.start))}</b>
       <button type="button" class="btn primary" data-t="end" data-id="${esc(t.id)}">■ 끝</button></div>`; }).join("");
   clearInterval(tickId);
@@ -1409,7 +1440,8 @@ function renderTimer() {
     const g = GOAL[TSEL.goal], acts = TIMER_ACTS[TSEL.goal], rec = TSEL.act === "recycle";
     html += `<div class="row"><h2 style="margin:0">${g.icon} ${g.label} · 무엇을 하나요?</h2><button class="btn" type="button" data-t="back">← 뒤로</button></div>
       <div class="tm-acts">${acts.map(([k, l]) => `<button type="button" class="tm-act" data-t="act" data-k="${k}" aria-pressed="${k === TSEL.act}">${esc(l)}</button>`).join("")}</div>
-      <div class="f"><label for="tmemo">메모(선택)</label><input id="tmemo" maxlength="100" placeholder="예: 아이와 블록 놀이" value="${esc(TSEL.memo || "")}"></div>
+      ${TSEL.act === "etc" ? `<div class="f"><label for="tmemo">무엇을 하나요? (꼭 적기)</label><input id="tmemo" maxlength="100" placeholder="예: 기타 연습, 그림, 목공" value="${esc(TSEL.memo || "")}"><small>40분마다 1점, 하루 최대 2점</small></div>`
+        : `<div class="f"><label for="tmemo">메모(선택)</label><input id="tmemo" maxlength="100" placeholder="예: 아이와 블록 놀이" value="${esc(TSEL.memo || "")}"></div>`}
       <button class="btn primary tm-big" type="button" data-t="${rec ? "once" : "start"}" ${TSEL.act ? "" : "disabled"}>${rec ? "♻️ 1회 기록" : "▶ 시작"}</button>
       <p class="muted" style="font-size:12px">${rec ? "분리수거는 시간 대신 횟수로 기록해요(1회 = 15분으로 계산)." : esc(TIMER_HINT[TSEL.goal])}</p>`;
   } else {
@@ -1435,6 +1467,7 @@ function timerLog(goal, act, minutes, memo) {
   const a = actOf(goal, act), spec = a[2], label = a[1], text = [label.replace(/^\S+\s/, ""), memo].filter(Boolean).join(" · ") + " (⏱)";
   if (spec.type === "exercise") return {name: `운동 ${minutes}분 · ${label.replace(/^\S+\s/, "")}`, f: {goal, type: "exercise", kind: spec.kind, minutes, text}};
   if (spec.type === "win") return {name: `${Object.fromEntries(MIND_SUBS)[spec.sub]} · ${SIZE_LABEL.s}`, f: {goal, type: "win", sub: spec.sub, size: "s", minutes, text: `${text} ${minutes}분`}};
+  if (spec.type === "etc") return {name: `✏️ ${memo || "기타"} ${minutes}분`, f: {goal, type: "etc", minutes, text: `${memo || "기타"} (⏱)`}};
   if (spec.field === "recycle") return {name: `${label} 1회`, f: {goal, type: "time", field: "recycle", count: 1, text}};
   return {name: `${label} ${minutes}분`, f: {goal, type: "time", field: spec.field, minutes, text}};
 }
@@ -1477,14 +1510,16 @@ async function timerAct(kind, id) {
         toast("기록하는 중…"); await api("saveItem", {category: "log", name: x.name, date: DATA.today, f: x.f});
         TSEL = {goal: "", act: ""}; await loadAssets(true); toast("♻️ 기록했어요"); return;
       }
+      if (TSEL.act === "etc" && !memo) { toast("무엇을 하는지 적어 주세요"); $("#tmemo").focus(); return; }
       const a = actOf(TSEL.goal, TSEL.act), f = {goal: TSEL.goal, act: TSEL.act, start: Date.now(), memo};
       TSEL = {goal: "", act: ""};
       // 저장을 기다리지 않고 바로 '진행 중'을 보여 준다
-      const tmp = {id: "tmp-" + f.start, name: a[1], f};
+      const tname = f.act === "etc" ? "✏️ " + memo : a[1];
+      const tmp = {id: "tmp-" + f.start, name: tname, f};
       store.set("timers", JSON.stringify([...runningTimers().map(t => ({id: t.id, name: t.name, f: t.f})), tmp]));
       DATA.items.push({...tmp, category: "timer", date: DATA.today, updated: ""});
       renderTimer(); toast("시작! 끝나면 아래 ■ 끝을 눌러요");
-      const realId = await api("saveItem", {category: "timer", name: a[1], date: DATA.today, f});
+      const realId = await api("saveItem", {category: "timer", name: tname, date: DATA.today, f});
       const it = DATA.items.find(x => x.id === tmp.id); if (it) it.id = realId;
       await loadAssets(true);
     } else if (kind === "end" && run) {
