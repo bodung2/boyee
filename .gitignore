@@ -36,3 +36,6 @@ places_inbox/
 data/models/
 data/life_dashboard_app.sha256
 data/life_dashboard_app_drive.json
+
+# 모든 알림 기록(하루 상태 보고가 실패·경고를 모은다)
+data/alerts.jsonl

@@ -115,16 +115,21 @@ def main(argv: list[str] | None = None) -> int:
             if args.cmd in ("daily", "collect"):
                 notes += collect_all(cfg, blogs, today)
             weekday = WEEKDAYS.get(os.environ.get("LAB_REVIEW_WEEKDAY", "일").strip()[:1], 6)
-            if args.cmd == "review" or (args.cmd == "daily" and datetime.now(KST).weekday() == weekday):
+            weekly = args.cmd == "review" or (args.cmd == "daily" and datetime.now(KST).weekday() == weekday)
+            if weekly:
                 _pull_telegram(cfg)
                 for blog in blogs:
                     review.run(blog, cfg, today, use_claude=not getattr(args, "no_claude", False), idents=_idents())
-                if cfg.push_report:
-                    from naver_autopost.__main__ import _push_diagnostics
-                    if _push_diagnostics("Growth lab: weekly report"):
-                        notes.append("⚠️ 주간 보고를 GitHub에 올리지 못했습니다(로그 확인)")
             if notes:
                 send_text(cfg.telegram_bot_token, cfg.telegram_chat_id, "[성장 실험실]\n" + "\n".join(notes))
+            if args.cmd == "daily" and cfg.push_report:
+                # 하루 상태 보고(발행 편수·티스토리 로그인·실패 알림) → Claude가 매일 밤 읽고 대화창에 알린다
+                from . import daily_status
+                daily_status.write(cfg.history_dir, cfg.diagnostics_dir.parent / "status" / "daily.md", _idents())
+            if (weekly or args.cmd == "daily") and cfg.push_report:
+                from naver_autopost.__main__ import _push_diagnostics
+                if _push_diagnostics("Growth lab: weekly report" if weekly else "Daily status"):
+                    log.warning("상태 보고를 GitHub에 올리지 못했습니다")
         return 0
     except Exception as e:  # noqa: BLE001
         log.exception("성장 실험실 실패")
@@ -134,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _idents() -> list[str]:
     """공개 보고에서 지울 블로그 아이디(네이버 세 블로그·티스토리)."""
-    keys = ("NAVER_BLOG_ID", "NAVER_BLOG_ID_EDU", "NAVER_BLOG_ID_INVEST", "NAVER_BLOG_ID_CHILDHOOD", "TISTORY_BLOG")
+    keys = [k for k in os.environ if k.startswith("NAVER_BLOG_ID")] + ["TISTORY_BLOG"]
     out = [os.environ.get(k, "").strip() for k in keys]
     return [i.removeprefix("https://").split(".tistory.com")[0].strip("/") for i in out if i]
 
