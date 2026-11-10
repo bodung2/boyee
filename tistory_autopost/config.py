@@ -65,6 +65,8 @@ class TistoryConfig:
     codex_effort: str = ""
     # 로그인이 풀렸을 때 블로그 주인이 PC에서 `login`을 다시 할 때까지 기다리는 시간(분). 0이면 바로 실패로 끝낸다.
     login_wait_min: int = 120
+    login_popup: bool = True          # 카카오 로그인이 끊기면 PC 화면에 로그인 창을 바로 띄운다
+    keepalive_popup_min: int = 30     # 로그인 점검(07:50·16:20·21:50)에서 띄운 창을 기다리는 시간
     # 카카오 로그인 유지가 끝났을 때만 쓰는 계정(비우면 직접 `login`). .env는 git에 올라가지 않는다.
     kakao_login_id: str = ""
     kakao_login_password: str = ""
@@ -128,6 +130,8 @@ class TistoryConfig:
             infographic_timeout=int(env("INFOGRAPHIC_TIMEOUT_SEC", "900")),
             codex_image_timeout=int(env("CODEX_IMAGE_TIMEOUT_SEC", "360")),
             login_wait_min=int(env("TISTORY_LOGIN_WAIT_MIN", "120")),
+            login_popup=_bool("TISTORY_LOGIN_POPUP", True),
+            keepalive_popup_min=int(env("TISTORY_KEEPALIVE_POPUP_MIN", "30")),
             kakao_login_id=env("KAKAO_LOGIN_ID", "").strip(),
             kakao_login_password=env("KAKAO_LOGIN_PASSWORD", ""),
             kakao_password_login=_bool("KAKAO_PASSWORD_LOGIN", False),
