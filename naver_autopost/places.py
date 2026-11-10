@@ -221,6 +221,18 @@ def yunet_model(models_dir: Path) -> Path | None:
         return None
 
 
+def _load_cascade(cv2, path: Path):
+    """옛 방식(Haar) 얼굴 찾기 파일을 메모리로 읽는다(한글 경로에서도 열리게). 못 읽으면 None."""
+    try:
+        fs = cv2.FileStorage(path.read_text(encoding="utf-8"), cv2.FILE_STORAGE_READ | cv2.FILE_STORAGE_MEMORY)
+        cascade = cv2.CascadeClassifier()
+        if cascade.read(fs.getFirstTopLevelNode()) and not cascade.empty():
+            return cascade
+    except Exception as e:  # noqa: BLE001
+        log.warning("얼굴 찾기 파일을 읽지 못했습니다(%s): %s", path.name, e)
+    return None
+
+
 class FaceFinder:
     """두 가지 얼굴 찾기(YuNet + Haar)를 모두 돌려 하나라도 찾은 곳은 흐린다."""
 
@@ -231,17 +243,28 @@ class FaceFinder:
             raise PhotoError("얼굴 흐림에 필요한 OpenCV가 설치되지 않아 사진을 올리지 않았습니다. "
                              "`.venv\\Scripts\\python.exe -m pip install -r requirements.txt`를 실행하세요.") from e
         self.cv2 = cv2
-        self.cascades = []
+        # 윈도우의 OpenCV는 한글이 든 경로(C:\\Users\\박보영\\...)의 파일을 열지 못한다.
+        # 그래서 파일은 파이썬으로 읽고, OpenCV에는 내용(메모리)만 넘긴다.
+        self.cascades: list[tuple[object, bool]] = []      # (얼굴 찾기, 옆얼굴용인지)
         if hasattr(cv2, "CascadeClassifier"):
             base = Path(cv2.data.haarcascades)
-            self.cascades = [cv2.CascadeClassifier(str(base / name)) for name in
-                             ("haarcascade_frontalface_default.xml", "haarcascade_frontalface_alt2.xml",
-                              "haarcascade_profileface.xml")]
-            self.cascades = [c for c in self.cascades if not c.empty()]
+            for name, profile in (("haarcascade_frontalface_default.xml", False),
+                                  ("haarcascade_frontalface_alt2.xml", False),
+                                  ("haarcascade_profileface.xml", True)):
+                cascade = _load_cascade(cv2, base / name)
+                if cascade is not None:
+                    self.cascades.append((cascade, profile))
         self.yunet = None
         model = yunet_model(models_dir) if models_dir and hasattr(cv2, "FaceDetectorYN") else None
         if model:
-            self.yunet = cv2.FaceDetectorYN.create(str(model), "", (320, 320), YUNET_SCORE, 0.3, 5000)
+            try:
+                import numpy as np
+                self.yunet = cv2.FaceDetectorYN.create(
+                    "onnx", np.frombuffer(model.read_bytes(), np.uint8), np.array([], np.uint8),
+                    (320, 320), YUNET_SCORE, 0.3, 5000)
+            except Exception as e:  # noqa: BLE001 - 모델을 못 읽으면 옛 방식만으로 흐린다
+                log.warning("얼굴 찾기 모델(YuNet)을 읽지 못해 옛 방식으로만 찾습니다: %s", str(e).strip()[-200:])
+        log.info("얼굴 찾기: YuNet %s, 옛 방식 %d개", "사용" if self.yunet is not None else "없음", len(self.cascades))
         if not self.cascades and self.yunet is None:
             raise PhotoError("얼굴 찾기 도구(OpenCV 얼굴 찾기 파일·YuNet 모델)를 쓸 수 없어 사진을 올리지 않았습니다. "
                              "`.venv\\Scripts\\python.exe -m pip install -r requirements.txt`를 실행하세요.")
@@ -262,8 +285,7 @@ class FaceFinder:
         if self.cascades:
             gray = cv2.equalizeHist(cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY))
             min_side = max(20, int(min(w, h) * 0.025))
-            for i, cascade in enumerate(self.cascades):
-                profile = i == len(self.cascades) - 1 and len(self.cascades) == 3
+            for cascade, profile in self.cascades:
                 for flipped in ((False, True) if profile else (False,)):
                     src = cv2.flip(gray, 1) if flipped else gray
                     found = cascade.detectMultiScale(src, scaleFactor=1.08, minNeighbors=4,
