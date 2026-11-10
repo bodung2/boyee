@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
 
 import pytest
 from PIL import Image
@@ -235,10 +236,38 @@ def test_yunet_used_when_model_present(tmp_path, monkeypatch):
         def detect(self, bgr):
             import numpy as np
             return 1, np.array([[10, 20, 30, 40] + [0] * 10 + [0.9]], dtype=np.float32)
-    monkeypatch.setattr(places, "yunet_model", lambda d: tmp_path / "m.onnx")
+    model = tmp_path / "m.onnx"
+    model.write_bytes(b"model-bytes")
+    monkeypatch.setattr(places, "yunet_model", lambda d: model)
     monkeypatch.setattr(cv2.FaceDetectorYN, "create", lambda *a: created.append(a) or FakeYN(), raising=False)
     finder = places.FaceFinder(models_dir=tmp_path)
     assert created and (10, 20, 30, 40) in finder.find(Image.new("RGB", (200, 200), "white"))
+    # 윈도우 OpenCV는 한글 경로를 못 연다 → 경로가 아니라 파일 내용(메모리)을 넘긴다
+    assert created[0][0] == "onnx" and created[0][1].tobytes() == b"model-bytes"
+
+
+def test_yunet_load_error_falls_back_to_haar(tmp_path, monkeypatch):
+    cv2 = pytest.importorskip("cv2")
+    model = tmp_path / "m.onnx"
+    model.write_bytes(b"x")
+    monkeypatch.setattr(places, "yunet_model", lambda d: model)
+
+    def broken(*a):
+        raise cv2.error("Can't read ONNX file")
+    monkeypatch.setattr(cv2.FaceDetectorYN, "create", broken, raising=False)
+    finder = places.FaceFinder(models_dir=tmp_path)       # 멈추지 않고 옛 방식으로
+    assert finder.yunet is None and len(finder.cascades) == 3
+
+
+def test_haar_files_load_from_korean_path(tmp_path):
+    cv2 = pytest.importorskip("cv2")
+    korean = tmp_path / "박보영" / "data"
+    korean.mkdir(parents=True)
+    src = Path(cv2.data.haarcascades) / "haarcascade_frontalface_default.xml"
+    (korean / src.name).write_bytes(src.read_bytes())
+    cascade = places._load_cascade(cv2, korean / src.name)
+    assert cascade is not None and not cascade.empty()
+    assert places._load_cascade(cv2, korean / "없는파일.xml") is None
 
 
 def test_archive_moves_folder_with_date(tmp_path):
