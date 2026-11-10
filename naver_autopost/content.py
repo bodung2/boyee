@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html
+import json
 import re
 
 from .profiles import Profile
@@ -18,6 +19,7 @@ MIN_BODY_CHARS = 1500
 MIN_SOURCES = 10
 MIN_PRIMARY_SOURCES = 2
 MIN_CLAIMS = 5
+_AGE = re.compile(r"\d+\s*(?:~\s*\d+\s*)?(?:살|세|개월)")
 MIN_PHOTOS_IN_POST = 2      # 직접 찍은 사진으로 쓰는 글(장소 글)의 본문 사진 최소 장수
 
 
@@ -188,6 +190,11 @@ def validate(post: dict, profile: Profile | None = None, after_factcheck: bool =
     if len(post["claims"]) < min_claims:
         errors.append(f"검증 대상 사실이 {min_claims}개 미만입니다")
     if profile and profile.photos:
+        # 장소 글 제목·썸네일에 우리 아이 나이(4살·2살)를 넣지 않는다: 검색에 도움이 안 되고 글을 좁게 보이게 한다
+        shown = " ".join([title, json.dumps(post["thumbnail"], ensure_ascii=False)])
+        ages = sorted(set(_AGE.findall(shown)))
+        if ages:
+            errors.append(f"제목·썸네일에 아이 나이가 있습니다({', '.join(ages)}). 나이는 본문에만 쓰고 제목·썸네일에서는 빼세요")
         used = [m for m in markers if m in photo_names(post)]
         if len(used) < MIN_PHOTOS_IN_POST:
             errors.append(f"본문에 넣은 사진이 {len(used)}장입니다(최소 {MIN_PHOTOS_IN_POST}장, photos.json의 이름으로 "

@@ -68,6 +68,7 @@ PROFILES: dict[str, Profile] = {
             "정상/지연", "통과해야", "못하면 발달", "smartstore.naver.com", "coupang.com",
             "구매 링크", "구매하기",
             "우리 동네", "집 근처", "집에서 차로", "집에서 걸어서",     # 사는 곳이 드러나지 않게
+            "확인하지 못했", "열리지 않아", "기사 기준",                  # 자료 조사 과정을 본문에 쓰지 않게(AI 티)
         ),
         min_sources=2, min_primary=1, min_claims=3, min_body_chars=1200, max_title=45,
         social=False, same_blog_as="childhood",   # 함께 보면 좋은 글은 스킬이 직접 고른다

@@ -69,8 +69,9 @@ ChatGPT 교차검증(장소 정보만) → 유아 블로그 '아이와 가볼 �
 ## 아이 사진 보호
 
 - **위치 정보:** 사진 속 GPS·촬영 기기 정보는 올리기 전에 모두 지웁니다(원본 파일은 그대로 둡니다).
-- **얼굴:** 두 가지 방법(OpenCV YuNet 모델 + 옛 방식 Haar)으로 얼굴을 찾아 하나라도 찾으면 흐립니다.
-  YuNet 모델은 처음 한 번 인터넷에서 받아 `data\models`에 둡니다(받지 못하면 옛 방식만 씁니다).
+- **얼굴:** OpenCV의 YuNet 모델로 얼굴을 찾아 흐립니다. 모델은 처음 한 번 인터넷에서 받아 `data\models`에 둡니다.
+  모델을 못 쓰면 옛 방식(Haar)으로 대신합니다. 옛 방식은 음식·글씨 무늬를 얼굴로 착각해 엉뚱한 곳이 흐려질 수 있습니다
+  (실행 기록의 `얼굴 찾기: YuNet 사용` 줄로 어느 쪽을 썼는지 볼 수 있습니다).
   얼굴 찾기를 아예 쓸 수 없으면 사진을 올리지 않고 멈춥니다.
 - **검수가 사진을 직접 봅니다:** 흐림이 빠진 얼굴, 명찰·이름표, 어린이집 로고, 읽히는 차 번호판, 집 주소가 보이는 사진은 글에서 뺍니다.
   빼고 나서 사진이 2장 미만이면 그날은 올리지 않고 알려 줍니다.
@@ -86,6 +87,7 @@ ChatGPT 교차검증(장소 정보만) → 유아 블로그 '아이와 가볼 �
 | "사진이 N장만 남아 올리지 않았습니다" | 얼굴·명찰이 보이는 사진이 빠진 것. 뒷모습·풍경 사진을 더 넣기 |
 | "OpenCV가 설치되지 않아" | `.venv\Scripts\python.exe -m pip install -r requirements.txt` |
 | 지금 바로 올리고 싶을 때 | `scripts\run_daily.bat --profile place` |
+| 올라간 글을 지우고 다시 쓰고 싶을 때 | 블로그에서 글을 지운 뒤 `.venv\Scripts\python.exe -m naver_autopost place-redo 글주소` → `scripts\run_daily.bat --profile place` |
 | 글 규칙을 바꾸고 싶을 때 | `.claude/skills/childhood-place-post/SKILL.md`(쓰기), `childhood-place-factcheck/SKILL.md`(검수) |
 
 참고: 이 글은 인스타·쓰레드로 자동 재가공하지 않습니다(아이 사진이 SNS로 더 퍼지지 않게).
