@@ -8,7 +8,7 @@ places_inbox\\
 
 사진은 올리기 전에 반드시 이 모듈을 거친다.
 - 위치 정보(GPS)·촬영 기기 같은 사진 속 정보(EXIF)를 모두 지운다(새로 저장할 때 EXIF를 붙이지 않음).
-- 얼굴을 찾아 흐리게 만든다(OpenCV의 YuNet 모델 + 옛 방식 Haar, 둘 중 하나라도 찾으면 흐림).
+- 얼굴을 찾아 흐리게 만든다(OpenCV의 YuNet 모델. 모델을 못 쓰면 옛 방식 Haar로 대신).
   얼굴 찾기를 쓸 수 없으면 사진을 올리지 않고 멈춘다(안전한 쪽으로 실패).
 - 긴 변을 1600px로 줄인다.
 얼굴 찾기가 놓친 얼굴·명찰·차 번호판은 검수 단계(childhood-place-factcheck)가 사진을 직접 보고 한 번 더 걸러 낸다.
@@ -192,7 +192,7 @@ YUNET_FILE = "face_detection_yunet_2023mar.onnx"
 YUNET_URL = ("https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_detection_yunet/"
              + YUNET_FILE)
 YUNET_SHA256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
-YUNET_SCORE = 0.6          # 낮을수록 더 많이 흐린다(놓치는 것보다 더 흐리는 쪽이 안전)
+YUNET_SCORE = 0.5          # 낮을수록 더 많이 흐린다(놓치는 것보다 더 흐리는 쪽이 안전). 기본값 0.9보다 많이 낮춤
 
 
 def _sha256(path: Path) -> str:
@@ -234,7 +234,7 @@ def _load_cascade(cv2, path: Path):
 
 
 class FaceFinder:
-    """두 가지 얼굴 찾기(YuNet + Haar)를 모두 돌려 하나라도 찾은 곳은 흐린다."""
+    """얼굴 찾기: YuNet(정확, 기본). YuNet을 못 쓰면 옛 방식(Haar)으로 대신한다. 둘 다 없으면 멈춘다."""
 
     def __init__(self, models_dir: Path | None = None):
         try:
@@ -245,15 +245,6 @@ class FaceFinder:
         self.cv2 = cv2
         # 윈도우의 OpenCV는 한글이 든 경로(C:\\Users\\박보영\\...)의 파일을 열지 못한다.
         # 그래서 파일은 파이썬으로 읽고, OpenCV에는 내용(메모리)만 넘긴다.
-        self.cascades: list[tuple[object, bool]] = []      # (얼굴 찾기, 옆얼굴용인지)
-        if hasattr(cv2, "CascadeClassifier"):
-            base = Path(cv2.data.haarcascades)
-            for name, profile in (("haarcascade_frontalface_default.xml", False),
-                                  ("haarcascade_frontalface_alt2.xml", False),
-                                  ("haarcascade_profileface.xml", True)):
-                cascade = _load_cascade(cv2, base / name)
-                if cascade is not None:
-                    self.cascades.append((cascade, profile))
         self.yunet = None
         model = yunet_model(models_dir) if models_dir and hasattr(cv2, "FaceDetectorYN") else None
         if model:
@@ -264,6 +255,17 @@ class FaceFinder:
                     (320, 320), YUNET_SCORE, 0.3, 5000)
             except Exception as e:  # noqa: BLE001 - 모델을 못 읽으면 옛 방식만으로 흐린다
                 log.warning("얼굴 찾기 모델(YuNet)을 읽지 못해 옛 방식으로만 찾습니다: %s", str(e).strip()[-200:])
+        # 옛 방식(Haar)은 음식·글씨 무늬를 얼굴로 착각하는 일이 잦다(국수 그릇·안내판이 흐려짐).
+        # YuNet을 쓸 수 있으면 YuNet만 쓰고, 못 쓸 때만 옛 방식으로 대신한다.
+        self.cascades: list[tuple[object, bool]] = []      # (얼굴 찾기, 옆얼굴용인지)
+        if self.yunet is None and hasattr(cv2, "CascadeClassifier"):
+            base = Path(cv2.data.haarcascades)
+            for name, profile in (("haarcascade_frontalface_default.xml", False),
+                                  ("haarcascade_frontalface_alt2.xml", False),
+                                  ("haarcascade_profileface.xml", True)):
+                cascade = _load_cascade(cv2, base / name)
+                if cascade is not None:
+                    self.cascades.append((cascade, profile))
         log.info("얼굴 찾기: YuNet %s, 옛 방식 %d개", "사용" if self.yunet is not None else "없음", len(self.cascades))
         if not self.cascades and self.yunet is None:
             raise PhotoError("얼굴 찾기 도구(OpenCV 얼굴 찾기 파일·YuNet 모델)를 쓸 수 없어 사진을 올리지 않았습니다. "

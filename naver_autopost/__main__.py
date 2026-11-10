@@ -10,6 +10,7 @@
   python -m naver_autopost social-check --profile edu        인스타·쓰레드 토큰·계정 확인
   python -m naver_autopost sheets-auth                       최초 1회 구글 시트 쓰기 승인(이웃 후보 추천용)
   python -m naver_autopost neighbors --profile childhood     이웃 후보 5곳을 콘텐츠 관리 시트에 추가
+  python -m naver_autopost place-redo 글주소                 지운 '아이와 가볼 곳' 글을 다시 쓰게 준비(폴더를 되돌림)
 """
 from __future__ import annotations
 
@@ -61,6 +62,8 @@ def main(argv: list[str] | None = None) -> int:
     hc = with_profile(sub.add_parser("history-check"))
     hc.add_argument("--days", type=int, default=7, help="최근 며칠을 볼지(기본 7)")
     hc.add_argument("--fix", action="store_true", help="제목으로 찾은 글을 자동 발행 기록으로 바로잡는다")
+    redo = sub.add_parser("place-redo")
+    redo.add_argument("target", help="지운 '아이와 가볼 곳' 글 주소 또는 발행 날짜(YYYY-MM-DD)")
     forget = with_profile(sub.add_parser("forget"))
     forget.add_argument("target", help="지운 글 주소 또는 날짜(YYYY-MM-DD)")
     imp = with_profile(sub.add_parser("import-history"))
@@ -76,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
     nb.add_argument("--force", action="store_true", help="오늘 이미 추천했어도 한 번 더")
     sub.add_parser("sheets-auth")
     args = parser.parse_args(argv)
-    cfg = Config.load(getattr(args, "profile", profiles.DEFAULT_PROFILE))
+    cfg = Config.load("place" if args.cmd == "place-redo" else getattr(args, "profile", profiles.DEFAULT_PROFILE))
 
     if args.cmd == "login":
         from .publisher import login
@@ -168,6 +171,17 @@ def main(argv: list[str] | None = None) -> int:
         from . import history
         print(f"  {cfg.blog_id}: {history.sync(cfg.history_file, cfg.blog_id)}")
         print(f"  이력 파일에 있는 글: {len(history.load(cfg.history_file))}편 ({cfg.history_file})")
+        return 0
+    if args.cmd == "place-redo":
+        from .pipeline import redo_place
+        try:
+            for line in redo_place(cfg, args.target):
+                print(f"  {line}")
+        except ValueError as e:
+            print(f"  {e}")
+            return 1
+        print("  → 블로그에서 원래 글을 지웠는지 확인한 뒤 `scripts\\run_daily.bat --profile place`로 다시 쓰세요"
+              "(10분쯤 기다려야 할 수 있습니다). 그냥 두면 오늘 18:10 예약 작업이 다시 씁니다.")
         return 0
     if args.cmd == "forget":
         from . import history

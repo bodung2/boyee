@@ -244,6 +244,7 @@ def test_yunet_used_when_model_present(tmp_path, monkeypatch):
     assert created and (10, 20, 30, 40) in finder.find(Image.new("RGB", (200, 200), "white"))
     # 윈도우 OpenCV는 한글 경로를 못 연다 → 경로가 아니라 파일 내용(메모리)을 넘긴다
     assert created[0][0] == "onnx" and created[0][1].tobytes() == b"model-bytes"
+    assert finder.cascades == []                      # YuNet을 쓰면 무늬를 얼굴로 착각하는 옛 방식은 끈다
 
 
 def test_yunet_load_error_falls_back_to_haar(tmp_path, monkeypatch):
@@ -378,3 +379,81 @@ def test_quest_board_shows_quiet_day_as_skip(tmp_path):
 def test_place_skills_exist():
     for name in (PLACE.write_skill, PLACE.factcheck_skill):
         assert (ROOT / ".claude" / "skills" / name / "SKILL.md").exists()
+
+
+# ---------------------------------------------------------------- 첫 글 검토 뒤 규칙
+
+def test_child_age_in_title_or_thumbnail_blocks():
+    post = place_post(title="광명스피돔 아이와 가볼 만한 곳 | 4살·2살 실내 놀이")
+    errors = content.validate(content.normalize(post), PLACE)
+    assert any("아이 나이" in e and "4살" in e for e in errors)
+    post = place_post(thumbnail={"chip": "아이와 가볼 곳", "main_lines": ["광명스피돔"], "sub": "4살·2살 실내 신체놀이"})
+    assert any("아이 나이" in e for e in content.validate(content.normalize(post), PLACE))
+
+
+def test_child_age_in_body_is_fine():
+    post = place_post()
+    post["body_html"] = "<p>첫째(4살)와 둘째(2살)를 데리고 다녀왔어요.</p>" + post["body_html"]
+    assert content.validate(content.normalize(post), PLACE) == []
+
+
+def test_research_narration_blocks():
+    post = place_post()
+    post["body_html"] += "<p>공식 홈페이지는 열리지 않아 직접 확인하지 못했고, 2025년 9월 기사 기준이에요.</p>"
+    errors = content.validate(content.normalize(post), PLACE)
+    assert any("확인하지 못했" in e for e in errors) and any("기사 기준" in e for e in errors)
+
+
+URL = "https://blog.naver.com/kkus_i/224472398545"
+
+
+def _published_setup(cfg, day="2026-11-11"):
+    folder = places.inspect(make_folder(cfg.places_inbox, "광명 스피돔"))
+    moved = places.archive(folder.path, cfg.places_inbox, day)
+    cfg.history_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.history_file.write_text(json.dumps([
+        {"date": day, "title": "광명스피돔 아이와 가볼 만한 곳", "url": URL, "source": "autopost",
+         "place_folder": folder.name, "place_key": folder.key},
+        {"date": "2026-11-01", "title": "다른 글", "url": "https://blog.naver.com/kkus_i/1", "source": "sync"},
+    ], ensure_ascii=False), encoding="utf-8")
+    child = cfg.data_dir / "published_childhood.json"
+    child.write_text(json.dumps([{"date": day, "title": "광명", "url": URL, "source": "sync"}]), encoding="utf-8")
+    out = cfg.output_dir / day
+    out.mkdir(parents=True)
+    (out / "ready.json").write_text("{}", encoding="utf-8")
+    return folder, moved, out, child
+
+
+def test_place_redo_puts_folder_back_and_clears_records(cfg):
+    folder, moved, out, child = _published_setup(cfg)
+    lines = pipeline.redo_place(cfg, URL + "/")
+    assert (cfg.places_inbox / "광명 스피돔").is_dir() and not moved.exists()
+    assert [e["url"] for e in json.loads(cfg.history_file.read_text(encoding="utf-8"))] == ["https://blog.naver.com/kkus_i/1"]
+    assert json.loads(child.read_text(encoding="utf-8")) == []          # 유아 글 내부 링크 후보에서도 빠짐
+    assert not out.exists() and list(cfg.output_dir.glob("2026-11-11-redo-*"))   # 옛 글을 다시 올리지 않게
+    assert any("되돌렸습니다" in line for line in lines)
+    # 되돌린 폴더는 다시 글감 후보가 된다(이미 발행한 폴더로 보지 않음)
+    again = pipeline._pick_place(cfg, cfg.output_dir / "2026-11-12")
+    assert again is not None and again.name == "광명 스피돔"
+
+
+def test_place_redo_by_date_and_unknown_target(cfg):
+    _published_setup(cfg)
+    with pytest.raises(ValueError, match="발행 이력이 없습니다"):
+        pipeline.redo_place(cfg, "https://blog.naver.com/kkus_i/999")
+    assert pipeline.redo_place(cfg, "2026-11-11")
+
+
+def test_place_redo_refuses_to_overwrite_existing_folder(cfg):
+    _published_setup(cfg)
+    make_folder(cfg.places_inbox, "광명 스피돔")
+    with pytest.raises(ValueError, match="같은 이름"):
+        pipeline.redo_place(cfg, URL)
+
+
+def test_place_redo_command(cfg, monkeypatch, capsys):
+    from naver_autopost import __main__ as cli
+    monkeypatch.setattr(cli.Config, "load", lambda name: cfg if name == "place" else pytest.fail(name))
+    _published_setup(cfg)
+    assert cli.main(["place-redo", URL]) == 0
+    assert "run_daily.bat --profile place" in capsys.readouterr().out

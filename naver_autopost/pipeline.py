@@ -533,6 +533,43 @@ def _pick_place(cfg: Config, out_dir: Path) -> "places.Folder | None":
     return folder
 
 
+def redo_place(cfg: Config, target: str) -> list[str]:
+    """블로그에서 지운 장소 글을 다시 쓰게 준비한다(글 주소 또는 발행 날짜).
+    발행 이력에서 빼고, _발행됨으로 옮긴 사진 폴더를 places_inbox로 되돌리고, 그날 만든 글 폴더는 옆으로 치운다
+    (그대로 두면 이미 검수를 통과한 옛 글을 다시 올린다)."""
+    key = target.strip().rstrip("/")
+    entries = [e for e in history.load(cfg.history_file) if e.get("place_folder")
+               and (history._norm_url(e.get("url", "")) == history._norm_url(key) or e.get("date") == key)]
+    if not entries:
+        raise ValueError(f"'{target}'에 해당하는 '아이와 가볼 곳' 발행 이력이 없습니다(주소나 날짜를 확인하세요)")
+    entry = entries[-1]
+    name, day = str(entry["place_folder"]), str(entry.get("date", ""))
+    done_dir = cfg.places_inbox / places.DONE_DIR
+    moved = [d for d in (done_dir / f"{day} {name}", *sorted(done_dir.glob(f"{day} {name} (*)"), reverse=True))
+             if d.is_dir()]
+    back = cfg.places_inbox / name
+    if not moved and not back.is_dir():
+        raise ValueError(f"사진 폴더를 찾지 못했습니다: {done_dir / f'{day} {name}'}")
+    if moved and back.exists():
+        raise ValueError(f"places_inbox에 같은 이름의 폴더가 이미 있습니다: {back}. 이름을 바꾸거나 옮긴 뒤 다시 하세요")
+    lines = []
+    for e in history.remove(cfg.history_file, entry["url"]):
+        lines.append(f"발행 이력에서 뺐습니다: {e.get('date')} {e.get('title')}")
+    for other in sorted(cfg.data_dir.glob("published_*.json")):     # 같은 블로그의 유아 글 이력(내부 링크 후보)에서도
+        if other != cfg.history_file and history.remove(other, entry["url"]):
+            lines.append(f"{other.name}의 내부 링크 후보에서도 뺐습니다")
+    if moved:
+        shutil.move(str(moved[0]), str(back))
+        lines.append(f"사진 폴더를 되돌렸습니다: {back}")
+    out = cfg.output_dir / day
+    if day and out.exists():
+        stamp = datetime.now(KST).strftime("%H%M%S")
+        aside = out.with_name(f"{day}-redo-{stamp}")
+        shutil.move(str(out), str(aside))
+        lines.append(f"그날 만든 글 폴더를 옆으로 치웠습니다: {aside.name}")
+    return lines
+
+
 def _archive_place(cfg: Config, place: "places.Folder", today: str) -> str:
     try:
         moved = places.archive(place.path, cfg.places_inbox, today)
