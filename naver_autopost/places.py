@@ -31,7 +31,7 @@ PHOTO_EXT = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp"}
 DONE_DIR = "_발행됨"
 EXAMPLE_MEMO = "_메모_예시.txt"
 MIN_PHOTOS = 3            # 폴더에 이만큼은 있어야 글을 쓴다
-MAX_PHOTOS = 15           # 글에 쓸 후보로 넘기는 최대 장수(촬영 순서대로 앞에서부터)
+MAX_PHOTOS = 24           # 글에 쓸 후보로 넘기는 최대 장수(넘으면 그날 처음부터 끝까지 고르게 고른다)
 MIN_MEMO_CHARS = 40       # 메모가 이보다 짧으면 사람 냄새 나는 글을 쓸 수 없다
 SETTLE_SEC = 600          # 폴더 속 파일이 마지막으로 바뀐 뒤 이만큼 지나야 쓴다(복사 중인 폴더 방지)
 LONG_SIDE = 1600
@@ -326,6 +326,16 @@ def _clean(path: Path) -> tuple[Image.Image, str]:
     return clean, taken
 
 
+def spread(items: list, limit: int) -> list:
+    """촬영 순서대로 놓인 사진이 limit장을 넘으면 처음·끝을 포함해 고르게 뽑는다(앞부분만 쓰면 그날 후반 동선이 빠진다)."""
+    if len(items) <= limit:
+        return list(items)
+    if limit <= 1:
+        return list(items[:limit])
+    step = (len(items) - 1) / (limit - 1)
+    return [items[round(k * step)] for k in range(limit)]
+
+
 def prepare(folder: Folder, out_dir: Path, detector: "FaceFinder | None" = None,
             models_dir: Path | None = None) -> list[dict]:
     """사진을 처리해 OUTPUT_DIR/photo_01.jpg …로 저장하고, 메모를 memo.txt로 복사한다.
@@ -350,7 +360,7 @@ def prepare(folder: Folder, out_dir: Path, detector: "FaceFinder | None" = None,
         raise PhotoError(f"'{folder.name}' 폴더에서 쓸 수 있는 사진이 {len(loaded)}장뿐입니다({MIN_PHOTOS}장 이상 필요)")
 
     photos = []
-    for i, (_, name, path, img, taken) in enumerate(loaded[:MAX_PHOTOS], 1):
+    for i, (_, name, path, img, taken) in enumerate(spread(loaded, MAX_PHOTOS), 1):
         faces = find_faces(img, detector)
         if faces:
             img = blur_faces(img, faces)
