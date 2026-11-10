@@ -82,3 +82,21 @@ def test_other_profiles_get_no_brief(tmp_path, monkeypatch):
         seen.update(p=prompt), (tmp_path / "post.json").write_text("{}", encoding="utf-8")))
     generate.write_post(Config.load("invest"), tmp_path, "2026-11-03")
     assert "MARKET_BRIEF" not in seen["p"]
+
+
+def test_thumbnail_minus_sign_uses_font_safe_hyphen(tmp_path):
+    """맑은 고딕에 없는 수학 마이너스(−)는 하이픈으로 바꿔 그린다(시황 썸네일 '□6.0%' 깨짐)."""
+    from PIL import Image, ImageChops
+    from naver_autopost import images
+    assert images.font_safe({"main_lines": ["코스피 −6.0%"], "sub": "한 주 새 −11.7%", "n": 1}) == \
+        {"main_lines": ["코스피 -6.0%"], "sub": "한 주 새 -11.7%", "n": 1}
+    try:
+        images._font("bold", 20)
+    except RuntimeError:
+        import pytest
+        pytest.skip("한글 글꼴이 없는 환경")
+    a = images.make_thumbnail_childhood({"chip": "매일 시황", "main_lines": ["11월 7일", "코스피 −6.0%"],
+                                         "sub": "한 주 새 −11.7%"}, None, tmp_path / "a.png")
+    b = images.make_thumbnail_childhood({"chip": "매일 시황", "main_lines": ["11월 7일", "코스피 -6.0%"],
+                                         "sub": "한 주 새 -11.7%"}, None, tmp_path / "b.png")
+    assert ImageChops.difference(Image.open(a).convert("RGB"), Image.open(b).convert("RGB")).getbbox() is None

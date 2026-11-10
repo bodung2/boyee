@@ -35,6 +35,27 @@ _FONT_CANDIDATES = {
 }
 
 
+# 맑은 고딕(윈도우 기본 글꼴)에 없는 기호 → 있는 기호. 없으면 썸네일에 네모(□)로 깨진다.
+# 예: 수학 마이너스 '−'(U+2212) — 시황 썸네일의 "코스피 −6.0%"가 "□6.0%"로 나왔다.
+_GLYPH_FALLBACK = str.maketrans({
+    "\u2212": "-",   # − 마이너스
+    "\u2010": "-", "\u2011": "-", "\u2012": "-",   # 여러 하이픈
+    "\u2009": " ", "\u202f": " ", "\u200a": " ",   # 얇은 공백
+    "\u200b": "",    # 폭 없는 공백
+})
+
+
+def font_safe(value):
+    """그림에 쓸 글자(문자열·목록·사전)에서 글꼴에 없는 기호를 바꾼다."""
+    if isinstance(value, str):
+        return value.translate(_GLYPH_FALLBACK)
+    if isinstance(value, dict):
+        return {k: font_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return type(value)(font_safe(v) for v in value)
+    return value
+
+
 def _font(weight: str, size: int) -> ImageFont.FreeTypeFont:
     for path in _FONT_CANDIDATES[weight]:
         if Path(path).exists():
@@ -144,6 +165,7 @@ def edu_tone(lane: str | None) -> str:
 
 
 def make_thumbnail(thumb: dict, out: Path, size: int = THUMBNAIL_SIZE, tone: str = BG) -> Path:
+    thumb = font_safe(thumb)
     final_size, size = size, _DRAW_SIZE
     img = Image.new("RGB", (size, size), tone)
     draw = ImageDraw.Draw(img)
@@ -184,6 +206,7 @@ def make_thumbnail(thumb: dict, out: Path, size: int = THUMBNAIL_SIZE, tone: str
 
 
 def make_card(card: dict, out: Path, width: int = 1200, tone: str = BG) -> Path:
+    card = font_safe(card)
     title_font = _font("bold", 52)
     bullet_font = _font("regular", 36)
     chip_font = _font("bold", 28)
@@ -270,6 +293,7 @@ def invest_tone(lane: str | None) -> str:
 
 def make_thumbnail_childhood(thumb: dict, domain: str | None, out: Path, size: int = THUMBNAIL_SIZE,
                              tone: str | None = None) -> Path:
+    thumb = font_safe(thumb)
     final_size, size = size, _DRAW_SIZE
     tone = tone or childhood_tone(domain)
     accent = "#ffcf5a" if tone in WARM_TONES else "#ffd23f"
@@ -311,6 +335,7 @@ def make_thumbnail_scene(thumb: dict, background: Path, out: Path, tone: str, si
     """홈피드용 장면 썸네일. 본문 일러스트(Codex가 그린 그림)를 정사각형 배경으로 깔고, 글씨가 놓이는 영역만
     흐리게(블러) + 레인 색으로 물들인 패널을 부드러운 가장자리로 얹은 뒤, 굵은 테두리 글씨를 올린다.
     질문의 마지막 줄은 노란색으로 강조한다. 그림을 열 수 없으면 단색 썸네일로 대신한다."""
+    thumb = font_safe(thumb)
     try:
         pic = Image.open(background).convert("RGB")
     except (OSError, ValueError):
