@@ -631,3 +631,39 @@ def test_page_fetcher_renders_with_a_real_browser():
             pytest.skip("브라우저 없음")
         raise
     assert [i["link"] for i in rank.ordered_posts(page)] == ["https://x.tistory.com/5"]   # 스크립트가 그린 링크도 읽는다
+
+
+# ---------------------------------------------------------------- 하루 상태 보고(텔레그램 없이 대화창으로)
+
+def test_every_alert_is_recorded(tmp_path, monkeypatch):
+    from naver_autopost import notify
+    box = tmp_path / "box.jsonl"
+    monkeypatch.setenv("AUTOPOST_ALERTS_FILE", str(box))
+    notify.send_text("", "", "[티스토리 자동발행 실패] 로그인이 풀려 있습니다")
+    rows = [json.loads(x) for x in box.read_text(encoding="utf-8").splitlines()]
+    assert rows[0]["text"].startswith("[티스토리 자동발행 실패]") and len(rows[0]["at"]) == 16
+
+
+def test_daily_status_page(tmp_path):
+    from datetime import datetime
+    from growth_lab import daily_status
+    data = tmp_path / "data"
+    data.mkdir()
+    history.save(data / "published_invest.json", [
+        {"date": "2026-11-10", "title": "비밀 제목", "url": "https://blog.naver.com/secretid/1", "source": "autopost"},
+        {"date": "2026-11-08", "title": "t", "url": "https://blog.naver.com/secretid/2", "source": "autopost"}])
+    history.save(data / "published_tistory.json", [
+        {"date": "2026-11-09", "title": "t", "url": "https://x.tistory.com/1", "source": "autopost"}])
+    (data / "tistory_login_log.json").write_text(json.dumps({"events": [
+        {"at": "2026-11-01 20:00", "event": "manual_login"},
+        {"at": "2026-11-10 21:50", "event": "fail", "state": "kakao_password"}]}), encoding="utf-8")
+    (data / "alerts.jsonl").write_text("\n".join(json.dumps(a, ensure_ascii=False) for a in [
+        {"at": "2026-11-10 07:31", "text": "[돈·생활 숫자 자동발행 완료] 비밀 제목\nhttps://blog.naver.com/secretid/1"},
+        {"at": "2026-11-10 08:31", "text": "[티스토리 자동발행 실패] secretid 로그인이 풀려 있습니다 https://x.tistory.com/manage"},
+        {"at": "2026-11-09 08:31", "text": "[티스토리 자동발행 실패] 어제 일"}]), encoding="utf-8")
+    out = daily_status.write(data, tmp_path / "status" / "daily.md", ["secretid"], now=datetime(2026, 11, 10, 22, 31))
+    text = out.read_text(encoding="utf-8")
+    assert "| 네이버 투자 | ✅ 1편 | 2026-11-10 |" in text and "| 티스토리 | 0편 | 2026-11-09 |" in text
+    assert "마지막 점검 2026-11-10 21:50 → 실패(kakao_password)" in text
+    assert "08:31 [티스토리 자동발행 실패] <BLOG> 로그인이 풀려 있습니다 (주소)" in text
+    assert "비밀 제목" not in text and "secretid" not in text and "어제 일" not in text   # 성공 알림·제목·아이디·어제 것은 안 싣는다
