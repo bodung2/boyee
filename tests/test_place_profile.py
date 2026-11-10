@@ -457,3 +457,36 @@ def test_place_redo_command(cfg, monkeypatch, capsys):
     _published_setup(cfg)
     assert cli.main(["place-redo", URL]) == 0
     assert "run_daily.bat --profile place" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------- 두 번째 실행에서 나온 문제
+
+def test_many_photos_are_spread_over_the_whole_day():
+    picked = places.spread(list(range(30)), 24)
+    assert len(picked) == 24 and picked[0] == 0 and picked[-1] == 29      # 마지막에 찍은 사진도 들어간다
+    assert picked == sorted(set(picked))
+    assert places.spread(list(range(21)), 24) == list(range(21))
+
+
+def test_factcheck_asks_again_when_file_missing(cfg, monkeypatch):
+    out = cfg.output_dir / "d"
+    out.mkdir(parents=True)
+    (out / "factcheck.json").write_text('{"verdict": "fail"}', encoding="utf-8")   # 지난 시도의 판정
+    prompts = []
+
+    def fake(c, prompt, log_file, light=False):
+        prompts.append(prompt)
+        if len(prompts) == 2:
+            (out / "factcheck.json").write_text('{"verdict": "pass"}', encoding="utf-8")
+    monkeypatch.setattr(generate, "_run_claude", fake)
+    assert generate.factcheck(cfg, out)["verdict"] == "pass"
+    assert len(prompts) == 2 and all("OUTPUT_DIR 밖" in p for p in prompts)
+    assert "저장하지 못하고 끝났다" in prompts[1]
+
+
+def test_factcheck_gives_up_after_second_try(cfg, monkeypatch):
+    out = cfg.output_dir / "d"
+    out.mkdir(parents=True)
+    monkeypatch.setattr(generate, "_run_claude", lambda c, p, log_file, light=False: None)
+    with pytest.raises(generate.GenerationError, match="factcheck.json"):
+        generate.factcheck(cfg, out)

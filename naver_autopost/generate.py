@@ -132,6 +132,15 @@ def _run_claude(cfg: Config, prompt: str, log_file: Path, light: bool = False,
         log.info("Claude 결과: %s", text.strip()[-300:])
 
 
+# 헤드리스 실행에서는 프로젝트 폴더 밖(윈도우 Temp 등)에 파일을 쓰거나 지울 권한이 없다.
+# 거기에 고칠 스크립트를 만들려다 막히면 Claude가 '계획만 세우고' 결과 파일 없이 끝난다(2026-11-11 장소 글 검수).
+FILE_RULES = (
+    "\n\n[파일 규칙] 파일은 OUTPUT_DIR 안에서만 만들고 고친다(Write·Edit 도구). OUTPUT_DIR 밖(윈도우 Temp 같은 임시 폴더)에는 "
+    "쓸 권한이 없어 실패한다. JSON을 고칠 파이썬 스크립트가 필요하면 OUTPUT_DIR 안에 만들어 실행하라. "
+    "파일을 지우는 명령은 쓰지 마라(남겨 둬도 된다). 끝내기 전에 결과 파일을 반드시 저장하라."
+)
+
+
 def _rel(path: Path) -> Path:
     return path.relative_to(ROOT) if path.is_relative_to(ROOT) else path
 
@@ -204,7 +213,7 @@ def write_post(cfg: Config, out_dir: Path, today: str, feedback: str = "") -> Pa
     if feedback:
         prompt += (f"\n\n직전 시도는 아래 이유로 발행이 거부되었다. "
                    f"{'같은 장소·같은 사진으로' if cfg.profile.photos else '다른 주제를 고르거나'} 문제를 해결하라:\n{feedback}")
-    _run_claude(cfg, prompt, out_dir / "claude_write.log")
+    _run_claude(cfg, prompt + FILE_RULES, out_dir / "claude_write.log")
     post_path = out_dir / "post.json"
     if not post_path.exists():
         raise NoPostError("post.json이 만들어지지 않았습니다(Claude가 글을 쓰지 않고 끝남)")
@@ -237,7 +246,7 @@ def repair_post(cfg: Config, out_dir: Path, errors: list[str]) -> None:
         "출처가 부족하면 글을 쓰며 실제로 확인한 자료와, 지금 웹에서 새로 열어 본문을 확인한 공식 자료로 sources를 채워라. "
         "열어 보지 않은 출처나 주소를 지어내지 마라. 질문하지 말고 끝까지 진행하라.\n- " + "\n- ".join(errors)
     )
-    _run_claude(cfg, prompt, out_dir / "claude_repair.log")
+    _run_claude(cfg, prompt + FILE_RULES, out_dir / "claude_repair.log")
 
 
 def factcheck(cfg: Config, out_dir: Path) -> dict:
@@ -247,10 +256,18 @@ def factcheck(cfg: Config, out_dir: Path) -> dict:
         "스킬 지침대로 post.json(과 일러스트가 있으면 그 이미지)을 검수하고 factcheck.json을 저장하라. "
         "질문하지 말고 끝까지 진행하라."
     )
-    _run_claude(cfg, prompt, out_dir / "claude_factcheck.log")
     fc_path = out_dir / "factcheck.json"
+    fc_path.unlink(missing_ok=True)          # 지난 시도의 판정을 이번 판정으로 잘못 읽지 않게
+    _run_claude(cfg, prompt + FILE_RULES, out_dir / "claude_factcheck.log")
     if not fc_path.exists():
-        raise GenerationError("factcheck.json이 만들어지지 않았습니다")
+        # 검수는 했는데 저장 단계에서 막혀 끝나는 경우가 있다. 글을 버리기 전에 한 번 더 저장을 요청한다.
+        log.warning("factcheck.json이 없어 검수를 한 번 더 요청합니다")
+        _run_claude(cfg, prompt + FILE_RULES + (
+            "\n\n직전 검수는 factcheck.json을 저장하지 못하고 끝났다. 이번에는 고칠 것은 Edit 도구로 OUTPUT_DIR/post.json에 "
+            "바로 반영하고, 마지막에 Write 도구로 OUTPUT_DIR/factcheck.json을 반드시 저장하라."),
+            out_dir / "claude_factcheck_retry.log")
+    if not fc_path.exists():
+        raise GenerationError("factcheck.json이 만들어지지 않았습니다(검수 기록: claude_factcheck.log, claude_factcheck_retry.log)")
     return json.loads(fc_path.read_text(encoding="utf-8"))
 
 
@@ -264,5 +281,5 @@ def apply_gpt_review(cfg: Config, out_dir: Path, round_no: int) -> dict:
     )
     path = out_dir / "gpt_applied.json"
     path.unlink(missing_ok=True)
-    _run_claude(cfg, prompt, out_dir / f"claude_apply_gpt_{round_no}.log", light=True)
+    _run_claude(cfg, prompt + FILE_RULES, out_dir / f"claude_apply_gpt_{round_no}.log", light=True)
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
