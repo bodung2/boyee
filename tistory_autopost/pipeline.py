@@ -432,6 +432,10 @@ def _ensure_session(cfg: TistoryConfig, label: str = "") -> None:
     _share_login_failure(cfg)
     if cfg.login_wait_min <= 0:
         raise publisher.SessionExpired(reason)
+    if cfg.login_popup:          # 창을 띄워 기다렸는데도 안 되면 그날은 멈춘다(창 없이 다시 기다리지 않는다)
+        if _login_popup(cfg, cfg.login_wait_min, label):
+            return
+        raise publisher.SessionExpired(reason)
     notify(cfg, f"[{LABEL}{label}] 로그인이 풀려 글을 시작하지 못했습니다.\n{reason}\n"
                 f"{cfg.login_wait_min}분 동안 기다렸다가, 다시 로그인하면 바로 이어서 발행합니다.")
     cookie_file = publisher._state_file(cfg)
@@ -454,6 +458,24 @@ def _ensure_session(cfg: TistoryConfig, label: str = "") -> None:
         reason = _login_reason()
         seen = _mtime(cookie_file)                      # 확인하면서 파일을 다시 썼다
     raise publisher.SessionExpired(reason)
+
+
+def _login_popup(cfg: TistoryConfig, minutes: int, label: str = "") -> bool:
+    """카카오 로그인이 끊겼을 때 PC 화면에 로그인 창을 바로 띄우고 minutes분 기다린다(TISTORY_LOGIN_POPUP, 기본 켬).
+    로그인은 블로그 주인이 직접 한다. 로그인되면 True, 창을 띄우지 않았거나 시간 안에 안 되면 False."""
+    from . import publisher
+
+    if not cfg.login_popup or minutes <= 0:
+        return False
+    notify(cfg, f"[{LABEL}{label}] 카카오 로그인이 끊겨 PC 화면에 로그인 창을 띄웠습니다. "
+                f"{minutes}분 안에 로그인하면 바로 이어서 진행합니다('로그인 상태 유지' 체크).")
+    try:
+        publisher.login(cfg, wait_minutes=minutes)
+        log.info("로그인 창에서 다시 로그인되어 이어서 진행합니다")
+        return True
+    except Exception as e:  # noqa: BLE001 - 시간 안에 로그인하지 않았거나 창을 띄우지 못함
+        log.warning("로그인 창에서 로그인되지 않았습니다: %s", e)
+        return False
 
 
 def _mtime(path: Path) -> float:
@@ -484,6 +506,8 @@ def keepalive(cfg: TistoryConfig) -> int:
                 return 0
             reason = _login_reason()
             _share_login_failure(cfg)
+            if _login_popup(cfg, cfg.keepalive_popup_min, " 로그인 점검"):
+                return 0
             raise publisher.SessionExpired(reason)
     except RuntimeError as e:
         if "이미 실행 중" in str(e):

@@ -69,6 +69,7 @@ def cfg(tmp_path):
     c.headless = True
     c.browser_channel = ""
     c.profile_dir = tmp_path / "profile"
+    c.login_popup = False              # 기존 테스트는 창 없이 기다리는 경로. 창 띄우기는 따로 시험한다
     return c
 
 
@@ -1444,3 +1445,40 @@ def test_relogin_test_real_restores_tistory_login_on_failure(cfg, monkeypatch, c
     assert "TSSESSION" in publisher._state_file(cfg).read_text(encoding="utf-8")
     out = capsys.readouterr().out
     assert "되돌렸습니다" in out and "풀려 있음" in out
+
+
+
+def test_expired_login_pops_up_the_login_window(cfg, monkeypatch):
+    """카카오 로그인이 끊기면 PC 화면에 로그인 창을 띄우고, 거기서 로그인하면 바로 이어서 진행한다."""
+    cfg.login_popup, cfg.login_wait_min = True, 45
+    opened, told = [], []
+    monkeypatch.setattr(publisher, "check_session", lambda c: False)
+    monkeypatch.setattr(publisher, "login", lambda c, wait_minutes=5: opened.append(wait_minutes))
+    monkeypatch.setattr(pipeline, "_share_login_failure", lambda c: None)
+    monkeypatch.setattr(pipeline, "notify", lambda c, text: told.append(text))
+    pipeline._ensure_session(cfg)
+    assert opened == [45] and "로그인 창을 띄웠습니다" in told[0]
+
+
+def test_popup_not_used_in_time_stops_without_second_wait(cfg, monkeypatch):
+    cfg.login_popup, cfg.login_wait_min = True, 45
+
+    def no_login(c, wait_minutes=5):
+        raise publisher.SessionExpired("45분 안에 로그인이 확인되지 않았습니다")
+    monkeypatch.setattr(publisher, "check_session", lambda c: False)
+    monkeypatch.setattr(publisher, "login", no_login)
+    monkeypatch.setattr(pipeline, "_share_login_failure", lambda c: None)
+    monkeypatch.setattr(pipeline, "notify", lambda c, text: None)
+    monkeypatch.setattr(pipeline, "_sleep", lambda s: (_ for _ in ()).throw(AssertionError("창 없이 다시 기다리면 안 됨")))
+    with pytest.raises(publisher.SessionExpired):
+        pipeline._ensure_session(cfg)
+
+
+def test_keepalive_pops_up_login_window_with_short_wait(cfg, monkeypatch):
+    cfg.login_popup, cfg.keepalive_popup_min = True, 30
+    opened = []
+    monkeypatch.setattr(publisher, "check_session", lambda c: False)
+    monkeypatch.setattr(publisher, "login", lambda c, wait_minutes=5: opened.append(wait_minutes))
+    monkeypatch.setattr(pipeline, "_share_login_failure", lambda c: None)
+    monkeypatch.setattr(pipeline, "notify", lambda c, text: None)
+    assert pipeline.keepalive(cfg) == 0 and opened == [30]
