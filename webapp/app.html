@@ -699,6 +699,13 @@ const GOALS = [
   {k: "career", icon: "🎖", label: "커리어", short: "커리어"}, {k: "economy", icon: "💰", label: "경제", short: "경제"}];
 const GOAL = Object.fromEntries(GOALS.map(g => [g.k, g]));
 const CAP = 56, MILE = 4, MONTH_W = 52 / 12, ETC_UNIT = 40, ETC_DAY_CAP = 2;
+// 하루 습관(신체): 권장 횟수를 채운 만큼 점수. 습관 하나를 하루 권장대로 다 하면 HABIT_PT점(모자라면 비율만큼)
+//   세 습관을 매일 다 지키면 주 10.5점 ≈ 30분 운동을 평균보다 조금 더(주 3~4회) 한 주의 점수와 비슷하게
+const HABIT_PT = 0.5;
+const HABITS = [["wash", "🚿 씻기", 1, "샤워·목욕 하루 1회(일반 위생 권장, 추정)"],
+  ["brush", "🪥 양치질", 3, "하루 3회(식후 — 보건복지부·대한치과의사협회 '3·3·3 칫솔질')"],
+  ["supp", "💊 영양제", 2, "하루 2회(사용자 설정)"]];
+const HABIT = Object.fromEntries(HABITS.map(h => [h[0], h]));
 const R = p => p >= 0.5 ? 0 : 10 * Math.log2(0.5 / Math.max(p, 0.001));      // 상위 50% = 0, 10% = 23, 1% = 56, 0.1% = 90
 const pFromPts = pts => 0.5 / Math.pow(2, pts / 10);
 const LV = n => 25 * n * n;                                                     // 레벨 n에 필요한 누적 점수
@@ -898,7 +905,11 @@ function weekStats(ws, logs, start) {
   const perDay = {};
   by("body", "exercise").forEach(l => { if ((num(l.f.minutes) || 30) >= 30) perDay[l.date] = Math.min(2, (perDay[l.date] || 0) + 1); });
   const n = Math.min(7, Object.values(perDay).reduce((a, b) => a + b, 0));
-  out.body = flow(bodyShare(n), n, `운동 ${n}회`);
+  // 하루 습관: 날짜·습관별 횟수 ÷ 권장 횟수(최대 1) × HABIT_PT
+  const hab = {};
+  by("body", "habit").forEach(l => { const k = l.date + l.f.field; hab[k] = (hab[k] || 0) + (num(l.f.count) || 1); });
+  const habPts = Object.entries(hab).reduce((a, [k, c]) => { const h = HABIT[k.slice(10)]; return a + (h ? Math.min(1, c / h[2]) * HABIT_PT : 0); }, 0);
+  out.body = flow(bodyShare(n), n, `운동 ${n}회${habPts ? ` · 하루 습관 ${Math.round(habPts * 10) / 10}점` : ""}`, habPts);
   out.body.vol = by("body", "exercise").reduce((a, l) => a + (num(l.f.minutes) || 30), 0);      // 작은 기록 적립용(30분 미만 포함)
   // 기능·영감: 가사·돌봄 시간 + 처음·완성 기록(같은 상한 안)
   const craftMin = by("craft", "time").reduce((a, l) => a + (l.f.field === "recycle" ? (num(l.f.count) || 1) * RECYCLE_MIN : (num(l.f.minutes) || 0)), 0);
@@ -1247,7 +1258,7 @@ function hexagon(title, vals, color, fmt, fixedMax, opts) {
 
 // ---------------------------------------------------------------- 기록 화면
 const LOG_TYPES = {
-  body: [["exercise", "운동(30분 이상)"], ["race", "대회 완주"], ["fitness", "체력 측정 등급"]],
+  body: [["exercise", "운동(30분 이상)"], ["habit", "하루 습관(씻기·양치·영양제)"], ["race", "대회 완주"], ["fitness", "체력 측정 등급"]],
   mind: [["win", "정신 성취"], ["pss", "월간 스트레스 점검(2분)"]],
   craft: [["time", "시간 기록"], ["etc", "기타(직접 적기)"], ["first", "처음 해 본 일"], ["project", "완성한 것"], ["level", "숙련 단계 올림"]],
   social: [["together", "함께한 시간(모임·가족 행사·멘토링)"], ["volunteer", "봉사"], ["donate", "기부"], ["care", "기념일·마음 챙김"]],
@@ -1264,6 +1275,7 @@ const inp = (name, v, extra) => `<input name="${name}" value="${esc(v == null ? 
 function drawLog() {
   const g = GLOG.goal, t = GLOG.type, mk = (h) => h;
   let body = "";
+  if (t === "habit") body = fld("습관", `<select name="field">${opt(HABITS.map(h => [h[0], `${h[1]} (하루 ${h[2]}회 권장)`]), "brush")}</select>`) + fld("횟수", inp("count", 1, 'inputmode="numeric"'), "권장 횟수를 채우면 습관 하나에 하루 0.5점");
   if (t === "exercise") body = fld("종류", `<select name="kind">${opt([["aerobic", "유산소"], ["strength", "근력"], ["etc", "기타"]], "aerobic")}</select>`) + fld("시간(분)", inp("minutes", 30, 'inputmode="numeric"'));
   if (t === "race") body = fld("거리", `<select name="dist">${opt([["5k", "5km"], ["10k", "10km"], ["half", "하프"], ["full", "풀코스"]], "10k")}</select>`) + fld("대회 이름", inp("text", ""));
   if (t === "fitness") body = fld("등급", `<select name="grade">${opt([["3", "3등급"], ["2", "2등급"], ["1", "1등급"]], "3")}</select>`, "국민체력100 인증 등급");
@@ -1306,6 +1318,7 @@ async function saveLog() {
     if (ans.some(v => v == null)) return toast("10문항 모두 골라 주세요");
     x.score = pssScore(ans); x.answers = ans.join(","); name = `스트레스 점검 ${x.score}점`;
   }
+  if (t === "habit") name = `${HABIT[x.field][1]} ${x.count || 1}회`;
   if (t === "exercise") name = `운동 ${x.minutes || 30}분 · ${{aerobic: "유산소", strength: "근력", etc: "기타"}[x.kind]}`;
   if (t === "etc") { if (!(x.text || "").trim()) return toast("무엇을 했는지 적어 주세요"); name = `✏️ ${x.text.trim()} ${x.minutes || 0}분`; }
   if (t === "time") name = `${Object.fromEntries(CRAFT_FIELDS)[x.field]} ${x.field === "recycle" ? (x.count || 1) + "회" : (x.minutes || 0) + "분"}`;
@@ -1346,7 +1359,7 @@ function showBench() {
     <span class="muted">비교 집단: ${esc(b.group)} · 근거: ${esc(b.level)}<br>${esc(b.src)}</span></div>`; }).join("") +
     Object.values(MILES).map(m => `<div class="dday" style="display:block"><strong>돌파 · ${esc(m.title)}</strong><br><span class="muted">근거: ${esc(m.level)} · ${esc(m.src)}</span></div>`).join("");
   $("#form").innerHTML = `<h3>점수 기준·출처</h3><p class="muted" style="line-height:1.7">점수 = 10 × log₂(0.5 ÷ 상위 비율). 평균 0점 · 상위 10% 23점 · 1% 56점 · 0.1% 90점.
-    흐름 점수는 한 영역 한 주 최대 ${CAP}점(월 단위 지표는 주 단위로 환산), 돌파는 같은 희소도의 ${MILE}배를 한 번. 시작일 이전 업적도 같은 점수로(줄이지 않음). 평균에 못 미쳐 0점이던 행동은 '작은 기록 적립'으로 모아 정해 둔 양마다 1점(한 영역 한 주 최대 ${SMALL_CAP}점, 아래 표). 누적 상위 %는 평균 페이스와 지금까지 이룬 상태 지표(아래 돌파 기준의 상위 비율)를 영역마다 평균하고, 매주 한 번 기록해 변화를 보여 줍니다.
+    흐름 점수는 한 영역 한 주 최대 ${CAP}점(월 단위 지표는 주 단위로 환산), 돌파는 같은 희소도의 ${MILE}배를 한 번. 시작일 이전 업적도 같은 점수로(줄이지 않음). 신체의 하루 습관(씻기 1회·양치 3회·영양제 2회 권장)은 하루 권장을 채운 비율 × 0.5점(습관마다). 평균에 못 미쳐 0점이던 행동은 '작은 기록 적립'으로 모아 정해 둔 양마다 1점(한 영역 한 주 최대 ${SMALL_CAP}점, 아래 표). 누적 상위 %는 평균 페이스와 지금까지 이룬 상태 지표(아래 돌파 기준의 상위 비율)를 영역마다 평균하고, 매주 한 번 기록해 변화를 보여 줍니다.
     '추정'으로 표시된 기준은 공식 원문을 확인하는 대로 바꿉니다.</p><div class="card">${rows}</div>
     <h3>작은 기록 적립(1점에 필요한 양)</h3><div class="card">${Object.values(SMALL).map(x => `<div class="dday" style="display:block"><strong>${esc(x.label)} ${esc(x.fmt(x.unit))} = 1점</strong><br><span class="muted">${esc(x.why)}</span></div>`).join("")}</div>
     <div class="row" style="margin-top:12px"><span></span><button class="btn" type="button" data-act="close">닫기</button></div>`;
@@ -1445,6 +1458,7 @@ function renderTimer() {
       <button class="btn primary tm-big" type="button" data-t="${rec ? "once" : "start"}" ${TSEL.act ? "" : "disabled"}>${rec ? "♻️ 1회 기록" : "▶ 시작"}</button>
       <p class="muted" style="font-size:12px">${rec ? "분리수거는 시간 대신 횟수로 기록해요(1회 = 15분으로 계산)." : esc(TIMER_HINT[TSEL.goal])}</p>`;
   } else {
+    html += habitBar();
     html += `<h2 style="margin-top:4px">무엇을 시작할까요?</h2><div class="tm-goals">${TIMER_GOALS.map(k => `<button type="button" class="tm-goal" data-t="goal" data-goal="${k}">
       <span class="ic">${GOAL[k].icon}</span><span>${GOAL[k].label}<small>${esc(TIMER_ACTS[k].slice(0, 4).map(a => a[1].replace(/^\S+\s/, "")).join(" · "))} …</small></span></button>`).join("")}</div>
       ${run.length ? `<p class="muted" style="font-size:12px">진행 중인 일은 화면 아래에 있어요. 다른 일을 함께 시작할 수도 있어요. 화면을 끄거나 앱을 닫아도 시간은 계속 흘러요.</p>` : ""}`;
@@ -1457,10 +1471,29 @@ function renderTimer() {
     return `<div class="item tm-rec" style="cursor:default"><span class="t">${goalIcon(l.f.goal)} ${esc(l.name)}</span>
       <span class="r">${esc(l.date === DATA.today ? "오늘" : l.date === addDays(DATA.today, -1) ? "어제" : fmtDay(l.date))}</span>
       <span class="s">${esc(l.f.text || "")}</span>
-      <span class="rs"><button class="btn" type="button" data-t="edit" data-id="${esc(l.id)}">${m != null || c != null ? "시간 변경" : "고치기"}</button>
+      <span class="rs"><button class="btn" type="button" data-t="edit" data-id="${esc(l.id)}">${m != null ? "시간 변경" : c != null ? "횟수 변경" : "고치기"}</button>
         <button class="btn danger" type="button" data-t="del" data-id="${esc(l.id)}">삭제</button></span></div>`; }).join("")}</div>`
     : `<p class="muted">아직 기록이 없어요. 위에서 하나를 골라 시작해 보세요.</p>`;
   $("#tmain").innerHTML = html;
+}
+// 하루 습관: 한 번 누르면 1회 기록(오늘 몇 번 했는지 / 권장 횟수)
+function habitBar() {
+  const today = gLogs().filter(l => l.f.type === "habit" && l.date === DATA.today);
+  const cnt = k => today.filter(l => l.f.field === k).reduce((a, l) => a + (num(l.f.count) || 1), 0);
+  return `<h2 style="margin-top:4px">💪 하루 습관 <span class="muted" style="font-size:12px;font-weight:400">누르면 1회 기록</span></h2>
+    <div class="tm-acts" style="grid-template-columns:repeat(3,1fr)">${HABITS.map(([k, l, rec]) => { const c = cnt(k);
+      return `<button type="button" class="tm-act" data-t="habit" data-k="${k}" aria-pressed="${c >= rec}">${esc(l)}<br><b style="font-size:13px">${c}/${rec}${c >= rec ? " ✓" : ""}</b></button>`; }).join("")}</div>`;
+}
+async function habitLog(k) {
+  if (tbusy) return; tbusy = true;
+  try {
+    const h = HABIT[k]; toast("기록하는 중…");
+    await api("saveItem", {category: "log", name: `${h[1]} 1회`, date: DATA.today, f: {goal: "body", type: "habit", field: k, count: 1, text: "하루 습관"}});
+    await loadAssets(true);
+    const c = gLogs().filter(l => l.f.type === "habit" && l.f.field === k && l.date === DATA.today).reduce((a, l) => a + (num(l.f.count) || 1), 0);
+    toast(`${h[1]} 오늘 ${c}/${h[2]}${c >= h[2] ? " · 오늘 목표 달성!" : ""}`);
+  } catch (e) { toast("저장하지 못했습니다: " + e.message, true); }
+  finally { tbusy = false; }
 }
 // 끝낸 시간을 성장 기록(log) 한 건으로 바꾼다 — 날짜는 시작한 날
 function timerLog(goal, act, minutes, memo) {
@@ -1475,7 +1508,7 @@ function timerLog(goal, act, minutes, memo) {
 let TEDIT = null;
 function openTimeEdit(id) {
   const l = gLogs().find(x => x.id === id); if (!l) return;
-  TEDIT = l; const rec = l.f.field === "recycle";
+  TEDIT = l; const rec = l.f.count != null;
   $("#form").innerHTML = `<h3>${goalIcon(l.f.goal)} ${esc(l.name)}</h3>
     <div class="f"><label for="te_val">${rec ? "횟수" : "시간(분)"}</label><input id="te_val" name="val" inputmode="numeric" required value="${esc(String(rec ? (num(l.f.count) || 1) : (num(l.f.minutes) || 0)))}"></div>
     <div class="f"><label for="te_date">날짜</label><input id="te_date" name="date" type="date" value="${esc(l.date)}" max="${esc(DATA.today)}" min="${esc(l.date < addDays(DATA.today, -1) ? l.date : addDays(DATA.today, -1))}">
@@ -1489,7 +1522,7 @@ async function saveTimeEdit() {
   const v = Math.round(num($("#te_val").value) || 0), d = $("#te_date").value || l.date;
   if (!(v > 0)) return toast("1 이상으로 적어 주세요");
   const f = {...l.f}; let name = l.name;
-  if (f.field === "recycle") { f.count = v; name = name.replace(/\d+회/, v + "회"); }
+  if (f.count != null) { f.count = v; name = name.replace(/\d+회/, v + "회"); }
   else { f.minutes = v; name = name.replace(/\d+분/, v + "분"); if (f.text) f.text = f.text.replace(/\d+분/, v + "분"); }
   tbusy = true;
   try { await api("saveItem", {id: l.id, category: "log", name, date: d, f}); $("#sheet").hidden = true; await loadAssets(true); toast("고쳤어요"); }
@@ -1551,6 +1584,7 @@ document.addEventListener("click", e => {
   else if (t === "back") { TSEL = {goal: "", act: ""}; renderTimer(); }
   else if (t === "act") { TSEL.act = b.dataset.k; TSEL.memo = ($("#tmemo") || {}).value || ""; renderTimer(); }
   else if (t === "edit") openTimeEdit(b.dataset.id);
+  else if (t === "habit") habitLog(b.dataset.k);
   else timerAct(t, b.dataset.id);
 });
 $("#form").addEventListener("submit", e => {
