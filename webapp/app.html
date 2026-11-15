@@ -1120,7 +1120,9 @@ const CMP = {
     all: {20: 263, 30: 386, 40: 451, 50: 429, 60: 250, all: 363}}
 };
 const CMP_SRC = "생활시간조사 2024(연령별-성별) · 국민생활체육조사 2025(연령별) · PSS-10 규준(성별·연령) · 가계금융복지조사 2025(가구주 연령별 순자산 중앙값) · 임금근로일자리 소득 2023(성별·연령별 평균, 일부 추정)";
+let CMP_FORCE = null;               // 종합 순위·상대 계산 때 모든 영역을 한 비교군으로 맞춘다
 function cmpGroup(goal) {
+  if (CMP_FORCE) return CMP_FORCE;
   const f = (gSetting() || {}).f || {};
   const glob = (f.cmp || "").split("|"), own = (f["cmp_" + goal] || "").split("|");
   const sex = own[0] || glob[0] || CMP_BASE.sex, age = own[1] || glob[1] || CMP_BASE.age;
@@ -1228,6 +1230,127 @@ async function saveCmp(reset) {
   busy = false;
 }
 
+// ---------------------------------------------------------------- 종합 순위 · 가상 상대
+// 종합 표준점수 = 여섯 영역의 누적 상위 %를 정규 점수(z)로 바꿔 평균하고, 영역 사이 상관(ρ=0.3, 추정)을 고려해 다시 표준화한 값(평균 50, 표준편차 10).
+// 기록이 없는 영역은 평균(z=0)으로 둔다. 순위 = 종합 상위 % × 그 비교군 인구(2025 인구주택총조사 등록센서스, 18세 이상 내국인 성·연령별).
+const RHO = 0.3;
+const POP = {m: {20: 2892112, 30: 3378752, 40: 3737327, 50: 4220433, 60: 6715832, all: 20944456},
+  f: {20: 2643514, 30: 3057648, 40: 3593919, 50: 4184047, 60: 7906213, all: 21385341},
+  all: {20: 5535626, 30: 6436400, 40: 7331246, 50: 8404480, 60: 14622045, all: 42329797}};
+const POP_SRC = "2025 인구주택총조사(등록센서스, 국가데이터처) 표 5 성·연령별 인구(내국인) — 20대는 20~29세, 60대 이상은 60세 이상, 성인 전체는 20세 이상";
+function probit(p) {                   // 표준정규 누적분포의 역함수(Acklam 근사)
+  p = Math.min(1 - 1e-9, Math.max(1e-9, p));
+  const a = [-39.6968302866538, 220.946098424521, -275.928510446969, 138.357751867269, -30.6647980661472, 2.50662827745924],
+    b = [-54.4760987982241, 161.585836858041, -155.698979859887, 66.8013118877197, -13.2806815528857],
+    c = [-.00778489400243029, -.322396458041136, -2.40075827716184, -2.54973253934373, 4.37466414146497, 2.93816398269878],
+    d = [.00778469570904146, .32246712907004, 2.445134137143, 3.75440866190742], lo = .02425;
+  if (p < lo) { const q = Math.sqrt(-2 * Math.log(p)); return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+  if (p > 1 - lo) { const q = Math.sqrt(-2 * Math.log(1 - p)); return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+  const q = p - .5, r = q * q;
+  return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+}
+// 영역별 상위 비율(p, 기록 없으면 null) → 종합
+function composite(ps) {
+  const z = GOALS.map(g => ps[g.k] == null ? 0 : probit(1 - Math.min(.999, Math.max(.001, ps[g.k]))));
+  const zc = z.reduce((a, b) => a + b, 0) / 6 / Math.sqrt((1 + 5 * RHO) / 6);
+  return {z: zc, score: 50 + 10 * zc, top: 1 - ncdf(zc)};
+}
+function globalGroup() { const f = (gSetting() || {}).f || {}, g = (f.cmp || "").split("|"); return {sex: g[0] || CMP_BASE.sex, age: g[1] || CMP_BASE.age}; }
+// 비교군 하나로 맞춘 나의 영역별 누적 상위 %
+function myShares(S, grp) {
+  CMP_FORCE = grp;
+  try { const T = periodTop(S, "all"); return Object.fromEntries(GOALS.map(g => [g.k, T[g.k].any ? T[g.k].p : null])); }
+  finally { CMP_FORCE = null; }
+}
+// 가상 상대: 영역별 상위 비율(신체·정신·기능·사회·커리어·경제). 비교군이 바뀌면 같은 비율의 구체적인 숫자로 바뀐다
+const RIVALS = [
+  ["김평범", "또래 한가운데. 모든 영역이 딱 평균", [.5, .5, .5, .5, .5, .5]],
+  ["이성실", "회사·집을 성실하게 오가는 보통의 모범생", [.45, .45, .38, .48, .45, .45]],
+  ["박주말", "주말마다 산·자전거, 나머지는 평범", [.15, .45, .55, .5, .5, .5]],
+  ["최마당", "모임·가족 행사 빠짐없는 마당발", [.45, .35, .42, .15, .5, .45]],
+  ["정알뜰", "가계부 10년째, 저축률 40%", [.5, .4, .45, .5, .4, .15]],
+  ["한야근", "승진 1순위 일벌레, 몸과 마음은 뒷전", [.6, .6, .65, .55, .1, .22]],
+  ["윤아빠", "아이와 놀고 요리하는 집안의 중심", [.4, .3, .12, .3, .45, .4]],
+  ["서균형", "어느 하나 빠지지 않는 육각형 입문자", [.25, .25, .25, .25, .25, .25]],
+  ["강새벽", "새벽 러닝 10년, 마음도 단단", [.05, .12, .35, .3, .3, .3]],
+  ["오전문", "전문직·자산가, 바쁘지만 챙길 건 챙김", [.3, .3, .4, .3, .05, .04]],
+  ["배상위", "모든 영역 상위 10%", [.1, .1, .1, .1, .1, .1]],
+  ["남다름", "상위 3%의 육각형 인간", [.03, .04, .03, .04, .02, .02]],
+  ["끝판왕", "모든 영역 상위 1% — 대한민국 최상위", [.01, .01, .01, .01, .01, .01]]
+].map(([name, bio, p]) => ({name, bio, ps: Object.fromEntries(GOALS.map((g, i) => [g.k, p[i]])), c: null}))
+ .map(r => ({...r, c: composite(r.ps)})).sort((a, b) => a.c.score - b.c.score);
+// 상위 비율 p에 해당하는 구체적인 값(지금 비교군 기준)
+function bisect(f, lo, hi, target, logScale) {
+  for (let i = 0; i < 60; i++) { const m = logScale ? Math.sqrt(lo * hi) : (lo + hi) / 2; if (f(m) > target) lo = m; else hi = m; }
+  return logScale ? Math.sqrt(lo * hi) : (lo + hi) / 2;
+}
+function rivalValue(goal, p, grp) {
+  CMP_FORCE = grp;
+  try {
+    const B = cmpBench(goal);
+    if (goal === "body") return `운동 주 ${bisect(r => bodyShare(r, B.survival), 0, 7, p).toFixed(1)}회`;
+    if (goal === "craft") return `가사·돌봄 하루 ${Math.round(bisect(x => topShareTime(x, B), .1, 1440, p))}분`;
+    if (goal === "social") return `교류 하루 ${Math.round(bisect(x => topShareTime(x, B), .1, 1440, p))}분`;
+    if (goal === "mind") return `스트레스 ${Math.max(0, B.mean + B.sd * probit(p)).toFixed(1)}점`;
+    if (goal === "career") return `월 보수 ${Math.round(B.wageMedian * Math.exp(JOB.wageSigma * probit(1 - p)) / 1e4).toLocaleString("ko-KR")}만 원`;
+    if (goal === "economy") return `순자산 ${won0(bisect(x => bandShare(x, B.networth), 1e5, 1e11, p, true))}`;
+  } finally { CMP_FORCE = null; }
+  return "";
+}
+function rivalState(S) {
+  const grp = globalGroup(), mine = myShares(S, grp), me = composite(mine);
+  const beaten = RIVALS.filter(r => r.c.score < me.score), next = RIVALS.find(r => r.c.score >= me.score);
+  return {grp, mine, me, beaten, next};
+}
+function rivalCard(S) {
+  const {grp, mine, me, beaten, next} = rivalState(S);
+  const pop = POP[grp.sex][grp.age], rank = Math.max(1, Math.ceil(me.top * pop));
+  const adultMine = myShares(S, {sex: "all", age: "all"}), adult = composite(adultMine), arank = Math.max(1, Math.ceil(adult.top * POP.all.all));
+  const fmtN = n => n.toLocaleString("ko-KR");
+  let rival = "";
+  if (next) {
+    const rows = GOALS.map(g => { const m = mine[g.k], r = next.ps[g.k], win = m != null && m < r;
+      return `<tr><td style="padding:3px 0">${g.icon} ${g.short}</td><td style="text-align:right">${m == null ? "기록 없음" : fmtTop(m)}</td>
+        <td style="text-align:center">${m == null ? "·" : win ? "🟢" : "🔴"}</td><td style="text-align:right">${fmtTop(r)}<br><small class="muted">${esc(rivalValue(g.k, r, grp))}</small></td></tr>`; }).join("");
+    const wins = GOALS.filter(g => mine[g.k] != null && mine[g.k] < next.ps[g.k]).length;
+    rival = `<div class="row" style="margin-top:12px"><b>🥊 다음 상대 · ${esc(next.name)}</b><span class="muted">${beaten.length}/${RIVALS.length}명 격파</span></div>
+      <div class="muted" style="font-size:13px">${esc(next.bio)} · 종합 ${next.c.score.toFixed(1)}점 (상위 ${fmtPct(next.c.top)})</div>
+      <div class="delta">${Math.max(.1, next.c.score - me.score).toFixed(1)}점 차 · 영역 대결 ${wins}승 ${6 - wins}패</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;font-variant-numeric:tabular-nums">
+        <tr class="muted"><th style="text-align:left;font-weight:400">영역</th><th style="text-align:right;font-weight:400">나</th><th></th><th style="text-align:right;font-weight:400">${esc(next.name)}</th></tr>${rows}</table>`;
+  } else rival = `<div style="margin-top:12px"><b>🏆 모든 상대를 이겼어요!</b> <span class="muted">${RIVALS.length}명 격파</span></div>`;
+  const last = beaten[beaten.length - 1];
+  return `<div class="card"><div class="row"><span class="label">종합 순위 · ${esc(cmpLabel(grp))}</span><button class="btn" type="button" data-g="rivals" style="padding:3px 10px;font-size:12px">상대 목록</button></div>
+    <div class="big" style="font-size:24px">${fmtN(pop)}명 중 ${fmtN(rank)}등</div>
+    <div class="delta">종합 표준점수 ${me.score.toFixed(1)}점 · 상위 ${fmtPct(me.top)} · 성인 전체 ${fmtN(POP.all.all)}명 중 ${fmtN(arank)}등</div>
+    ${last ? `<div class="muted" style="font-size:12px;margin-top:4px">최근에 이긴 상대: ${esc(last.name)}(${last.c.score.toFixed(1)}점)</div>` : ""}
+    ${rival}</div>`;
+}
+function showRivals() {
+  const S = scoreAll(), {grp, me, beaten} = rivalState(S), won = new Map(byCat("rivalwin").map(x => [x.name, x.date]));
+  const rows = RIVALS.map(r => { const b = beaten.includes(r);
+    return `<div class="dday" style="display:block"><div class="row"><b>${b ? "✅" : "⬜"} ${esc(r.name)}</b><span class="muted">종합 ${r.c.score.toFixed(1)}점 · 상위 ${fmtPct(r.c.top)}</span></div>
+      <div class="muted" style="font-size:12px">${esc(r.bio)}${won.get(r.name) ? ` · ${esc(fmtDay(won.get(r.name)))} 처음 이김` : ""}</div>
+      <div style="font-size:12px;margin-top:2px">${GOALS.map(g => `${g.icon} ${esc(rivalValue(g.k, r.ps[g.k], grp))}`).join(" · ")}</div></div>`; }).join("");
+  $("#form").innerHTML = `<div class="row"><h3 style="margin:0">가상 상대 ${RIVALS.length}명</h3><button class="btn" type="button" data-act="close">닫기</button></div>
+    <p class="muted" style="font-size:12px;line-height:1.6">비교군 ${esc(cmpLabel(grp))} 기준 숫자예요. 내 종합 표준점수 ${me.score.toFixed(1)}점.
+      종합 표준점수 = 여섯 영역 누적 상위 %를 정규 점수로 바꿔 평균한 뒤 영역 사이 상관(ρ=${RHO}, 추정)을 고려해 다시 표준화(평균 50, 표준편차 10). 기록이 없는 영역은 평균으로 둡니다.
+      순위 = 종합 상위 % × 인구. 인구: ${esc(POP_SRC)}. 상대는 실존 인물이 아닌 가상 인물이에요.</p>
+    <div class="card">${rows}</div>`;
+  $("#form").dataset.mode = "rivals"; $("#sheet").hidden = false;
+}
+// 처음 이긴 날을 시트에 남겨 둔다(점수에는 들어가지 않음)
+let rivalSaving = false;
+async function saveRivalWins(S) {
+  if (rivalSaving) return 0; rivalSaving = true;
+  try {
+    const have = new Set(byCat("rivalwin").map(x => x.name)), {beaten} = rivalState(S); let n = 0;
+    for (const r of beaten) if (!have.has(r.name)) { await api("saveItem", {category: "rivalwin", name: r.name, date: DATA.today, f: {score: Math.round(r.c.score * 10) / 10}}); n++; }
+    if (n) toast(`🥊 ${beaten[beaten.length - 1].name}을(를) 이겼어요!`);
+    return n;
+  } finally { rivalSaving = false; }
+}
+
 // 기간(이번 주 / 이번 달)의 상위 %(실제 기록 기준)와 그 기간에 얻은 점수
 function periodTop(S, mode) {
   const logs = gLogs(), ws = weekStart(DATA.today), m = DATA.today.slice(0, 7);
@@ -1310,7 +1433,7 @@ async function saveTopSnap(T) {
     return 1;
   } finally { snapping = false; }
 }
-const fmtPct = p => p == null ? "-" : p > .5 ? "평균↓" : (p < .01 ? (p * 100).toFixed(1) : Math.round(p * 100)) + "%";
+const fmtPct = p => p == null ? "-" : (p = Math.round(p * 10000) / 10000) > .5 ? "평균↓" : (p < .01 ? (p * 100).toFixed(1) : Math.round(p * 100)) + "%";
 
 // ---------------------------------------------------------------- 그리기
 let GVIEW = ["week", "month"].includes(store.get("gview")) ? store.get("gview") : "all";
@@ -1348,6 +1471,7 @@ function renderGrowth() {
         <span>🏆 돌파 점수 <b>${Math.round(S.mileTotal).toLocaleString("ko-KR")}</b><small>업적을 이룬 것</small></span></div>
       <div class="bar1"><i style="width:${Math.min(100, (S.total - cur) / (nextLv - cur) * 100).toFixed(1)}%"></i></div>
       <div class="delta">다음 레벨까지 ${Math.ceil(nextLv - S.total).toLocaleString("ko-KR")}점 · 이번 주 +${Math.round(thisWeek)}점</div></div>
+    ${rivalCard(S)}
     <div class="hex2">${hexagon("쌓은 점수", GOALS.map(g => S.byGoal[g.k]), "--s1", v => Math.round(v) + "", 0, {sqrt: true, note: "넓이가 점수에 비례(√ 눈금)"})}
       ${hexagon(GVIEW === "all" ? "누적 상위 %" : GVIEW_LABEL[GVIEW] + " 상위 %", GOALS.map(g => T[g.k].any ? 1 - T[g.k].p : 0), "--s3", v => v <= 0 ? "-" : v < .5 ? "평균↓" : Math.max(1, Math.round((1 - v) * 100)) + "%", 1)}</div>
     <div class="row" style="margin-top:14px"><span class="muted">비교군: <b style="color:var(--ink)">${esc(cmpSame() || "영역마다 다름")}</b></span>
@@ -1367,7 +1491,7 @@ function renderGrowth() {
     <h2>빠르게 기록</h2><div class="grid">${GOALS.map(g => `<button type="button" class="stat" data-g="log" data-goal="${g.k}"><div class="l">${g.icon} ${g.label}</div><div class="n" style="font-size:15px">＋ 기록</div></button>`).join("")}</div>
     ${feed ? `<h2>최근 얻은 점수</h2><div class="card">${feed}</div>` : ""}
     ${recent ? `<h2>최근 기록</h2><div class="list">${recent}</div>` : ""}`;
-  persistMiles(S.start, false).then(async n => { n += await saveTopSnap(TA); if (n) loadAssets(true); }).catch(() => {});
+  persistMiles(S.start, false).then(async n => { n += await saveTopSnap(TA); n += await saveRivalWins(S); if (n) loadAssets(true); }).catch(() => {});
 }
 
 // 육각형 그래프: 또렷한 바깥 테두리 + 꼭짓점까지 축선 + 여섯 점을 잇는 닫힌 도형.
@@ -1519,6 +1643,7 @@ document.addEventListener("click", async e => {
   if (a === "detail") showGoalDetail(b.dataset.goal);
   if (a === "bench") showBench();
   if (a === "cmp") showCmp();
+  if (a === "rivals") showRivals();
   if (a === "cmpreset") saveCmp(true);
   if (a === "dellog") {
     const l = DATA.items.find(i => i.id === b.dataset.id); if (!l || !confirm(`'${l.name}' 기록을 지울까요?`)) return;
