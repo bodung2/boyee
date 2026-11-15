@@ -1257,9 +1257,11 @@ function composite(ps) {
 }
 function globalGroup() { const f = (gSetting() || {}).f || {}, g = (f.cmp || "").split("|"); return {sex: g[0] || CMP_BASE.sex, age: g[1] || CMP_BASE.age}; }
 // 비교군 하나로 맞춘 나의 영역별 누적 상위 %
+let MY_PARTS = {};                     // 마지막으로 계산한 나의 영역별 근거 지표(대결 표에 보여 줌)
 function myShares(S, grp) {
   CMP_FORCE = grp;
-  try { const T = periodTop(S, "all"); return Object.fromEntries(GOALS.map(g => [g.k, T[g.k].any ? T[g.k].p : null])); }
+  try { const T = periodTop(S, "all"); MY_PARTS = Object.fromEntries(GOALS.map(g => [g.k, T[g.k].parts || []]));
+    return Object.fromEntries(GOALS.map(g => [g.k, T[g.k].any ? T[g.k].p : null])); }
   finally { CMP_FORCE = null; }
 }
 // 가상 상대 100명: 종합 50점(김평범)부터 86점(끝판왕)까지 고르게 오르는 사다리. 실존 인물이 아닌 가상 인물.
@@ -1330,14 +1332,15 @@ function rivalState(S) {
   return {grp, mine, me, beaten, next};
 }
 function rivalCard(S) {
-  const {grp, mine, me, beaten, next} = rivalState(S);
+  const {grp, mine, me, beaten, next} = rivalState(S), parts = MY_PARTS;
   const pop = POP[grp.sex][grp.age], rank = Math.max(1, Math.ceil(me.top * pop));
   const adultMine = myShares(S, {sex: "all", age: "all"}), adult = composite(adultMine), arank = Math.max(1, Math.ceil(adult.top * POP.all.all));
   const fmtN = n => n.toLocaleString("ko-KR");
   let rival = "";
   if (next) {
     const rows = GOALS.map(g => { const m = mine[g.k], r = next.ps[g.k], win = m != null && m < r;
-      return `<tr><td style="padding:3px 0">${g.icon} ${g.short}</td><td style="text-align:right">${m == null ? "기록 없음" : fmtTop(m)}</td>
+      const why = (parts[g.k] || []).map(x => `${x.label} ${fmtPct(x.p)}`).join(" · ");
+      return `<tr><td style="padding:3px 0;vertical-align:top;white-space:nowrap">${g.icon} ${g.short}</td><td style="text-align:right">${m == null ? "기록 없음" : fmtTop(m)}${why ? `<br><small class="muted">${esc(why)}</small>` : ""}</td>
         <td style="text-align:center">${m == null ? "·" : win ? "🟢" : "🔴"}</td><td style="text-align:right">${fmtTop(r)}<br><small class="muted">${esc(rivalValue(g.k, r, grp))}</small></td></tr>`; }).join("");
     const wins = GOALS.filter(g => mine[g.k] != null && mine[g.k] < next.ps[g.k]).length;
     rival = `<div class="row" style="margin-top:12px"><b>🥊 Lv.${next.lv} ${esc(next.tier)} · ${esc(next.name)}</b><span class="muted">${beaten.length}/${RIVALS.length}명 격파</span></div>
@@ -1452,7 +1455,8 @@ function cumulativeShares(pace) {
     if (g.k === "economy") {
       const net = DATA.totals && DATA.totals.net;
       if (isFinite(net) && net > 0) put(bandShare(net, cmpBench("economy").networth), "순자산");
-      if (items.some(i => i.category === "realestate")) put(MILES.home.p, "내 집");
+      // 내 집 마련은 순자산에 이미 들어 있어(집값 − 대출) 따로 평균하지 않는다 — 넣으면 순자산이 높은 사람의 상위 %가 오히려 끌려 내려간다
+      if (!(isFinite(net) && net > 0) && items.some(i => i.category === "realestate")) put(MILES.home.p, "내 집");
       const pipe = byCat("pipeline").reduce((a, x) => a + monthly(x), 0);
       if (pipe > 0) put(bandShare(pipe, MILES.pipeline.bands), "파이프라인 월수입");
     }
