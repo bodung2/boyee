@@ -140,9 +140,11 @@ body.has-run #toast{bottom:auto;top:64px}body.has-run{padding-bottom:calc(76px +
 .tier .tb{font-size:26px;font-weight:900;letter-spacing:-1px}
 .gplus{position:absolute;left:84px;top:96px;font-weight:900;font-size:22px;color:#22c55e;text-shadow:0 0 12px rgba(34,197,94,.6);animation:gplus 1.8s ease-out forwards;pointer-events:none}
 @keyframes gplus{0%{opacity:0;transform:translateY(8px)}15%{opacity:1}100%{opacity:0;transform:translateY(-28px)}}
-.grass{display:grid;grid-template-columns:repeat(14,1fr);gap:3px;margin-top:10px}.grass i{aspect-ratio:1;border-radius:3px;background:var(--chip)}
-.grass .g1{background:#bbf7d0}.grass .g2{background:#86efac}.grass .g3{background:#22c55e}.grass .g4{background:#15803d}
-:root[data-theme=dark] .grass .g1{background:#14532d}:root[data-theme=dark] .grass .g2{background:#16a34a}:root[data-theme=dark] .grass .g3{background:#22c55e}:root[data-theme=dark] .grass .g4{background:#4ade80}
+.grass2{display:grid;grid-template-columns:18px repeat(6,1fr);gap:4px;margin-top:10px;align-items:center}.grass2 .gd{font-size:10px;color:var(--mute)}
+.grass2 i,.lg{display:block;height:18px;border-radius:4px;background:var(--chip);cursor:pointer}.lg{width:12px;height:12px;cursor:default}.grass2 i.gf{opacity:.25;cursor:default}
+.grass2 i.gt{outline:2px solid var(--accent);outline-offset:1px}
+.g1{background:#bbf7d0!important}.g2{background:#86efac!important}.g3{background:#22c55e!important}.g4{background:#15803d!important}
+:root[data-theme=dark] .g1{background:#14532d!important}:root[data-theme=dark] .g2{background:#16a34a!important}:root[data-theme=dark] .g3{background:#22c55e!important}:root[data-theme=dark] .g4{background:#4ade80!important}
 .mis{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px;width:100%;background:none;border-left:0;border-right:0;border-bottom:0;text-align:left;cursor:pointer;color:var(--ink)}
 .mis:first-of-type{border-top:0}.mis .ck{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:13px;font-weight:900;border:2px solid var(--mute);flex:none}
 .mis.done .ck{background:#22c55e;border-color:#22c55e;color:#fff}.mis.done .mt{text-decoration:line-through;color:var(--sub)}
@@ -1583,7 +1585,7 @@ function renderGrowth() {
       <div class="delta">다음 레벨까지 ${Math.ceil(nextLv - S.total).toLocaleString("ko-KR")}점 · 이번 주 +${Math.round(thisWeek)}점</div></div>
     <div class="hex2">${hexagon("쌓은 점수", GOALS.map(g => S.byGoal[g.k]), "--s1", v => Math.round(v) + "", 0, {sqrt: true, note: "넓이가 점수에 비례(√ 눈금)"})}
       ${hexagon(GVIEW === "all" && RS.next ? `누적 상위 % vs ${RS.next.name}` : GVIEW === "all" ? "누적 상위 %" : GVIEW_LABEL[GVIEW] + " 상위 %", GOALS.map(g => T[g.k].any ? 1 - T[g.k].p : 0), "--s1", v => v <= 0 ? "-" : v < .5 ? "평균↓" : Math.max(1, Math.round((1 - v) * 100)) + "%", 1,
-        GVIEW === "all" && RS.next ? {compare: GOALS.map(g => 1 - RS.next.ps[g.k]), note: "점선 = 상대 · 🟢 이김 🔴 짐"} : {})}</div>
+        GVIEW === "all" && RS.next ? {compare: GOALS.map(g => 1 - RS.next.ps[g.k]), note: "노란 점선 = 상대 · 내 점 🟢✓ 이김 · 🔴✕ 짐"} : {})}</div>
     ${streakCard()}
     <div class="row" style="margin-top:14px"><span class="muted">비교군: <b style="color:var(--ink)">${esc(cmpSame() || "영역마다 다름")}</b></span>
       <button class="btn" type="button" data-g="cmp">비교군 바꾸기</button></div>
@@ -1691,12 +1693,29 @@ function missionCard(RS) {
 }
 // 연속 기록일 + 최근 6주 잔디
 function streakCard() {
-  const days = new Map(); gLogs().forEach(l => days.set(l.date, (days.get(l.date) || 0) + 1));
+  // 연속 기록 = 하루에 기록(어느 영역이든, 습관 버튼 포함)을 하나라도 남긴 날이 끊기지 않고 이어진 날 수
+  const days = new Map(); gLogs().forEach(l => { const m = days.get(l.date) || {}; m[l.f.goal] = (m[l.f.goal] || 0) + 1; days.set(l.date, m); });
+  const cnt = d => Object.values(days.get(d) || {}).reduce((a, b) => a + b, 0);
   let st = 0, d = days.has(DATA.today) ? DATA.today : addDays(DATA.today, -1);
   while (days.has(d)) { st++; d = addDays(d, -1); }
-  const cells = []; for (let i = 41; i >= 0; i--) { const k = addDays(DATA.today, -i), n = days.get(k) || 0;
-    cells.push(`<i class="${n >= 8 ? "g4" : n >= 5 ? "g3" : n >= 3 ? "g2" : n >= 1 ? "g1" : ""}" title="${k} · ${n}건"></i>`); }
-  return `<div class="card" style="margin-top:10px"><div class="row"><b>🔥 ${st}일 연속 기록</b><span class="muted">최근 6주</span></div><div class="grass">${cells.join("")}</div></div>`;
+  let best = 0, run = 0; [...days.keys()].sort().forEach((k, i, a) => { run = i && addDays(a[i - 1], 1) === k ? run + 1 : 1; best = Math.max(best, run); });
+  // 깃허브 잔디처럼: 세로 = 요일(월~일), 가로 = 최근 6주. 진할수록 그날 기록이 많음
+  const start = addDays(weekStart(DATA.today), -35), dayName = ["월", "화", "수", "목", "금", "토", "일"];
+  let grid = "";
+  for (let r = 0; r < 7; r++) {
+    grid += `<span class="gd">${r % 2 ? "" : dayName[r]}</span>`;
+    for (let c = 0; c < 6; c++) { const k = addDays(start, c * 7 + r), n = cnt(k), fut = k > DATA.today;
+      grid += `<i class="${fut ? "gf" : n >= 8 ? "g4" : n >= 5 ? "g3" : n >= 3 ? "g2" : n >= 1 ? "g1" : ""}${k === DATA.today ? " gt" : ""}" ${fut ? "" : `data-g="day" data-d="${k}"`}></i>`; }
+  }
+  const todayM = days.get(DATA.today) || {};
+  return `<div class="card" style="margin-top:10px"><div class="row"><b>🔥 ${st}일 연속 기록 중</b><span class="muted">최고 ${best}일</span></div>
+    <div class="muted" style="font-size:12px">하루에 기록을 하나라도 남기면(습관 버튼 포함) 이어져요. 오늘: ${Object.keys(todayM).length ? GOALS.filter(g => todayM[g.k]).map(g => `${g.icon}${todayM[g.k]}`).join(" ") : "아직 없음 — 오늘 기록하면 이어져요"}</div>
+    <div class="grass2">${grid}</div>
+    <div class="row muted" style="font-size:11px;margin-top:6px"><span>최근 6주 · 칸을 누르면 그날 기록</span><span style="display:flex;gap:3px;align-items:center">적음 <i class="lg"></i><i class="lg g1"></i><i class="lg g2"></i><i class="lg g3"></i><i class="lg g4"></i> 많음</span></div></div>`;
+}
+function showDay(k) {
+  const L = gLogs().filter(l => l.date === k);
+  toast(L.length ? `${fmtDay(k)} · ${GOALS.filter(g => L.some(l => l.f.goal === g.k)).map(g => `${g.icon}${L.filter(l => l.f.goal === g.k).length}`).join(" ")} — ${L.slice(0, 4).map(l => l.name).join(", ")}${L.length > 4 ? " 외 " + (L.length - 4) + "건" : ""}` : `${fmtDay(k)} · 기록 없음`);
 }
 // 점수가 오르면 '+N'이 떠오르고, 상대를 이기면 K.O. 연출
 let PREV_TOTAL = null;
@@ -1726,15 +1745,21 @@ function hexagon(title, vals, color, fmt, fixedMax, opts) {
   const spokes = GOALS.map((_, i) => { const [x, y] = pt(i, Rr); return `<line x1="${C}" y1="${C}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`; }).join("");
   const labels = GOALS.map((g, i) => { const [x, y] = pt(i, Rr + 20); return `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--g-${g.k})">${g.icon}${g.short}</text>`; }).join("");
   const cmpv = opts.compare, cpoly = cmpv ? cmpv.map((v, i) => pt(i, Rr * frac(v)).map(n => n.toFixed(1)).join(",")).join(" ") : "";
-  const dots = vals.map((v, i) => { const [x, y] = pt(i, Rr * frac(v)), fill = cmpv ? (v >= cmpv[i] ? "#22c55e" : "#ef4444") : `var(${color})`;
-    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${cmpv ? 4.5 : 3.5}" fill="${fill}" stroke="var(--card)" stroke-width="1.5"><title>${GOALS[i].label} ${fmt(v)}</title></circle>`; }).join("");
+  // 상대와 겨룰 때: 상대 = 노란 점선·작은 노란 점, 나 = 이긴 영역 초록(✓) · 진 영역 빨강(✕) — 상대 선과 '짐' 색이 겹치지 않게
+  const win = i => cmpv && vals[i] > cmpv[i];
+  const rdots = cmpv ? cmpv.map((v, i) => { const [x, y] = pt(i, Rr * frac(v)); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" fill="#f59e0b"/>`; }).join("") : "";
+  const dots = vals.map((v, i) => { const [x, y] = pt(i, Rr * frac(v)), fill = cmpv ? (win(i) ? "#22c55e" : "#ef4444") : `var(${color})`;
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${cmpv ? 6 : 3.5}" fill="${fill}" stroke="var(--card)" stroke-width="1.5"><title>${GOALS[i].label} ${fmt(v)}</title></circle>` +
+      (cmpv ? `<text x="${x.toFixed(1)}" y="${(y + 3.2).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="900" fill="#fff">${win(i) ? "✓" : "✕"}</text>` : ""); }).join("");
   return `<figure class="card hex"><figcaption>${esc(title)}</figcaption><svg viewBox="0 0 ${W} ${W}" role="img" aria-label="${esc(title)}: ${GOALS.map((g, i) => g.label + " " + fmt(vals[i])).join(", ")}">
     ${[.325, .55, .775].map(f => `<polygon points="${ring(f)}" fill="none" stroke="var(--line)" stroke-width="1"/>`).join("")}
     <polygon points="${ring(FLOOR)}" fill="var(--chip)" stroke="var(--line)" stroke-width="1"/>
     ${spokes}<polygon points="${ring(1)}" fill="none" stroke="var(--mute)" stroke-width="1.5" stroke-linejoin="round"/>
-    ${cmpv ? `<polygon points="${cpoly}" fill="none" stroke="#ef4444" stroke-width="1.8" stroke-dasharray="5 4" stroke-linejoin="round"/>` : ""}
-    <polygon points="${poly}" fill="var(${color})" fill-opacity=".22" stroke="var(${color})" stroke-width="2.5" stroke-linejoin="round"/>${dots}${labels}</svg>
-    <div class="hexv">${GOALS.map((g, i) => `<span>${g.icon} ${fmt(vals[i])}</span>`).join("")}</div>${opts.note ? `<div class="muted" style="font-size:11px;margin-top:2px">${esc(opts.note)}</div>` : ""}</figure>`;
+    ${cmpv ? `<polygon points="${cpoly}" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round"/>` : ""}
+    <polygon points="${poly}" fill="var(${color})" fill-opacity=".22" stroke="var(${color})" stroke-width="2.5" stroke-linejoin="round"/>${rdots}${dots}${labels}</svg>
+    ${cmpv ? `<div style="font-size:12px;font-weight:800;margin:2px 0 4px">${GOALS.filter((_, i) => win(i)).length}승 ${GOALS.filter((_, i) => !win(i)).length}패</div>
+      <div class="hexv" style="grid-template-columns:1fr;gap:3px">${GOALS.map((g, i) => `<span style="display:flex;justify-content:space-between;gap:4px"><span>${win(i) ? "🟢" : "🔴"} ${g.icon}${g.short}</span><span>나 <b style="color:var(--ink)">${fmt(vals[i])}</b> · 상대 ${fmt(cmpv[i])}</span></span>`).join("")}</div>`
+      : `<div class="hexv">${GOALS.map((g, i) => `<span>${g.icon} ${fmt(vals[i])}</span>`).join("")}</div>`}${opts.note ? `<div class="muted" style="font-size:11px;margin-top:2px">${esc(opts.note)}</div>` : ""}</figure>`;
 }
 
 // ---------------------------------------------------------------- 기록 화면
@@ -1867,6 +1892,7 @@ document.addEventListener("click", async e => {
   if (a === "log") openLog(b.dataset.goal);
   if (a === "detail") showGoalDetail(b.dataset.goal);
   if (a === "tabtimer") showTab("timer");
+  if (a === "day") showDay(b.dataset.d);
   if (a === "bench") showBench();
   if (a === "cmp") showCmp();
   if (a === "rivals") showRivals();
