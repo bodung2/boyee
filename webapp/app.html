@@ -749,7 +749,8 @@ const MILES = {
     src: "운영 중인 파이프라인 월수입 합계 구간 — 부업 참가율 1.95%(2022, 임금 부업 한정)를 참고한 추정 구간", level: "추정"},
   home: {title: "첫 내 집 마련", p: .36, src: "주택소유통계 2024(국가데이터처, 2025.11 발표): 30대 주택 소유율 36%", level: "공식(30대)"},
   marriage: {title: "결혼(배우자 있음)", p: .356, src: "2025 인구주택총조사(등록센서스) 표 5 성·연령·혼인상태별 인구: 30~39세 남자 중 배우자 있음 35.6%(30~34세 24.0% · 35~39세 48.9%)", level: "공식(30대 남자)"},
-  child: {title: "자녀(태어난 순서)", p: {1: .45, 2: .25, 3: .04}, src: "30대 후반 남성 중 자녀 1명 이상 45%·2명 이상 25%·3명 이상 4%로 추정(합계출산율 0.75, 신혼부부 무자녀 47.5% 참고). 공식 분포 확인 필요", level: "추정"},
+  child: {title: "자녀(태어난 순서)", p: {1: .249, 2: .125, 3: .014}, r: {1: .70, 2: .35, 3: .04},
+    src: "자녀는 결혼 다음 단계로 셈: 배우자 있는 사람(30대 남자 35.6%, 2025 인구주택총조사) 중 자녀 1명 이상 70%·2명 이상 35%·3명 이상 4%로 추정(신혼부부 무자녀 47.5%, 합계출산율 0.75 참고) → 30대 남자 중 24.9%·12.5%·1.4%. 공식 분포 확인 필요", level: "공식(결혼) × 추정(자녀 비율)"},
   pipeIncome: {title: "파이프라인 누적 수익 돌파(파이프라인별)", bands: [[1e4, .15], [1e5, .10], [1e6, .04], [1e7, .01], [1e8, .001]],
     src: "수익 기록을 더한 누적 금액 기준. 첫 수익(1만 원)부터 1억 원까지 — 부업 참가율 1.95%(2022, 임금 부업 한정)를 참고한 추정 구간", level: "추정"},
   income: {title: "저작물 누적 수익 돌파(작품별)", bands: [[1e5, .2], [1e6, .05], [1e7, .01], [1e8, .001]], src: "추정", level: "추정"},
@@ -927,14 +928,16 @@ function weekStats(ws, logs, start) {
   // 성취 기록(정신·커리어 공통): 같은 종류 반복은 절반 → 0, 큰 돌파는 월 1회, 한 주 최대 CAP
   const rep = {};          // 같은 영역 세 번째부터(0점이던 반복 성취) — 작은 기록 적립용
   const winPts = goal => {
-    let pts = 0; const seen = {}; rep[goal] = 0;
-    by(goal, "win").sort((a, b) => a.date < b.date ? -1 : 1).forEach(l => {
-      const sub = l.f.sub || "etc"; seen[sub] = (seen[sub] || 0) + 1;
-      let p = SIZE_PTS[l.f.size] || 5;
-      if (l.f.size === "l" && logs.some(o => o !== l && o.f.goal === goal && o.f.type === "win" && o.f.size === "l"
-          && o.date.slice(0, 7) === l.date.slice(0, 7) && o.date < l.date)) p = SIZE_PTS.m;   // 같은 달 두 번째 큰 돌파는 의미 있는 승리로
-      pts += seen[sub] === 1 ? p : seen[sub] === 2 ? p / 2 : 0;
-      if (seen[sub] > 2) rep[goal]++;
+    // 같은 주 같은 영역은 큰 것부터 한 번(전부) → 두 번째(절반) → 세 번째부터 0점(작은 기록 적립으로).
+    // 큰 돌파는 한 달에 첫 번째 것만 +40, 나머지는 의미 있는 승리(+15)로 — 기록을 더해 합계가 줄지 않게 큰 순서·달 단위로 센다
+    let pts = 0; rep[goal] = 0;
+    const wins = by(goal, "win"), subs = {};
+    wins.forEach(l => { (subs[l.f.sub || "etc"] = subs[l.f.sub || "etc"] || []).push(l.f.size === "l" ? SIZE_PTS.m : (SIZE_PTS[l.f.size] || 5)); });
+    Object.values(subs).forEach(v => { v.sort((a, b) => b - a); pts += (v[0] || 0) + (v[1] || 0) / 2; rep[goal] += Math.max(0, v.length - 2); });
+    wins.filter(l => l.f.size === "l").forEach(l => {
+      const firstOfMonth = logs.filter(o => o.f.goal === goal && o.f.type === "win" && o.f.size === "l" && o.date.slice(0, 7) === l.date.slice(0, 7))
+        .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.id < b.id ? -1 : 1))[0];
+      if (firstOfMonth === l) pts += SIZE_PTS.l - SIZE_PTS.m;
     });
     return Math.min(CAP, pts);
   };
@@ -954,7 +957,7 @@ function weekStats(ws, logs, start) {
   const sav = by("economy", "saving").map(l => (num(l.f.income) > 0 ? (num(l.f.saving) || 0) / num(l.f.income) : null)).filter(r => r != null);
   if (sav.length) {
     const r = Math.max(...sav), p = topShareNormal(r, BENCH.economy);
-    out.economy = {p, pts: Math.min(CAP * MONTH_W, R(p) * MONTH_W), any: true, what: `저축률 ${Math.round(r * 100)}% (월)`, low: R(p) <= 0 && Math.max(...sav) > 0};
+    out.economy = {p, pts: Math.min(CAP * MONTH_W, R(p) * MONTH_W), any: true, what: `저축률 ${Math.round(r * 100)}% (월)`, saved: Math.max(...sav) > 0};
   } else out.economy = {p: 1, pts: 0, any: false, what: ""};
   return out;
 }
@@ -964,8 +967,8 @@ function flow(p, amount, what, extra) {
   return {p, pts: any ? pts : 0, any, what, rp};
 }
 // 작은 기록 적립: 평균에 못 미쳐 그 주 점수가 0이던 행동을 시작일부터 계속 모아, 정해 둔 양을 채울 때마다 1점(흐름 점수).
-// 1점 = 그 영역 '평균 한 주' 양의 약 1/8(작은 행동도 자주 보상받도록). 대신 한 영역 한 주 최대 SMALL_CAP점이라
-// 평균 아래인 주가 평균을 넘긴 주(상위 % 점수)보다 많이 받지는 않는다. 평균 이상인 주는 상위 % 점수를 받으므로 모으지 않는다.
+// 1점 = 그 영역 '평균 한 주' 양의 약 1/8(작은 행동도 자주 보상받도록). 한 영역 한 주 최대 SMALL_CAP점.
+// 평균을 넘긴 주도 계속 모은다 — 기록을 하나 더해 평균을 넘는 순간 적립이 사라져 점수가 줄던 일을 막기 위해(성취는 쌓일수록 좋아야 한다).
 const SMALL_CAP = 3;
 const SMALL = {
   body: {unit: 30, label: "운동", fmt: v => `${v}분`, why: "30분 = 1점(짧은 운동은 모아서 30분이 되면 1점)"},
@@ -974,7 +977,7 @@ const SMALL = {
   mind: {unit: 1, label: "반복 성취", fmt: v => `${v}회`, why: "같은 주 같은 영역 세 번째부터(5 → 2.5 → 0점이던 것) 1회 = 1점"},
   career: {unit: 1, label: "반복 성취", fmt: v => `${v}회`, why: "정신과 같은 규칙"},
   check: {unit: 1, label: "점검·측정", fmt: v => `${v}회`, why: "스트레스 점검·체력 측정은 구간·등급이 오르지 않아도 1회(한 달 1회까지) 1점"},
-  economy: {unit: 1, label: "평균 아래 저축", fmt: v => `${v}달`, why: "저축률이 평균(25%) 아래라도 저축한 달 1점"}
+  economy: {unit: 1, label: "저축한 달", fmt: v => `${v}달`, why: "저축률과 상관없이 저축한 달 1점(저축률 상위 % 점수와 별도)"}
 };
 
 // 돌파(한 번) 점수 목록: [{date, goal, pts, label, past}]
@@ -1033,10 +1036,11 @@ function milestones(start) {
   // 기록에서 나오는 돌파
   const logs = gLogs();
   logs.filter(l => l.f.type === "race").forEach(l => add(l.date, "body", MILES.race.p[l.f.dist] || .1, `🏃 ${l.name}`));
-  let best = 9;
-  logs.filter(l => l.f.type === "fitness").sort((a, b) => a.date < b.date ? -1 : 1).forEach((l, i) => {
-    const g = num(l.f.grade) || 3;
-    if (g < best) { if (i > 0 || l.date < start) add(i === 0 ? "" : l.date, "body", MILES.fitness.p[g] || .5, `💪 체력 ${g}등급`); best = g; }
+  // 체력 등급: 지금까지 가장 좋은 등급까지 오른 만큼만(첫 측정 포함) — 기록을 더해도 합계가 줄지 않게(합계 = 최고 등급의 점수)
+  let bestFit = 0;
+  logs.filter(l => l.f.type === "fitness").sort((a, b) => a.date < b.date ? -1 : 1).forEach(l => {
+    const g = num(l.f.grade) || 3, pts = R(MILES.fitness.p[g] || .7) * MILE;
+    if (pts > bestFit + .05) { ev.push({date: l.date, goal: "body", pts: pts - bestFit, label: `💪 체력 ${g}등급 (${fmtTop(MILES.fitness.p[g] || .7)})${bestFit ? " · 이전 최고보다 오른 만큼" : ""}`, past: l.date < start}); bestFit = pts; }
   });
   logs.filter(l => l.f.type === "level").forEach(l => add(l.date, "craft", MILES.craftLevel.p[l.f.stage] || .4, `📈 ${l.name}`));
   return ev;
@@ -1076,15 +1080,17 @@ function scoreAll() {
   for (let ws = weekStart(start); ws <= weekStart(DATA.today); ws = addDays(ws, 7)) {
     const w = weekStats(ws, logs, start); weeks.push({ws, w});
     // 작은 기록 적립(평균 아래라 0점이던 것): 모아서 정해 둔 양마다 1점 — 그 주 점수에 더해 '최근 얻은 점수'에도 보인다
-    const we = addDays(ws, 6), small = {};
-    ["body", "craft", "social"].forEach(k => { if ((!w[k].rp || w[k].alwaysSmall) && w[k].vol > 0) acc[k] += w[k].vol; });     // 상위 % 점수가 0인 주만(친구·모임 시간은 늘)
+    const we = addDays(ws, 6), small = {}, checks = {};      // 점검·측정 1점은 주 상한(3점) 밖에서 따로 — 다른 적립 자리를 빼앗지 않게
+    // 기록을 더해 점수가 줄어드는 일이 없게: 평균 위·아래와 상관없이 늘 모은다(예전엔 평균을 넘는 순간 적립이 사라져 점수가 줄 수 있었음)
+    ["body", "craft", "social"].forEach(k => { if (w[k].vol > 0) acc[k] += w[k].vol; });
     ["mind", "career"].forEach(k => { acc[k] += w[k].rep || 0; });
-    if (w.economy.low) acc.economy += 1;
+    if (w.economy.saved) acc.economy += 1;
     logs.filter(l => l.date >= ws && l.date <= we && l.date >= start && ["pss", "fitness"].includes(l.f.type)).forEach(l => {
-      const key = l.f.type + l.date.slice(0, 7); if (!checkMonth.has(key)) { checkMonth.add(key); small[l.f.goal] = (small[l.f.goal] || 0) + 1; } });
-    GOALS.forEach(g => { const u = SMALL[g.k].unit, n = Math.floor(acc[g.k] / u);
-      if (n > 0) { acc[g.k] -= n * u; small[g.k] = (small[g.k] || 0) + n; }
-      if (small[g.k] > SMALL_CAP) small[g.k] = SMALL_CAP; });                 // 한 주 최대 3점(넘친 양은 버림, 1점이 안 된 나머지만 이월)
+      const key = l.f.type + l.date.slice(0, 7); if (!checkMonth.has(key)) { checkMonth.add(key); checks[l.f.goal] = (checks[l.f.goal] || 0) + 1; } });
+    GOALS.forEach(g => { const u = SMALL[g.k].unit, n = Math.floor(acc[g.k] / u), room = Math.max(0, SMALL_CAP - (small[g.k] || 0)), give = Math.min(n, room);
+      // 한 주 최대 3점. 넘친 양은 버리되 1점이 안 되는 만큼은 다음 주로 넘김(더 많이 해서 다음 주 적립이 줄어드는 일이 없게)
+      acc[g.k] = n > room ? Math.min(u * .999, acc[g.k] - give * u) : acc[g.k] - give * u;
+      small[g.k] = Math.min(SMALL_CAP, (small[g.k] || 0) + give) + (checks[g.k] || 0); });
     GOALS.forEach(g => { if (small[g.k]) { w[g.k].pts += small[g.k]; w[g.k].what += ` · 작은 기록 적립 +${small[g.k]}`; } });
     GOALS.forEach(g => { if (w[g.k].pts) { byGoal[g.k] += w[g.k].pts; events.push({date: addDays(ws, 6) > DATA.today ? DATA.today : addDays(ws, 6), goal: g.k, pts: w[g.k].pts,
       label: `${ws.slice(5).replace("-", ".")} 주 · ${w[g.k].what}${w[g.k].p < .5 ? ` (${fmtTop(w[g.k].p)})` : ""}`, week: true}); } });
@@ -1239,7 +1245,7 @@ async function saveCmp(reset) {
 
 // ---------------------------------------------------------------- 종합 순위 · 가상 상대
 // 종합 표준점수 = 여섯 영역의 누적 상위 %를 정규 점수(z)로 바꿔 평균하고, 영역 사이 상관(ρ=0.3, 추정)을 고려해 다시 표준화한 값(평균 50, 표준편차 10).
-// 기록이 없는 영역은 평균(z=0)으로 둔다. 순위 = 종합 상위 % × 그 비교군 인구(2025 인구주택총조사 등록센서스, 18세 이상 내국인 성·연령별).
+// 기록이 없는 영역과 하위 16%보다 낮은 영역은 z −1로 둔다(아래 Z_FLOOR). 순위 = 종합 상위 % × 그 비교군 인구(2025 인구주택총조사 등록센서스, 18세 이상 내국인 성·연령별).
 const RHO = 0.3;
 const POP = {m: {20: 2892112, 30: 3378752, 40: 3737327, 50: 4220433, 60: 6715832, all: 20944456},
   f: {20: 2643514, 30: 3057648, 40: 3593919, 50: 4184047, 60: 7906213, all: 21385341},
@@ -1258,9 +1264,11 @@ function probit(p) {                   // 표준정규 누적분포의 역함수
 }
 // 영역별 상위 비율(p, 기록 없으면 null) → 종합
 // 만점 100·최저 0이 딱 떨어지게, 한 영역의 정규 점수는 ±Z_CAP(≈3.23, 상위 약 0.06%)에서 멈춘다 → 여섯 영역 모두 그 끝이면 50 ± 50
-const Z_SD = Math.sqrt((1 + 5 * RHO) / 6), Z_CAP = 5 * Z_SD;
+// 바닥은 z −1(하위 16%): 기록이 없는 영역도 −1로 본다 → 어떤 기록을 더해도 종합 점수가 내려가지 않는다
+//   (예전엔 기록 없음 = 평균(0)이라, 처음 남긴 기록이 평균 아래면 종합이 오히려 떨어졌음)
+const Z_SD = Math.sqrt((1 + 5 * RHO) / 6), Z_CAP = 5 * Z_SD, Z_FLOOR = -1;
 function composite(ps) {
-  const z = GOALS.map(g => ps[g.k] == null ? 0 : Math.max(-Z_CAP, Math.min(Z_CAP, probit(1 - Math.min(1 - 1e-6, Math.max(1e-6, ps[g.k]))))));
+  const z = GOALS.map(g => ps[g.k] == null ? Z_FLOOR : Math.max(Z_FLOOR, Math.min(Z_CAP, probit(1 - Math.min(1 - 1e-6, Math.max(1e-6, ps[g.k]))))));
   const zc = z.reduce((a, b) => a + b, 0) / 6 / Z_SD;
   return {z: zc, score: Math.max(0, Math.min(100, 50 + 10 * zc)), top: 1 - ncdf(zc)};
 }
@@ -1383,7 +1391,7 @@ function showRivals(more) {
   $("#form").innerHTML = `<div class="row"><h3 style="margin:0">가상 상대 ${RIVALS.length}명</h3><button class="btn" type="button" data-act="close">닫기</button></div>
     <p class="muted" style="font-size:12px;line-height:1.6">${beaten.length}명 격파 · 내 종합 ${me.score.toFixed(1)}점 · 비교군 ${esc(cmpLabel(grp))} 기준 숫자.
       단계: 브론즈(1~20) · 실버(21~40) · 골드(41~60) · 플래티넘(61~80) · 다이아(81~95) · 마스터(96~100). 아직 먼 상대의 숫자는 가까워지면 보여요.
-      종합 표준점수 = 여섯 영역 누적 상위 %를 정규 점수로 바꿔 평균한 뒤 영역 사이 상관(ρ=${RHO}, 추정)을 고려해 다시 표준화(평균 50, 표준편차 10). 여섯 영역 가중치는 같고(각 1/6), 한 영역은 상위 약 0.06%에서 더 오르지 않아 만점 100점·최저 0점. 기록이 없는 영역은 평균.
+      종합 표준점수 = 여섯 영역 누적 상위 %를 정규 점수로 바꿔 평균한 뒤 영역 사이 상관(ρ=${RHO}, 추정)을 고려해 다시 표준화(평균 50, 표준편차 10). 여섯 영역 가중치는 같고(각 1/6), 한 영역은 상위 약 0.06%에서 더 오르지 않아 만점 100점. 기록이 없거나 하위 16%보다 낮은 영역은 하위 16%로 보아, 어떤 기록을 더해도 종합 점수가 내려가지 않아요.
       순위 = 종합 상위 % × 인구(${esc(POP_SRC)}). 상대는 모두 실존 인물이 아닌 가상 인물이에요.</p>
     <div class="card">${rows}</div>
     ${list.length < RIVALS.length ? `<button class="btn" type="button" data-g="rivalsmore" style="width:100%;margin-top:8px">다음 20명 보기 (${list.length}/${RIVALS.length})</button>` : ""}`;
@@ -1422,7 +1430,7 @@ function periodTop(S, mode) {
   return out;
 }
 
-// 누적 상위 %: 시작일부터의 평균 페이스에, 지금까지 이룬 '상태' 지표(체력 등급·숙련·결혼·자녀·봉사·직업·수상·저작물·순자산·내 집·파이프라인)를
+// 누적 상위 %: 시작일부터의 평균 페이스에, 지금까지 이룬 '상태' 지표(체력 등급·숙련·결혼·자녀·직업·수상·저작물·순자산·내 집·파이프라인)를
 // 더해 영역마다 평균한다(영역 공통 규칙: 지표는 평균, 적어 둔 지표만). 이번 주·이번 달은 그 기간의 기록만 본다.
 const PACE_LABEL = {body: "운동 페이스", mind: "스트레스 점검 평균", craft: "가사·돌봄 시간", social: "가족 관계 행동", career: "지금 하는 일", economy: "저축률 평균"};
 // 구간 표 [[값, 상위 비율], ...]에서 x의 상위 비율(구간 사이는 로그 보간, 첫 구간 아래는 평균 쪽으로 직선)
@@ -1439,35 +1447,43 @@ function bandShare(x, bands) {
 function cumulativeShares(pace) {
   const items = DATA.items, logs = gLogs(), out = {};
   GOALS.forEach(g => {
-    const parts = [];
+    // 페이스 지표(parts)와 업적 지표(bonus)를 모아 가장 좋은 것을 고른다(아래)
+    const parts = [], bonus = [];
     const put = (p, label) => { if (p < 1) parts.push({p, label}); };
+    const extra = (p, label) => { if (p < 1) bonus.push({p, label}); };
     if (pace[g.k] && pace[g.k].any) put(pace[g.k].p, PACE_LABEL[g.k]);
     const best = (list, fn) => list.length ? Math.min(...list.map(fn)) : 1;
     if (g.k === "body") {
-      const fit = logs.filter(l => l.f.type === "fitness").sort((a, b) => a.date < b.date ? 1 : -1)[0];
-      if (fit) put(MILES.fitness.p[num(fit.f.grade) || 3] || .7, `체력 ${num(fit.f.grade) || 3}등급`);
-      put(best(logs.filter(l => l.f.type === "race"), l => MILES.race.p[l.f.dist] || .1), "대회 완주(최고)");
+      const fit = logs.filter(l => l.f.type === "fitness").sort((a, b) => (num(a.f.grade) || 3) - (num(b.f.grade) || 3))[0];   // 지금까지 받은 가장 좋은 등급
+      if (fit) extra(MILES.fitness.p[num(fit.f.grade) || 3] || .7, `체력 ${num(fit.f.grade) || 3}등급`);
+      extra(best(logs.filter(l => l.f.type === "race"), l => MILES.race.p[l.f.dist] || .1), "대회 완주(최고)");
     }
-    if (g.k === "craft") put(best(logs.filter(l => l.f.type === "level"), l => MILES.craftLevel.p[l.f.stage] || .4), "숙련 단계(최고)");
+    if (g.k === "craft") extra(best(logs.filter(l => l.f.type === "level"), l => MILES.craftLevel.p[l.f.stage] || .4), "숙련 단계(최고)");
     if (g.k === "social") {
       const people = items.filter(i => i.category === "people");
-      if (people.some(i => /배우자|아내|남편|부인/.test(i.f.relation || ""))) put(cmpBench("social").married, "결혼");
+      // 가족 형성은 한 단계 사다리(결혼 → 자녀 1명 → 2명 → 3명 이상): 가장 높은 단계 하나만 — 자녀가 결혼을 깎지 않게
+      const wed = people.some(i => /배우자|아내|남편|부인/.test(i.f.relation || ""));
       const kids = people.filter(i => /자녀|아들|딸|첫째|둘째|셋째|넷째|막내/.test(i.f.relation || "")).length;
-      if (kids) put(MILES.child.p[Math.min(kids, 3)], `자녀 ${kids}명`);
+      const m = cmpBench("social").married;
+      if (kids) extra(m * MILES.child.r[Math.min(kids, 3)], `가족 형성(${wed ? "결혼·" : ""}자녀 ${kids}명)`);
+      else if (wed) extra(m, "가족 형성(결혼)");
     }
     if (g.k === "career") {
-      put(best(items.filter(i => i.category === "awards"), i => i.f.kind === "cert" ? (MILES.cert.p[i.f.cert_level] || .3) : (MILES.award.p[i.f.level] || .3)), "수상·자격(최고)");
-      put(best(items.filter(i => i.category === "works"), i => MILES.work.p[i.f.kind] || .2), "저작물(최고)");
+      extra(best(items.filter(i => i.category === "awards"), i => i.f.kind === "cert" ? (MILES.cert.p[i.f.cert_level] || .3) : (MILES.award.p[i.f.level] || .3)), "수상·자격(최고)");
+      extra(best(items.filter(i => i.category === "works"), i => MILES.work.p[i.f.kind] || .2), "저작물(최고)");
     }
     if (g.k === "economy") {
       const net = DATA.totals && DATA.totals.net;
       if (isFinite(net) && net > 0) put(bandShare(net, cmpBench("economy").networth), "순자산");
       // 내 집 마련은 순자산에 이미 들어 있어(집값 − 대출) 따로 평균하지 않는다 — 넣으면 순자산이 높은 사람의 상위 %가 오히려 끌려 내려간다
-      if (!(isFinite(net) && net > 0) && items.some(i => i.category === "realestate")) put(MILES.home.p, "내 집");
+      if (!(isFinite(net) && net > 0) && items.some(i => i.category === "realestate")) extra(MILES.home.p, "내 집");
       const pipe = byCat("pipeline").reduce((a, x) => a + monthly(x), 0);
-      if (pipe > 0) put(bandShare(pipe, MILES.pipeline.bands), "파이프라인 월수입");
+      if (pipe > 0) extra(bandShare(pipe, MILES.pipeline.bands), "파이프라인 월수입");
     }
-    out[g.k] = parts.length ? {p: parts.reduce((a, x) => a + x.p, 0) / parts.length, any: true, parts} : {p: 1, any: false, parts};
+    // 영역 상위 % = 그 영역 지표 가운데 가장 좋은 것(업적·페이스 모두). 평균을 내면 지표를 하나 더 기록할 때 오히려 나빠질 수 있어,
+    // '성취는 쌓일수록 좋아야 한다'는 원칙에 맞게 가장 좋은 지표가 그 영역을 대표한다(나머지는 근거로 함께 보여 줌)
+    parts.push(...bonus); parts.sort((a, b) => a.p - b.p);
+    out[g.k] = parts.length ? {p: parts[0].p, any: true, parts} : {p: 1, any: false, parts};
   });
   return out;
 }
@@ -1533,7 +1549,7 @@ function renderGrowth() {
     <div class="grow-row" style="cursor:default;border:0;background:none;padding:2px 12px;font-size:11px;color:var(--mute)"><span></span><span>영역 · 근거</span><span>상위 %</span><span style="text-align:right">쌓은 점수</span></div>
     <div class="list">${rows}</div>
     ${GVIEW === "all" ? `<p class="muted">누적 = ${fmtDay(S.start)}부터 ${Math.round((parseDay(DATA.today) - parseDay(S.start)) / 864e5) + 1}일 동안의 평균 페이스(운동은 주당 횟수, 시간은 하루 평균, 저축률·스트레스 점검은 평균)에
-      지금까지 이룬 것(체력 등급·대회·숙련 단계·결혼·자녀·봉사·직업·수상·저작물·순자산·내 집·파이프라인)을 더해 영역마다 평균한 상위 %입니다. 적어 둔 지표만 평균하고, 기록을 빠뜨린 주도 페이스에 들어갑니다.
+      지금까지 이룬 것(체력 등급·대회·숙련 단계·결혼·자녀·직업·수상·저작물·순자산·내 집·파이프라인)을 더해, 영역마다 가장 좋은 지표로 낸 상위 %입니다(기록·업적을 더해 나빠지는 일이 없게). 기록을 빠뜨린 주도 페이스에 들어갑니다.
       ${prevSnap ? `▲▼는 ${fmtDay(prevSnap.date)} 주 기록과 비교한 변화예요.` : "매주 처음 열 때 그 주의 누적 상위 %가 기록되고, 다음 주부터 변화가 보여요."}</p>
       ${snaps.length ? `<h2>누적 상위 % 기록(매주)</h2><div class="card" style="overflow-x:auto"><table class="snap" style="width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums">
         <tr><th style="text-align:left;padding:3px 4px">주</th>${GOALS.map(g => `<th style="padding:3px 4px">${g.icon}</th>`).join("")}</tr>
