@@ -1579,10 +1579,10 @@ function renderGrowth() {
     `<button type="button" class="item" data-g="dellog" data-id="${esc(l.id)}"><span class="t">${GOAL[l.f.goal].icon} ${esc(l.name)}</span>
       <span class="r">${esc(fmtDay(l.date))}</span><span class="s">${esc(l.f.text || "")}</span><span class="rs">눌러서 지우기</span></button>`).join("");
   const RS = rivalState(S);
-  $("#gmain").innerHTML = `${vsHero(S, RS)}
-    ${missionCard(RS)}
-    ${weeklyReport(S)}
-    ${tierCard(S, RS)}
+  $("#gmain").innerHTML = `${safeCard("대결", () => vsHero(S, RS))}
+    ${safeCard("오늘의 미션", () => missionCard(RS))}
+    ${safeCard("지난주 리포트", () => weeklyReport(S))}
+    ${safeCard("티어", () => tierCard(S, RS))}
     <div class="card hero" style="margin-top:10px"><div class="row"><span class="label">인생 레벨</span><span class="muted">${fmtDay(S.start)}부터</span></div>
       <div class="big">Lv.${lv} <span style="font-size:18px;color:var(--sub)">${Math.round(S.total).toLocaleString("ko-KR")}점</span></div>
       <div class="track"><span>📈 흐름 점수 <b>${Math.round(S.flowTotal).toLocaleString("ko-KR")}</b><small>매일·매주 쌓은 것</small></span>
@@ -1595,7 +1595,7 @@ function renderGrowth() {
         ? hexagon(`누적 상위 % vs ${RS.next.name}`, GOALS.map(g => RS.mine[g.k] == null ? 0 : 1 - RS.mine[g.k]), "--s1", v => v <= 0 ? "-" : v < .5 ? "평균↓" : Math.max(1, Math.round((1 - v) * 100)) + "%", 1,
             {compare: GOALS.map(g => 1 - RS.next.ps[g.k]), missing: GOALS.map(g => RS.mine[g.k] == null), note: `비교군 ${cmpLabel(RS.grp)} 기준(위 대결과 같음) · 노란 점선 = 상대 · 🟢✓ 이김 · 🔴✕ 짐 · ⚪ 기록 없음`})
         : hexagon(GVIEW === "all" ? "누적 상위 %" : GVIEW_LABEL[GVIEW] + " 상위 %", GOALS.map(g => T[g.k].any ? 1 - T[g.k].p : 0), "--s1", v => v <= 0 ? "-" : v < .5 ? "평균↓" : Math.max(1, Math.round((1 - v) * 100)) + "%", 1)}</div>
-    ${streakCard()}
+    ${safeCard("연속 기록", () => streakCard())}
     <div class="row" style="margin-top:14px"><span class="muted">비교군: <b style="color:var(--ink)">${esc(cmpSame() || "영역마다 다름")}</b></span>
       <button class="btn" type="button" data-g="cmp">비교군 바꾸기</button></div>
     <div class="row" style="margin-top:8px"><h2 style="margin:0">${GVIEW_LABEL[GVIEW]} 성적표</h2>
@@ -1612,11 +1612,19 @@ function renderGrowth() {
     <p class="muted">줄을 누르면 그 영역의 점수 내역과 기록이 나와요 · 점수는 늘 기본 비교군(남자·30대)으로 쌓여요 · <a href="#" data-g="bench">점수 기준·출처 보기</a></p>
     <h2>빠르게 기록</h2><div class="grid">${GOALS.map(g => `<button type="button" class="stat" data-g="log" data-goal="${g.k}"><div class="l">${g.icon} ${g.label}</div><div class="n" style="font-size:15px">＋ 기록</div></button>`).join("")}</div>
     ${feed ? `<h2>최근 얻은 점수</h2><div class="card">${feed}</div>` : ""}
-    ${recent ? `<h2>최근 기록</h2><div class="list">${recent}</div>` : ""}`;
+    ${recent ? `<h2>최근 기록</h2><div class="list">${recent}</div>` : ""}
+    <p class="muted" style="text-align:center;font-size:11px;margin-top:18px">화면 버전 ${APP_BUILD}</p>`;
   floatGain(S);
   persistMiles(S.start, false).then(async n => { n += await saveTopSnap(TA); n += await saveRivalWins(S); n += await saveBadges(S, RS); if (n) loadAssets(true); }).catch(() => {});
 }
 
+// 화면 버전: 폰이 새 화면을 받았는지 성장 탭 맨 아래에서 확인할 수 있게(바꿀 때마다 올린다)
+const APP_BUILD = "2026.11.16-a";
+// 카드 하나를 그리다 오류가 나도 나머지 화면은 그대로 보이게, 오류 내용은 그 자리에 보여 준다
+function safeCard(name, fn) {
+  try { return fn(); }
+  catch (e) { console.error(name, e); return `<div class="note" style="margin-top:10px">⚠️ '${esc(name)}' 카드를 그리지 못했어요: ${esc(e && e.message || String(e))}</div>`; }
+}
 // ---------------------------------------------------------------- 게임 화면(대결 · 티어 · 미션 · 연속 기록 · K.O.)
 // 받침 있으면 a(을·이·은), 없으면 b(를·가·는)
 const josa = (w, a, b) => { const c = (w || "").charCodeAt(w.length - 1); return c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 ? a : b; };
