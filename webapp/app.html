@@ -810,9 +810,9 @@ function topShareTime(x, b) {
 const topShareNormal = (x, b, lowerBetter) => lowerBetter ? ncdf((x - b.mean) / b.sd) : 1 - ncdf((x - b.mean) / b.sd);
 const fmtTop = p => p >= 1 ? "기록 없음" : p > .5 ? "평균 아래" : "상위 " + (p < .01 ? (p * 100).toFixed(1) : Math.round(p * 100)) + "%";
 // 주 n회(소수 가능)의 상위 비율: 정수 사이는 로그로 보간
-function bodyShare(rate) {
+function bodyShare(rate, survival) {
   if (!(rate > 0)) return 1;
-  const S = BENCH.body.survival, r = Math.min(7, rate), lo = Math.max(1, Math.floor(r)), hi = Math.min(7, lo + 1);
+  const S = survival || BENCH.body.survival, r = Math.min(7, rate), lo = Math.max(1, Math.floor(r)), hi = Math.min(7, lo + 1);
   if (r < 1) return 1 - (1 - S[1]) * r;
   const t = r - lo; return Math.exp(Math.log(S[lo]) * (1 - t) + Math.log(S[hi]) * t);
 }
@@ -826,9 +826,9 @@ function rangeShare(from, to, logs) {
   by("body", ["exercise"]).forEach(l => { if ((num(l.f.minutes) || 30) >= 30) perDay[l.date] = Math.min(2, (perDay[l.date] || 0) + 1); });
   const sessions = Object.values(perDay).reduce((a, b) => a + b, 0);
   const out = {
-    body: {p: bodyShare(sessions * 7 / days), any: sessions > 0},
-    craft: (m => ({p: topShareTime(m / days, BENCH.craft), any: m > 0}))(sumMin(by("craft", ["time"]))),
-    social: (m => ({p: topShareTime(m / days, BENCH.social), any: m > 0}))(sumMin(by("social", ["volunteer", "together"])))
+    body: {p: bodyShare(sessions * 7 / days, cmpBench("body").survival), any: sessions > 0},
+    craft: (m => ({p: topShareTime(m / days, cmpBench("craft")), any: m > 0}))(sumMin(by("craft", ["time"]))),
+    social: (m => ({p: topShareTime(m / days, cmpBench("social")), any: m > 0}))(sumMin(by("social", ["volunteer", "together"])))
   };
   const sav = by("economy", ["saving"]).map(l => num(l.f.income) > 0 ? (num(l.f.saving) || 0) / num(l.f.income) : null).filter(r => r != null);
   out.economy = sav.length ? {p: topShareNormal(sav.reduce((a, b) => a + b, 0) / sav.length, BENCH.economy), any: true} : {p: 1, any: false};   // 여러 달이면 평균
@@ -839,7 +839,8 @@ function rangeShare(from, to, logs) {
 function positionShare() {
   const now = byCat("positions").filter(i => !(i.f || {}).end || i.f.end >= DATA.today);
   if (!now.length) return {p: 1, any: false};
-  return {p: Math.min(...now.map(i => jobShare(i).p)), any: true};
+  const wm = cmpBench("career").wageMedian;
+  return {p: Math.min(...now.map(i => jobShare(i, wm).p)), any: true};
 }
 // 직업 상위 %: ① 직업군 지위 ② 연봉 ③ 고용 안정성 — 적어 둔 지표만 평균(영역 공통 규칙: 지표는 평균)
 const JOB = {
@@ -854,14 +855,14 @@ function bandOf(table, k) {
   let above = 0; for (const x of keys) { if (x === k) return {above: above / tot, size: table[x] / tot}; above += table[x]; }
   return null;
 }
-function jobShare(i) {
+function jobShare(i, wageMedian) {
   const f = (i && i.f) || {}, parts = {}, q = MILES.position.q;
   const lv = JOB.levels.includes(f.level) ? f.level : "staff", nxt = JOB.levels[JOB.levels.indexOf(lv) + 1];
   const within = (q[lv] + (nxt ? q[nxt] : 0)) / 2;                  // 같은 직업 안에서 내 직위 구간의 가운데
   const g = bandOf(JOB.groups, f.job);
   if (g) parts.status = g.above + g.size * (f.job === "manager" ? .5 : within);
   const sal = num(f.salary);
-  if (sal > 0) parts.wage = 1 - ncdf(Math.log(sal / 12 / JOB.wageMedian) / JOB.wageSigma);
+  if (sal > 0) parts.wage = 1 - ncdf(Math.log(sal / 12 / (wageMedian || JOB.wageMedian)) / JOB.wageSigma);
   const e = bandOf(JOB.employ, f.employ);
   if (e) parts.stable = e.above + e.size / 2;
   const v = Object.values(parts);
@@ -879,10 +880,10 @@ function jobPreview(it) {
 function mindShare(logs, since) {
   if (since) {          // 누적: 시작일부터 받은 스트레스 점검 점수의 평균
     const list = logs.filter(x => x.f.type === "pss" && x.date >= since).map(x => num(x.f.score)).filter(v => v != null);
-    return list.length ? {p: topShareNormal(list.reduce((a, b) => a + b, 0) / list.length, BENCH.mind, true), any: true, pss: true} : {p: 1, any: false};
+    return list.length ? {p: topShareNormal(list.reduce((a, b) => a + b, 0) / list.length, cmpBench("mind"), true), any: true, pss: true} : {p: 1, any: false};
   }
   const from = addDays(DATA.today, -31), l = logs.filter(x => x.f.type === "pss" && x.date >= from).sort((a, b) => a.date < b.date ? 1 : -1)[0];
-  return l ? {p: topShareNormal(num(l.f.score), BENCH.mind, true), any: true, pss: true} : {p: 1, any: false};
+  return l ? {p: topShareNormal(num(l.f.score), cmpBench("mind"), true), any: true, pss: true} : {p: 1, any: false};
 }
 
 // ---------------------------------------------------------------- 날짜
@@ -1096,6 +1097,77 @@ function scoreAll() {
   const total = Object.values(byGoal).reduce((a, b) => a + b, 0);
   return {start, weeks, byGoal, events: events.sort((a, b) => a.date < b.date ? 1 : -1), total, flowTotal, mileTotal: total - flowTotal};
 }
+// ---------------------------------------------------------------- 비교군(상위 %만 바뀐다)
+// 점수는 늘 기본 비교군(남자·30대)으로 쌓는다 — 비교군을 바꿔 점수를 부풀리지 못하게. 비교군은 '상위 %'를 다른 집단과 견줘 보는 용도
+const CMP_SEX = [["m", "남자"], ["f", "여자"], ["all", "남녀 전체"]];
+const CMP_AGE = [["20", "20대"], ["30", "30대"], ["40", "40대"], ["50", "50대"], ["60", "60대 이상"], ["all", "성인 전체"]];
+const CMP_BASE = {sex: "m", age: "30"};
+const CMP = {
+  // 생활시간조사 2024 통계표 2-1(연령별-성별)·2-2(성인): 하루 평균 분
+  craft: {m: {20: 39, 30: 76, 40: 68, 50: 54, 60: 69, all: 62}, f: {20: 71, 30: 211, 40: 222, 50: 183, 60: 185, all: 179},
+    all: {20: 55, 30: 140, 40: 144, 50: 118, 60: 132, all: 122}},
+  social: {m: {20: 51, 30: 39, 40: 37, 50: 47, 60: 61, all: 49}, f: {20: 72, 30: 54, 40: 57, 50: 73, 60: 92, all: 75},
+    all: {20: 61, 30: 46, 40: 47, 50: 60, 60: 78, all: 62}},
+  // 국민생활체육조사 2025: 주 1회 이상(30분) 참여율 — 연령별만 공표(성별 구분 없음). 60대 이상은 60대 65.8·70세 이상 59.5 사이
+  bodyS1: {20: .652, 30: .678, 40: .671, 50: .642, 60: .63, all: .629},
+  // Cohen PSS-10 규준: 성별(남 12.1/5.9, 여 13.7/6.6, 전체 13.0/6.35)과 연령(18~29 14.2/6.2, 30~44 13.0/6.2, 45~54 12.6/6.1, 55~64 11.9/6.9, 65+ 12.0/6.3)의 평균
+  pssSex: {m: [12.1, 5.9], f: [13.7, 6.6], all: [13.0, 6.35]},
+  pssAge: {20: [14.2, 6.2], 30: [13.0, 6.2], 40: [12.8, 6.15], 50: [12.25, 6.5], 60: [12.0, 6.3], all: [13.0, 6.35]},
+  // 가계금융복지조사 2025: 가구주 연령별 순자산 중앙값(만 원) — 가구 단위라 성별 구분 없음
+  netMedian: {20: 5000, 30: 15585, 40: 28384, 50: 31685, 60: 25000, all: 23860},
+  // 임금근로일자리 소득 2023: 월평균 보수(만 원). 남 30·40·50대와 성별·연령별 평균은 공식, 남녀 20대·60대 이상은 성별 격차로 나눈 추정
+  wage: {m: {20: 275, 30: 409, 40: 508, 50: 509, 60: 321, all: 426}, f: {20: 250, 30: 335, 40: 333, 50: 274, 60: 163, all: 279},
+    all: {20: 263, 30: 386, 40: 451, 50: 429, 60: 250, all: 363}}
+};
+const CMP_SRC = "생활시간조사 2024(연령별-성별) · 국민생활체육조사 2025(연령별) · PSS-10 규준(성별·연령) · 가계금융복지조사 2025(가구주 연령별 순자산 중앙값) · 임금근로일자리 소득 2023(성별·연령별 평균, 일부 추정)";
+function cmpGroup(goal) {
+  const f = (gSetting() || {}).f || {};
+  const glob = (f.cmp || "").split("|"), own = (f["cmp_" + goal] || "").split("|");
+  const sex = own[0] || glob[0] || CMP_BASE.sex, age = own[1] || glob[1] || CMP_BASE.age;
+  return {sex, age};
+}
+const cmpLabel = g => `${Object.fromEntries(CMP_SEX)[g.sex]}·${Object.fromEntries(CMP_AGE)[g.age]}`;
+// 비교군에 맞춘 기준(BENCH와 같은 꼴). 기본 비교군이면 BENCH 그대로
+function cmpBench(goal) {
+  const g = cmpGroup(goal), base = BENCH[goal] || {};
+  if (goal === "craft" || goal === "social") return {...base, mean: CMP[goal][g.sex][g.age]};
+  if (goal === "body") { const k = CMP.bodyS1[g.age] / CMP.bodyS1[30], S = {};
+    Object.entries(BENCH.body.survival).forEach(([n, v]) => { S[n] = Math.min(.99, v * k); }); return {...base, survival: S}; }
+  if (goal === "mind") { if (g.sex === "m" && g.age === "30") return base;
+    const a = CMP.pssSex[g.sex], b = CMP.pssAge[g.age]; return {...base, mean: (a[0] + b[0]) / 2, sd: (a[1] + b[1]) / 2}; }
+  if (goal === "economy") { const k = CMP.netMedian[g.age] / CMP.netMedian.all; return {...base, networth: MILES.networth.bands.map(([v, p]) => [v * k, p])}; }
+  if (goal === "career") return {...base, wageMedian: 305e4 * CMP.wage[g.sex][g.age] / CMP.wage.all.all};
+  return base;
+}
+function cmpSame() { const k = GOALS.map(g => cmpLabel(cmpGroup(g.k))); return k.every(x => x === k[0]) ? k[0] : ""; }
+function showCmp() {
+  const f = (gSetting() || {}).f || {}, glob = (f.cmp || `${CMP_BASE.sex}|${CMP_BASE.age}`).split("|");
+  const sel = (name, opts, v) => `<select name="${name}">${opts.map(([k, l]) => `<option value="${k}"${k === v ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
+  $("#form").innerHTML = `<h3>비교군 고르기</h3>
+    <p class="muted" style="font-size:13px;line-height:1.6">상위 %를 누구와 견줄지 정해요. <b>점수는 바뀌지 않아요</b>(점수는 늘 기본 비교군 남자·30대로 쌓여서, 비교군을 바꿔 점수를 부풀릴 수 없어요).</p>
+    <div class="f"><label>모든 영역</label><div class="row" style="flex-wrap:nowrap">${sel("sex", CMP_SEX, glob[0])}${sel("age", CMP_AGE, glob[1])}</div></div>
+    <h3 style="margin-top:14px">영역마다 따로 <span class="muted" style="font-size:12px;font-weight:400">비워 두면 위 설정을 따라요</span></h3>
+    ${GOALS.map(g => { const o = (f["cmp_" + g.k] || "").split("|");
+      return `<div class="f"><label>${g.icon} ${g.label}</label><div class="row" style="flex-wrap:nowrap">${sel("s_" + g.k, [["", "위와 같게"], ...CMP_SEX], o[0] || "")}${sel("a_" + g.k, [["", "위와 같게"], ...CMP_AGE], o[1] || "")}</div></div>`; }).join("")}
+    <p class="muted" style="font-size:12px">근거: ${esc(CMP_SRC)}. 성별 자료가 없는 운동 참여율·순자산은 연령만, 저축률·직업 지위·고용 안정성은 전체 기준을 써요.</p>
+    <div class="row"><button class="btn" type="button" data-g="cmpreset">기본으로</button>
+      <div class="row"><button class="btn" type="button" data-act="close">취소</button><button class="btn primary" type="submit">저장</button></div></div>`;
+  $("#form").dataset.mode = "cmp"; $("#sheet").hidden = false;
+}
+async function saveCmp(reset) {
+  const st = gSetting(); if (!st || busy) return;
+  const fd = new FormData($("#form")), f = {...st.f};
+  Object.keys(f).filter(k => k === "cmp" || k.startsWith("cmp_")).forEach(k => delete f[k]);
+  if (!reset) {
+    f.cmp = `${fd.get("sex")}|${fd.get("age")}`;
+    GOALS.forEach(g => { const s = fd.get("s_" + g.k) || "", a = fd.get("a_" + g.k) || ""; if (s || a) f["cmp_" + g.k] = `${s}|${a}`; });
+  }
+  busy = true;
+  try { await api("saveItem", {id: st.id, category: "setting", name: st.name, date: st.date, f}); $("#sheet").hidden = true; busy = false; await loadAssets(true); toast("비교군을 바꿨어요"); }
+  catch (e) { toast("저장하지 못했습니다: " + e.message, true); }
+  busy = false;
+}
+
 // 기간(이번 주 / 이번 달)의 상위 %(실제 기록 기준)와 그 기간에 얻은 점수
 function periodTop(S, mode) {
   const logs = gLogs(), ws = weekStart(DATA.today), m = DATA.today.slice(0, 7);
@@ -1155,7 +1227,7 @@ function cumulativeShares(pace) {
     }
     if (g.k === "economy") {
       const net = DATA.totals && DATA.totals.net;
-      if (isFinite(net) && net > 0) put(bandShare(net, MILES.networth.bands), "순자산");
+      if (isFinite(net) && net > 0) put(bandShare(net, cmpBench("economy").networth), "순자산");
       if (items.some(i => i.category === "realestate")) put(MILES.home.p, "내 집");
       const pipe = byCat("pipeline").reduce((a, x) => a + monthly(x), 0);
       if (pipe > 0) put(bandShare(pipe, MILES.pipeline.bands), "파이프라인 월수입");
@@ -1188,7 +1260,7 @@ function renderGrowth() {
   const st = gSetting();
   if (!st) {
     $("#gmain").innerHTML = `<div class="card"><h2 style="margin-top:0">🏅 6대 목표 성장 점수</h2>
-      <p class="muted" style="font-size:14px;line-height:1.7">신체 · 정신 · 기능·영감 · 사회 · 커리어 · 경제의 기록을 <b>30대 후반 남성 중 상위 몇 %</b>인지로 바꿔 같은 기준으로 점수를 쌓습니다.
+      <p class="muted" style="font-size:14px;line-height:1.7">신체 · 정신 · 기능·영감 · 사회 · 커리어 · 경제의 기록을 <b>같은 나이대·성별 중 상위 몇 %</b>인지로 바꿔 같은 기준으로 점수를 쌓습니다(점수는 남자·30대 기준, 상위 % 비교군은 나중에 바꿀 수 있어요).
       평균(상위 50%)은 0점, 상위 10%는 23점, 상위 1%는 56점. 지금까지 이룬 업적도 그대로 들어가고, 오늘부터의 성취가 그 위에 쌓입니다.</p>
       <button class="btn primary" type="button" data-g="start">오늘부터 시작하기</button></div>`;
     return;
@@ -1199,7 +1271,7 @@ function renderGrowth() {
   const snaps = topSnaps(), ws = weekStart(DATA.today), prevSnap = snaps.filter(x => x.date < ws).pop();
   const rows = GOALS.map(g => {
     const t = T[g.k], b = BENCH[g.k];
-    const sub = GVIEW === "all" && t.parts && t.parts.length ? t.parts.map(x => `${x.label} ${fmtPct(x.p)}`).join(" · ") : b.level;
+    const sub = (cmpSame() ? "" : cmpLabel(cmpGroup(g.k)) + " · ") + (GVIEW === "all" && t.parts && t.parts.length ? t.parts.map(x => `${x.label} ${fmtPct(x.p)}`).join(" · ") : b.level);
     const was = prevSnap && prevSnap.f[g.k] != null ? num(prevSnap.f[g.k]) : null;
     const dlt = GVIEW === "all" && t.any && was != null ? Math.round((was - t.p) * 100) : 0;     // 상위 %가 줄면(좋아지면) ▲
     return `<button type="button" class="grow-row" data-g="detail" data-goal="${g.k}"><span class="gi">${g.icon}</span><span class="gn">${g.label}<small>${esc(sub)}</small></span>
@@ -1218,7 +1290,9 @@ function renderGrowth() {
       <div class="delta">다음 레벨까지 ${Math.ceil(nextLv - S.total).toLocaleString("ko-KR")}점 · 이번 주 +${Math.round(thisWeek)}점</div></div>
     <div class="hex2">${hexagon("쌓은 점수", GOALS.map(g => S.byGoal[g.k]), "--s1", v => Math.round(v) + "", 0, {sqrt: true, note: "넓이가 점수에 비례(√ 눈금)"})}
       ${hexagon(GVIEW === "all" ? "누적 상위 %" : GVIEW_LABEL[GVIEW] + " 상위 %", GOALS.map(g => T[g.k].any ? 1 - T[g.k].p : 0), "--s3", v => v <= 0 ? "-" : v < .5 ? "평균↓" : Math.max(1, Math.round((1 - v) * 100)) + "%", 1)}</div>
-    <div class="row" style="margin-top:14px"><h2 style="margin:0">${GVIEW_LABEL[GVIEW]} 성적표</h2>
+    <div class="row" style="margin-top:14px"><span class="muted">비교군: <b style="color:var(--ink)">${esc(cmpSame() || "영역마다 다름")}</b></span>
+      <button class="btn" type="button" data-g="cmp">비교군 바꾸기</button></div>
+    <div class="row" style="margin-top:8px"><h2 style="margin:0">${GVIEW_LABEL[GVIEW]} 성적표</h2>
       <div class="ranges" role="group">${[["week", "주간"], ["month", "월간"], ["all", "누적"]].map(([k, l]) => `<button type="button" data-gview="${k}" aria-pressed="${k === GVIEW}">${l}</button>`).join("")}</div></div>
     <div class="grow-row" style="cursor:default;border:0;background:none;padding:2px 12px;font-size:11px;color:var(--mute)"><span></span><span>영역 · 근거</span><span>상위 %</span><span style="text-align:right">쌓은 점수</span></div>
     <div class="list">${rows}</div>
@@ -1229,7 +1303,7 @@ function renderGrowth() {
         <tr><th style="text-align:left;padding:3px 4px">주</th>${GOALS.map(g => `<th style="padding:3px 4px">${g.icon}</th>`).join("")}</tr>
         ${snaps.slice(-12).reverse().map(x => `<tr><td style="padding:3px 4px;white-space:nowrap">${esc(x.date.slice(2).replace(/-/g, "."))}</td>${GOALS.map(g => `<td style="text-align:center;padding:3px 4px">${fmtPct(x.f[g.k] != null ? num(x.f[g.k]) : null)}</td>`).join("")}</tr>`).join("")}
       </table></div>` : ""}` : ""}
-    <p class="muted">줄을 누르면 그 영역의 점수 내역과 기록이 나와요 · 비교 기준: 30대 후반 남성 · <a href="#" data-g="bench">점수 기준·출처 보기</a></p>
+    <p class="muted">줄을 누르면 그 영역의 점수 내역과 기록이 나와요 · 점수는 늘 기본 비교군(남자·30대)으로 쌓여요 · <a href="#" data-g="bench">점수 기준·출처 보기</a></p>
     <h2>빠르게 기록</h2><div class="grid">${GOALS.map(g => `<button type="button" class="stat" data-g="log" data-goal="${g.k}"><div class="l">${g.icon} ${g.label}</div><div class="n" style="font-size:15px">＋ 기록</div></button>`).join("")}</div>
     ${feed ? `<h2>최근 얻은 점수</h2><div class="card">${feed}</div>` : ""}
     ${recent ? `<h2>최근 기록</h2><div class="list">${recent}</div>` : ""}`;
@@ -1383,6 +1457,8 @@ document.addEventListener("click", async e => {
   if (a === "log") openLog(b.dataset.goal);
   if (a === "detail") showGoalDetail(b.dataset.goal);
   if (a === "bench") showBench();
+  if (a === "cmp") showCmp();
+  if (a === "cmpreset") saveCmp(true);
   if (a === "dellog") {
     const l = DATA.items.find(i => i.id === b.dataset.id); if (!l || !confirm(`'${l.name}' 기록을 지울까요?`)) return;
     try { await api("deleteItem", l.id); await loadAssets(true); toast("지웠습니다");
@@ -1395,6 +1471,7 @@ $("#form").addEventListener("change", e => {
   else if (GLOG.type === "win" && ["sub", "size"].includes(e.target.name)) mindHint();
 }, true);
 $("#form").addEventListener("submit", e => {
+  if ($("#form").dataset.mode === "cmp") { e.preventDefault(); e.stopImmediatePropagation(); saveCmp(false); return; }
   if ($("#form").dataset.mode !== "log") return;
   e.preventDefault(); e.stopImmediatePropagation(); saveLog();
 }, true);
