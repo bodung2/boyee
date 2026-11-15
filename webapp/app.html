@@ -749,7 +749,8 @@ const MILES = {
     src: "운영 중인 파이프라인 월수입 합계 구간 — 부업 참가율 1.95%(2022, 임금 부업 한정)를 참고한 추정 구간", level: "추정"},
   home: {title: "첫 내 집 마련", p: .36, src: "주택소유통계 2024(국가데이터처, 2025.11 발표): 30대 주택 소유율 36%", level: "공식(30대)"},
   marriage: {title: "결혼(배우자 있음)", p: .356, src: "2025 인구주택총조사(등록센서스) 표 5 성·연령·혼인상태별 인구: 30~39세 남자 중 배우자 있음 35.6%(30~34세 24.0% · 35~39세 48.9%)", level: "공식(30대 남자)"},
-  child: {title: "자녀(태어난 순서)", p: {1: .45, 2: .25, 3: .04}, src: "30대 후반 남성 중 자녀 1명 이상 45%·2명 이상 25%·3명 이상 4%로 추정(합계출산율 0.75, 신혼부부 무자녀 47.5% 참고). 공식 분포 확인 필요", level: "추정"},
+  child: {title: "자녀(태어난 순서)", p: {1: .249, 2: .125, 3: .014}, r: {1: .70, 2: .35, 3: .04},
+    src: "자녀는 결혼 다음 단계로 셈: 배우자 있는 사람(30대 남자 35.6%, 2025 인구주택총조사) 중 자녀 1명 이상 70%·2명 이상 35%·3명 이상 4%로 추정(신혼부부 무자녀 47.5%, 합계출산율 0.75 참고) → 30대 남자 중 24.9%·12.5%·1.4%. 공식 분포 확인 필요", level: "공식(결혼) × 추정(자녀 비율)"},
   pipeIncome: {title: "파이프라인 누적 수익 돌파(파이프라인별)", bands: [[1e4, .15], [1e5, .10], [1e6, .04], [1e7, .01], [1e8, .001]],
     src: "수익 기록을 더한 누적 금액 기준. 첫 수익(1만 원)부터 1억 원까지 — 부업 참가율 1.95%(2022, 임금 부업 한정)를 참고한 추정 구간", level: "추정"},
   income: {title: "저작물 누적 수익 돌파(작품별)", bands: [[1e5, .2], [1e6, .05], [1e7, .01], [1e8, .001]], src: "추정", level: "추정"},
@@ -1439,34 +1440,43 @@ function bandShare(x, bands) {
 function cumulativeShares(pace) {
   const items = DATA.items, logs = gLogs(), out = {};
   GOALS.forEach(g => {
-    const parts = [];
+    // 핵심 지표(core)는 늘 평균에 넣고, 업적 지표(bonus)는 평균을 낮출 때(=더 좋게 만들 때)만 넣는다 — 업적을 기록했는데 상위 %가 나빠지는 일이 없게
+    const parts = [], bonus = [];
     const put = (p, label) => { if (p < 1) parts.push({p, label}); };
+    const extra = (p, label) => { if (p < 1) bonus.push({p, label}); };
     if (pace[g.k] && pace[g.k].any) put(pace[g.k].p, PACE_LABEL[g.k]);
     const best = (list, fn) => list.length ? Math.min(...list.map(fn)) : 1;
     if (g.k === "body") {
       const fit = logs.filter(l => l.f.type === "fitness").sort((a, b) => a.date < b.date ? 1 : -1)[0];
-      if (fit) put(MILES.fitness.p[num(fit.f.grade) || 3] || .7, `체력 ${num(fit.f.grade) || 3}등급`);
-      put(best(logs.filter(l => l.f.type === "race"), l => MILES.race.p[l.f.dist] || .1), "대회 완주(최고)");
+      if (fit) extra(MILES.fitness.p[num(fit.f.grade) || 3] || .7, `체력 ${num(fit.f.grade) || 3}등급`);
+      extra(best(logs.filter(l => l.f.type === "race"), l => MILES.race.p[l.f.dist] || .1), "대회 완주(최고)");
     }
-    if (g.k === "craft") put(best(logs.filter(l => l.f.type === "level"), l => MILES.craftLevel.p[l.f.stage] || .4), "숙련 단계(최고)");
+    if (g.k === "craft") extra(best(logs.filter(l => l.f.type === "level"), l => MILES.craftLevel.p[l.f.stage] || .4), "숙련 단계(최고)");
     if (g.k === "social") {
       const people = items.filter(i => i.category === "people");
-      if (people.some(i => /배우자|아내|남편|부인/.test(i.f.relation || ""))) put(cmpBench("social").married, "결혼");
+      // 가족 형성은 한 단계 사다리(결혼 → 자녀 1명 → 2명 → 3명 이상): 가장 높은 단계 하나만 — 자녀가 결혼을 깎지 않게
+      const wed = people.some(i => /배우자|아내|남편|부인/.test(i.f.relation || ""));
       const kids = people.filter(i => /자녀|아들|딸|첫째|둘째|셋째|넷째|막내/.test(i.f.relation || "")).length;
-      if (kids) put(MILES.child.p[Math.min(kids, 3)], `자녀 ${kids}명`);
+      const m = cmpBench("social").married;
+      if (kids) put(m * MILES.child.r[Math.min(kids, 3)], `가족 형성(${wed ? "결혼·" : ""}자녀 ${kids}명)`);
+      else if (wed) put(m, "가족 형성(결혼)");
     }
     if (g.k === "career") {
-      put(best(items.filter(i => i.category === "awards"), i => i.f.kind === "cert" ? (MILES.cert.p[i.f.cert_level] || .3) : (MILES.award.p[i.f.level] || .3)), "수상·자격(최고)");
-      put(best(items.filter(i => i.category === "works"), i => MILES.work.p[i.f.kind] || .2), "저작물(최고)");
+      extra(best(items.filter(i => i.category === "awards"), i => i.f.kind === "cert" ? (MILES.cert.p[i.f.cert_level] || .3) : (MILES.award.p[i.f.level] || .3)), "수상·자격(최고)");
+      extra(best(items.filter(i => i.category === "works"), i => MILES.work.p[i.f.kind] || .2), "저작물(최고)");
     }
     if (g.k === "economy") {
       const net = DATA.totals && DATA.totals.net;
       if (isFinite(net) && net > 0) put(bandShare(net, cmpBench("economy").networth), "순자산");
       // 내 집 마련은 순자산에 이미 들어 있어(집값 − 대출) 따로 평균하지 않는다 — 넣으면 순자산이 높은 사람의 상위 %가 오히려 끌려 내려간다
-      if (!(isFinite(net) && net > 0) && items.some(i => i.category === "realestate")) put(MILES.home.p, "내 집");
+      if (!(isFinite(net) && net > 0) && items.some(i => i.category === "realestate")) extra(MILES.home.p, "내 집");
       const pipe = byCat("pipeline").reduce((a, x) => a + monthly(x), 0);
-      if (pipe > 0) put(bandShare(pipe, MILES.pipeline.bands), "파이프라인 월수입");
+      if (pipe > 0) extra(bandShare(pipe, MILES.pipeline.bands), "파이프라인 월수입");
     }
+    bonus.sort((a, b) => a.p - b.p).forEach(x => {
+      const avg = parts.length ? parts.reduce((a, y) => a + y.p, 0) / parts.length : 1;
+      if (x.p < avg) parts.push(x);
+    });
     out[g.k] = parts.length ? {p: parts.reduce((a, x) => a + x.p, 0) / parts.length, any: true, parts} : {p: 1, any: false, parts};
   });
   return out;
