@@ -1262,23 +1262,50 @@ function myShares(S, grp) {
   try { const T = periodTop(S, "all"); return Object.fromEntries(GOALS.map(g => [g.k, T[g.k].any ? T[g.k].p : null])); }
   finally { CMP_FORCE = null; }
 }
-// 가상 상대: 영역별 상위 비율(신체·정신·기능·사회·커리어·경제). 비교군이 바뀌면 같은 비율의 구체적인 숫자로 바뀐다
-const RIVALS = [
-  ["김평범", "또래 한가운데. 모든 영역이 딱 평균", [.5, .5, .5, .5, .5, .5]],
-  ["이성실", "회사·집을 성실하게 오가는 보통의 모범생", [.45, .45, .38, .48, .45, .45]],
-  ["박주말", "주말마다 산·자전거, 나머지는 평범", [.15, .45, .55, .5, .5, .5]],
-  ["최마당", "모임·가족 행사 빠짐없는 마당발", [.45, .35, .42, .15, .5, .45]],
-  ["정알뜰", "가계부 10년째, 저축률 40%", [.5, .4, .45, .5, .4, .15]],
-  ["한야근", "승진 1순위 일벌레, 몸과 마음은 뒷전", [.6, .6, .65, .55, .1, .22]],
-  ["윤아빠", "아이와 놀고 요리하는 집안의 중심", [.4, .3, .12, .3, .45, .4]],
-  ["서균형", "어느 하나 빠지지 않는 육각형 입문자", [.25, .25, .25, .25, .25, .25]],
-  ["강새벽", "새벽 러닝 10년, 마음도 단단", [.05, .12, .35, .3, .3, .3]],
-  ["오전문", "전문직·자산가, 바쁘지만 챙길 건 챙김", [.3, .3, .4, .3, .05, .04]],
-  ["배상위", "모든 영역 상위 10%", [.1, .1, .1, .1, .1, .1]],
-  ["남다름", "상위 3%의 육각형 인간", [.03, .04, .03, .04, .02, .02]],
-  ["끝판왕", "모든 영역 상위 1% — 대한민국 최상위", [.01, .01, .01, .01, .01, .01]]
-].map(([name, bio, p]) => ({name, bio, ps: Object.fromEntries(GOALS.map((g, i) => [g.k, p[i]])), c: null}))
- .map(r => ({...r, c: composite(r.ps)})).sort((a, b) => a.c.score - b.c.score);
+// 가상 상대 100명: 종합 50점(김평범)부터 86점(끝판왕)까지 고르게 오르는 사다리. 실존 인물이 아닌 가상 인물.
+// 상대마다 성향(강점·약점, 정규 점수 z로 더하고 뺌)을 하나씩 갖고, 목표 종합 점수에 맞게 전체 수준을 올린다 → 영역별 상위 %
+const RIVAL_N = 100, RIVAL_TOP = 86;
+const RIVAL_TYPES = [   // [성향, 한 줄, 영역별 기울기(신체·정신·기능·사회·커리어·경제)]
+  ["주말 러너", "운동이 강점, 집안일은 약점", [1.2, .2, -.6, 0, -.2, -.3]],
+  ["마당발", "모임·경조사 빠짐없음, 재테크는 약점", [-.2, .1, -.1, 1.3, .1, -.6]],
+  ["짠테크", "가계부·저축이 강점, 모임은 약점", [-.1, 0, .1, -.5, 0, 1.2]],
+  ["워커홀릭", "일이 강점, 몸과 마음은 약점", [-.6, -.6, -.5, -.2, 1.4, .6]],
+  ["가정의 중심", "요리·놀이·청소가 강점, 일은 보통", [0, .3, 1.3, .3, -.5, -.4]],
+  ["명상가", "흔들리지 않는 마음, 일은 느긋", [.2, 1.3, .1, .1, -.6, -.3]],
+  ["육각형", "어느 하나 빠지지 않음", [0, 0, 0, 0, 0, 0]],
+  ["자산가", "순자산·커리어가 강점, 운동은 약점", [-.6, -.1, -.4, -.1, .7, 1.4]],
+  ["철인", "운동과 멘탈이 강점, 사회생활은 약점", [1.2, .8, -.3, -.7, -.2, -.3]],
+  ["살림 고수", "집안일과 저축이 강점", [-.3, .1, 1.0, -.2, -.4, .8]],
+  ["인싸 직장인", "사람과 일이 강점, 집안일은 약점", [-.2, -.2, -.6, 1.0, .9, -.1]],
+  ["자기관리왕", "운동·멘탈·저축이 고루 강함, 집안일은 약점", [.7, .7, -.8, -.3, .1, .4]]];
+const RIVAL_TIERS = [[20, "브론즈"], [40, "실버"], [60, "골드"], [80, "플래티넘"], [95, "다이아"], [100, "마스터"]];
+const RIVALS = (() => {
+  const SUR = "김이박최정강조윤장임한오서신권황안송류홍전고문양손배백허유남심노하곽성차주우구민진나지엄채원천방공현함변염여추도소석선설마길연위표명기반왕금옥육인맹제모탁국어은편용예봉경".split("");
+  const G1 = "민서지하도예주시은현준윤수재태건우승가유채나다소한서진".split(""), G2 = "준윤호우원진혁훈성민현빈아은연린율희솔온결별한담".split("");
+  let seed = 20261115; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const sdc = Math.sqrt((1 + 5 * RHO) / 6), used = new Set(["김평범", "최끝판"]), out = [];
+  for (let i = 0; i < RIVAL_N; i++) {
+    let name, ps, type;
+    if (i === 0) { name = "김평범"; type = ["평균", "또래 한가운데, 모든 영역이 딱 평균", [0, 0, 0, 0, 0, 0]]; }
+    else if (i === RIVAL_N - 1) { name = "최끝판"; type = ["끝판왕", "모든 영역 상위 1% — 대한민국 최상위", [0, 0, 0, 0, 0, 0]]; }
+    else {
+      type = RIVAL_TYPES[(i * 7 + 3) % RIVAL_TYPES.length];
+      do { name = SUR[Math.floor(rnd() * SUR.length)] + G1[Math.floor(rnd() * G1.length)] + G2[Math.floor(rnd() * G2.length)]; }
+      while (used.has(name) || name[0] === name[1] || name[1] === name[2]);           // '윤윤윤'처럼 같은 글자가 이어지는 이름은 빼기
+      used.add(name);
+    }
+    const target = i === RIVAL_N - 1 ? null : 50 + (RIVAL_TOP - 50) * Math.pow(i / (RIVAL_N - 1), 1.15);     // 초반은 촘촘, 갈수록 넓게
+    if (target == null) ps = Object.fromEntries(GOALS.map(g => [g.k, .01]));
+    else {
+      const t = type[2], shrink = 1 - .5 * i / RIVAL_N;            // 위로 갈수록 약점이 줄어든다
+      const tm = t.reduce((a, b) => a + b, 0) / 6, c = (target - 50) / 10 * sdc - tm * shrink;
+      ps = Object.fromEntries(GOALS.map((g, k) => [g.k, Math.min(.97, Math.max(.0005, 1 - ncdf(c + t[k] * shrink)))]));
+    }
+    const lv = i + 1, tier = RIVAL_TIERS.find(([n]) => lv <= n)[1];
+    out.push({name, lv, tier, kind: type[0], bio: type[1], ps, c: composite(ps)});
+  }
+  return out.sort((a, b) => a.c.score - b.c.score).map((r, k) => ({...r, lv: k + 1, tier: RIVAL_TIERS.find(([n]) => k + 1 <= n)[1]}));
+})();
 // 상위 비율 p에 해당하는 구체적인 값(지금 비교군 기준)
 function bisect(f, lo, hi, target, logScale) {
   for (let i = 0; i < 60; i++) { const m = logScale ? Math.sqrt(lo * hi) : (lo + hi) / 2; if (f(m) > target) lo = m; else hi = m; }
@@ -1313,9 +1340,10 @@ function rivalCard(S) {
       return `<tr><td style="padding:3px 0">${g.icon} ${g.short}</td><td style="text-align:right">${m == null ? "기록 없음" : fmtTop(m)}</td>
         <td style="text-align:center">${m == null ? "·" : win ? "🟢" : "🔴"}</td><td style="text-align:right">${fmtTop(r)}<br><small class="muted">${esc(rivalValue(g.k, r, grp))}</small></td></tr>`; }).join("");
     const wins = GOALS.filter(g => mine[g.k] != null && mine[g.k] < next.ps[g.k]).length;
-    rival = `<div class="row" style="margin-top:12px"><b>🥊 다음 상대 · ${esc(next.name)}</b><span class="muted">${beaten.length}/${RIVALS.length}명 격파</span></div>
-      <div class="muted" style="font-size:13px">${esc(next.bio)} · 종합 ${next.c.score.toFixed(1)}점 (상위 ${fmtPct(next.c.top)})</div>
-      <div class="delta">${Math.max(.1, next.c.score - me.score).toFixed(1)}점 차 · 영역 대결 ${wins}승 ${6 - wins}패</div>
+    rival = `<div class="row" style="margin-top:12px"><b>🥊 Lv.${next.lv} ${esc(next.tier)} · ${esc(next.name)}</b><span class="muted">${beaten.length}/${RIVALS.length}명 격파</span></div>
+      <div class="muted" style="font-size:13px">${esc(next.kind)} · ${esc(next.bio)} · 종합 ${next.c.score.toFixed(1)}점 (상위 ${fmtPct(next.c.top)})</div>
+      <div class="bar1" style="margin-top:6px"><i style="width:${(beaten.length / RIVALS.length * 100).toFixed(1)}%"></i></div>
+      <div class="delta">${Math.max(.1, next.c.score - me.score).toFixed(1)}점 차 · 영역 대결 ${wins}승 ${GOALS.filter(g => mine[g.k] != null).length - wins}패${GOALS.some(g => mine[g.k] == null) ? ` · 기록 없음 ${GOALS.filter(g => mine[g.k] == null).length}` : ""}</div>
       <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;font-variant-numeric:tabular-nums">
         <tr class="muted"><th style="text-align:left;font-weight:400">영역</th><th style="text-align:right;font-weight:400">나</th><th></th><th style="text-align:right;font-weight:400">${esc(next.name)}</th></tr>${rows}</table>`;
   } else rival = `<div style="margin-top:12px"><b>🏆 모든 상대를 이겼어요!</b> <span class="muted">${RIVALS.length}명 격파</span></div>`;
@@ -1323,20 +1351,30 @@ function rivalCard(S) {
   return `<div class="card"><div class="row"><span class="label">종합 순위 · ${esc(cmpLabel(grp))}</span><button class="btn" type="button" data-g="rivals" style="padding:3px 10px;font-size:12px">상대 목록</button></div>
     <div class="big" style="font-size:24px">${fmtN(pop)}명 중 ${fmtN(rank)}등</div>
     <div class="delta">종합 표준점수 ${me.score.toFixed(1)}점 · 상위 ${fmtPct(me.top)} · 성인 전체 ${fmtN(POP.all.all)}명 중 ${fmtN(arank)}등</div>
-    ${last ? `<div class="muted" style="font-size:12px;margin-top:4px">최근에 이긴 상대: ${esc(last.name)}(${last.c.score.toFixed(1)}점)</div>` : ""}
+    ${last ? `<div class="muted" style="font-size:12px;margin-top:4px">최근에 이긴 상대: Lv.${last.lv} ${esc(last.name)}(${last.c.score.toFixed(1)}점)</div>` : ""}
     ${rival}</div>`;
 }
-function showRivals() {
-  const S = scoreAll(), {grp, me, beaten} = rivalState(S), won = new Map(byCat("rivalwin").map(x => [x.name, x.date]));
-  const rows = RIVALS.map(r => { const b = beaten.includes(r);
-    return `<div class="dday" style="display:block"><div class="row"><b>${b ? "✅" : "⬜"} ${esc(r.name)}</b><span class="muted">종합 ${r.c.score.toFixed(1)}점 · 상위 ${fmtPct(r.c.top)}</span></div>
-      <div class="muted" style="font-size:12px">${esc(r.bio)}${won.get(r.name) ? ` · ${esc(fmtDay(won.get(r.name)))} 처음 이김` : ""}</div>
-      <div style="font-size:12px;margin-top:2px">${GOALS.map(g => `${g.icon} ${esc(rivalValue(g.k, r.ps[g.k], grp))}`).join(" · ")}</div></div>`; }).join("");
+function rivalWinDates() {          // 'Lv:날짜,Lv:날짜' 한 줄(설정 시트 한 항목)
+  const it = byCat("rivalrec")[0], m = new Map();
+  ((it && it.f.log) || "").split(",").filter(Boolean).forEach(x => { const [k, d] = x.split(":"); m.set(+k, d); });
+  return {it, m};
+}
+let RIVAL_SHOW = 0;
+function showRivals(more) {
+  const S = scoreAll(), {grp, me, beaten, next} = rivalState(S), {m: won} = rivalWinDates();
+  if (!more) RIVAL_SHOW = Math.max(10, beaten.length + 10);
+  const cur = next ? next.lv : RIVALS.length, list = RIVALS.slice(0, Math.min(RIVALS.length, RIVAL_SHOW));
+  const rows = list.map(r => { const b = beaten.includes(r), isNext = next === r;
+    return `<div class="dday" style="display:block${isNext ? ";background:var(--chip);border-radius:8px;padding:8px" : ""}"><div class="row"><b>${b ? "✅" : isNext ? "🥊" : "⬜"} Lv.${r.lv} ${esc(r.name)}</b><span class="muted">${esc(r.tier)} · 종합 ${r.c.score.toFixed(1)}점 · 상위 ${fmtPct(r.c.top)}</span></div>
+      <div class="muted" style="font-size:12px">${esc(r.kind)} · ${esc(r.bio)}${won.get(r.lv) ? ` · ${esc(fmtDay(won.get(r.lv)))} 처음 이김` : ""}</div>
+      ${b || isNext || r.lv <= cur + 3 ? `<div style="font-size:12px;margin-top:2px">${GOALS.map(g => `${g.icon} ${esc(rivalValue(g.k, r.ps[g.k], grp))}`).join(" · ")}</div>` : ""}</div>`; }).join("");
   $("#form").innerHTML = `<div class="row"><h3 style="margin:0">가상 상대 ${RIVALS.length}명</h3><button class="btn" type="button" data-act="close">닫기</button></div>
-    <p class="muted" style="font-size:12px;line-height:1.6">비교군 ${esc(cmpLabel(grp))} 기준 숫자예요. 내 종합 표준점수 ${me.score.toFixed(1)}점.
-      종합 표준점수 = 여섯 영역 누적 상위 %를 정규 점수로 바꿔 평균한 뒤 영역 사이 상관(ρ=${RHO}, 추정)을 고려해 다시 표준화(평균 50, 표준편차 10). 기록이 없는 영역은 평균으로 둡니다.
-      순위 = 종합 상위 % × 인구. 인구: ${esc(POP_SRC)}. 상대는 실존 인물이 아닌 가상 인물이에요.</p>
-    <div class="card">${rows}</div>`;
+    <p class="muted" style="font-size:12px;line-height:1.6">${beaten.length}명 격파 · 내 종합 ${me.score.toFixed(1)}점 · 비교군 ${esc(cmpLabel(grp))} 기준 숫자.
+      단계: 브론즈(1~20) · 실버(21~40) · 골드(41~60) · 플래티넘(61~80) · 다이아(81~95) · 마스터(96~100). 아직 먼 상대의 숫자는 가까워지면 보여요.
+      종합 표준점수 = 여섯 영역 누적 상위 %를 정규 점수로 바꿔 평균한 뒤 영역 사이 상관(ρ=${RHO}, 추정)을 고려해 다시 표준화(평균 50, 표준편차 10). 기록이 없는 영역은 평균.
+      순위 = 종합 상위 % × 인구(${esc(POP_SRC)}). 상대는 모두 실존 인물이 아닌 가상 인물이에요.</p>
+    <div class="card">${rows}</div>
+    ${list.length < RIVALS.length ? `<button class="btn" type="button" data-g="rivalsmore" style="width:100%;margin-top:8px">다음 20명 보기 (${list.length}/${RIVALS.length})</button>` : ""}`;
   $("#form").dataset.mode = "rivals"; $("#sheet").hidden = false;
 }
 // 처음 이긴 날을 시트에 남겨 둔다(점수에는 들어가지 않음)
@@ -1344,10 +1382,13 @@ let rivalSaving = false;
 async function saveRivalWins(S) {
   if (rivalSaving) return 0; rivalSaving = true;
   try {
-    const have = new Set(byCat("rivalwin").map(x => x.name)), {beaten} = rivalState(S); let n = 0;
-    for (const r of beaten) if (!have.has(r.name)) { await api("saveItem", {category: "rivalwin", name: r.name, date: DATA.today, f: {score: Math.round(r.c.score * 10) / 10}}); n++; }
-    if (n) toast(`🥊 ${beaten[beaten.length - 1].name}을(를) 이겼어요!`);
-    return n;
+    const {it, m} = rivalWinDates(), {beaten} = rivalState(S), add = beaten.filter(r => !m.has(r.lv));
+    if (!add.length) return 0;
+    add.forEach(r => m.set(r.lv, DATA.today));
+    const log = [...m.entries()].sort((a, b) => a[0] - b[0]).map(([k, d]) => `${k}:${d}`).join(",");
+    await api("saveItem", {id: it ? it.id : "", category: "rivalrec", name: "가상 상대 격파 기록", date: DATA.today, f: {log, best: Math.max(...m.keys())}});
+    if (it) toast(`🥊 Lv.${add[add.length - 1].lv} ${add[add.length - 1].name}을(를) 이겼어요!`);
+    return 1;
   } finally { rivalSaving = false; }
 }
 
@@ -1644,6 +1685,7 @@ document.addEventListener("click", async e => {
   if (a === "bench") showBench();
   if (a === "cmp") showCmp();
   if (a === "rivals") showRivals();
+  if (a === "rivalsmore") { RIVAL_SHOW += 20; showRivals(true); }
   if (a === "cmpreset") saveCmp(true);
   if (a === "dellog") {
     const l = DATA.items.find(i => i.id === b.dataset.id); if (!l || !confirm(`'${l.name}' 기록을 지울까요?`)) return;
