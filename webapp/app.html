@@ -149,6 +149,11 @@ body.has-run #toast{bottom:auto;top:64px}body.has-run{padding-bottom:calc(76px +
 .mis:first-of-type{border-top:0}.mis .ck{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:13px;font-weight:900;border:2px solid var(--mute);flex:none}
 .mis.done .ck{background:#22c55e;border-color:#22c55e;color:#fff}.mis.done .mt{text-decoration:line-through;color:var(--sub)}
 .mis .flip{margin-left:auto;font-size:11px;font-weight:800;color:#f59e0b;border:1px solid #f59e0b;border-radius:99px;padding:1px 7px}
+.vs .taunt{margin-top:8px;font-size:13px;font-style:italic;opacity:.95}
+.bdg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}.bd{border:1px solid var(--line);border-radius:12px;padding:10px 6px;text-align:center;opacity:.55}
+.bd.on{opacity:1;border-color:#f59e0b;box-shadow:0 0 0 1px rgba(245,158,11,.35),0 6px 16px rgba(245,158,11,.15)}.bd .bi{font-size:26px}.bd b{display:block;font-size:12px}.bd small{display:block;font-size:10px;color:var(--sub)}
+.report summary{cursor:pointer;list-style:none}.report summary::-webkit-details-marker{display:none}
+.rgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.rgrid div{background:var(--chip);border-radius:10px;padding:8px;text-align:center}.rgrid small{display:block;font-size:11px;color:var(--sub)}.rgrid b{font-size:20px;font-variant-numeric:tabular-nums}
 #ko{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(2,6,23,.55)}#ko[hidden]{display:none}
 #ko .kc{width:270px;text-align:center;border-radius:20px;padding:18px;color:#fff;background:linear-gradient(135deg,#7c2d12,#b91c1c);box-shadow:0 20px 50px rgba(239,68,68,.5);animation:kopop .5s cubic-bezier(.2,1.6,.4,1)}
 #ko .kc b{display:block;font-size:40px;font-style:italic;font-weight:900;letter-spacing:-1px}
@@ -1576,6 +1581,7 @@ function renderGrowth() {
   const RS = rivalState(S);
   $("#gmain").innerHTML = `${vsHero(S, RS)}
     ${missionCard(RS)}
+    ${weeklyReport(S)}
     ${tierCard(S, RS)}
     <div class="card hero" style="margin-top:10px"><div class="row"><span class="label">인생 레벨</span><span class="muted">${fmtDay(S.start)}부터</span></div>
       <div class="big">Lv.${lv} <span style="font-size:18px;color:var(--sub)">${Math.round(S.total).toLocaleString("ko-KR")}점</span></div>
@@ -1608,7 +1614,7 @@ function renderGrowth() {
     ${feed ? `<h2>최근 얻은 점수</h2><div class="card">${feed}</div>` : ""}
     ${recent ? `<h2>최근 기록</h2><div class="list">${recent}</div>` : ""}`;
   floatGain(S);
-  persistMiles(S.start, false).then(async n => { n += await saveTopSnap(TA); n += await saveRivalWins(S); if (n) loadAssets(true); }).catch(() => {});
+  persistMiles(S.start, false).then(async n => { n += await saveTopSnap(TA); n += await saveRivalWins(S); n += await saveBadges(S, RS); if (n) loadAssets(true); }).catch(() => {});
 }
 
 // ---------------------------------------------------------------- 게임 화면(대결 · 티어 · 미션 · 연속 기록 · K.O.)
@@ -1644,9 +1650,95 @@ function vsHero(S, RS) {
     <div class="tug"><i style="width:${pos}%"></i><em style="left:${pos}%"></em></div>
     <div class="row" style="font-size:11px;opacity:.9"><span>영역 대결 <b>${wins}승 ${lost}패</b>${GOALS.some(g => mine[g.k] == null) ? ` · 기록 없음 ${GOALS.filter(g => mine[g.k] == null).length}` : ""}</span><span>종합 ${Math.max(.1, next.c.score - me.score).toFixed(1)}점 차</span></div>
     ${h ? `<div class="tip2">💡 ${h.g.icon} <b>${esc(h.g.label)}</b>${josa(h.g.label, "을", "를")} 상위 ${fmtPct(h.target)}로 올리면 역전! 상대 약점은 ${h.weak.icon} ${esc(h.weak.label)}</div>` : ""}
+    <div class="taunt">💬 “${esc(taunt(next, grp))}” <span style="opacity:.75">— ${esc(next.name)}</span></div>
     <details><summary>영역별 대결 자세히</summary><table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;font-variant-numeric:tabular-nums">
       <tr class="muted"><th style="text-align:left;font-weight:400">영역</th><th style="text-align:right;font-weight:400">나</th><th></th><th style="text-align:right;font-weight:400">${esc(next.name)}</th></tr>${rows}</table>
       <div class="muted" style="font-size:12px;margin-top:4px">${esc(next.bio)}</div></details></div>`;
+}
+// 상대의 도발 한마디: 상대가 가장 강한 영역의 실제 숫자로, 날마다 바뀐다
+const TAUNT = {
+  body: ["{v}. 몸이 먼저야.", "{v}는 기본이지. 너는?", "어제도 {v}였는데, 넌 쉬었지?"],
+  mind: ["{v}. 흔들릴 일이 없지.", "마음이 단단하면 {v}쯤은 나와.", "{v}. 조급하면 진다."],
+  craft: ["{v}은 기본이야.", "집안일도 실력이야. {v}.", "{v} — 손이 부지런해야지."],
+  social: ["{v}. 가족이 먼저야.", "{v}, 사람이 재산이지.", "가족한테 {v}는 해야지."],
+  career: ["{v}. 일은 결과로 말하지.", "{v} 받으려면 증명해야 돼.", "커리어는 {v}부터 시작이야."],
+  economy: ["{v}. 숫자가 말해 주지.", "{v} 모으는 게 쉬운 줄 알아?", "{v}. 복리는 기다려 주지 않아."]};
+function taunt(r, grp) {
+  const best = GOALS.slice().sort((a, b) => r.ps[a.k] - r.ps[b.k])[0], lines = TAUNT[best.k];
+  const seed = (DATA.today.replace(/-/g, "") * 1 + r.lv * 7) % lines.length;
+  return lines[seed].replace("{v}", rivalValue(best.k, r.ps[best.k], grp));
+}
+// ---------------------------------------------------------------- 업적 배지(한 번 얻으면 사라지지 않게 시트 한 항목에 날짜와 함께 기록)
+const BADGES = [
+  ["first", "🌱", "첫 기록", "아무 기록이나 처음 남김"], ["ko1", "🥊", "첫 격파", "가상 상대를 처음 이김"],
+  ["t1", "🥉", "브론즈", "Lv.1 상대 격파"], ["t21", "🥈", "실버", "Lv.21 상대 격파"], ["t41", "🥇", "골드", "Lv.41 상대 격파"],
+  ["t61", "💠", "플래티넘", "Lv.61 상대 격파"], ["t81", "💎", "다이아", "Lv.81 상대 격파"], ["t96", "👑", "마스터", "Lv.96 상대 격파"],
+  ["s7", "🔥", "7일 연속", "7일 연속 기록"], ["s30", "🔥", "30일 연속", "30일 연속 기록"], ["s100", "☄️", "100일 연속", "100일 연속 기록"],
+  ["habit", "🧼", "완벽한 하루", "씻기·양치·영양제를 하루에 모두 권장만큼"], ["fam7", "👪", "가족 주간", "한 주에 가족 관계 7회"],
+  ["run5", "🏃", "운동 주간", "한 주에 30분 이상 운동 5회"], ["craft600", "🍳", "살림꾼 주간", "한 주에 가사·돌봄 600분"],
+  ["c60", "📈", "종합 60점", "종합 표준점수 60점"], ["c70", "🚀", "종합 70점", "종합 표준점수 70점"], ["c80", "🌟", "종합 80점", "종합 표준점수 80점"],
+  ["lv5", "⭐", "레벨 5", "인생 레벨 5"], ["lv10", "🌠", "레벨 10", "인생 레벨 10"],
+  ...GOALS.map(g => ["top_" + g.k, g.icon, `${g.label} 상위 10%`, `${g.label} 누적 상위 10% 진입`])];
+function badgeDates() { const it = byCat("badgerec")[0], m = new Map(); ((it && it.f.log) || "").split(",").filter(Boolean).forEach(x => { const [k, d] = x.split(":"); m.set(k, d); }); return m; }
+function earnedNow(S, RS) {
+  const logs = gLogs(), e = new Set();
+  if (logs.length) e.add("first");
+  const best = RS.beaten.length;
+  if (best >= 1) e.add("ko1");
+  [1, 21, 41, 61, 81, 96].forEach(n => { if (best >= n) e.add("t" + n); });
+  const days = [...new Set(logs.map(l => l.date))].sort(); let run = 0, mx = 0;
+  days.forEach((k, i) => { run = i && addDays(days[i - 1], 1) === k ? run + 1 : 1; mx = Math.max(mx, run); });
+  [7, 30, 100].forEach(n => { if (mx >= n) e.add("s" + n); });
+  const hab = {}; logs.filter(l => l.f.type === "habit").forEach(l => { const k = l.date + "|" + l.f.field; hab[k] = (hab[k] || 0) + (num(l.f.count) || 1); });
+  if (days.some(d => HABITS.every(([f, , rec]) => (hab[d + "|" + f] || 0) >= rec))) e.add("habit");
+  S.weeks.forEach(({ws}) => { const we = addDays(ws, 6), inW = logs.filter(l => l.date >= ws && l.date <= we);
+    if (inW.filter(l => l.f.goal === "social" && FAMILY_TYPES.includes(l.f.type)).length >= 7) e.add("fam7");
+    if (inW.filter(l => l.f.type === "exercise" && (num(l.f.minutes) || 30) >= 30).length >= 5) e.add("run5");
+    if (inW.filter(l => l.f.goal === "craft" && l.f.type === "time").reduce((a, l) => a + (l.f.field === "recycle" ? (num(l.f.count) || 1) * RECYCLE_MIN : (num(l.f.minutes) || 0)), 0) >= 600) e.add("craft600"); });
+  [60, 70, 80].forEach(n => { if (RS.me.score >= n) e.add("c" + n); });
+  const lv = levelOf(S.total); if (lv >= 5) e.add("lv5"); if (lv >= 10) e.add("lv10");
+  GOALS.forEach(g => { if (RS.mine[g.k] != null && RS.mine[g.k] <= .1) e.add("top_" + g.k); });
+  return e;
+}
+let badgeSaving = false;
+async function saveBadges(S, RS) {
+  if (badgeSaving) return 0; badgeSaving = true;
+  try {
+    const m = badgeDates(), it = byCat("badgerec")[0], add = [...earnedNow(S, RS)].filter(k => !m.has(k));
+    if (!add.length) return 0;
+    add.forEach(k => m.set(k, DATA.today));
+    await api("saveItem", {id: it ? it.id : "", category: "badgerec", name: "업적 배지 기록", date: DATA.today, f: {log: [...m.entries()].map(([k, d]) => `${k}:${d}`).join(",")}});
+    if (it) { const b = BADGES.find(x => x[0] === add[add.length - 1]); toast(`🏅 배지 획득: ${b[1]} ${b[2]}${add.length > 1 ? ` 외 ${add.length - 1}개` : ""}`); }
+    return 1;
+  } finally { badgeSaving = false; }
+}
+function showBadges() {
+  const m = badgeDates(), got = BADGES.filter(b => m.has(b[0])).length;
+  $("#form").innerHTML = `<div class="row"><h3 style="margin:0">🏅 배지 도감 ${got}/${BADGES.length}</h3><button class="btn" type="button" data-act="close">닫기</button></div>
+    <p class="muted" style="font-size:12px">한 번 얻은 배지는 사라지지 않아요. 점수와는 별개예요.</p>
+    <div class="bdg">${BADGES.map(([k, ic, nm, how]) => { const d = m.get(k);
+      return `<div class="bd${d ? " on" : ""}"><div class="bi">${d ? ic : "🔒"}</div><b>${esc(nm)}</b><small>${esc(d ? fmtDay(d) + " 획득" : how)}</small></div>`; }).join("")}</div>`;
+  $("#form").dataset.mode = "badges"; $("#sheet").hidden = false;
+}
+// ---------------------------------------------------------------- 지난주 리포트(일·월·화요일에는 펼쳐서)
+function weeklyReport(S) {
+  const ws = addDays(weekStart(DATA.today), -7), we = addDays(ws, 6);
+  if (ws < weekStart(S.start)) return "";
+  const W = S.weeks.find(x => x.ws === ws); if (!W) return "";
+  const byG = Object.fromEntries(GOALS.map(g => [g.k, W.w[g.k].pts || 0]));
+  S.events.filter(e => !e.week && e.date >= ws && e.date <= we).forEach(e => { byG[e.goal] += e.pts; });
+  const total = Object.values(byG).reduce((a, b) => a + b, 0), mvp = GOALS.slice().sort((a, b) => byG[b.k] - byG[a.k])[0];
+  const logs = gLogs().filter(l => l.date >= ws && l.date <= we), days = new Set(logs.map(l => l.date)).size;
+  const won = [...rivalWinDates().m.entries()].filter(([, d]) => d >= ws && d <= we).map(([k]) => k).sort((a, b) => a - b);
+  const snaps = topSnaps(), a = snaps.find(x => x.date === ws), b = snaps.find(x => x.date === addDays(ws, 7));
+  let grow = null; if (a && b) GOALS.forEach(g => { const d = (num(a.f[g.k]) || 1) - (num(b.f[g.k]) || 1); if (d > 0 && (!grow || d > grow.d)) grow = {g, d}; });
+  const open = [0, 1, 2].includes(parseDay(DATA.today).getDay()) ? " open" : "";      // 일·월·화요일에는 펼쳐 둔다
+  return `<details class="card report"${open} style="margin-top:10px"><summary><b>📊 지난주 리포트</b> <span class="muted">${fmtDay(ws).slice(5)} ~ ${fmtDay(we).slice(5)}</span></summary>
+    <div class="rgrid"><div><small>얻은 점수</small><b>+${Math.round(total)}</b></div><div><small>기록한 날</small><b>${days}/7일</b></div><div><small>이긴 상대</small><b>${won.length}명</b></div></div>
+    <div style="font-size:14px;margin-top:8px">🏆 MVP 영역: <b style="color:var(--g-${mvp.k})">${mvp.icon} ${esc(mvp.label)}</b> +${Math.round(byG[mvp.k])}점</div>
+    ${grow ? `<div style="font-size:14px">📈 가장 성장: <b style="color:var(--g-${grow.g.k})">${grow.g.icon} ${esc(grow.g.label)}</b> 상위 %가 ${Math.round(grow.d * 100)}%p 좋아짐</div>` : ""}
+    ${won.length ? `<div style="font-size:14px">🥊 격파: ${won.map(k => esc(RIVALS[k - 1] ? RIVALS[k - 1].name : "Lv." + k)).slice(-5).join(", ")}${won.length > 5 ? " 외" : ""}</div>` : ""}
+    <div class="muted" style="font-size:12px;margin-top:4px">${days >= 5 ? "꾸준했어요! 이번 주도 이어 가요." : "이번 주는 기록한 날을 하루라도 늘려 봐요."}</div></details>`;
 }
 // 지난주 기록(topsnap)으로 계산한 순위와 비교
 function rankDelta(me, pop) {
@@ -1674,7 +1766,8 @@ function tierCard(S, RS) {
     <div style="min-width:0"><div class="label">현재 티어 · ${esc(cmpLabel(grp))}</div><div class="tb">${esc(tier)}</div>
       <div style="font-size:13px">${nextTier ? `${esc(nextTier[1])}까지 <b>${ti < 0 ? 1 : RIVAL_TIERS[ti][0] + 1 - lv}명</b> · 진행 ${Math.round(Math.min(1, prog) * 100)}%` : "최고 티어"}</div>
       <div style="font-size:13px;margin-top:2px">${fmtN(pop)}명 중 <b>${fmtN(rank)}등</b>${rankDelta(me, pop)}</div>
-      <div class="muted" style="font-size:12px">종합 ${me.score.toFixed(1)} / 100점 · 성인 전체 ${fmtN(arank)}등</div></div></div></div>`;
+      <div class="muted" style="font-size:12px">종합 ${me.score.toFixed(1)} / 100점 · 성인 전체 ${fmtN(arank)}등</div></div></div>
+    <button type="button" class="btn" data-g="badges" style="width:100%;margin-top:10px">🏅 배지 도감 ${badgeDates().size}/${BADGES.length}</button></div>`;
 }
 // 오늘의 미션 3개: 역전 길잡이 영역 1개 + 양치 + 다른 영역 1개 — 오늘 기록으로 자동 체크(점수와 무관한 동기 장치)
 function missionCard(RS) {
@@ -1896,6 +1989,7 @@ document.addEventListener("click", async e => {
   if (a === "detail") showGoalDetail(b.dataset.goal);
   if (a === "tabtimer") showTab("timer");
   if (a === "day") showDay(b.dataset.d);
+  if (a === "badges") showBadges();
   if (a === "bench") showBench();
   if (a === "cmp") showCmp();
   if (a === "rivals") showRivals();
