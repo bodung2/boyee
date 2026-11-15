@@ -1139,6 +1139,66 @@ function cmpBench(goal) {
   if (goal === "career") return {...base, wageMedian: 305e4 * CMP.wage[g.sex][g.age] / CMP.wage.all.all};
   return base;
 }
+// 비교군 평균과 내 값(시작일부터의 평균) — 영역 상세에 보여 준다
+const won0 = v => v >= 1e8 ? (Math.round(v / 1e7) / 10) + "억 원" : Math.round(v / 1e4).toLocaleString("ko-KR") + "만 원";
+function bodyMedian(Sv) {            // 주당 횟수의 중앙값(생존 곡선이 0.5가 되는 지점, 로그 보간)
+  if (Sv[1] < .5) return .5 / (1 - Sv[1]);          // 1회 미만 구간: bodyShare와 같은 직선
+  for (let n = 1; n < 7; n++) if (Sv[n + 1] < .5) return n + Math.log(.5 / Sv[n]) / Math.log(Sv[n + 1] / Sv[n]);
+  return 7;
+}
+function cmpAvgRows(goal, start) {
+  const grp = cmpGroup(goal), B = cmpBench(goal), logs = gLogs().filter(l => l.date >= start && l.date <= DATA.today);
+  const days = Math.max(7, Math.round((parseDay(DATA.today) - parseDay(start)) / 864e5) + 1);
+  const mine = (types, g) => logs.filter(l => l.f.goal === g && types.includes(l.f.type))
+    .reduce((a, l) => a + (l.f.field === "recycle" ? (num(l.f.count) || 1) * RECYCLE_MIN : (num(l.f.minutes) || 0)), 0) / days;
+  const r = [];
+  if (goal === "body") {
+    const per = {}; logs.filter(l => l.f.goal === "body" && l.f.type === "exercise" && (num(l.f.minutes) || 30) >= 30).forEach(l => { per[l.date] = Math.min(2, (per[l.date] || 0) + 1); });
+    const n = Object.values(per).reduce((a, b) => a + b, 0) * 7 / days;
+    r.push(["주 1회 이상 운동하는 비율", Math.round(B.survival[1] * 100) + "%", n >= 1 ? "해당" : "해당 안 됨"]);
+    r.push(["30분 이상 운동(주당, 중앙값)", `주 ${bodyMedian(B.survival).toFixed(1)}회`, `주 ${n.toFixed(1)}회`]);
+  }
+  if (goal === "craft") r.push(["가사·돌봄(하루 평균)", `${Math.round(B.mean)}분`, `${Math.round(mine(["time"], "craft"))}분`]);
+  if (goal === "social") r.push(["교류·나눔(하루 평균)", `${Math.round(B.mean)}분`, `${Math.round(mine(["together", "volunteer"], "social"))}분`]);
+  if (goal === "mind") {
+    const ps = logs.filter(l => l.f.type === "pss").map(l => num(l.f.score)).filter(v => v != null);
+    r.push(["스트레스 점검(PSS-10, 낮을수록 좋음)", `${B.mean.toFixed(1)}점`, ps.length ? `${(ps.reduce((a, b) => a + b, 0) / ps.length).toFixed(1)}점` : "점검 없음"]);
+  }
+  if (goal === "career") {
+    const now = byCat("positions").filter(i => !(i.f || {}).end).map(i => num(i.f.salary)).filter(v => v > 0);
+    r.push(["월평균 보수", won0(CMP.wage[grp.sex][grp.age] * 1e4), now.length ? won0(Math.max(...now) / 12) : "연봉 기록 없음"]);
+    r.push(["월 보수 중앙값(추정)", won0(B.wageMedian), ""]);
+  }
+  if (goal === "economy") {
+    r.push(["순자산 중앙값(가구)", won0(CMP.netMedian[grp.age] * 1e4), DATA.totals && isFinite(DATA.totals.net) ? won0(DATA.totals.net) : ""]);
+    const sav = logs.filter(l => l.f.type === "saving" && num(l.f.income) > 0).map(l => (num(l.f.saving) || 0) / num(l.f.income));
+    r.push(["월 저축률(전체 가구)", Math.round(BENCH.economy.mean * 100) + "%", sav.length ? Math.round(sav.reduce((a, b) => a + b, 0) / sav.length * 100) + "%" : "기록 없음"]);
+  }
+  return r;
+}
+function cmpAvgCard(goal, start) {
+  const rows = cmpAvgRows(goal, start); if (!rows.length) return "";
+  const grp = cmpGroup(goal), noSex = ["body", "economy"].includes(goal);
+  const lab = noSex ? `${Object.fromEntries(CMP_AGE)[grp.age]} (성별 구분 없는 자료)` : cmpLabel(grp);
+  return `<div class="card"><div class="row"><b>비교군 평균 · ${esc(lab)}</b><button class="btn" type="button" data-g="cmp" style="padding:3px 10px;font-size:12px">바꾸기</button></div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;font-variant-numeric:tabular-nums">
+      <tr class="muted"><th style="text-align:left;font-weight:400;padding:3px 0">지표</th><th style="text-align:right;font-weight:400">비교군</th><th style="text-align:right;font-weight:400">나(시작일부터)</th></tr>
+      ${rows.map(([l, a, m]) => `<tr><td style="padding:4px 0">${esc(l)}</td><td style="text-align:right"><b>${esc(a)}</b></td><td style="text-align:right">${esc(m)}</td></tr>`).join("")}</table></div>`;
+}
+// 비교군 고르기 화면: 영역마다 수치가 가장 높은(정신은 스트레스가 가장 낮은) 성별·나이대
+function cmpTop(goal) {
+  const SX = ["m", "f"], AG = ["20", "30", "40", "50", "60"], lab = (sx, ag) => cmpLabel({sex: sx, age: ag});
+  let best = null;
+  const consider = (val, sx, ag, txt, lower) => { if (!best || (lower ? val < best.v : val > best.v)) best = {v: val, l: lab(sx, ag), t: txt}; };
+  if (goal === "craft" || goal === "social") SX.forEach(sx => AG.forEach(ag => consider(CMP[goal][sx][ag], sx, ag, `하루 ${CMP[goal][sx][ag]}분`)));
+  if (goal === "body") AG.forEach(ag => consider(CMP.bodyS1[ag], "all", ag, `주 1회 이상 ${Math.round(CMP.bodyS1[ag] * 1000) / 10}%`));
+  if (goal === "mind") SX.forEach(sx => AG.forEach(ag => { const m = (CMP.pssSex[sx][0] + CMP.pssAge[ag][0]) / 2; consider(m, sx, ag, `평균 ${m.toFixed(1)}점`, true); }));
+  if (goal === "career") SX.forEach(sx => AG.forEach(ag => consider(CMP.wage[sx][ag], sx, ag, `월 ${CMP.wage[sx][ag]}만 원`)));
+  if (goal === "economy") AG.forEach(ag => consider(CMP.netMedian[ag], "all", ag, `순자산 중앙값 ${won0(CMP.netMedian[ag] * 1e4)}`));
+  if (!best) return "";
+  const who = ["body", "economy"].includes(goal) ? best.l.replace(/^남녀 전체·/, "") + "(성별 자료 없음)" : best.l;
+  return `${goal === "mind" ? "스트레스가 가장 낮은 군" : "가장 높은 군"}: ${who} · ${best.t}`;
+}
 function cmpSame() { const k = GOALS.map(g => cmpLabel(cmpGroup(g.k))); return k.every(x => x === k[0]) ? k[0] : ""; }
 function showCmp() {
   const f = (gSetting() || {}).f || {}, glob = (f.cmp || `${CMP_BASE.sex}|${CMP_BASE.age}`).split("|");
@@ -1148,7 +1208,7 @@ function showCmp() {
     <div class="f"><label>모든 영역</label><div class="row" style="flex-wrap:nowrap">${sel("sex", CMP_SEX, glob[0])}${sel("age", CMP_AGE, glob[1])}</div></div>
     <h3 style="margin-top:14px">영역마다 따로 <span class="muted" style="font-size:12px;font-weight:400">비워 두면 위 설정을 따라요</span></h3>
     ${GOALS.map(g => { const o = (f["cmp_" + g.k] || "").split("|");
-      return `<div class="f"><label>${g.icon} ${g.label}</label><div class="row" style="flex-wrap:nowrap">${sel("s_" + g.k, [["", "위와 같게"], ...CMP_SEX], o[0] || "")}${sel("a_" + g.k, [["", "위와 같게"], ...CMP_AGE], o[1] || "")}</div></div>`; }).join("")}
+      return `<div class="f"><label>${g.icon} ${g.label}</label><small style="display:block;margin:-2px 0 4px;color:var(--accent)">🏆 ${esc(cmpTop(g.k))}</small><div class="row" style="flex-wrap:nowrap">${sel("s_" + g.k, [["", "위와 같게"], ...CMP_SEX], o[0] || "")}${sel("a_" + g.k, [["", "위와 같게"], ...CMP_AGE], o[1] || "")}</div></div>`; }).join("")}
     <p class="muted" style="font-size:12px">근거: ${esc(CMP_SRC)}. 성별 자료가 없는 운동 참여율·순자산은 연령만, 저축률·직업 지위·고용 안정성은 전체 기준을 써요.</p>
     <div class="row"><button class="btn" type="button" data-g="cmpreset">기본으로</button>
       <div class="row"><button class="btn" type="button" data-act="close">취소</button><button class="btn primary" type="submit">저장</button></div></div>`;
@@ -1420,6 +1480,7 @@ function showGoalDetail(goal) {
       <span>📈 흐름 <b>${Math.round(flowPts)}</b><small>매주 쌓은 것</small></span><span>🏆 돌파 <b>${Math.round(milePts)}</b><small>업적</small></span></div>
     <div class="card"><b>누적 상위 % · ${T.any ? fmtTop(T.p) : "기록 없음"}</b>
       ${T.parts && T.parts.length ? `<div class="muted" style="font-size:13px;margin-top:4px">${T.parts.map(x => `${esc(x.label)} ${fmtPct(x.p)}`).join(" · ")}</div>` : ""}</div>
+    ${cmpAvgCard(goal, S.start)}
     <div class="row" style="margin-top:12px"><h3 style="margin:0">점수 내역 <span class="muted" style="font-size:13px;font-weight:400">${ev.length}건</span></h3>
       <button class="btn primary" type="button" data-g="log" data-goal="${goal}">＋ 기록</button></div>
     <div class="card">${evRows || '<p class="muted">아직 점수가 없어요.</p>'}</div>
