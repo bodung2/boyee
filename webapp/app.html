@@ -749,8 +749,9 @@ const MILES = {
     src: "운영 중인 파이프라인 월수입 합계 구간 — 부업 참가율 1.95%(2022, 임금 부업 한정)를 참고한 추정 구간", level: "추정"},
   home: {title: "첫 내 집 마련", p: .36, src: "주택소유통계 2024(국가데이터처, 2025.11 발표): 30대 주택 소유율 36%", level: "공식(30대)"},
   marriage: {title: "결혼(배우자 있음)", p: .356, src: "2025 인구주택총조사(등록센서스) 표 5 성·연령·혼인상태별 인구: 30~39세 남자 중 배우자 있음 35.6%(30~34세 24.0% · 35~39세 48.9%)", level: "공식(30대 남자)"},
-  child: {title: "자녀(태어난 순서)", p: {1: .249, 2: .125, 3: .014}, r: {1: .70, 2: .35, 3: .04},
-    src: "자녀는 결혼 다음 단계로 셈: 배우자 있는 사람(30대 남자 35.6%, 2025 인구주택총조사) 중 자녀 1명 이상 70%·2명 이상 35%·3명 이상 4%로 추정(신혼부부 무자녀 47.5%, 합계출산율 0.75 참고) → 30대 남자 중 24.9%·12.5%·1.4%. 공식 분포 확인 필요", level: "공식(결혼) × 추정(자녀 비율)"},
+  child: {title: "자녀(태어난 순서)", p: {1: .284, 2: .155, 3: .025}, r: {1: .797, 2: .434, 3: .070},
+    src: "자녀는 결혼 다음 단계: 배우자 있는 비율(30대 남자 35.6%, 2025 인구주택총조사) × 2020 인구주택총조사(표본) 표 4 기혼여성 연령별 출생아 수 — 30~39세 기혼여성 중 자녀 1명 이상 79.7%·2명 이상 43.4%·3명 이상 7.0% → 30대 남자 중 28.4%·15.5%·2.5%. 남자는 같은 나이대 기혼여성 분포로 근사",
+    level: "공식(2025 결혼 × 2020 출생아 수)"},
   pipeIncome: {title: "파이프라인 누적 수익 돌파(파이프라인별)", bands: [[1e4, .15], [1e5, .10], [1e6, .04], [1e7, .01], [1e8, .001]],
     src: "수익 기록을 더한 누적 금액 기준. 첫 수익(1만 원)부터 1억 원까지 — 부업 참가율 1.95%(2022, 임금 부업 한정)를 참고한 추정 구간", level: "추정"},
   income: {title: "저작물 누적 수익 돌파(작품별)", bands: [[1e5, .2], [1e6, .05], [1e7, .01], [1e8, .001]], src: "추정", level: "추정"},
@@ -1111,6 +1112,9 @@ const CMP = {
   // 생활시간조사 2024 통계표 2-1(연령별-성별)·2-2(성인): 하루 평균 분
   craft: {m: {20: 39, 30: 76, 40: 68, 50: 54, 60: 69, all: 62}, f: {20: 71, 30: 211, 40: 222, 50: 183, 60: 185, all: 179},
     all: {20: 55, 30: 140, 40: 144, 50: 118, 60: 132, all: 122}},
+  // 2020 인구주택총조사(표본) 표 4: 기혼여성 연령별 출생아 수 → 기혼자 중 자녀 1명·2명·3명 이상 비율(성별은 같은 나이대 기혼여성으로 근사)
+  childR: {20: {1: .529, 2: .168, 3: .019}, 30: {1: .797, 2: .434, 3: .070}, 40: {1: .925, 2: .676, 3: .120}, 50: {1: .951, 2: .776, 3: .127},
+    60: {1: .951, 2: .856, 3: .472}, all: {1: .916, 2: .727, 3: .251}},
   // 2025 인구주택총조사 표 5: 배우자 있는 비율(성·연령별, 20세 이상 내국인)
   married: {m: {20: .028, 30: .356, 40: .661, 50: .724, 60: .802, all: .582}, f: {20: .06, 30: .509, 40: .756, 50: .771, 60: .568, all: .568},
     all: {20: .043, 30: .428, 40: .707, 50: .748, 60: .676, all: .575}},
@@ -1139,7 +1143,7 @@ const cmpLabel = g => `${Object.fromEntries(CMP_SEX)[g.sex]}·${Object.fromEntri
 function cmpBench(goal) {
   const g = cmpGroup(goal), base = BENCH[goal] || {};
   if (goal === "craft") return {...base, mean: CMP.craft[g.sex][g.age]};
-  if (goal === "social") return {...base, married: CMP.married[g.sex][g.age]};
+  if (goal === "social") return {...base, married: CMP.married[g.sex][g.age], childR: CMP.childR[g.age]};
   if (goal === "body") { const k = CMP.bodyS1[g.age] / CMP.bodyS1[30], S = {};
     Object.entries(BENCH.body.survival).forEach(([n, v]) => { S[n] = Math.min(.99, v * k); }); return {...base, survival: S}; }
   if (goal === "mind") { if (g.sex === "m" && g.age === "30") return base;
@@ -1464,8 +1468,8 @@ function cumulativeShares(pace) {
       // 가족 형성은 한 단계 사다리(결혼 → 자녀 1명 → 2명 → 3명 이상): 가장 높은 단계 하나만 — 자녀가 결혼을 깎지 않게
       const wed = people.some(i => /배우자|아내|남편|부인/.test(i.f.relation || ""));
       const kids = people.filter(i => /자녀|아들|딸|첫째|둘째|셋째|넷째|막내/.test(i.f.relation || "")).length;
-      const m = cmpBench("social").married;
-      if (kids) extra(m * MILES.child.r[Math.min(kids, 3)], `가족 형성(${wed ? "결혼·" : ""}자녀 ${kids}명)`);
+      const SB = cmpBench("social"), m = SB.married;
+      if (kids) extra(m * SB.childR[Math.min(kids, 3)], `가족 형성(${wed ? "결혼·" : ""}자녀 ${kids}명)`);
       else if (wed) extra(m, "가족 형성(결혼)");
     }
     if (g.k === "career") {
