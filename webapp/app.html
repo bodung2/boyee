@@ -1257,10 +1257,12 @@ function probit(p) {                   // 표준정규 누적분포의 역함수
   return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
 }
 // 영역별 상위 비율(p, 기록 없으면 null) → 종합
+// 만점 100·최저 0이 딱 떨어지게, 한 영역의 정규 점수는 ±Z_CAP(≈3.23, 상위 약 0.06%)에서 멈춘다 → 여섯 영역 모두 그 끝이면 50 ± 50
+const Z_SD = Math.sqrt((1 + 5 * RHO) / 6), Z_CAP = 5 * Z_SD;
 function composite(ps) {
-  const z = GOALS.map(g => ps[g.k] == null ? 0 : probit(1 - Math.min(.999, Math.max(.001, ps[g.k]))));
-  const zc = z.reduce((a, b) => a + b, 0) / 6 / Math.sqrt((1 + 5 * RHO) / 6);
-  return {z: zc, score: 50 + 10 * zc, top: 1 - ncdf(zc)};
+  const z = GOALS.map(g => ps[g.k] == null ? 0 : Math.max(-Z_CAP, Math.min(Z_CAP, probit(1 - Math.min(1 - 1e-6, Math.max(1e-6, ps[g.k]))))));
+  const zc = z.reduce((a, b) => a + b, 0) / 6 / Z_SD;
+  return {z: zc, score: Math.max(0, Math.min(100, 50 + 10 * zc)), top: 1 - ncdf(zc)};
 }
 function globalGroup() { const f = (gSetting() || {}).f || {}, g = (f.cmp || "").split("|"); return {sex: g[0] || CMP_BASE.sex, age: g[1] || CMP_BASE.age}; }
 // 비교군 하나로 맞춘 나의 영역별 누적 상위 %
@@ -1360,7 +1362,7 @@ function rivalCard(S) {
   const last = beaten[beaten.length - 1];
   return `<div class="card"><div class="row"><span class="label">종합 순위 · ${esc(cmpLabel(grp))}</span><button class="btn" type="button" data-g="rivals" style="padding:3px 10px;font-size:12px">상대 목록</button></div>
     <div class="big" style="font-size:24px">${fmtN(pop)}명 중 ${fmtN(rank)}등</div>
-    <div class="delta">종합 표준점수 ${me.score.toFixed(1)}점 · 상위 ${fmtPct(me.top)} · 성인 전체 ${fmtN(POP.all.all)}명 중 ${fmtN(arank)}등</div>
+    <div class="delta">종합 표준점수 ${me.score.toFixed(1)} / 100점 · 상위 ${fmtPct(me.top)} · 성인 전체 ${fmtN(POP.all.all)}명 중 ${fmtN(arank)}등</div>
     ${last ? `<div class="muted" style="font-size:12px;margin-top:4px">최근에 이긴 상대: Lv.${last.lv} ${esc(last.name)}(${last.c.score.toFixed(1)}점)</div>` : ""}
     ${rival}</div>`;
 }
@@ -1381,7 +1383,7 @@ function showRivals(more) {
   $("#form").innerHTML = `<div class="row"><h3 style="margin:0">가상 상대 ${RIVALS.length}명</h3><button class="btn" type="button" data-act="close">닫기</button></div>
     <p class="muted" style="font-size:12px;line-height:1.6">${beaten.length}명 격파 · 내 종합 ${me.score.toFixed(1)}점 · 비교군 ${esc(cmpLabel(grp))} 기준 숫자.
       단계: 브론즈(1~20) · 실버(21~40) · 골드(41~60) · 플래티넘(61~80) · 다이아(81~95) · 마스터(96~100). 아직 먼 상대의 숫자는 가까워지면 보여요.
-      종합 표준점수 = 여섯 영역 누적 상위 %를 정규 점수로 바꿔 평균한 뒤 영역 사이 상관(ρ=${RHO}, 추정)을 고려해 다시 표준화(평균 50, 표준편차 10). 기록이 없는 영역은 평균.
+      종합 표준점수 = 여섯 영역 누적 상위 %를 정규 점수로 바꿔 평균한 뒤 영역 사이 상관(ρ=${RHO}, 추정)을 고려해 다시 표준화(평균 50, 표준편차 10). 여섯 영역 가중치는 같고(각 1/6), 한 영역은 상위 약 0.06%에서 더 오르지 않아 만점 100점·최저 0점. 기록이 없는 영역은 평균.
       순위 = 종합 상위 % × 인구(${esc(POP_SRC)}). 상대는 모두 실존 인물이 아닌 가상 인물이에요.</p>
     <div class="card">${rows}</div>
     ${list.length < RIVALS.length ? `<button class="btn" type="button" data-g="rivalsmore" style="width:100%;margin-top:8px">다음 20명 보기 (${list.length}/${RIVALS.length})</button>` : ""}`;
