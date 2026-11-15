@@ -6,23 +6,35 @@
 <title>인생 대시보드</title>
 <!-- 인생 대시보드 화면(구글 Apps Script 웹앱). 집 PC가 이 파일을 드라이브의 life_dashboard_app.html로 올리고,
      webapp/Code.gs의 doGet이 그 파일을 보여 준다. 데이터는 google.script.run으로 Code.gs의 함수를 불러 주고받는다. -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script>
+// 화면 모드: dark(기본) · light · auto(기기 설정). 이 기기에만 기억한다
+(function () { let m = "dark"; try { m = localStorage.getItem("theme") || "dark"; } catch (e) {}
+  const dark = m === "auto" ? matchMedia("(prefers-color-scheme: dark)").matches : m === "dark";
+  document.documentElement.dataset.theme = dark ? "dark" : "light"; })();
+</script>
 <style>
-:root{--bg:#f6f5f2;--card:#fff;--ink:#1d1d1f;--sub:#6b6b70;--mute:#9a9aa0;--line:#e4e2dd;--accent:#2a78d6;
---up:#c62f2f;--down:#2361c4;--warn:#a86400;--warn-bg:#fdf0d8;--chip:#efeeea;
---s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--s6:#008300}
-@media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1e1e21;--ink:#f1f1f3;--sub:#a1a1a8;--mute:#77777e;
---line:#2e2e33;--accent:#3987e5;--up:#ff7a6e;--down:#7aa8ff;--warn:#f0b04d;--warn-bg:#3a2c12;--chip:#26262a;
---s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#008300}}
+:root{--bg:#f4f6fb;--card:#fff;--cardbg:#fff;--ink:#111827;--sub:#6b7280;--mute:#9ca3af;--line:#e7e9f0;--accent:#4f46e5;
+--up:#dc2626;--down:#2563eb;--warn:#a86400;--warn-bg:#fdf0d8;--chip:#eef0f6;--shadow:0 6px 20px rgba(17,24,39,.06);
+--s1:#4f46e5;--s2:#ea580c;--s3:#059669;--s4:#d97706;--s5:#db2777;--s6:#16a34a;
+--hero:linear-gradient(135deg,#2563eb,#7c3aed);--tabon:#fff;--tabsh:0 2px 8px rgba(0,0,0,.08);
+--g-body:#ea580c;--g-mind:#7c3aed;--g-craft:#db2777;--g-social:#059669;--g-career:#2563eb;--g-economy:#d97706}
+:root[data-theme=dark]{--bg:#070b18;--card:#0f172a;--cardbg:linear-gradient(160deg,#0f172a,#111827);--ink:#e5e7eb;--sub:#94a3b8;--mute:#64748b;
+--line:rgba(148,163,184,.16);--accent:#6366f1;--up:#f87171;--down:#60a5fa;--warn:#fbbf24;--warn-bg:#3a2c12;--chip:#1e293b;--shadow:0 10px 30px rgba(0,0,0,.35);
+--s1:#22d3ee;--s2:#fb923c;--s3:#34d399;--s4:#fbbf24;--s5:#f472b6;--s6:#4ade80;
+--hero:radial-gradient(120% 90% at 50% 0%,#312e81 0%,#0f172a 55%,#070b18 100%);--tabon:linear-gradient(135deg,#1e293b,#312e81);--tabsh:0 0 0 1px rgba(129,140,248,.4),0 6px 18px rgba(99,102,241,.25);
+--g-body:#ff8a3d;--g-mind:#a78bfa;--g-craft:#f472b6;--g-social:#34d399;--g-career:#60a5fa;--g-economy:#fbbf24}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);
-font:15px/1.5 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif}
+font:15px/1.5 Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif}
 button,input,select,textarea{font:inherit;color:inherit}
 .tabs{position:sticky;top:0;z-index:5;display:flex;gap:4px;padding:8px 12px;background:var(--bg);border-bottom:1px solid var(--line)}
 .tabs button{flex:1;border:0;background:none;padding:8px;border-radius:8px;font-weight:700;color:var(--sub);cursor:pointer}
-.tabs button[aria-selected=true]{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.tabs button[aria-selected=true]{background:var(--tabon);color:var(--ink);box-shadow:var(--tabsh)}
+.tabs #themeBtn{flex:none;width:40px;padding:8px 0;font-size:16px}
 main{max-width:860px;margin:0 auto;padding:16px 16px 96px}
 #qframe{width:100%;border:0;display:block;min-height:70vh;background:var(--bg)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.card{background:var(--cardbg);border:1px solid var(--line);border-radius:16px;padding:14px 16px;box-shadow:var(--shadow)}
 .hero .label{color:var(--sub);font-size:13px}
 .hero .big{font-size:30px;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums;margin:2px 0}
 .delta{font-size:13px;color:var(--sub);font-variant-numeric:tabular-nums}
@@ -112,6 +124,36 @@ padding:8px 12px calc(8px + env(safe-area-inset-bottom));display:grid;gap:6px}
 .rb-clock{font-size:20px;font-variant-numeric:tabular-nums}
 body.has-run #toast{bottom:auto;top:64px}body.has-run{padding-bottom:calc(76px + env(safe-area-inset-bottom))}body.has-run .fab{bottom:calc(84px + env(safe-area-inset-bottom))}
 .tm-rec .rs{display:flex;gap:6px;justify-content:flex-end}.tm-rec .rs .btn{padding:4px 10px;font-size:12px}
+.vs{background:var(--hero);color:#fff;border:0;position:relative;overflow:hidden}
+.vs .vrow{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:6px;margin-top:6px}
+.vs .who{text-align:center}.vs .av{width:60px;height:60px;border-radius:50%;margin:0 auto 6px;display:grid;place-items:center;font-size:28px;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.35)}
+.vs .me .av{box-shadow:0 0 0 3px #22d3ee,0 0 22px rgba(34,211,238,.6)}.vs .rv .av{box-shadow:0 0 0 3px #f87171,0 0 22px rgba(248,113,113,.55)}
+.vs .nm{font-weight:800;font-size:15px}.vs .sc{font-size:26px;font-weight:900;letter-spacing:-1px;font-variant-numeric:tabular-nums;line-height:1.1}.vs .sb{font-size:11px;opacity:.8}
+.vs .vx{font-size:32px;font-weight:900;font-style:italic;background:linear-gradient(180deg,#fde68a,#f59e0b);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 10px rgba(245,158,11,.5))}
+.vs .tug{height:14px;border-radius:99px;background:linear-gradient(90deg,#f97316,#ef4444);margin:14px 0 6px;position:relative;overflow:hidden}
+.vs .tug i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#22d3ee,#6366f1)}
+.vs .tug em{position:absolute;top:0;width:4px;height:100%;background:#fff;box-shadow:0 0 10px #fff;transform:translateX(-2px)}
+.vs .tip2{background:rgba(255,255,255,.14);border-radius:12px;padding:9px 12px;font-size:13px;font-weight:600;margin-top:8px}
+.vs .vbtn{background:rgba(255,255,255,.16);border:0;color:#fff;border-radius:99px;padding:3px 10px;font-size:12px;cursor:pointer}
+.vs details{margin-top:8px;font-size:13px}.vs details summary{cursor:pointer;opacity:.85}.vs details table{color:#fff}.vs details .muted{color:rgba(255,255,255,.65)}
+.tier{display:flex;gap:14px;align-items:center}.tier svg{width:90px;height:90px;flex:none}
+.tier .tb{font-size:26px;font-weight:900;letter-spacing:-1px}
+.gplus{position:absolute;left:84px;top:96px;font-weight:900;font-size:22px;color:#22c55e;text-shadow:0 0 12px rgba(34,197,94,.6);animation:gplus 1.8s ease-out forwards;pointer-events:none}
+@keyframes gplus{0%{opacity:0;transform:translateY(8px)}15%{opacity:1}100%{opacity:0;transform:translateY(-28px)}}
+.grass{display:grid;grid-template-columns:repeat(14,1fr);gap:3px;margin-top:10px}.grass i{aspect-ratio:1;border-radius:3px;background:var(--chip)}
+.grass .g1{background:#bbf7d0}.grass .g2{background:#86efac}.grass .g3{background:#22c55e}.grass .g4{background:#15803d}
+:root[data-theme=dark] .grass .g1{background:#14532d}:root[data-theme=dark] .grass .g2{background:#16a34a}:root[data-theme=dark] .grass .g3{background:#22c55e}:root[data-theme=dark] .grass .g4{background:#4ade80}
+.mis{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px;width:100%;background:none;border-left:0;border-right:0;border-bottom:0;text-align:left;cursor:pointer;color:var(--ink)}
+.mis:first-of-type{border-top:0}.mis .ck{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:13px;font-weight:900;border:2px solid var(--mute);flex:none}
+.mis.done .ck{background:#22c55e;border-color:#22c55e;color:#fff}.mis.done .mt{text-decoration:line-through;color:var(--sub)}
+.mis .flip{margin-left:auto;font-size:11px;font-weight:800;color:#f59e0b;border:1px solid #f59e0b;border-radius:99px;padding:1px 7px}
+#ko{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(2,6,23,.55)}#ko[hidden]{display:none}
+#ko .kc{width:270px;text-align:center;border-radius:20px;padding:18px;color:#fff;background:linear-gradient(135deg,#7c2d12,#b91c1c);box-shadow:0 20px 50px rgba(239,68,68,.5);animation:kopop .5s cubic-bezier(.2,1.6,.4,1)}
+#ko .kc b{display:block;font-size:40px;font-style:italic;font-weight:900;letter-spacing:-1px}
+#ko .cf{position:absolute;width:8px;height:13px;border-radius:2px;top:-20px;animation:cf 2.6s linear forwards}
+@keyframes kopop{0%{transform:scale(.4) rotate(-12deg);opacity:0}100%{transform:scale(1) rotate(-3deg);opacity:1}}
+@keyframes cf{to{transform:translateY(110vh) rotate(720deg)}}
+@media (prefers-reduced-motion:reduce){#ko .kc,#ko .cf,.gplus{animation:none}}
 @media (max-width:520px){.grid{grid-template-columns:repeat(2,1fr)}.hero .big{font-size:26px}.legend{grid-template-columns:1fr}}
 </style>
 </head>
@@ -121,7 +163,9 @@ body.has-run #toast{bottom:auto;top:64px}body.has-run{padding-bottom:calc(76px +
   <button role="tab" data-tab="growth" aria-selected="false">🏅 성장</button>
   <button role="tab" data-tab="quest" aria-selected="false">퀘스트</button>
   <button role="tab" data-tab="assets" aria-selected="false">내 자산</button>
+  <button type="button" id="themeBtn" aria-label="화면 모드 바꾸기" title="화면 모드">🌙</button>
 </div>
+<div id="ko" hidden></div>
 <section id="timer" hidden><main id="tmain"><p class="empty">불러오는 중…</p></main></section>
 <section id="growth" hidden><main id="gmain"><p class="empty">불러오는 중…</p></main></section>
 <section id="quest" hidden><iframe id="qframe" title="퀘스트 보드"></iframe><main id="qmsg" hidden></main></section>
@@ -280,8 +324,20 @@ function ago(iso) {
 }
 
 // ---------------------------------------------------------------- 탭
+const THEME_LABEL = {dark: "🌙 다크", light: "☀️ 라이트", auto: "🖥 기기 설정 따라"};
+function themeMode() { return store.get("theme") || "dark"; }
+function applyTheme() {
+  const m = themeMode(), dark = m === "auto" ? matchMedia("(prefers-color-scheme: dark)").matches : m === "dark";
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  const b = $("#themeBtn"); if (b) b.textContent = m === "auto" ? "🖥" : dark ? "🌙" : "☀️";
+}
+function cycleTheme() {
+  const order = ["dark", "light", "auto"], next = order[(order.indexOf(themeMode()) + 1) % order.length];
+  store.set("theme", next); applyTheme(); toast("화면 모드: " + THEME_LABEL[next]);
+}
+try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (themeMode() === "auto") applyTheme(); }); } catch (e) {}
 function showTab(name) {
-  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name));
+  document.querySelectorAll(".tabs button[data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name));
   $("#quest").hidden = name !== "quest"; $("#assets").hidden = name !== "assets"; $("#growth").hidden = name !== "growth"; $("#timer").hidden = name !== "timer";
   store.set("tab", name);
   if (name === "quest") loadQuest(); else if (!DATA) loadAssets(); else if (name === "growth") renderGrowth(); else if (name === "timer") renderTimer();
@@ -660,7 +716,8 @@ async function remove() {
 document.addEventListener("click", e => {
   const t = e.target;
   if (t.closest("[data-stop]")) return;
-  const tab = t.closest(".tabs button"); if (tab) return showTab(tab.dataset.tab);
+  if (t.closest("#themeBtn")) return cycleTheme();
+  const tab = t.closest(".tabs button[data-tab]"); if (tab) return showTab(tab.dataset.tab);
   const v = t.closest("[data-view]"); if (v) { VIEW = v.dataset.view; store.set("view", VIEW); render(); window.scrollTo(0, 0); return; }
   const r = t.closest("[data-range]"); if (r) { RANGE = r.dataset.range; render(); return; }
   const ed = t.closest("[data-edit]"); if (ed) { const it = DATA.items.find(x => x.id === ed.dataset.edit); if (it) openEditor(it); return; }
@@ -681,6 +738,7 @@ $("#form").addEventListener("change", e => {
 });
 $("#sheet").addEventListener("click", e => { if (e.target.id === "sheet") $("#sheet").hidden = true; });
 VIEW = VIEWS.some(([k]) => k === store.get("view")) ? store.get("view") : "summary";
+applyTheme();
 showTab(["assets", "growth", "timer"].includes(store.get("tab")) ? store.get("tab") : "quest");
 // 주소 끝에 ?tab=timer 를 붙여 홈 화면에 두면 바로 ⏱ 기록 화면으로 열린다
 try { google.script.url.getLocation(loc => { const t = loc && loc.parameter && loc.parameter.tab; if (["timer", "growth", "assets", "quest"].includes(t)) showTab(t); }); } catch (e) {}
@@ -1352,32 +1410,6 @@ function rivalState(S) {
   const beaten = RIVALS.filter(r => r.c.score < me.score), next = RIVALS.find(r => r.c.score >= me.score);
   return {grp, mine, me, beaten, next};
 }
-function rivalCard(S) {
-  const {grp, mine, me, beaten, next} = rivalState(S), parts = MY_PARTS;
-  const pop = POP[grp.sex][grp.age], rank = Math.max(1, Math.ceil(me.top * pop));
-  const adultMine = myShares(S, {sex: "all", age: "all"}), adult = composite(adultMine), arank = Math.max(1, Math.ceil(adult.top * POP.all.all));
-  const fmtN = n => n.toLocaleString("ko-KR");
-  let rival = "";
-  if (next) {
-    const rows = GOALS.map(g => { const m = mine[g.k], r = next.ps[g.k], win = m != null && m < r;
-      const why = (parts[g.k] || []).map(x => `${x.label} ${fmtPct(x.p)}`).join(" · ");
-      return `<tr><td style="padding:3px 0;vertical-align:top;white-space:nowrap">${g.icon} ${g.short}</td><td style="text-align:right">${m == null ? "기록 없음" : fmtTop(m)}${why ? `<br><small class="muted">${esc(why)}</small>` : ""}</td>
-        <td style="text-align:center">${m == null ? "·" : win ? "🟢" : "🔴"}</td><td style="text-align:right">${fmtTop(r)}<br><small class="muted">${esc(rivalValue(g.k, r, grp))}</small></td></tr>`; }).join("");
-    const wins = GOALS.filter(g => mine[g.k] != null && mine[g.k] < next.ps[g.k]).length;
-    rival = `<div class="row" style="margin-top:12px"><b>🥊 Lv.${next.lv} ${esc(next.tier)} · ${esc(next.name)}</b><span class="muted">${beaten.length}/${RIVALS.length}명 격파</span></div>
-      <div class="muted" style="font-size:13px">${esc(next.kind)} · ${esc(next.bio)} · 종합 ${next.c.score.toFixed(1)}점 (상위 ${fmtPct(next.c.top)})</div>
-      <div class="bar1" style="margin-top:6px"><i style="width:${(beaten.length / RIVALS.length * 100).toFixed(1)}%"></i></div>
-      <div class="delta">${Math.max(.1, next.c.score - me.score).toFixed(1)}점 차 · 영역 대결 ${wins}승 ${GOALS.filter(g => mine[g.k] != null).length - wins}패${GOALS.some(g => mine[g.k] == null) ? ` · 기록 없음 ${GOALS.filter(g => mine[g.k] == null).length}` : ""}</div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;font-variant-numeric:tabular-nums">
-        <tr class="muted"><th style="text-align:left;font-weight:400">영역</th><th style="text-align:right;font-weight:400">나</th><th></th><th style="text-align:right;font-weight:400">${esc(next.name)}</th></tr>${rows}</table>`;
-  } else rival = `<div style="margin-top:12px"><b>🏆 모든 상대를 이겼어요!</b> <span class="muted">${RIVALS.length}명 격파</span></div>`;
-  const last = beaten[beaten.length - 1];
-  return `<div class="card"><div class="row"><span class="label">종합 순위 · ${esc(cmpLabel(grp))}</span><button class="btn" type="button" data-g="rivals" style="padding:3px 10px;font-size:12px">상대 목록</button></div>
-    <div class="big" style="font-size:24px">${fmtN(pop)}명 중 ${fmtN(rank)}등</div>
-    <div class="delta">종합 표준점수 ${me.score.toFixed(1)} / 100점 · 상위 ${fmtPct(me.top)} · 성인 전체 ${fmtN(POP.all.all)}명 중 ${fmtN(arank)}등</div>
-    ${last ? `<div class="muted" style="font-size:12px;margin-top:4px">최근에 이긴 상대: Lv.${last.lv} ${esc(last.name)}(${last.c.score.toFixed(1)}점)</div>` : ""}
-    ${rival}</div>`;
-}
 function rivalWinDates() {          // 'Lv:날짜,Lv:날짜' 한 줄(설정 시트 한 항목)
   const it = byCat("rivalrec")[0], m = new Map();
   ((it && it.f.log) || "").split(",").filter(Boolean).forEach(x => { const [k, d] = x.split(":"); m.set(+k, d); });
@@ -1411,7 +1443,9 @@ async function saveRivalWins(S) {
     add.forEach(r => m.set(r.lv, DATA.today));
     const log = [...m.entries()].sort((a, b) => a[0] - b[0]).map(([k, d]) => `${k}:${d}`).join(",");
     await api("saveItem", {id: it ? it.id : "", category: "rivalrec", name: "가상 상대 격파 기록", date: DATA.today, f: {log, best: Math.max(...m.keys())}});
-    if (it) toast(`🥊 Lv.${add[add.length - 1].lv} ${add[add.length - 1].name}을(를) 이겼어요!`);
+    if (it) { const last = add[add.length - 1], prevBest = Math.max(0, ...[...m.keys()].filter(k => !add.includes(RIVALS[k - 1])));
+      const prevTier = prevBest ? RIVALS[prevBest - 1].tier : "", promoted = last.tier !== prevTier ? last.tier : "";
+      showKO(last, RIVALS.find(r => r.lv === last.lv + 1), promoted); }
     return 1;
   } finally { rivalSaving = false; }
 }
@@ -1537,15 +1571,20 @@ function renderGrowth() {
   const recent = gLogs().sort((a, b) => (b.date + b.updated) < (a.date + a.updated) ? -1 : 1).slice(0, 8).map(l =>
     `<button type="button" class="item" data-g="dellog" data-id="${esc(l.id)}"><span class="t">${GOAL[l.f.goal].icon} ${esc(l.name)}</span>
       <span class="r">${esc(fmtDay(l.date))}</span><span class="s">${esc(l.f.text || "")}</span><span class="rs">눌러서 지우기</span></button>`).join("");
-  $("#gmain").innerHTML = `<div class="card hero"><div class="row"><span class="label">인생 레벨</span><span class="muted">${fmtDay(S.start)}부터</span></div>
+  const RS = rivalState(S);
+  $("#gmain").innerHTML = `${vsHero(S, RS)}
+    ${missionCard(RS)}
+    ${tierCard(S, RS)}
+    <div class="card hero" style="margin-top:10px"><div class="row"><span class="label">인생 레벨</span><span class="muted">${fmtDay(S.start)}부터</span></div>
       <div class="big">Lv.${lv} <span style="font-size:18px;color:var(--sub)">${Math.round(S.total).toLocaleString("ko-KR")}점</span></div>
       <div class="track"><span>📈 흐름 점수 <b>${Math.round(S.flowTotal).toLocaleString("ko-KR")}</b><small>매일·매주 쌓은 것</small></span>
         <span>🏆 돌파 점수 <b>${Math.round(S.mileTotal).toLocaleString("ko-KR")}</b><small>업적을 이룬 것</small></span></div>
       <div class="bar1"><i style="width:${Math.min(100, (S.total - cur) / (nextLv - cur) * 100).toFixed(1)}%"></i></div>
       <div class="delta">다음 레벨까지 ${Math.ceil(nextLv - S.total).toLocaleString("ko-KR")}점 · 이번 주 +${Math.round(thisWeek)}점</div></div>
-    ${rivalCard(S)}
     <div class="hex2">${hexagon("쌓은 점수", GOALS.map(g => S.byGoal[g.k]), "--s1", v => Math.round(v) + "", 0, {sqrt: true, note: "넓이가 점수에 비례(√ 눈금)"})}
-      ${hexagon(GVIEW === "all" ? "누적 상위 %" : GVIEW_LABEL[GVIEW] + " 상위 %", GOALS.map(g => T[g.k].any ? 1 - T[g.k].p : 0), "--s3", v => v <= 0 ? "-" : v < .5 ? "평균↓" : Math.max(1, Math.round((1 - v) * 100)) + "%", 1)}</div>
+      ${hexagon(GVIEW === "all" && RS.next ? `누적 상위 % vs ${RS.next.name}` : GVIEW === "all" ? "누적 상위 %" : GVIEW_LABEL[GVIEW] + " 상위 %", GOALS.map(g => T[g.k].any ? 1 - T[g.k].p : 0), "--s1", v => v <= 0 ? "-" : v < .5 ? "평균↓" : Math.max(1, Math.round((1 - v) * 100)) + "%", 1,
+        GVIEW === "all" && RS.next ? {compare: GOALS.map(g => 1 - RS.next.ps[g.k]), note: "점선 = 상대 · 🟢 이김 🔴 짐"} : {})}</div>
+    ${streakCard()}
     <div class="row" style="margin-top:14px"><span class="muted">비교군: <b style="color:var(--ink)">${esc(cmpSame() || "영역마다 다름")}</b></span>
       <button class="btn" type="button" data-g="cmp">비교군 바꾸기</button></div>
     <div class="row" style="margin-top:8px"><h2 style="margin:0">${GVIEW_LABEL[GVIEW]} 성적표</h2>
@@ -1563,8 +1602,117 @@ function renderGrowth() {
     <h2>빠르게 기록</h2><div class="grid">${GOALS.map(g => `<button type="button" class="stat" data-g="log" data-goal="${g.k}"><div class="l">${g.icon} ${g.label}</div><div class="n" style="font-size:15px">＋ 기록</div></button>`).join("")}</div>
     ${feed ? `<h2>최근 얻은 점수</h2><div class="card">${feed}</div>` : ""}
     ${recent ? `<h2>최근 기록</h2><div class="list">${recent}</div>` : ""}`;
+  floatGain(S);
   persistMiles(S.start, false).then(async n => { n += await saveTopSnap(TA); n += await saveRivalWins(S); if (n) loadAssets(true); }).catch(() => {});
 }
+
+// ---------------------------------------------------------------- 게임 화면(대결 · 티어 · 미션 · 연속 기록 · K.O.)
+// 받침 있으면 a(을·이·은), 없으면 b(를·가·는)
+const josa = (w, a, b) => { const c = (w || "").charCodeAt(w.length - 1); return c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 ? a : b; };
+const RIVAL_FACE = {"평균": "🙂", "끝판왕": "🐉", "주말 러너": "🏃", "마당발": "🤝", "짠테크": "🐷", "워커홀릭": "🦾", "가정의 중심": "🏡", "명상가": "🧘",
+  "육각형": "🔷", "자산가": "💎", "철인": "🏋️", "살림 고수": "🍳", "인싸 직장인": "🎤", "자기관리왕": "👑"};
+const TIER_COLOR = {"브론즈": ["#f3c69a", "#b06a2b"], "실버": ["#f8fafc", "#94a3b8"], "골드": ["#fde68a", "#d97706"], "플래티넘": ["#ccfbf1", "#14b8a6"], "다이아": ["#dbeafe", "#3b82f6"], "마스터": ["#f5d0fe", "#a21caf"]};
+const zOf = p => p == null ? Z_FLOOR : Math.max(Z_FLOOR, Math.min(Z_CAP, probit(1 - Math.min(1 - 1e-6, Math.max(1e-6, p)))));
+// 역전 길잡이: 상대가 앞선 영역 가운데 가장 따라잡기 쉬운 곳과, 그 영역만 올려 역전하려면 필요한 상위 %
+function flipHint(mine, me, next) {
+  const lose = GOALS.filter(g => mine[g.k] == null || mine[g.k] >= next.ps[g.k]);
+  if (!lose.length) return null;
+  const need = (next.c.score - me.score) / 10 * 6 * Z_SD + .02;
+  const g = lose.map(g => ({g, gap: zOf(next.ps[g.k]) - zOf(mine[g.k])})).sort((a, b) => a.gap - b.gap)[0].g;
+  const target = 1 - ncdf(Math.min(Z_CAP, zOf(mine[g.k]) + need));
+  const weak = GOALS.slice().sort((a, b) => next.ps[b.k] - next.ps[a.k])[0];
+  return {g, target, weak};
+}
+function vsHero(S, RS) {
+  const {grp, mine, me, beaten, next} = RS;
+  if (!next) return `<div class="card vs"><div style="font-size:13px;opacity:.85">🏆 ${RIVALS.length}명 모두 격파</div><div style="font-size:24px;font-weight:900;margin-top:6px">대한민국 최상위 · 종합 ${me.score.toFixed(1)}점</div></div>`;
+  const wins = GOALS.filter(g => mine[g.k] != null && mine[g.k] < next.ps[g.k]).length, lost = GOALS.filter(g => mine[g.k] != null).length - wins;
+  const pos = Math.max(6, Math.min(94, 50 + (me.score - next.c.score) * 8)), h = flipHint(mine, me, next), parts = MY_PARTS;
+  const rows = GOALS.map(g => { const m = mine[g.k], r = next.ps[g.k], win = m != null && m < r;
+    const why = (parts[g.k] || []).map(x => `${x.label} ${fmtPct(x.p)}`).join(" · ");
+    return `<tr><td style="padding:3px 0;vertical-align:top;white-space:nowrap">${g.icon} ${g.short}</td><td style="text-align:right">${m == null ? "기록 없음" : fmtTop(m)}${why ? `<br><small class="muted">${esc(why)}</small>` : ""}</td>
+      <td style="text-align:center">${m == null ? "·" : win ? "🟢" : "🔴"}</td><td style="text-align:right">${fmtTop(r)}<br><small class="muted">${esc(rivalValue(g.k, r, grp))}</small></td></tr>`; }).join("");
+  return `<div class="card vs" id="vscard"><div class="row" style="font-size:12px;opacity:.9"><span>🥊 오늘의 대결 · Lv.${next.lv} ${esc(next.tier)}</span><button type="button" class="vbtn" data-g="rivals">${beaten.length}/${RIVALS.length} 격파 ›</button></div>
+    <div class="vrow"><div class="who me"><div class="av">😎</div><div class="nm">나</div><div class="sc">${me.score.toFixed(1)}</div><div class="sb">상위 ${fmtPct(me.top)}</div></div>
+      <div class="vx">VS</div>
+      <div class="who rv"><div class="av">${RIVAL_FACE[next.kind] || "🥷"}</div><div class="nm">${esc(next.name)}</div><div class="sc">${next.c.score.toFixed(1)}</div><div class="sb">${esc(next.kind)}</div></div></div>
+    <div class="tug"><i style="width:${pos}%"></i><em style="left:${pos}%"></em></div>
+    <div class="row" style="font-size:11px;opacity:.85"><span>나 ${wins}승</span><span>${Math.max(.1, next.c.score - me.score).toFixed(1)}점 차</span><span>${lost}승 상대</span></div>
+    ${h ? `<div class="tip2">💡 ${h.g.icon} <b>${esc(h.g.label)}</b>${josa(h.g.label, "을", "를")} 상위 ${fmtPct(h.target)}로 올리면 역전! 상대 약점은 ${h.weak.icon} ${esc(h.weak.label)}</div>` : ""}
+    <details><summary>영역별 대결 자세히</summary><table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;font-variant-numeric:tabular-nums">
+      <tr class="muted"><th style="text-align:left;font-weight:400">영역</th><th style="text-align:right;font-weight:400">나</th><th></th><th style="text-align:right;font-weight:400">${esc(next.name)}</th></tr>${rows}</table>
+      <div class="muted" style="font-size:12px;margin-top:4px">${esc(next.bio)}</div></details></div>`;
+}
+// 지난주 기록(topsnap)으로 계산한 순위와 비교
+function rankDelta(me, pop) {
+  const snaps = topSnaps(), ws = weekStart(DATA.today), prev = snaps.filter(x => x.date < ws).pop();
+  if (!prev) return "";
+  const pc = composite(Object.fromEntries(GOALS.map(g => [g.k, prev.f[g.k] != null ? num(prev.f[g.k]) : null])));
+  const d = Math.round((pc.top - me.top) * pop);
+  return d ? ` <b style="color:${d > 0 ? "#22c55e" : "var(--up)"}">${d > 0 ? "▲" : "▼"}${Math.abs(d).toLocaleString("ko-KR")}</b>` : "";
+}
+function tierCard(S, RS) {
+  const {grp, me, beaten, next} = RS, pop = POP[grp.sex][grp.age], rank = Math.max(1, Math.ceil(me.top * pop));
+  const adult = composite(myShares(S, {sex: "all", age: "all"})), arank = Math.max(1, Math.ceil(adult.top * POP.all.all));
+  const cur = beaten.length ? beaten[beaten.length - 1] : null, tier = cur ? cur.tier : "언랭크", lv = beaten.length;
+  const ti = RIVAL_TIERS.findIndex(([, n]) => n === tier), from = ti > 0 ? RIVAL_TIERS[ti - 1][0] : 0, to = ti >= 0 ? RIVAL_TIERS[ti][0] : 0;
+  const nextTier = ti >= 0 && ti < RIVAL_TIERS.length - 1 ? RIVAL_TIERS[ti + 1] : ti < 0 ? RIVAL_TIERS[0] : null;
+  const prog = ti >= 0 ? (lv - from) / (to - from) : lv / RIVAL_TIERS[0][0], col = TIER_COLOR[tier] || ["#e2e8f0", "#64748b"], fmtN = n => n.toLocaleString("ko-KR");
+  const C = 2 * Math.PI * 44;
+  return `<div class="card" style="margin-top:10px"><div class="tier"><svg viewBox="0 0 100 100" aria-hidden="true"><defs>
+      <linearGradient id="tg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${col[0]}"/><stop offset="1" stop-color="${col[1]}"/></linearGradient>
+      <linearGradient id="tp" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs>
+      <circle cx="50" cy="50" r="44" fill="none" stroke="var(--chip)" stroke-width="8"/>
+      <circle cx="50" cy="50" r="44" fill="none" stroke="url(#tp)" stroke-width="8" stroke-linecap="round" stroke-dasharray="${(C * Math.max(.02, Math.min(1, prog))).toFixed(1)} 999" transform="rotate(-90 50 50)"/>
+      <path d="M50 18 L74 30 L74 56 Q74 74 50 84 Q26 74 26 56 L26 30 Z" fill="url(#tg)" stroke="${col[1]}" stroke-width="1.5"/>
+      <text x="50" y="58" text-anchor="middle" font-size="15" font-weight="900" fill="#1f2937">${lv}</text></svg>
+    <div style="min-width:0"><div class="label">현재 티어 · ${esc(cmpLabel(grp))}</div><div class="tb">${esc(tier)}</div>
+      <div style="font-size:13px">${nextTier ? `${esc(nextTier[1])}까지 <b>${ti < 0 ? 1 : RIVAL_TIERS[ti][0] + 1 - lv}명</b> · 진행 ${Math.round(Math.min(1, prog) * 100)}%` : "최고 티어"}</div>
+      <div style="font-size:13px;margin-top:2px">${fmtN(pop)}명 중 <b>${fmtN(rank)}등</b>${rankDelta(me, pop)}</div>
+      <div class="muted" style="font-size:12px">종합 ${me.score.toFixed(1)} / 100점 · 성인 전체 ${fmtN(arank)}등</div></div></div></div>`;
+}
+// 오늘의 미션 3개: 역전 길잡이 영역 1개 + 양치 + 다른 영역 1개 — 오늘 기록으로 자동 체크(점수와 무관한 동기 장치)
+function missionCard(RS) {
+  const today = gLogs().filter(l => l.date === DATA.today), sum = (f) => today.filter(f).reduce((a, l) => a + (num(l.f.minutes) || 0), 0);
+  const M = {
+    body: {t: "💪 운동 30분", done: sum(l => l.f.type === "exercise") >= 30},
+    mind: {t: "🧘 정신 성취 1개", done: today.some(l => l.f.goal === "mind" && l.f.type === "win")},
+    craft: {t: "🎨 가사·돌봄 30분", done: sum(l => l.f.goal === "craft" && l.f.type === "time") >= 30},
+    social: {t: "👪 가족 관계 1회", done: today.some(l => l.f.goal === "social" && FAMILY_TYPES.includes(l.f.type))},
+    career: {t: "🎖 커리어 성취 1개", done: today.some(l => l.f.goal === "career" && l.f.type === "win")}};
+  const h = RS.next ? flipHint(RS.mine, RS.me, RS.next) : null, flip = h && M[h.g.k] ? h.g.k : "body";
+  const brush = today.filter(l => l.f.type === "habit" && l.f.field === "brush").reduce((a, l) => a + (num(l.f.count) || 1), 0);
+  const third = ["social", "body", "craft", "mind"].find(k => k !== flip);
+  const list = [{k: flip, ...M[flip], flip: true}, {k: "habit", t: `🪥 양치질 ${Math.min(3, brush)}/3`, done: brush >= 3}, {k: third, ...M[third]}];
+  const n = list.filter(x => x.done).length;
+  return `<div class="card" style="margin-top:10px"><div class="row"><b>🎯 오늘의 미션</b><span class="muted">${n === 3 ? "🎉 오늘 클리어!" : n + "/3"}</span></div>
+    ${list.map(x => `<button type="button" class="mis${x.done ? " done" : ""}" data-g="${x.k === "habit" ? "tabtimer" : "log"}" data-goal="${x.k === "habit" ? "body" : x.k}">
+      <span class="ck">${x.done ? "✓" : ""}</span><span class="mt">${esc(x.t)}</span>${x.flip ? '<span class="flip">역전 카드</span>' : ""}</button>`).join("")}</div>`;
+}
+// 연속 기록일 + 최근 6주 잔디
+function streakCard() {
+  const days = new Map(); gLogs().forEach(l => days.set(l.date, (days.get(l.date) || 0) + 1));
+  let st = 0, d = days.has(DATA.today) ? DATA.today : addDays(DATA.today, -1);
+  while (days.has(d)) { st++; d = addDays(d, -1); }
+  const cells = []; for (let i = 41; i >= 0; i--) { const k = addDays(DATA.today, -i), n = days.get(k) || 0;
+    cells.push(`<i class="${n >= 8 ? "g4" : n >= 5 ? "g3" : n >= 3 ? "g2" : n >= 1 ? "g1" : ""}" title="${k} · ${n}건"></i>`); }
+  return `<div class="card" style="margin-top:10px"><div class="row"><b>🔥 ${st}일 연속 기록</b><span class="muted">최근 6주</span></div><div class="grass">${cells.join("")}</div></div>`;
+}
+// 점수가 오르면 '+N'이 떠오르고, 상대를 이기면 K.O. 연출
+let PREV_TOTAL = null;
+function floatGain(S) {
+  if (PREV_TOTAL != null && S.total > PREV_TOTAL + .5) { const c = $("#vscard"); if (c) { const e = document.createElement("div"); e.className = "gplus"; e.textContent = "+" + Math.round(S.total - PREV_TOTAL); c.appendChild(e); setTimeout(() => e.remove(), 2000); } }
+  PREV_TOTAL = S.total;
+}
+function showKO(r, nextR, promoted) {
+  const ko = $("#ko"), cols = ["#f59e0b", "#22d3ee", "#a78bfa", "#f472b6", "#34d399"];
+  ko.innerHTML = Array.from({length: 36}, (_, i) => `<i class="cf" style="left:${Math.random() * 100}%;background:${cols[i % 5]};animation-delay:${(Math.random() * .6).toFixed(2)}s"></i>`).join("") +
+    `<div class="kc">${promoted ? `<div style="font-size:14px;font-weight:800">🎖 ${esc(promoted)} 승급!</div>` : ""}<b>K.O.!</b>Lv.${r.lv} ${esc(r.name)}${josa(r.name, "을", "를")} 이겼어요 🎉
+      ${nextR ? `<div style="font-size:12px;opacity:.9;margin-top:6px">다음 상대: ${esc(nextR.name)}(${esc(nextR.kind)})</div>` : ""}</div>`;
+  ko.hidden = false; try { navigator.vibrate && navigator.vibrate([60, 40, 120]); } catch (e) {}
+  clearTimeout(showKO.t); showKO.t = setTimeout(() => { ko.hidden = true; }, 3200);
+}
+document.addEventListener("click", e => { if (e.target.closest("#ko")) $("#ko").hidden = true; });
 
 // 육각형 그래프: 또렷한 바깥 테두리 + 꼭짓점까지 축선 + 여섯 점을 잇는 닫힌 도형.
 // 0인 영역도 가운데로 빨려 들지 않게 가장 안쪽(FLOOR)에 둔다. opts.sqrt면 넓이가 값에 비례하는 눈금(√)
@@ -1576,13 +1724,16 @@ function hexagon(title, vals, color, fmt, fixedMax, opts) {
   const ring = f => GOALS.map((_, i) => pt(i, Rr * f).map(n => n.toFixed(1)).join(",")).join(" ");
   const poly = vals.map((v, i) => pt(i, Rr * frac(v)).map(n => n.toFixed(1)).join(",")).join(" ");
   const spokes = GOALS.map((_, i) => { const [x, y] = pt(i, Rr); return `<line x1="${C}" y1="${C}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`; }).join("");
-  const labels = GOALS.map((g, i) => { const [x, y] = pt(i, Rr + 20); return `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle" font-size="11" fill="var(--sub)">${g.icon}${g.short}</text>`; }).join("");
-  const dots = vals.map((v, i) => { const [x, y] = pt(i, Rr * frac(v)); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" fill="var(${color})" stroke="var(--card)" stroke-width="1.5"><title>${GOALS[i].label} ${fmt(v)}</title></circle>`; }).join("");
+  const labels = GOALS.map((g, i) => { const [x, y] = pt(i, Rr + 20); return `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--g-${g.k})">${g.icon}${g.short}</text>`; }).join("");
+  const cmpv = opts.compare, cpoly = cmpv ? cmpv.map((v, i) => pt(i, Rr * frac(v)).map(n => n.toFixed(1)).join(",")).join(" ") : "";
+  const dots = vals.map((v, i) => { const [x, y] = pt(i, Rr * frac(v)), fill = cmpv ? (v >= cmpv[i] ? "#22c55e" : "#ef4444") : `var(${color})`;
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${cmpv ? 4.5 : 3.5}" fill="${fill}" stroke="var(--card)" stroke-width="1.5"><title>${GOALS[i].label} ${fmt(v)}</title></circle>`; }).join("");
   return `<figure class="card hex"><figcaption>${esc(title)}</figcaption><svg viewBox="0 0 ${W} ${W}" role="img" aria-label="${esc(title)}: ${GOALS.map((g, i) => g.label + " " + fmt(vals[i])).join(", ")}">
     ${[.325, .55, .775].map(f => `<polygon points="${ring(f)}" fill="none" stroke="var(--line)" stroke-width="1"/>`).join("")}
     <polygon points="${ring(FLOOR)}" fill="var(--chip)" stroke="var(--line)" stroke-width="1"/>
     ${spokes}<polygon points="${ring(1)}" fill="none" stroke="var(--mute)" stroke-width="1.5" stroke-linejoin="round"/>
-    <polygon points="${poly}" fill="var(${color})" fill-opacity=".2" stroke="var(${color})" stroke-width="2.5" stroke-linejoin="round"/>${dots}${labels}</svg>
+    ${cmpv ? `<polygon points="${cpoly}" fill="none" stroke="#ef4444" stroke-width="1.8" stroke-dasharray="5 4" stroke-linejoin="round"/>` : ""}
+    <polygon points="${poly}" fill="var(${color})" fill-opacity=".22" stroke="var(${color})" stroke-width="2.5" stroke-linejoin="round"/>${dots}${labels}</svg>
     <div class="hexv">${GOALS.map((g, i) => `<span>${g.icon} ${fmt(vals[i])}</span>`).join("")}</div>${opts.note ? `<div class="muted" style="font-size:11px;margin-top:2px">${esc(opts.note)}</div>` : ""}</figure>`;
 }
 
@@ -1715,6 +1866,7 @@ document.addEventListener("click", async e => {
   }
   if (a === "log") openLog(b.dataset.goal);
   if (a === "detail") showGoalDetail(b.dataset.goal);
+  if (a === "tabtimer") showTab("timer");
   if (a === "bench") showBench();
   if (a === "cmp") showCmp();
   if (a === "rivals") showRivals();
