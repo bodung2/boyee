@@ -1584,8 +1584,11 @@ function renderGrowth() {
       <div class="bar1"><i style="width:${Math.min(100, (S.total - cur) / (nextLv - cur) * 100).toFixed(1)}%"></i></div>
       <div class="delta">다음 레벨까지 ${Math.ceil(nextLv - S.total).toLocaleString("ko-KR")}점 · 이번 주 +${Math.round(thisWeek)}점</div></div>
     <div class="hex2">${hexagon("쌓은 점수", GOALS.map(g => S.byGoal[g.k]), "--s1", v => Math.round(v) + "", 0, {sqrt: true, note: "넓이가 점수에 비례(√ 눈금)"})}
-      ${hexagon(GVIEW === "all" && RS.next ? `누적 상위 % vs ${RS.next.name}` : GVIEW === "all" ? "누적 상위 %" : GVIEW_LABEL[GVIEW] + " 상위 %", GOALS.map(g => T[g.k].any ? 1 - T[g.k].p : 0), "--s1", v => v <= 0 ? "-" : v < .5 ? "평균↓" : Math.max(1, Math.round((1 - v) * 100)) + "%", 1,
-        GVIEW === "all" && RS.next ? {compare: GOALS.map(g => 1 - RS.next.ps[g.k]), note: "노란 점선 = 상대 · 내 점 🟢✓ 이김 · 🔴✕ 짐"} : {})}</div>
+      ${GVIEW === "all" && RS.next
+        // 대결 육각형은 위 대결 카드와 똑같은 숫자(모든 영역을 '모든 영역' 비교군 하나로 계산한 누적 상위 %)를 쓴다
+        ? hexagon(`누적 상위 % vs ${RS.next.name}`, GOALS.map(g => RS.mine[g.k] == null ? 0 : 1 - RS.mine[g.k]), "--s1", v => v <= 0 ? "-" : v < .5 ? "평균↓" : Math.max(1, Math.round((1 - v) * 100)) + "%", 1,
+            {compare: GOALS.map(g => 1 - RS.next.ps[g.k]), missing: GOALS.map(g => RS.mine[g.k] == null), note: `비교군 ${cmpLabel(RS.grp)} 기준(위 대결과 같음) · 노란 점선 = 상대 · 🟢✓ 이김 · 🔴✕ 짐 · ⚪ 기록 없음`})
+        : hexagon(GVIEW === "all" ? "누적 상위 %" : GVIEW_LABEL[GVIEW] + " 상위 %", GOALS.map(g => T[g.k].any ? 1 - T[g.k].p : 0), "--s1", v => v <= 0 ? "-" : v < .5 ? "평균↓" : Math.max(1, Math.round((1 - v) * 100)) + "%", 1)}</div>
     ${streakCard()}
     <div class="row" style="margin-top:14px"><span class="muted">비교군: <b style="color:var(--ink)">${esc(cmpSame() || "영역마다 다름")}</b></span>
       <button class="btn" type="button" data-g="cmp">비교군 바꾸기</button></div>
@@ -1639,7 +1642,7 @@ function vsHero(S, RS) {
       <div class="vx">VS</div>
       <div class="who rv"><div class="av">${RIVAL_FACE[next.kind] || "🥷"}</div><div class="nm">${esc(next.name)}</div><div class="sc">${next.c.score.toFixed(1)}</div><div class="sb">${esc(next.kind)}</div></div></div>
     <div class="tug"><i style="width:${pos}%"></i><em style="left:${pos}%"></em></div>
-    <div class="row" style="font-size:11px;opacity:.85"><span>나 ${wins}승</span><span>${Math.max(.1, next.c.score - me.score).toFixed(1)}점 차</span><span>${lost}승 상대</span></div>
+    <div class="row" style="font-size:11px;opacity:.9"><span>영역 대결 <b>${wins}승 ${lost}패</b>${GOALS.some(g => mine[g.k] == null) ? ` · 기록 없음 ${GOALS.filter(g => mine[g.k] == null).length}` : ""}</span><span>종합 ${Math.max(.1, next.c.score - me.score).toFixed(1)}점 차</span></div>
     ${h ? `<div class="tip2">💡 ${h.g.icon} <b>${esc(h.g.label)}</b>${josa(h.g.label, "을", "를")} 상위 ${fmtPct(h.target)}로 올리면 역전! 상대 약점은 ${h.weak.icon} ${esc(h.weak.label)}</div>` : ""}
     <details><summary>영역별 대결 자세히</summary><table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;font-variant-numeric:tabular-nums">
       <tr class="muted"><th style="text-align:left;font-weight:400">영역</th><th style="text-align:right;font-weight:400">나</th><th></th><th style="text-align:right;font-weight:400">${esc(next.name)}</th></tr>${rows}</table>
@@ -1746,19 +1749,19 @@ function hexagon(title, vals, color, fmt, fixedMax, opts) {
   const labels = GOALS.map((g, i) => { const [x, y] = pt(i, Rr + 20); return `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--g-${g.k})">${g.icon}${g.short}</text>`; }).join("");
   const cmpv = opts.compare, cpoly = cmpv ? cmpv.map((v, i) => pt(i, Rr * frac(v)).map(n => n.toFixed(1)).join(",")).join(" ") : "";
   // 상대와 겨룰 때: 상대 = 노란 점선·작은 노란 점, 나 = 이긴 영역 초록(✓) · 진 영역 빨강(✕) — 상대 선과 '짐' 색이 겹치지 않게
-  const win = i => cmpv && vals[i] > cmpv[i];
+  const miss = i => !!(opts.missing && opts.missing[i]), win = i => cmpv && !miss(i) && vals[i] > cmpv[i];
   const rdots = cmpv ? cmpv.map((v, i) => { const [x, y] = pt(i, Rr * frac(v)); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" fill="#f59e0b"/>`; }).join("") : "";
-  const dots = vals.map((v, i) => { const [x, y] = pt(i, Rr * frac(v)), fill = cmpv ? (win(i) ? "#22c55e" : "#ef4444") : `var(${color})`;
+  const dots = vals.map((v, i) => { const [x, y] = pt(i, Rr * frac(v)), fill = cmpv ? (miss(i) ? "#94a3b8" : win(i) ? "#22c55e" : "#ef4444") : `var(${color})`;
     return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${cmpv ? 6 : 3.5}" fill="${fill}" stroke="var(--card)" stroke-width="1.5"><title>${GOALS[i].label} ${fmt(v)}</title></circle>` +
-      (cmpv ? `<text x="${x.toFixed(1)}" y="${(y + 3.2).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="900" fill="#fff">${win(i) ? "✓" : "✕"}</text>` : ""); }).join("");
+      (cmpv && !miss(i) ? `<text x="${x.toFixed(1)}" y="${(y + 3.2).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="900" fill="#fff">${win(i) ? "✓" : "✕"}</text>` : ""); }).join("");
   return `<figure class="card hex"><figcaption>${esc(title)}</figcaption><svg viewBox="0 0 ${W} ${W}" role="img" aria-label="${esc(title)}: ${GOALS.map((g, i) => g.label + " " + fmt(vals[i])).join(", ")}">
     ${[.325, .55, .775].map(f => `<polygon points="${ring(f)}" fill="none" stroke="var(--line)" stroke-width="1"/>`).join("")}
     <polygon points="${ring(FLOOR)}" fill="var(--chip)" stroke="var(--line)" stroke-width="1"/>
     ${spokes}<polygon points="${ring(1)}" fill="none" stroke="var(--mute)" stroke-width="1.5" stroke-linejoin="round"/>
     ${cmpv ? `<polygon points="${cpoly}" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round"/>` : ""}
     <polygon points="${poly}" fill="var(${color})" fill-opacity=".22" stroke="var(${color})" stroke-width="2.5" stroke-linejoin="round"/>${rdots}${dots}${labels}</svg>
-    ${cmpv ? `<div style="font-size:12px;font-weight:800;margin:2px 0 4px">${GOALS.filter((_, i) => win(i)).length}승 ${GOALS.filter((_, i) => !win(i)).length}패</div>
-      <div class="hexv" style="grid-template-columns:1fr;gap:3px">${GOALS.map((g, i) => `<span style="display:flex;justify-content:space-between;gap:4px"><span>${win(i) ? "🟢" : "🔴"} ${g.icon}${g.short}</span><span>나 <b style="color:var(--ink)">${fmt(vals[i])}</b> · 상대 ${fmt(cmpv[i])}</span></span>`).join("")}</div>`
+    ${cmpv ? `<div style="font-size:12px;font-weight:800;margin:2px 0 4px">${GOALS.filter((_, i) => win(i)).length}승 ${GOALS.filter((_, i) => !win(i) && !miss(i)).length}패${GOALS.some((_, i) => miss(i)) ? ` · 기록 없음 ${GOALS.filter((_, i) => miss(i)).length}` : ""}</div>
+      <div class="hexv" style="grid-template-columns:1fr;gap:3px">${GOALS.map((g, i) => `<span style="display:flex;justify-content:space-between;gap:4px"><span>${miss(i) ? "⚪" : win(i) ? "🟢" : "🔴"} ${g.icon}${g.short}</span><span>나 <b style="color:var(--ink)">${miss(i) ? "기록 없음" : fmt(vals[i])}</b> · 상대 ${fmt(cmpv[i])}</span></span>`).join("")}</div>`
       : `<div class="hexv">${GOALS.map((g, i) => `<span>${g.icon} ${fmt(vals[i])}</span>`).join("")}</div>`}${opts.note ? `<div class="muted" style="font-size:11px;margin-top:2px">${esc(opts.note)}</div>` : ""}</figure>`;
 }
 
