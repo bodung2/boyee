@@ -152,6 +152,14 @@ test('화면 파일이 있으면 그것을, 없으면 퀘스트 보드를 보여
   assert.match(gas.doGet().html, /아직 집 PC가 화면 파일을/);
 });
 
+test('베이스캠프 주소 점검: 열림·로그인 필요·닫힘·접속 실패·잘못된 주소', () => {
+  const { gas } = load({ sites: { 'https://a.example/': 200, 'https://b.example/': 403, 'https://c.example/': 500, 'https://d.example/': 'fail' } });
+  const r = gas.checkLinks(['https://a.example/', 'https://b.example/', 'https://c.example/', 'https://d.example/', 'javascript:alert(1)']);
+  assert.deepEqual(r.map(x => x.state), ['ok', 'login', 'down', 'down', 'down']);
+  assert.deepEqual(r.map(x => x.code), [200, 403, 500, 0, 0]);
+  assert.equal(gas.checkLinks(Array(50).fill('https://a.example/')).length, 40, '한 번에 최대 40개');
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ' + name); } catch (e) { failed++; console.log('FAIL ' + name + '\n     ' + (e.stack || e).split('\n').slice(0, 3).join('\n     ')); }

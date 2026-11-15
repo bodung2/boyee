@@ -8,7 +8,7 @@
   function make(opts) {
     opts = opts || {};
     const fake = {
-      gf: opts.gf || {}, coins: opts.coins || {}, naver: opts.naver || {}, files: opts.files || {},
+      gf: opts.gf || {}, coins: opts.coins || {}, naver: opts.naver || {}, files: opts.files || {}, sites: opts.sites || {},
       props: {}, books: {}, triggers: [], fetched: [], now: opts.now || new Date('2026-11-08T07:00:00Z')
     };
     let seq = 0;
@@ -104,6 +104,7 @@
       }
       m = /m\.stock\.naver\.com\/api\/stock\/(\w+)\/basic/.exec(url);
       if (m) return m[1] in fake.naver ? resp(200, { closePrice: Number(fake.naver[m[1]]).toLocaleString('en-US') }) : resp(409, {});
+      if (url in fake.sites) { if (fake.sites[url] === 'fail') throw new Error('DNS error'); return resp(fake.sites[url], {}); }
       return resp(404, {});
     } };
     const ScriptApp = {

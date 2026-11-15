@@ -2,6 +2,7 @@
  * 인생 대시보드 웹앱 (구글 Apps Script, '나만' 접근으로 배포)
  *
  * 탭 1. 퀘스트 보드: 집 PC가 매시간 드라이브에 올리는 quest_board.html(보기 전용)
+ * 탭 3. 베이스캠프: 내가 만든 사이트·웹앱 모음(화면이 'tool' 분류로 저장). checkLinks가 주소가 열리는지 하루 한 번 점검한다.
  * 탭 2. 내 자산: 금융·파이프라인(부가수입)·부동산·사람·저작물·직위·수상을 기록하는 곳. 화면에서 추가·수정·삭제한다.
  *        분류 목록은 화면(app.html)이 정한다. 이 코드는 분류 이름 형식만 검사하므로 분류를 더해도 다시 붙여 넣을 필요가 없다.
  *
@@ -13,7 +14,7 @@
  *   이 코드를 다시 붙여 넣을 필요가 없다. 이 코드가 바뀌면 API_VERSION이 올라가고 화면이 '새로 붙여 넣기'를 알린다.
  * 설치·갱신 방법: docs/QUEST_BOARD_WEBAPP.md
  */
-const API_VERSION = 2;
+const API_VERSION = 3;
 const QUEST_FILE = 'quest_board.html';
 const APP_FILE = 'life_dashboard_app.html';
 const BOOK_NAME = '인생 자산 대시보드 (웹앱 데이터)';
@@ -400,6 +401,25 @@ function ensureTrigger_() {
 }
 
 // ---------------------------------------------------------------- 화면이 부르는 함수
+
+/**
+ * 베이스캠프 도구 주소가 열리는지 점검한다. 주소마다 {url, code, state}:
+ *   ok(2xx·3xx) · login(401·403: 로그인이 필요한 페이지 — 살아 있음) · down(그 밖의 응답이나 접속 실패)
+ * http(s) 주소만, 한 번에 최대 40개.
+ */
+function checkLinks(urls) {
+  return (urls || []).slice(0, 40).map(function (u) {
+    const url = String(u || '').trim();
+    if (!/^https?:\/\/[^\s]+$/i.test(url)) return { url: url, code: 0, state: 'down' };
+    try {
+      const r = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true, headers: { 'User-Agent': 'Mozilla/5.0' } });
+      const c = r.getResponseCode();
+      return { url: url, code: c, state: c < 400 ? 'ok' : (c === 401 || c === 403) ? 'login' : 'down' };
+    } catch (e) {
+      return { url: url, code: 0, state: 'down' };
+    }
+  });
+}
 
 /** 화면을 그릴 데이터 전부. 처음 부르면 데이터 시트와 매일 기록 트리거를 만든다. */
 function getData() {
