@@ -1636,7 +1636,7 @@ function renderGrowth() {
 }
 
 // 화면 버전: 폰이 새 화면을 받았는지 성장 탭 맨 아래에서 확인할 수 있게(바꿀 때마다 올린다)
-const APP_BUILD = "2026.11.16-a";
+const APP_BUILD = "2026.11.16-b";
 // 카드 하나를 그리다 오류가 나도 나머지 화면은 그대로 보이게, 오류 내용은 그 자리에 보여 준다
 function safeCard(name, fn) {
   try { return fn(); }
@@ -2117,21 +2117,35 @@ function renderTimer() {
 // 하루 습관: 한 번 누르면 1회 기록(오늘 몇 번 했는지 / 권장 횟수)
 function habitBar() {
   const today = gLogs().filter(l => l.f.type === "habit" && l.date === DATA.today);
-  const cnt = k => today.filter(l => l.f.field === k).reduce((a, l) => a + (num(l.f.count) || 1), 0);
+  const cnt = k => today.filter(l => l.f.field === k).reduce((a, l) => a + (num(l.f.count) || 1), 0) + (HAB_PENDING[k] || 0);
   return `<h2 style="margin-top:4px">💪 하루 습관 <span class="muted" style="font-size:12px;font-weight:400">누르면 1회 기록</span></h2>
     <div class="tm-acts" style="grid-template-columns:repeat(3,1fr)">${HABITS.map(([k, l, rec]) => { const c = cnt(k);
       return `<button type="button" class="tm-act" data-t="habit" data-k="${k}" aria-pressed="${c >= rec}">${esc(l)}<br><b style="font-size:13px">${c}/${rec}${c >= rec ? " ✓" : ""}</b></button>`; }).join("")}</div>`;
 }
-async function habitLog(k) {
-  if (tbusy) return; tbusy = true;
+// 습관 버튼: 눌린 즉시 화면 숫자를 올리고(저장 대기), 여러 번·여러 버튼을 연달아 눌러도 차례로 모두 저장한다
+//   (예전엔 저장·새로 불러오기(2~4초) 동안 다른 버튼을 누르면 말없이 무시돼 '안 눌린다'고 느껴졌음)
+const HAB_PENDING = {}, HAB_QUEUE = [];
+let habRunning = false;
+function habitLog(k) {
+  const h = HABIT[k]; if (!h) return;
+  HAB_PENDING[k] = (HAB_PENDING[k] || 0) + 1; HAB_QUEUE.push(k);
+  const c = gLogs().filter(l => l.f.type === "habit" && l.f.field === k && l.date === DATA.today).reduce((a, l) => a + (num(l.f.count) || 1), 0) + HAB_PENDING[k];
+  toast(`${h[1]} 오늘 ${c}/${h[2]}${c >= h[2] ? " · 오늘 목표 달성!" : ""}`);
+  try { navigator.vibrate && navigator.vibrate(20); } catch (e) {}
+  renderTimer(); drainHabits();
+}
+async function drainHabits() {
+  if (habRunning) return; habRunning = true;
   try {
-    const h = HABIT[k]; toast("기록하는 중…");
-    await api("saveItem", {category: "log", name: `${h[1]} 1회`, date: DATA.today, f: {goal: "body", type: "habit", field: k, count: 1, text: "하루 습관"}});
-    await loadAssets(true);
-    const c = gLogs().filter(l => l.f.type === "habit" && l.f.field === k && l.date === DATA.today).reduce((a, l) => a + (num(l.f.count) || 1), 0);
-    toast(`${h[1]} 오늘 ${c}/${h[2]}${c >= h[2] ? " · 오늘 목표 달성!" : ""}`);
-  } catch (e) { toast("저장하지 못했습니다: " + e.message, true); }
-  finally { tbusy = false; }
+    while (HAB_QUEUE.length) {
+      const k = HAB_QUEUE.shift(), h = HABIT[k];
+      try { await api("saveItem", {category: "log", name: `${h[1]} 1회`, date: DATA.today, f: {goal: "body", type: "habit", field: k, count: 1, text: "하루 습관"}}); }
+      catch (e) { toast(`${h[1]} 저장하지 못했습니다: ${e.message}`, true); }
+      HAB_PENDING[k] = Math.max(0, (HAB_PENDING[k] || 0) - 1);
+      if (DATA) DATA.items.push({id: "hab-" + Date.now() + Math.random(), category: "log", name: `${h[1]} 1회`, date: DATA.today, updated: "", f: {goal: "body", type: "habit", field: k, count: 1, text: "하루 습관"}});
+    }
+    await loadAssets(true);           // 다 저장한 뒤 한 번만 새로 불러온다
+  } finally { habRunning = false; if (HAB_QUEUE.length) drainHabits(); }
 }
 // 끝낸 시간을 성장 기록(log) 한 건으로 바꾼다 — 날짜는 시작한 날
 function timerLog(goal, act, minutes, memo) {
@@ -2168,7 +2182,7 @@ async function saveTimeEdit() {
   finally { tbusy = false; }
 }
 async function timerAct(kind, id) {
-  if (tbusy) return;
+  if (tbusy) return toast("저장하는 중이에요 — 잠시 뒤에 다시 눌러 주세요");
   tbusy = true;
   try {
     if (!DATA && (kind === "end" || kind === "del")) { toast("불러오는 중…"); await loadAssets(true); }
