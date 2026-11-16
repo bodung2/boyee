@@ -1510,8 +1510,10 @@ function rivalProfile(r, grp) {
 }
 function rivalState(S) {
   const grp = globalGroup(), mine = myShares(S, grp), me = composite(mine);
-  const beaten = RIVALS.filter(r => r.c.score < me.score), next = RIVALS.find(r => r.c.score >= me.score);
-  return {grp, mine, me, beaten, next};
+  // 한 번 이긴 상대는 계속 이긴 것으로 친다(격파 기록) — 페이스가 잠시 내려가 종합 점수가 떨어져도 이미 이긴 상대에게 다시 붙지 않게
+  const {it, m} = rivalWinDates(), beaten = RIVALS.filter(r => r.c.score < me.score || m.has(r.lv)), next = RIVALS.find(r => !beaten.includes(r));
+  const best = Math.max(me.score, num(it && it.f.top) || 0);
+  return {grp, mine, me, beaten, next, best};
 }
 function rivalWinDates() {          // 'Lv:날짜,Lv:날짜' 한 줄(설정 시트 한 항목)
   const it = byCat("rivalrec")[0], m = new Map();
@@ -1542,11 +1544,14 @@ let rivalSaving = false;
 async function saveRivalWins(S) {
   if (rivalSaving) return 0; rivalSaving = true;
   try {
-    const {it, m} = rivalWinDates(), {beaten} = rivalState(S), add = beaten.filter(r => !m.has(r.lv));
-    if (!add.length) return 0;
+    const {it, m} = rivalWinDates(), {beaten, me} = rivalState(S), add = beaten.filter(r => !m.has(r.lv));
+    const top = num(it && it.f.top) || 0, newTop = me.score > top + .3;          // 최고 종합 점수도 함께(0.3점 넘게 오를 때만 저장)
+    if (!add.length && !newTop) return 0;
     add.forEach(r => m.set(r.lv, DATA.today));
     const log = [...m.entries()].sort((a, b) => a[0] - b[0]).map(([k, d]) => `${k}:${d}`).join(",");
-    await api("saveItem", {id: it ? it.id : "", category: "rivalrec", name: "가상 상대 격파 기록", date: DATA.today, f: {log, best: Math.max(...m.keys())}});
+    await api("saveItem", {id: it ? it.id : "", category: "rivalrec", name: "가상 상대 격파 기록", date: DATA.today,
+      f: {log, best: m.size ? Math.max(...m.keys()) : 0, top: Math.round(Math.max(top, me.score) * 10) / 10}});
+    if (!add.length) return 1;
     if (it) { const last = add[add.length - 1], prevBest = Math.max(0, ...[...m.keys()].filter(k => !add.includes(RIVALS[k - 1])));
       const prevTier = prevBest ? RIVALS[prevBest - 1].tier : "", promoted = last.tier !== prevTier ? last.tier : "";
       showKO(last, RIVALS.find(r => r.lv === last.lv + 1), promoted); }
@@ -1716,7 +1721,7 @@ function renderGrowth() {
 }
 
 // 화면 버전: 폰이 새 화면을 받았는지 성장 탭 맨 아래에서 확인할 수 있게(바꿀 때마다 올린다)
-const APP_BUILD = "2026.11.16-f";
+const APP_BUILD = "2026.11.16-g";
 // 카드 하나를 그리다 오류가 나도 나머지 화면은 그대로 보이게, 오류 내용은 그 자리에 보여 준다
 function safeCard(name, fn) {
   try { return fn(); }
@@ -1753,6 +1758,7 @@ function vsHero(S, RS) {
       <div class="vx">VS</div>
       <div class="who rv"><div class="av">${RIVAL_FACE[next.kind] || "🥷"}</div><div class="nm">${esc(next.name)}</div><div class="sc">${next.c.score.toFixed(1)}</div><div class="sb">${esc(next.kind)}</div></div></div>
     ${(pf => `<div class="prof"><b>👤 ${esc(pf.line)}</b><br>${esc(pf.work)}<br>${esc(pf.sub)}</div>`)(rivalProfile(next, grp))}
+    ${RS.best > me.score + .3 ? `<div class="tip2" style="margin-top:8px;background:rgba(245,158,11,.18)">📉 지금 ${me.score.toFixed(1)}점 · 최고 ${RS.best.toFixed(1)}점 — 최근 기록이 뜸해 평균 페이스가 내려갔어요. 이긴 상대와 티어는 그대로예요</div>` : ""}
     <div class="tug"><i style="width:${pos}%"></i><em style="left:${pos}%"></em></div>
     <div class="row" style="font-size:11px;opacity:.9"><span>영역 대결 <b>${wins}승 ${lost}패</b>${GOALS.some(g => mine[g.k] == null) ? ` · 기록 없음 ${GOALS.filter(g => mine[g.k] == null).length}` : ""}</span><span>종합 ${Math.max(.1, next.c.score - me.score).toFixed(1)}점 차</span></div>
     ${h ? `<div class="tip2">💡 ${h.g.icon} <b>${esc(h.g.label)}</b>${josa(h.g.label, "을", "를")} 상위 ${fmtPct(h.target)}로 올리면 역전! 상대 약점은 ${h.weak.icon} ${esc(h.weak.label)}</div>` : ""}
@@ -1872,7 +1878,7 @@ function tierCard(S, RS) {
     <div style="min-width:0"><div class="label">현재 티어 · ${esc(cmpLabel(grp))}</div><div class="tb">${esc(tier)}</div>
       <div style="font-size:13px">${nextTier ? `${esc(nextTier[1])}까지 <b>${ti < 0 ? 1 : RIVAL_TIERS[ti][0] + 1 - lv}명</b> · 진행 ${Math.round(Math.min(1, prog) * 100)}%` : "최고 티어"}</div>
       <div style="font-size:13px;margin-top:2px">${fmtN(pop)}명 중 <b>${fmtN(rank)}등</b>${rankDelta(me, pop)}</div>
-      <div class="muted" style="font-size:12px">종합 ${me.score.toFixed(1)} / 100점 · 성인 전체 ${fmtN(arank)}등</div></div></div>
+      <div class="muted" style="font-size:12px">종합 ${me.score.toFixed(1)} / 100점${RS.best > me.score + .05 ? ` (최고 ${RS.best.toFixed(1)})` : ""} · 성인 전체 ${fmtN(arank)}등</div></div></div>
     <button type="button" class="btn" data-g="badges" style="width:100%;margin-top:10px">🏅 배지 도감 ${badgeDates().size}/${BADGES.length}</button></div>`;
 }
 // 오늘의 미션 3개: 역전 길잡이 영역 1개 + 양치 + 다른 영역 1개 — 오늘 기록으로 자동 체크(점수와 무관한 동기 장치)
