@@ -163,6 +163,7 @@ body.has-run #toast{bottom:auto;top:64px}body.has-run{padding-bottom:calc(76px +
 .mis:first-of-type{border-top:0}.mis .ck{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:13px;font-weight:900;border:2px solid var(--mute);flex:none}
 .mis.done .ck{background:#22c55e;border-color:#22c55e;color:#fff}.mis.done .mt{text-decoration:line-through;color:var(--sub)}
 .mis .flip{margin-left:auto;font-size:11px;font-weight:800;color:#f59e0b;border:1px solid #f59e0b;border-radius:99px;padding:1px 7px}
+.vs .prof{margin-top:10px;font-size:12.5px;line-height:1.5;background:rgba(255,255,255,.1);border-radius:12px;padding:8px 12px}
 .vs .taunt{margin-top:8px;font-size:13px;font-style:italic;opacity:.95}
 .bdg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}.bd{border:1px solid var(--line);border-radius:12px;padding:10px 6px;text-align:center;opacity:.55}
 .bd.on{opacity:1;border-color:#f59e0b;box-shadow:0 0 0 1px rgba(245,158,11,.35),0 6px 16px rgba(245,158,11,.15)}.bd .bi{font-size:26px}.bd b{display:block;font-size:12px}.bd small{display:block;font-size:10px;color:var(--sub)}
@@ -1429,6 +1430,69 @@ function rivalValue(goal, p, grp) {
   } finally { CMP_FORCE = null; }
   return "";
 }
+// 상대 프로필: 이미 정해진 영역별 상위 %와 어긋나지 않게(같은 비교군 통계로) 나이·결혼·자녀·직업·집·생활 습관을 정한다. 실존 인물 아님
+const JOB_TITLES = [   // [상위 비율 이하, 직업 후보]
+  [.02, ["대기업 임원", "전문의(개원)", "로펌 파트너 변호사", "IT 스타트업 창업자", "외국계 투자은행 이사"]],
+  [.06, ["대기업 부장", "대학병원 전문의", "회계법인 매니저", "공기업 부장", "IT 대기업 팀장"]],
+  [.15, ["대기업 차장", "공기업 차장", "세무사", "중학교 부장교사", "IT 기업 시니어 개발자", "약사"]],
+  [.30, ["중견기업 과장", "초등학교 교사", "7급 공무원", "간호사", "은행 대리", "소방관"]],
+  [.50, ["중소기업 대리", "영업 사원", "9급 공무원", "물류센터 관리자", "사회복지사"]],
+  [1.01, ["계약직 사무원", "프리랜서 디자이너", "배달 라이더", "편의점 점주", "취업 준비 중"]]];
+const KIND_JOB = {"워커홀릭": "IT", "자산가": "투자", "인싸 직장인": "영업", "가정의 중심": "교사", "주말 러너": "공무원", "짠테크": "은행"};
+const LIFE_STRONG = {body: ["새벽 러닝 주 5회", "헬스 주 4회", "주말 등산"], mind: ["매일 10분 명상", "아침 일기", "디지털 디톡스"], craft: ["주말마다 요리", "아이와 블록 놀이", "집 정리 달인"],
+  social: ["매주 부모님 댁 저녁", "가족 여행 월 1회", "아내와 주 1회 데이트"], career: ["밤에 자격증 공부", "사내 프로젝트 리더", "업계 세미나 강연"], economy: ["가계부 10년째", "매달 적립식 투자", "부업 수입 월 100만"]};
+const LIFE_WEAK = {body: "운동은 거의 안 함", mind: "스트레스 많은 편", craft: "집안일은 남에게", social: "가족 모임은 뜸함", career: "일은 적당히", economy: "모으는 건 서툼"};
+// 회사(가상 이름, 실제 규모·업종) — 실제 회사명에 지어낸 사람·연봉을 붙이지 않으려고 '(가상)'으로 표시
+const FIRM_NAMES = ["가온", "다온", "미르", "해솔", "라온", "늘품", "온새", "아라", "윤슬", "도담", "시나브로", "별가람", "마루", "나린", "새벽들"];
+const FIRM_BY_JOB = [[/IT|개발자|스타트업/, n => `${n}소프트`], [/공기업/, n => `한국${n}공사`], [/대기업/, n => `${n}전자`], [/중견기업/, n => `${n}산업`],
+  [/중소기업|물류/, n => `${n}로지스`], [/투자은행/, n => `${n}증권`], [/은행/, n => `${n}은행`], [/교사/, n => `${n}초등학교`], [/공무원/, n => `${n}시청`],
+  [/전문의|전공의|간호사/, n => `${n}병원`], [/변호사/, n => `법무법인 ${n}`], [/회계/, n => `${n}회계법인`], [/세무사/, n => `${n}세무회계`], [/약사/, n => `${n}약국`],
+  [/소방관/, n => `${n}소방서`], [/사회복지사/, n => `${n}복지관`], [/영업/, n => `${n}유통`], [/디자이너|프리랜서/, n => `스튜디오 ${n}`], [/점주/, n => `${n}마트`]];
+// 사는 곳: 집값을 지역별 공식 평균에 맞춰(한국부동산원 2026.10 서울 아파트 평균 13억 6,862만·중위 11억 500만, 수도권 주택 평균 6억 8,102만, 지방 주택 평균 2억 4,106만 — 구간 경계는 이를 기준으로 한 추정)
+const HOME_AREA = [[20e8, ["서울 서초구", "서울 강남구", "서울 송파구"]], [11e8, ["서울 마포구", "서울 성동구", "서울 동작구", "서울 영등포구", "서울 광진구"]],
+  [7e8, ["경기 성남 분당구", "경기 과천시", "경기 용인 수지구", "경기 하남시", "경기 광명시"]], [4e8, ["경기 고양 일산동구", "경기 수원 영통구", "인천 연수구 송도", "경기 화성 동탄", "경기 김포시"]],
+  [2.4e8, ["부산 해운대구", "대구 수성구", "대전 유성구", "광주 남구", "울산 남구"]], [0, ["충남 천안시", "충북 청주시", "전북 전주시", "경남 창원시", "강원 원주시"]]];
+const eok = v => v >= 1e8 ? (Math.round(v / 1e7) / 10).toLocaleString("ko-KR") + "억" : Math.round(v / 1e4).toLocaleString("ko-KR") + "만";
+function rivalProfile(r, grp) {
+  const seed = n => (r.lv * 37 + n * 101) % 997;
+  const pick = (arr, n) => arr[seed(n) % arr.length];
+  const ageRange = {20: [24, 29], 30: [31, 39], 40: [41, 49], 50: [51, 59], 60: [61, 68], all: [30, 55]}[grp.age] || [31, 39];
+  // 커리어가 높을수록 그 나이대 안에서 나이가 많게(직급과 나이가 어울리게) + 약간의 흔들림
+  const lift = Math.min(1, .3 + (.5 - Math.min(.5, r.ps.career)) * 1.4);
+  const age = Math.min(ageRange[1], Math.max(ageRange[0], Math.round(ageRange[0] + (ageRange[1] - ageRange[0]) * lift) + seed(1) % 3 - 1));
+  const sex = grp.sex === "all" ? (seed(2) % 2 ? "남" : "여") : grp.sex === "f" ? "여" : "남";
+  // 가족: 사회 상위 %를 같은 비교군의 결혼·자녀 비율에 맞춰(결혼 → 자녀 1 → 2 → 3명 사다리)
+  CMP_FORCE = grp; let SB; try { SB = cmpBench("social"); } finally { CMP_FORCE = null; }
+  const ps = r.ps.social, m = SB.married, R = SB.childR;
+  const fam = ps <= m * R[3] ? "기혼 · 자녀 3명" : ps <= m * R[2] ? "기혼 · 자녀 2명" : ps <= m * R[1] ? "기혼 · 자녀 1명" : ps <= m ? "기혼 · 아직 자녀 없음" : "미혼";
+  // 직업: 커리어 상위 %에 맞는 단계에서, 성향에 어울리는 것을 먼저
+  const band = JOB_TITLES.find(([p]) => r.ps.career <= p + 1e-6)[1], hint = KIND_JOB[r.kind];
+  let job = (hint && band.find(j => j.includes(hint))) || pick(band, 3);
+  if (age < 30) [["로펌 파트너 변호사", "변호사"], ["전문의(개원)", "전공의"], ["대학병원 전문의", "전공의"], ["부장교사", "교사"], ["임원", "핵심 인재"], ["부장", "과장"], ["차장", "대리"],
+    ["이사", "애널리스트"], ["팀장", "리드"], ["창업자", "공동창업자"]].forEach(([a, b]) => { job = job.replace(a, b); });     // 20대에게 어울리는 직급으로
+  const home = r.ps.economy <= .2 ? "자가 아파트" : r.ps.economy <= .4 ? "자가(대출 상환 중)" : r.ps.economy <= .6 ? "전세" : "월세";
+  const order = GOALS.slice().sort((a, b) => r.ps[a.k] - r.ps[b.k]), weak = GOALS.slice().sort((a, b) => r.ps[b.k] - r.ps[a.k])[0];   // 대결 카드의 '상대 약점'과 같은 계산
+  // 생활 습관: 실제로 강한(상위 35% 안) 영역만 — 평균인 사람에게 '새벽 러닝 주 5회'가 붙지 않게
+  const life = order.slice(0, 2).filter(g => r.ps[g.k] <= .35).map((g, i) => pick(LIFE_STRONG[g.k], 4 + i));
+  if (!life.length) life.push(pick(["주말엔 집에서 넷플릭스", "퇴근 후 유튜브", "평범한 주말 나들이"], 6));
+  if (r.ps[weak.k] > .5) life.push(LIFE_WEAK[weak.k]);
+  if (fam === "미혼") life.forEach((x, i) => { if (/아내|아이/.test(x)) life[i] = "친구들과 주말 풋살"; });
+  // 연봉: 커리어 상위 %에 해당하는 월 보수(같은 비교군 임금 분포) × 12, 기업 규모는 연봉으로(대기업 평균 월 613만 · 중소 307만, 2024 임금근로일자리 소득)
+  CMP_FORCE = grp; let CB, EB; try { CB = cmpBench("career"); EB = cmpBench("economy"); } finally { CMP_FORCE = null; }
+  const monthly = CB.wageMedian * Math.exp(JOB.wageSigma * probit(1 - Math.min(.999, Math.max(.001, r.ps.career)))), salary = monthly * 12;
+  const size = monthly >= 6.13e6 ? "대기업 평균 이상" : monthly >= 4.5e6 ? "중견기업 수준" : monthly >= 3.07e6 ? "중소기업 평균 이상" : "중소기업 평균 아래";
+  const fn = FIRM_NAMES[seed(7) % FIRM_NAMES.length], fj = FIRM_BY_JOB.find(([re]) => re.test(job));
+  const firm = /취업 준비/.test(job) ? "" : (fj ? fj[1](fn) : fn + "컴퍼니") + "(가상)";
+  // 집: 경제 상위 %에 해당하는 순자산(같은 비교군 분포) → 자가면 집값 ≈ 순자산 × 1.2(대출 포함, 추정), 전·월세면 보증금 ≈ 순자산 × 0.6
+  const net = bisect(x => bandShare(x, EB.networth), 1e5, 1e11, r.ps.economy, true);
+  const own = /자가/.test(home), price = own ? net * 1.2 : net * .6;
+  const areas = HOME_AREA.find(([v]) => (own ? price : price * 1.6) >= v)[1], area = areas[seed(8) % areas.length];   // 전·월세는 보증금이 집값의 약 60%라 집값으로 바꿔 지역을 고른다
+  const homeTxt = own ? `${area} 아파트 자가${/대출/.test(home) ? "(대출 상환 중)" : ""} · 시세 약 ${eok(price)}` : `${area} 아파트 ${home} · 보증금 약 ${eok(price)}`;
+  return {age, sex, fam, job, home, life, firm, salary, homeTxt,
+    line: `${age}세 ${sex} · ${fam} · ${job}`,
+    work: `${firm ? "🏢 " + firm + " · " : ""}연봉 약 ${eok(salary)} 원(월 ${Math.round(monthly / 1e4).toLocaleString("ko-KR")}만 · ${size})`,
+    sub: `🏠 ${homeTxt} · ${life.join(" · ")}`};
+}
 function rivalState(S) {
   const grp = globalGroup(), mine = myShares(S, grp), me = composite(mine);
   const beaten = RIVALS.filter(r => r.c.score < me.score), next = RIVALS.find(r => r.c.score >= me.score);
@@ -1446,7 +1510,8 @@ function showRivals(more) {
   const cur = next ? next.lv : RIVALS.length, list = RIVALS.slice(0, Math.min(RIVALS.length, RIVAL_SHOW));
   const rows = list.map(r => { const b = beaten.includes(r), isNext = next === r;
     return `<div class="dday" style="display:block${isNext ? ";background:var(--chip);border-radius:8px;padding:8px" : ""}"><div class="row"><b>${b ? "✅" : isNext ? "🥊" : "⬜"} Lv.${r.lv} ${esc(r.name)}</b><span class="muted">${esc(r.tier)} · 종합 ${r.c.score.toFixed(1)}점 · 상위 ${fmtPct(r.c.top)}</span></div>
-      <div class="muted" style="font-size:12px">${esc(r.kind)} · ${esc(r.bio)}${won.get(r.lv) ? ` · ${esc(fmtDay(won.get(r.lv)))} 처음 이김` : ""}</div>
+      <div class="muted" style="font-size:12px">${esc(r.kind)} · ${esc(rivalProfile(r, grp).line)}${won.get(r.lv) ? ` · ${esc(fmtDay(won.get(r.lv)))} 처음 이김` : ""}</div>
+      ${b || isNext || r.lv <= cur + 3 ? (pf => `<div class="muted" style="font-size:12px">${esc(pf.work)}<br>${esc(pf.sub)}</div>`)(rivalProfile(r, grp)) : ""}
       ${b || isNext || r.lv <= cur + 3 ? `<div style="font-size:12px;margin-top:2px">${GOALS.map(g => `${g.icon} ${esc(rivalValue(g.k, r.ps[g.k], grp))}`).join(" · ")}</div>` : ""}</div>`; }).join("");
   $("#form").innerHTML = `<div class="row"><h3 style="margin:0">가상 상대 ${RIVALS.length}명</h3><button class="btn" type="button" data-act="close">닫기</button></div>
     <p class="muted" style="font-size:12px;line-height:1.6">${beaten.length}명 격파 · 내 종합 ${me.score.toFixed(1)}점 · 비교군 ${esc(cmpLabel(grp))} 기준 숫자.
@@ -1636,7 +1701,7 @@ function renderGrowth() {
 }
 
 // 화면 버전: 폰이 새 화면을 받았는지 성장 탭 맨 아래에서 확인할 수 있게(바꿀 때마다 올린다)
-const APP_BUILD = "2026.11.16-b";
+const APP_BUILD = "2026.11.16-d";
 // 카드 하나를 그리다 오류가 나도 나머지 화면은 그대로 보이게, 오류 내용은 그 자리에 보여 준다
 function safeCard(name, fn) {
   try { return fn(); }
@@ -1672,6 +1737,7 @@ function vsHero(S, RS) {
     <div class="vrow"><div class="who me"><div class="av">😎</div><div class="nm">나</div><div class="sc">${me.score.toFixed(1)}</div><div class="sb">상위 ${fmtPct(me.top)}</div></div>
       <div class="vx">VS</div>
       <div class="who rv"><div class="av">${RIVAL_FACE[next.kind] || "🥷"}</div><div class="nm">${esc(next.name)}</div><div class="sc">${next.c.score.toFixed(1)}</div><div class="sb">${esc(next.kind)}</div></div></div>
+    ${(pf => `<div class="prof"><b>👤 ${esc(pf.line)}</b><br>${esc(pf.work)}<br>${esc(pf.sub)}</div>`)(rivalProfile(next, grp))}
     <div class="tug"><i style="width:${pos}%"></i><em style="left:${pos}%"></em></div>
     <div class="row" style="font-size:11px;opacity:.9"><span>영역 대결 <b>${wins}승 ${lost}패</b>${GOALS.some(g => mine[g.k] == null) ? ` · 기록 없음 ${GOALS.filter(g => mine[g.k] == null).length}` : ""}</span><span>종합 ${Math.max(.1, next.c.score - me.score).toFixed(1)}점 차</span></div>
     ${h ? `<div class="tip2">💡 ${h.g.icon} <b>${esc(h.g.label)}</b>${josa(h.g.label, "을", "를")} 상위 ${fmtPct(h.target)}로 올리면 역전! 상대 약점은 ${h.weak.icon} ${esc(h.weak.label)}</div>` : ""}
