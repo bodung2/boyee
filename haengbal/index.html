@@ -78,6 +78,8 @@ mark{background:#fff3a3;padding:0}
 table{border-collapse:collapse;width:100%}
 td,th{border-bottom:1px solid var(--line);padding:6px;vertical-align:top;text-align:left;font-size:13px}
 th{background:#f6f7f9;position:sticky;top:0}
+#sync.fail{color:var(--bad);font-weight:600;cursor:pointer}
+#sync a{color:inherit}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1d2330;color:#fff;padding:8px 14px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:60}
 #toast.on{opacity:.95}
 .lock main .it,.lock #items .b button,.lock #addFree{pointer-events:none}
@@ -91,6 +93,7 @@ th{background:#f6f7f9;position:sticky;top:0}
   <button id="newYear" class="sm">+ 새 학년도</button>
   <div class="tabs" id="areaTabs"></div>
   <div class="sp"></div>
+  <span id="sync" class="muted" style="display:none"></span>
   <button id="btnRoster">명단</button>
   <button id="btnAdd">문장 추가</button>
   <button id="btnAll">학급 전체 보기</button>
@@ -189,12 +192,105 @@ let area=BANK[0]?.id||'hb', cur=null, catSel='*', q='';
 let bankCache={}, useCache=null;
 
 function load(){
-  try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.years)return s}catch(e){}
+  try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.years){delete s._loaded;return s}}catch(e){}
   return {version:1,cur:thisYear,years:{[thisYear]:newYear()},custom:{},hidden:{},opt:{}};
 }
 function newYear(){return {students:[],recs:{},targets:{},locked:false}}
 let saveT=null;
-function save(){S.dirty=true;clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){alert('브라우저 저장 공간이 가득 찼습니다. 백업 저장 후 오래된 학년도를 정리하세요.')}},250)}
+function save(){S.dirty=true;scheduleSync();clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){alert('브라우저 저장 공간이 가득 찼습니다. 백업 저장 후 오래된 학년도를 정리하세요.')}},250)}
+/* ---------- 구글 시트 저장 (Apps Script로 열었을 때만) ----------
+   화면은 클릭을 바로 반영한다. 저장은 '바뀐 단위'(학년도 명단, 학생 한 명의 한 영역, 추가·숨긴 문장 하나)만
+   모아 0.7초 뒤 한 번에 보낸다. 마지막으로 시트에 저장된 값(synced)과 지금 값을 비교해 바뀐 것만 고른다. */
+const GAS=(typeof google!=='undefined'&&google.script&&google.script.run)?google.script.run:null;
+const NEED_API=1, SKEY='haengbal.synced';
+let synced={}; try{synced=JSON.parse(localStorage.getItem(SKEY))||{}}catch(e){}
+let syncT=null,inflight=false,failN=0,lastPull=0,sheetUrl='';
+const areaName=id=>(BANK.find(a=>a.id===id)||{}).name||id;
+function units(){
+  const u={};
+  for(const y in S.years){const o=S.years[y];
+    u['Y|'+y]=JSON.stringify({students:o.students,targets:o.targets||{},locked:!!o.locked,lockedAt:o.lockedAt||''});
+    for(const a in o.recs||{})for(const no in o.recs[a]){const r=o.recs[a][no];if(r&&r.length)u[`R|${y}|${a}|${no}`]=JSON.stringify(r)}}
+  for(const a in S.custom)(S.custom[a]||[]).forEach(c=>u[`C|${a}|${c.id}`]=JSON.stringify({cat:c.cat,t:c.t}));
+  for(const k in S.hidden)u['H|'+k]='1';
+  return u;
+}
+function cols(k,v){
+  const p=k.split('|'),o=JSON.parse(v);
+  if(p[0]==='Y')return [p[1],o.students.length,o.locked?'확정':'',o.lockedAt];
+  if(p[0]==='R'){const st=((S.years[p[1]]||{}).students||[]).find(s=>String(s.no)===p[3]);return [p[1],areaName(p[2]),p[3],st?st.name:'',o.join(' '),new Date().toLocaleString('ko-KR')]}
+  if(p[0]==='C')return [areaName(p[1]),o.cat,o.t];
+  if(p[0]==='H')return [areaName(p[1]),k.slice(3+p[1].length)];
+}
+function fromUnits(m){
+  const years={},custom={},hidden={};
+  const yr=y=>years[y]||(years[y]=newYear());
+  for(const k in m){const p=k.split('|'),v=m[k];
+    try{
+      if(p[0]==='Y'){const o=JSON.parse(v),y=yr(p[1]);Object.assign(y,{students:o.students||[],targets:o.targets||{},locked:!!o.locked,lockedAt:o.lockedAt||''})}
+      else if(p[0]==='R'){const y=yr(p[1]);(y.recs[p[2]]||(y.recs[p[2]]={}))[p[3]]=JSON.parse(v)}
+      else if(p[0]==='C'){const o=JSON.parse(v);(custom[p[1]]||(custom[p[1]]=[])).push({id:p[2],cat:o.cat,t:o.t})}
+      else if(p[0]==='H')hidden[k.slice(2)]=1;
+    }catch(e){console.warn('읽지 못한 줄',k)}
+  }
+  return {years,custom,hidden};
+}
+function pendingList(){
+  const u=units(),list=[];
+  for(const k in u)if(synced[k]!==u[k])list.push({k,v:u[k]});
+  for(const k in synced)if(!(k in u))list.push({k,v:null});
+  return list;
+}
+function setSync(st,msg){
+  const el=$('#sync');if(!GAS)return;el.style.display='';el.className='muted';
+  if(st==='ok')el.innerHTML=sheetUrl?`<a href="${sheetUrl}" target="_blank" title="저장 시트 열기">✓ 시트에 저장됨</a>`:'✓ 시트에 저장됨';
+  if(st==='pending'||st==='saving')el.textContent='저장 중…';
+  if(st==='load')el.textContent='시트에서 불러오는 중…';
+  if(st==='fail'){el.className='fail';el.textContent='⚠ 저장 실패 — 다시 시도 중 (누르면 바로)';el.title=String(msg||'')}
+}
+function scheduleSync(ms){if(!GAS)return;clearTimeout(syncT);syncT=setTimeout(push,ms??700);if(!inflight)setSync('pending')}
+function push(){
+  if(!GAS||!S._loaded)return;
+  if(inflight)return scheduleSync(300);
+  const list=pendingList().slice(0,300);
+  if(!list.length)return setSync('ok');
+  list.forEach(x=>{if(x.v!==null)x.c=cols(x.k,x.v)});
+  inflight=true;setSync('saving');
+  GAS.withSuccessHandler(res=>{
+    inflight=false;failN=0;
+    list.forEach(x=>{if(x.v===null)delete synced[x.k];else synced[x.k]=x.v});
+    try{localStorage.setItem(SKEY,JSON.stringify(synced))}catch(e){}
+    if(res&&res.api<NEED_API)apiWarn(res.api);
+    if(pendingList().length)push();else setSync('ok');
+  }).withFailureHandler(err=>{inflight=false;failN++;setSync('fail',err&&err.message);scheduleSync(Math.min(30000,2000*failN))}).saveUnits(list);
+}
+function apiWarn(v){const b=$('#banner');b.style.display='block';b.innerHTML=`Apps Script의 <b>Code.gs</b>가 옛 버전(${v})입니다. 저장소의 haengbal/Code.gs를 다시 붙여 넣고 <b>배포 관리 → 새 버전</b>으로 다시 배포하세요.`}
+function pull(first){
+  if(!GAS||inflight)return;
+  lastPull=Date.now();if(first)setSync('load');
+  GAS.withSuccessHandler(res=>{
+    sheetUrl=res.url||'';
+    const server=res.units||{},local=units(),merged=Object.assign({},server);
+    if(!Object.keys(synced).length){
+      // 이 기기에서 처음 연결: 시트 내용을 기준으로 하고, 시트에 없는 이 기기 기록(빈 명단 제외)만 더한다
+      for(const k in local){if(k in server)continue;if(k[0]==='Y'&&!JSON.parse(local[k]).students.length)continue;merged[k]=local[k]}
+    }else{
+      // 아직 시트에 못 보낸 이 기기의 변경은 지키고, 나머지는 시트(다른 기기에서 고친 것 포함)를 따른다
+      for(const k in local)if(synced[k]!==local[k])merged[k]=local[k];
+      for(const k in synced)if(!(k in local))delete merged[k];
+    }
+    const d=fromUnits(merged);
+    S.years=d.years;S.custom=d.custom;S.hidden=d.hidden;
+    if(!S.years[S.cur]){const ys=Object.keys(S.years).sort();S.cur=ys.length?ys[ys.length-1]:thisYear}
+    synced=server;try{localStorage.setItem(SKEY,JSON.stringify(synced))}catch(e){}
+    S._loaded=true;bankCache={};useCache=null;
+    if(cur!=null&&!Y().students.some(s=>s.no===cur))cur=null;
+    try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
+    renderAll();
+    if(res.api<NEED_API)apiWarn(res.api);
+    if(pendingList().length)push();else setSync('ok');
+  }).withFailureHandler(err=>{setSync('fail',err&&err.message);setTimeout(()=>pull(first),3000)}).loadAll();
+}
 function Y(){return S.years[S.cur]||(S.years[S.cur]=newYear())}
 function A(){return BANK.find(a=>a.id===area)}
 function recs(no){const r=Y().recs[area]||(Y().recs[area]={});return r[no]||(r[no]=[])}
@@ -444,9 +540,18 @@ $('#fileIn').onchange=async e=>{
   const ys=Object.keys(d.years).sort();S.cur=ys[ys.length-1];cur=null;bankCache={};useCache=null;save();renderAll();
   toast(`${ys.join(', ')}학년도를 불러왔습니다`);
 };
-window.addEventListener('beforeunload',()=>{clearTimeout(saveT);try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}});
+window.addEventListener('beforeunload',e=>{
+  clearTimeout(saveT);try{localStorage.setItem(KEY,JSON.stringify(S))}catch(_){}
+  if(GAS&&(inflight||pendingList().length)){push();e.preventDefault();e.returnValue=''}
+});
+$('#sync').onclick=()=>{if($('#sync').classList.contains('fail')){failN=0;S._loaded?push():pull(true)}};
+document.addEventListener('visibilitychange',()=>{
+  // 다른 기기에서 고친 내용 받기: 이 화면으로 돌아왔을 때, 보낼 것이 없고 30초가 지났으면
+  if(document.visibilityState==='visible'&&S._loaded&&!inflight&&!pendingList().length&&Date.now()-lastPull>30000)pull(false);
+});
 
 renderAll();
+if(GAS)pull(true);else S._loaded=true;
 </script>
 </body>
 </html>
