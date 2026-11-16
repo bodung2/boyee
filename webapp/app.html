@@ -1721,7 +1721,7 @@ function renderGrowth() {
 }
 
 // 화면 버전: 폰이 새 화면을 받았는지 성장 탭 맨 아래에서 확인할 수 있게(바꿀 때마다 올린다)
-const APP_BUILD = "2026.11.16-g";
+const APP_BUILD = "2026.11.16-h";
 // 카드 하나를 그리다 오류가 나도 나머지 화면은 그대로 보이게, 오류 내용은 그 자리에 보여 준다
 function safeCard(name, fn) {
   try { return fn(); }
@@ -1733,6 +1733,8 @@ const josa = (w, a, b) => { const c = (w || "").charCodeAt(w.length - 1); return
 const RIVAL_FACE = {"평균": "🙂", "끝판왕": "🐉", "주말 러너": "🏃", "마당발": "🤝", "짠테크": "🐷", "워커홀릭": "🦾", "가정의 중심": "🏡", "명상가": "🧘",
   "육각형": "🔷", "자산가": "💎", "철인": "🏋️", "살림 고수": "🍳", "인싸 직장인": "🎤", "자기관리왕": "👑"};
 const TIER_COLOR = {"브론즈": ["#f3c69a", "#b06a2b"], "실버": ["#f8fafc", "#94a3b8"], "골드": ["#fde68a", "#d97706"], "플래티넘": ["#ccfbf1", "#14b8a6"], "다이아": ["#dbeafe", "#3b82f6"], "마스터": ["#f5d0fe", "#a21caf"]};
+// 대결 표의 위치: 평균보다 위면 '상위 %', 아래면 '하위 %' — 하위 16%보다 낮으면 점수 바닥(Z_FLOOR = −1)이라 '하위 16% 이하'
+const fmtDuel = p => p <= .5 ? fmtTop(p) : p >= 1 - ncdf(Z_FLOOR) ? "하위 16% 이하" : "하위 " + Math.max(1, Math.round((1 - p) * 100)) + "%";
 const zOf = p => p == null ? Z_FLOOR : Math.max(Z_FLOOR, Math.min(Z_CAP, probit(1 - Math.min(1 - 1e-6, Math.max(1e-6, p)))));
 // 역전 길잡이: 상대가 앞선 영역 가운데 가장 따라잡기 쉬운 곳과, 그 영역만 올려 역전하려면 필요한 상위 %
 function flipHint(mine, me, next) {
@@ -1749,10 +1751,15 @@ function vsHero(S, RS) {
   if (!next) return `<div class="card vs"><div style="font-size:13px;opacity:.85">🏆 ${RIVALS.length}명 모두 격파</div><div style="font-size:24px;font-weight:900;margin-top:6px">대한민국 최상위 · 종합 ${me.score.toFixed(1)}점</div></div>`;
   const wins = GOALS.filter(g => mine[g.k] != null && mine[g.k] < next.ps[g.k]).length, lost = GOALS.filter(g => mine[g.k] != null).length - wins;
   const pos = Math.max(6, Math.min(94, 50 + (me.score - next.c.score) * 8)), h = flipHint(mine, me, next), parts = MY_PARTS;
-  const rows = GOALS.map(g => { const m = mine[g.k], r = next.ps[g.k], win = m != null && m < r;
+  // 영역마다 종합 점수에 준 차이(점): 종합 = 50 + 10 × (여섯 영역 정규 점수 평균) / Z_SD 이므로 영역 하나는 10·Δz/(6·Z_SD)
+  const gain = g => (zOf(mine[g.k]) - zOf(next.ps[g.k])) * 10 / (6 * Z_SD);
+  let plus = 0, minus = 0;
+  const rows = GOALS.map(g => { const m = mine[g.k], r = next.ps[g.k], win = m != null && m < r, d = gain(g);
+    if (d >= 0) plus += d; else minus += d;
     const why = (parts[g.k] || []).map(x => `${x.label} ${fmtPct(x.p)}`).join(" · ");
-    return `<tr><td style="padding:3px 0;vertical-align:top;white-space:nowrap">${g.icon} ${g.short}</td><td style="text-align:right">${m == null ? "기록 없음" : fmtTop(m)}${why ? `<br><small class="muted">${esc(why)}</small>` : ""}</td>
-      <td style="text-align:center">${m == null ? "·" : win ? "🟢" : "🔴"}</td><td style="text-align:right">${fmtTop(r)}<br><small class="muted">${esc(rivalValue(g.k, r, grp))}</small></td></tr>`; }).join("");
+    return `<tr><td style="padding:3px 0;vertical-align:top;white-space:nowrap">${g.icon} ${g.short}</td><td style="text-align:right">${m == null ? "기록 없음" : fmtDuel(m)}${why ? `<br><small class="muted">${esc(why)}</small>` : ""}</td>
+      <td style="text-align:center;white-space:nowrap">${m == null ? "⚪" : win ? "🟢" : "🔴"}<br><small style="font-weight:700;color:${d >= 0 ? "#22c55e" : "#f87171"}">${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)}점</small></td><td style="text-align:right">${fmtDuel(r)}<br><small class="muted">${esc(rivalValue(g.k, r, grp))}</small></td></tr>`; }).join("");
+  const sum = `<div class="tip2" style="margin-top:6px;font-size:12px">⚖️ 승부는 이긴 영역 수가 아니라 <b>점수 차의 합</b>으로 정해져요 · 앞선 영역 <b style="color:#22c55e">+${plus.toFixed(1)}</b> · 뒤진 영역 <b style="color:#f87171">−${Math.abs(minus).toFixed(1)}</b> → 종합 <b>${me.score >= next.c.score ? "+" : "−"}${Math.abs(me.score - next.c.score).toFixed(1)}점</b>${minus < -.05 ? ` · 가장 크게 잃는 곳: ${(g => `${g.icon} ${esc(g.label)}`)(GOALS.slice().sort((a, b) => gain(a) - gain(b))[0])}` : ""}</div>`;
   return `<div class="card vs" id="vscard"><div class="row" style="font-size:12px;opacity:.9"><span>🥊 오늘의 대결 · Lv.${next.lv} ${esc(next.tier)}</span><button type="button" class="vbtn" data-g="rivals">${beaten.length}/${RIVALS.length} 격파 ›</button></div>
     <div class="vrow"><div class="who me"><div class="av">😎</div><div class="nm">나</div><div class="sc">${me.score.toFixed(1)}</div><div class="sb">상위 ${fmtPct(me.top)}</div></div>
       <div class="vx">VS</div>
@@ -1761,10 +1768,10 @@ function vsHero(S, RS) {
     ${RS.best > me.score + .3 ? `<div class="tip2" style="margin-top:8px;background:rgba(245,158,11,.18)">📉 지금 ${me.score.toFixed(1)}점 · 최고 ${RS.best.toFixed(1)}점 — 최근 기록이 뜸해 평균 페이스가 내려갔어요. 이긴 상대와 티어는 그대로예요</div>` : ""}
     <div class="tug"><i style="width:${pos}%"></i><em style="left:${pos}%"></em></div>
     <div class="row" style="font-size:11px;opacity:.9"><span>영역 대결 <b>${wins}승 ${lost}패</b>${GOALS.some(g => mine[g.k] == null) ? ` · 기록 없음 ${GOALS.filter(g => mine[g.k] == null).length}` : ""}</span><span>종합 ${Math.max(.1, next.c.score - me.score).toFixed(1)}점 차</span></div>
-    ${h ? `<div class="tip2">💡 ${h.g.icon} <b>${esc(h.g.label)}</b>${josa(h.g.label, "을", "를")} 상위 ${fmtPct(h.target)}로 올리면 역전! 상대 약점은 ${h.weak.icon} ${esc(h.weak.label)}</div>` : ""}
+    ${h ? `<div class="tip2">💡 ${h.g.icon} <b>${esc(h.g.label)}</b>${josa(h.g.label, "을", "를")} ${fmtDuel(h.target)}${h.target > .5 ? "까지만 올려도" : "로 올리면"} 역전! 상대 약점은 ${h.weak.icon} ${esc(h.weak.label)}</div>` : ""}
     <div class="taunt">💬 “${esc(taunt(next, grp))}” <span style="opacity:.75">— ${esc(next.name)}</span></div>
     <details><summary>영역별 대결 자세히</summary><table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;font-variant-numeric:tabular-nums">
-      <tr class="muted"><th style="text-align:left;font-weight:400">영역</th><th style="text-align:right;font-weight:400">나</th><th></th><th style="text-align:right;font-weight:400">${esc(next.name)}</th></tr>${rows}</table>
+      <tr class="muted"><th style="text-align:left;font-weight:400">영역</th><th style="text-align:right;font-weight:400">나</th><th style="font-weight:400;white-space:nowrap">점수</th><th style="text-align:right;font-weight:400">${esc(next.name)}</th></tr>${rows}</table>${sum}
       <div class="muted" style="font-size:12px;margin-top:4px">${esc(next.bio)}</div></details></div>`;
 }
 // 상대의 도발 한마디: 상대가 가장 강한 영역의 실제 숫자로, 날마다 바뀐다
