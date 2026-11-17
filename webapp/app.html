@@ -1637,13 +1637,15 @@ function cumulativeShares(pace) {
 // 누적 상위 %를 매주 한 번 기록해 두고(그 주에 처음 열 때) 지난 기록과 비교한다
 const topSnaps = () => DATA.items.filter(i => i.category === "topsnap" && i.date).sort((a, b) => a.date < b.date ? -1 : 1);
 let snapping = false;
-async function saveTopSnap(T) {
+async function saveTopSnap(T, RS) {
   const ws = weekStart(DATA.today);
   if (snapping || topSnaps().some(x => x.date === ws)) return 0;
   snapping = true;
   try {
     const f = {};
-    GOALS.forEach(g => { if (T[g.k].any) f[g.k] = Math.round(T[g.k].p * 10000) / 10000; });
+    // 그때의 비교군도 함께 남긴다 — 비교군을 바꾸면 잣대가 달라져 ▲▼가 성취 변화가 아니게 되므로, 같은 비교군일 때만 비교한다
+    GOALS.forEach(g => { if (T[g.k].any) { f[g.k] = Math.round(T[g.k].p * 10000) / 10000; const c = cmpGroup(g.k); f["g_" + g.k] = c.sex + "|" + c.age; } });
+    if (RS) { f.ctop = Math.round(RS.me.top * 1e6) / 1e6; f.cg = RS.grp.sex + "|" + RS.grp.age; }     // 종합 순위 비교용(그때의 종합 비교군과 함께)
     await api("saveItem", {category: "topsnap", name: `누적 상위 % ${ws}`, date: ws, f});
     return 1;
   } finally { snapping = false; }
@@ -1670,10 +1672,13 @@ function renderGrowth() {
   const rows = GOALS.map(g => {
     const t = T[g.k], b = BENCH[g.k];
     const sub = (cmpSame() ? "" : cmpLabel(cmpGroup(g.k)) + " · ") + (GVIEW === "all" && t.parts && t.parts.length ? t.parts.map(x => `${x.label} ${fmtPct(x.p)}`).join(" · ") : b.level);
-    const was = prevSnap && prevSnap.f[g.k] != null ? num(prevSnap.f[g.k]) : null;
+    // 지난주 기록과 비교: 그때와 비교군이 같을 때만(비교군을 기록하기 전의 옛 기록은 비교하지 않음)
+    const c = cmpGroup(g.k), sameGrp = prevSnap && prevSnap.f["g_" + g.k] === c.sex + "|" + c.age;
+    const was = sameGrp && prevSnap.f[g.k] != null ? num(prevSnap.f[g.k]) : null;
     const dlt = GVIEW === "all" && t.any && was != null ? Math.round((was - t.p) * 100) : 0;     // 상위 %가 줄면(좋아지면) ▲
+    const why = dlt && t.parts && t.parts[0] ? " " + t.parts[0].label.replace(/\(최고\)/, "") : "";   // 무엇이 움직였는지(순자산·지금 하는 일 같은 측정값은 오르내린다)
     return `<button type="button" class="grow-row" data-g="detail" data-goal="${g.k}"><span class="gi">${g.icon}</span><span class="gn">${g.label}<small>${esc(sub)}</small></span>
-      <span class="gt ${t.any && t.p < .5 ? "up" : ""}">${t.any ? fmtTop(t.p) : (GVIEW !== "all" ? (GVIEW === "week" ? "이번 주 기록 없음" : "이번 달 기록 없음") : g.k === "mind" ? "점검·기록 없음" : g.k === "career" ? "직업 기록 없음" : "기록 없음")}${dlt ? `<small style="display:block;font-size:11px;font-weight:400;color:var(${dlt > 0 ? "--up" : "--down"})">${dlt > 0 ? "▲" : "▼"}${Math.abs(dlt)}%p</small>` : ""}</span>
+      <span class="gt ${t.any && t.p < .5 ? "up" : ""}">${t.any ? fmtTop(t.p) : (GVIEW !== "all" ? (GVIEW === "week" ? "이번 주 기록 없음" : "이번 달 기록 없음") : g.k === "mind" ? "점검·기록 없음" : g.k === "career" ? "직업 기록 없음" : "기록 없음")}${dlt ? `<small style="display:block;font-size:11px;font-weight:400;color:var(${dlt > 0 ? "--up" : "--down"})">${dlt > 0 ? "▲" : "▼"}${Math.abs(dlt)}%p${esc(why)}</small>` : ""}</span>
       <span class="gp">${Math.round(S.byGoal[g.k])}점</span></button>`;
   }).join("");
   const feed = S.events.slice(0, 12).map(e => `<div class="dday"><span><span class="badge">${e.week ? "📈 흐름" : "🏆 돌파"}</span> ${GOAL[e.goal].icon} ${esc(e.label)}</span><b>+${Math.round(e.pts * 10) / 10}</b></div>`).join("");
@@ -1717,11 +1722,11 @@ function renderGrowth() {
     ${recent ? `<h2>최근 기록</h2><div class="list">${recent}</div>` : ""}
     <p class="muted" style="text-align:center;font-size:11px;margin-top:18px">화면 버전 ${APP_BUILD}</p>`;
   floatGain(S);
-  persistMiles(S.start, false).then(async n => { n += await saveTopSnap(TA); n += await saveRivalWins(S); n += await saveBadges(S, RS); if (n) loadAssets(true); }).catch(() => {});
+  persistMiles(S.start, false).then(async n => { n += await saveTopSnap(TA, RS); n += await saveRivalWins(S); n += await saveBadges(S, RS); if (n) loadAssets(true); }).catch(() => {});
 }
 
 // 화면 버전: 폰이 새 화면을 받았는지 성장 탭 맨 아래에서 확인할 수 있게(바꿀 때마다 올린다)
-const APP_BUILD = "2026.11.16-h";
+const APP_BUILD = "2026.11.17-a";
 // 카드 하나를 그리다 오류가 나도 나머지 화면은 그대로 보이게, 오류 내용은 그 자리에 보여 준다
 function safeCard(name, fn) {
   try { return fn(); }
@@ -1850,7 +1855,7 @@ function weeklyReport(S) {
   const logs = gLogs().filter(l => l.date >= ws && l.date <= we), days = new Set(logs.map(l => l.date)).size;
   const won = [...rivalWinDates().m.entries()].filter(([, d]) => d >= ws && d <= we).map(([k]) => k).sort((a, b) => a - b);
   const snaps = topSnaps(), a = snaps.find(x => x.date === ws), b = snaps.find(x => x.date === addDays(ws, 7));
-  let grow = null; if (a && b) GOALS.forEach(g => { const d = (num(a.f[g.k]) || 1) - (num(b.f[g.k]) || 1); if (d > 0 && (!grow || d > grow.d)) grow = {g, d}; });
+  let grow = null; if (a && b) GOALS.forEach(g => { if (!a.f["g_" + g.k] || a.f["g_" + g.k] !== b.f["g_" + g.k]) return; const d = (num(a.f[g.k]) || 1) - (num(b.f[g.k]) || 1); if (d > 0 && (!grow || d > grow.d)) grow = {g, d}; });
   const open = [0, 1, 2].includes(parseDay(DATA.today).getDay()) ? " open" : "";      // 일·월·화요일에는 펼쳐 둔다
   return `<details class="card report"${open} style="margin-top:10px"><summary><b>📊 지난주 리포트</b> <span class="muted">${fmtDay(ws).slice(5)} ~ ${fmtDay(we).slice(5)}</span></summary>
     <div class="rgrid"><div><small>얻은 점수</small><b>+${Math.round(total)}</b></div><div><small>기록한 날</small><b>${days}/7일</b></div><div><small>이긴 상대</small><b>${won.length}명</b></div></div>
@@ -1862,9 +1867,10 @@ function weeklyReport(S) {
 // 지난주 기록(topsnap)으로 계산한 순위와 비교
 function rankDelta(me, pop) {
   const snaps = topSnaps(), ws = weekStart(DATA.today), prev = snaps.filter(x => x.date < ws).pop();
-  if (!prev) return "";
-  const pc = composite(Object.fromEntries(GOALS.map(g => [g.k, prev.f[g.k] != null ? num(prev.f[g.k]) : null])));
-  const d = Math.round((pc.top - me.top) * pop);
+  // 같은 종합 비교군으로 남긴 종합 상위 %가 있을 때만 비교한다(비교군이 바뀌면 순위가 달라져도 성취 변화가 아님)
+  const g = globalGroup();
+  if (!prev || prev.f.cg !== g.sex + "|" + g.age || !(num(prev.f.ctop) > 0)) return "";
+  const d = Math.round((num(prev.f.ctop) - me.top) * pop);
   return d ? ` <b style="color:${d > 0 ? "#22c55e" : "var(--up)"}">${d > 0 ? "▲" : "▼"}${Math.abs(d).toLocaleString("ko-KR")}</b>` : "";
 }
 function tierCard(S, RS) {
