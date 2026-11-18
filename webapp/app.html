@@ -177,6 +177,7 @@ body.has-run #toast{bottom:auto;top:64px}body.has-run{padding-bottom:calc(76px +
 @keyframes cf{to{transform:translateY(110vh) rotate(720deg)}}
 @media (prefers-reduced-motion:reduce){#ko .kc,#ko .cf,.gplus{animation:none}}
 @media (max-width:520px){.grid{grid-template-columns:repeat(2,1fr)}.hero .big{font-size:26px}.legend{grid-template-columns:1fr}}
+#syncdot{position:fixed;left:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:60;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--chip);color:var(--sub);box-shadow:var(--shadow)}
 </style>
 </head>
 <body>
@@ -198,6 +199,7 @@ body.has-run #toast{bottom:auto;top:64px}body.has-run{padding-bottom:calc(76px +
 <div id="runbar" hidden></div>
 <div class="sheet" id="sheet" hidden><form id="form" autocomplete="off"></form></div>
 <div id="toast" role="status"></div>
+<div id="syncdot" hidden aria-live="polite">☁️ 저장 중…</div>
 <script>
 "use strict";
 const NEED_API = 3;
@@ -300,6 +302,29 @@ function api(fn, ...args) {
     google.script.run.withSuccessHandler(ok).withFailureHandler(e => fail(e instanceof Error ? e : new Error(String(e && e.message || e))))[fn](...args);
   });
 }
+// 빠른 반영: 화면(DATA)은 먼저 바꾸고, 서버 저장은 뒤에서 차례로 한다(버튼이 저장·새로 불러오기 4~8초를 기다리지 않게).
+// 저장이 다 끝나면 잠시 뒤 한 번만 조용히 새로 불러와 서버와 맞춘다. 실패하면 알리고 바로 새로 불러와 화면을 서버 상태로 되돌린다.
+const BG = {q: Promise.resolve(), n: 0, t: 0, ids: {}};
+function bgSave(task, what) {
+  BG.n++; syncBadge(); clearTimeout(BG.t);
+  BG.q = BG.q.then(task).catch(e => { toast(`${what || "저장"}하지 못했습니다: ${e.message} — 서버 기록으로 다시 맞출게요`, true); BG.fail = true; })
+    .finally(() => { BG.n--; syncBadge(); if (!BG.n) BG.t = setTimeout(() => { if (!BG.n) { BG.fail = false; loadAssets(true); } }, BG.fail ? 0 : 2500); });
+  return BG.q;
+}
+const realId = id => BG.ids[id] || id;            // 아직 저장 전에 화면에 붙인 임시 id → 저장 뒤 진짜 id
+window.addEventListener("beforeunload", e => { if (BG.n) { e.preventDefault(); e.returnValue = ""; } });   // 저장이 남았는데 닫으려 하면 한 번 묻는다
+function syncBadge() { const b = document.getElementById("syncdot"); if (b) b.hidden = !BG.n; }
+// 화면에 바로 기록 한 건을 더하고(임시 id), 뒤에서 저장한다
+function addLocal(item, what) {
+  const tmp = {id: "loc-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6), updated: new Date().toISOString(), ...item};
+  DATA.items.push(tmp);
+  bgSave(async () => { const id = await api("saveItem", item); BG.ids[tmp.id] = id; const it = DATA.items.find(x => x.id === tmp.id); if (it) it.id = id; }, what);
+  return tmp;
+}
+function redrawLive() {
+  if (typeof renderTimer === "function") renderTimer();
+  if (typeof renderGrowth === "function") renderGrowth();
+}
 function toast(msg, long) {
   const t = $("#toast"); t.textContent = msg; t.style.display = "block";
   clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = "none", long ? 6000 : 2500);
@@ -387,8 +412,9 @@ function fit(f) {
 // ---------------------------------------------------------------- 자산 데이터
 async function loadAssets(quiet) {
   try {
-    const ver = await api("apiVersion");
-    DATA = await api("getData");
+    const [ver, data] = await Promise.all([api("apiVersion"), api("getData")]);     // 두 요청을 동시에
+    if (BG.n) return;                 // 저장이 아직 남아 있으면 덮어쓰지 않는다(다 끝난 뒤 다시 불러옴)
+    DATA = data;
     DATA.oldApi = ver < NEED_API;
     render();
     if (typeof renderGrowth === "function") renderGrowth();
@@ -1778,7 +1804,7 @@ function renderGrowth() {
 }
 
 // 화면 버전: 폰이 새 화면을 받았는지 성장 탭 맨 아래에서 확인할 수 있게(바꿀 때마다 올린다)
-const APP_BUILD = "2026.11.18-a";
+const APP_BUILD = "2026.11.18-b";
 // 카드 하나를 그리다 오류가 나도 나머지 화면은 그대로 보이게, 오류 내용은 그 자리에 보여 준다
 function safeCard(name, fn) {
   try { return fn(); }
@@ -2107,10 +2133,8 @@ async function saveLog() {
   if (t === "saving") { if (!(x.income > 0)) return toast("소득을 적어 주세요"); name = `저축률 ${Math.round((x.saving || 0) / x.income * 100)}%`; }
   if (t === "family") name = Object.fromEntries(FAMILY_KINDS)[x.kind] || "가족 관계";
   if (["together", "volunteer", "study"].includes(t)) name = `${name.split("(")[0]} ${x.minutes || 0}분`;
-  busy = true; toast("저장 중…");
-  try { await api("saveItem", {category: "log", name, date: fd.get("date") || DATA.today, f: x}); $("#sheet").hidden = true; busy = false; await loadAssets(true); toast("기록했습니다"); }
-  catch (e) { toast("저장하지 못했습니다: " + e.message, true); }
-  busy = false;
+  addLocal({category: "log", name, date: fd.get("date") || DATA.today, f: x}, "기록");
+  $("#sheet").hidden = true; redrawLive(); toast("기록했습니다");
 }
 // 영역 상세: 쌓은 점수(흐름·돌파), 상위 % 근거, 점수 내역 전체, 이 영역의 기록(지우기)
 let DETAIL = "";
@@ -2174,8 +2198,9 @@ document.addEventListener("click", async e => {
   if (a === "cmpreset") saveCmp(true);
   if (a === "dellog") {
     const l = DATA.items.find(i => i.id === b.dataset.id); if (!l || !confirm(`'${l.name}' 기록을 지울까요?`)) return;
-    try { await api("deleteItem", l.id); await loadAssets(true); toast("지웠습니다");
-      if (!$("#sheet").hidden && $("#form").dataset.mode === "detail") showGoalDetail(DETAIL); } catch (err) { toast("지우지 못했습니다: " + err.message, true); }
+    DATA.items = DATA.items.filter(i => i.id !== l.id); redrawLive(); toast("지웠습니다");
+    if (!$("#sheet").hidden && $("#form").dataset.mode === "detail") showGoalDetail(DETAIL);
+    bgSave(() => api("deleteItem", realId(l.id)), "지우기");
   }
 });
 $("#form").addEventListener("change", e => {
@@ -2205,7 +2230,7 @@ const TIMER_ACTS = {
 };
 const TIMER_HINT = {body: "운동은 30분 이상이면 1회로 셉니다", mind: "끝내면 그 영역의 '작은 승리'로 기록돼요(같은 주 같은 영역은 반씩 줄어요)",
   craft: "가사·돌봄 시간은 하루 평균 분으로 30대 남성과 비교해요"};
-let TSEL = {goal: "", act: ""}, tickId = 0, tbusy = false;
+let TSEL = {goal: "", act: ""}, tickId = 0;
 // 진행 중인 타이머: 시트의 'timer' 항목. 새로고침·재실행 직후(데이터를 받기 전)에도 바로 보이게 이 기기에 사본을 둔다
 function runningTimers() {
   if (DATA) {
@@ -2296,7 +2321,7 @@ async function drainHabits() {
       HAB_PENDING[k] = Math.max(0, (HAB_PENDING[k] || 0) - 1);
       if (DATA) DATA.items.push({id: "hab-" + Date.now() + Math.random(), category: "log", name: `${h[1]} 1회`, date: DATA.today, updated: "", f: {goal: "body", type: "habit", field: k, count: 1, text: "하루 습관"}});
     }
-    await loadAssets(true);           // 다 저장한 뒤 한 번만 새로 불러온다
+    bgSave(async () => {}, "");       // 다 저장한 뒤 잠시 있다가 한 번만 조용히 새로 불러온다
   } finally { habRunning = false; if (HAB_QUEUE.length) drainHabits(); }
 }
 // 끝낸 시간을 성장 기록(log) 한 건으로 바꾼다 — 날짜는 시작한 날
@@ -2322,45 +2347,36 @@ function openTimeEdit(id) {
   $("#form").dataset.mode = "tedit"; $("#sheet").hidden = false;
 }
 async function saveTimeEdit() {
-  const l = TEDIT; if (!l || tbusy) return;
+  const l = TEDIT; if (!l) return;
   const v = Math.round(num($("#te_val").value) || 0), d = $("#te_date").value || l.date;
   if (!(v > 0)) return toast("1 이상으로 적어 주세요");
   const f = {...l.f}; let name = l.name;
   if (f.count != null) { f.count = v; name = name.replace(/\d+회/, v + "회"); }
   else { f.minutes = v; name = name.replace(/\d+분/, v + "분"); if (f.text) f.text = f.text.replace(/\d+분/, v + "분"); }
-  tbusy = true;
-  try { await api("saveItem", {id: l.id, category: "log", name, date: d, f}); $("#sheet").hidden = true; await loadAssets(true); toast("고쳤어요"); }
-  catch (e) { toast("저장하지 못했습니다: " + e.message, true); }
-  finally { tbusy = false; }
+  Object.assign(l, {name, date: d, f}); $("#sheet").hidden = true; redrawLive(); toast("고쳤어요");
+  bgSave(() => api("saveItem", {id: realId(l.id), category: "log", name, date: d, f}), "고치기");
 }
 async function timerAct(kind, id) {
-  if (tbusy) return toast("저장하는 중이에요 — 잠시 뒤에 다시 눌러 주세요");
-  tbusy = true;
   try {
-    if (!DATA && (kind === "end" || kind === "del")) { toast("불러오는 중…"); await loadAssets(true); }
+    if (!DATA) { toast("불러오는 중…"); await loadAssets(true); if (!DATA) return; }
     const run = runningTimers().find(t => t.id === id);
     if (kind === "start" || kind === "once") {
       if (!TSEL.act) return;
       const memo = (($("#tmemo") || {}).value || "").trim();
       if (kind === "once") {
         const x = timerLog(TSEL.goal, TSEL.act, 0, memo);
-        toast("기록하는 중…"); await api("saveItem", {category: "log", name: x.name, date: DATA.today, f: x.f});
-        TSEL = {goal: "", act: ""}; await loadAssets(true); toast("♻️ 기록했어요"); return;
+        TSEL = {goal: "", act: ""};
+        addLocal({category: "log", name: x.name, date: DATA.today, f: x.f}, "기록");
+        redrawLive(); toast("♻️ 기록했어요"); return;
       }
       if (TSEL.act === "etc" && !memo) { toast("무엇을 하는지 적어 주세요"); $("#tmemo").focus(); return; }
       const a = actOf(TSEL.goal, TSEL.act), f = {goal: TSEL.goal, act: TSEL.act, start: Date.now(), memo};
       TSEL = {goal: "", act: ""};
       // 저장을 기다리지 않고 바로 '진행 중'을 보여 준다
       const tname = f.act === "etc" ? "✏️ " + memo : a[1];
-      const tmp = {id: "tmp-" + f.start, name: tname, f};
-      store.set("timers", JSON.stringify([...runningTimers().map(t => ({id: t.id, name: t.name, f: t.f})), tmp]));
-      DATA.items.push({...tmp, category: "timer", date: DATA.today, updated: ""});
+      addLocal({category: "timer", name: tname, date: DATA.today, f}, "타이머 시작");
       renderTimer(); toast("시작! 끝나면 아래 ■ 끝을 눌러요");
-      const realId = await api("saveItem", {category: "timer", name: tname, date: DATA.today, f});
-      const it = DATA.items.find(x => x.id === tmp.id); if (it) it.id = realId;
-      await loadAssets(true);
     } else if (kind === "end" && run) {
-      if (String(run.id).startsWith("tmp-")) return toast("아직 저장 중이에요. 잠시 뒤에 눌러 주세요");
       let minutes = Math.max(1, Math.round((Date.now() - num(run.f.start)) / 6e4));
       if (minutes > 300) {          // 끝 누르기를 잊은 경우
         const v = prompt(`${Math.floor(minutes / 60)}시간 넘게 켜져 있었어요. 실제로 한 시간은 몇 분인가요?`, "60");
@@ -2369,17 +2385,19 @@ async function timerAct(kind, id) {
       }
       const x = timerLog(run.f.goal, run.f.act, minutes, run.f.memo || "");
       const day = new Date(num(run.f.start) + 9 * 3600e3).toISOString().slice(0, 10);   // 시작한 날(한국 시간, 서버의 오늘과 같은 기준)
-      toast("기록하는 중…");
-      await api("saveItem", {category: "log", name: x.name, date: day >= addDays(DATA.today, -1) ? day : DATA.today, f: x.f});
-      await api("deleteItem", run.id).catch(() => {});
-      await loadAssets(true); toast(`${goalIcon(run.f.goal)} ${minutes}분 기록했어요 · 성장에 반영됨`);
+      // 화면에서 바로 끝내고 기록을 더한다 → 저장은 뒤에서(타이머가 아직 저장 중이어도 차례가 오면 진짜 id로 지움)
+      const tid = run.id;
+      DATA.items = DATA.items.filter(i => i.id !== tid);
+      addLocal({category: "log", name: x.name, date: day >= addDays(DATA.today, -1) ? day : DATA.today, f: x.f}, "기록");
+      bgSave(() => api("deleteItem", realId(tid)).catch(() => {}), "");
+      redrawLive(); toast(`${goalIcon(run.f.goal)} ${minutes}분 기록했어요 · 성장에 반영됨`);
     } else if (kind === "del") {
       const l = gLogs().find(x => x.id === id); if (!l) return;
       if (!confirm(`'${l.name}' 기록을 지울까요?`)) return;
-      await api("deleteItem", id); $("#sheet").hidden = true; await loadAssets(true); toast("지웠어요");
+      DATA.items = DATA.items.filter(i => i.id !== id); $("#sheet").hidden = true; redrawLive(); toast("지웠어요");
+      bgSave(() => api("deleteItem", realId(id)), "지우기");
     }
   } catch (e) { toast("저장하지 못했습니다: " + e.message, true); }
-  finally { tbusy = false; }
 }
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-t]"); if (!b || !(b.closest("#tmain") || b.closest("#runbar") || b.closest("#form"))) return;
