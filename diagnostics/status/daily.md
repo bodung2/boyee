@@ -1,24 +1,28 @@
-# 하루 상태 · 2026-11-18 (22:34 기준)
+# 하루 상태 · 2026-11-19 (22:34 기준)
 
 ## 발행
 
 | 블로그 | 오늘 | 마지막 발행 |
 |---|---|---|
-| 네이버 교육 | ✅ 1편 | 2026-11-18 |
-| 네이버 유아 | ✅ 1편 | 2026-11-18 |
+| 네이버 교육 | ✅ 1편 | 2026-11-19 |
+| 네이버 유아 | ✅ 1편 | 2026-11-19 |
 | 네이버 유아 장소 | 0편 | 2026-11-11 |
-| 네이버 투자 | ✅ 1편 | 2026-11-18 |
-| 네이버 시황 | ✅ 1편 | 2026-11-18 |
-| 티스토리 | ✅ 2편 | 2026-11-18 |
-| 구글 블로거 | ✅ 1편 | 2026-11-18 |
+| 네이버 투자 | ✅ 1편 | 2026-11-19 |
+| 네이버 시황 | ✅ 1편 | 2026-11-19 |
+| 티스토리 | ✅ 1편 | 2026-11-19 |
+| 구글 블로거 | ✅ 1편 | 2026-11-19 |
 
 ## 티스토리 로그인
 
-- 마지막 점검 2026-11-18 07:50 → 정상 · 직접 로그인 후 7일째 · 지금까지 유지 기간 0.5일 → 약 0일 남음
+- 마지막 점검 2026-11-19 18:15 → 정상 · 직접 로그인 후 0일째 · 지금까지 유지 기간 0.5일, 7.4일 → 약 0일 남음
 
 ## 오늘의 실패·경고 알림
 
-- 07:50 [티스토리] 카카오 로그인 유지가 약 0일 뒤 끝날 수 있어요(지금까지 0.5일 만에 끝남). 편할 때 PC에서 `.venv\Scripts\python.exe -m tistory_autopost login`을 한 번 해 주세요('로그인 상태 유지'·'간편로그인 정보 저장' 체크). 그러면 발행이 막히지 않습니다.
-- 19:00 [유아교육 이웃 후보 실패] 2026-11-18 구글 시트 로그인이 만료되었거나 취소되었습니다 → python -m naver_autopost sheets-auth 구글 로그인이 만료되었거나 취소되었습니다(HTTP 400): { "error": "invalid_grant", "error_description": "Bad Request" } → python -m blogger_autopost auth 를 다시 실행하세요.
-- 19:00 [교육 정책 이웃 후보 실패] 2026-11-18 구글 시트 로그인이 만료되었거나 취소되었습니다 → python -m naver_autopost sheets-auth 구글 로그인이 만료되었거나 취소되었습니다(HTTP 400): { "error": "invalid_grant", "error_description": "Bad Request" } → python -m blogger_autopost auth 를 다시 실행하세요.
-- 19:00 [돈·생활 숫자 이웃 후보 실패] 2026-11-18 구글 시트 로그인이 만료되었거나 취소되었습니다 → python -m naver_autopost sheets-auth 구글 로그인이 만료되었거나 취소되었습니다(HTTP 400): { "error": "invalid_grant", "error_description": "Bad Request" } → python -m blogger_autopost auth 를 다시 실행하세요.
+- 08:20 [티스토리 로그인 점검 실패] 다음 발행 전에 고쳐 주세요. 티스토리 로그인이 끝났고, 카카오가 비밀번호를 다시 묻습니다(이 자동화 브라우저에서는 카카오가 로그인을 오래 유지해 주지 않습니다 — 11/7 relogin-test --real로 확인). PC에서 `.venv\Scripts\python.exe -m tistory_autopost login`으로 다시 로그인하세요('로그인 상태 유지'·'간편로그인 정보 저장' 체크). 다시 로그인하면 티스토리 로그인이 끝날 때까지 하루 3번 점검이 계속 새로 고칩니다.
+- 10:30 [티스토리 자동발행 실패] 2026-11-19 티스토리 로그인이 끝났고, 카카오가 비밀번호를 다시 묻습니다(이 자동화 브라우저에서는 카카오가 로그인을 오래 유지해 주지 않습니다 — 11/7 relogin-test --real로 확인). PC에서 `.venv\Scripts\python.exe -m tistory_autopost login`으로 다시 로그인하세요('로그인 상태 유지'·'간편로그인 정보 저장' 체크). 다시 로그인하면 티스토리 로그인이 끝날 때까지 하루 3번 점검이 계속 새로 고칩니다.
+- 16:50 [티스토리 로그인 점검 실패] 다음 발행 전에 고쳐 주세요. 티스토리 로그인이 끝났고, 카카오가 비밀번호를 다시 묻습니다(이 자동화 브라우저에서는 카카오가 로그인을 오래 유지해 주지 않습니다 — 11/7 relogin-test --real로 확인). PC에서 `.venv\Scripts\python.exe -m tistory_autopost login`으로 다시 로그인하세요('로그인 상태 유지'·'간편로그인 정보 저장' 체크). 다시 로그인하면 티스토리 로그인이 끝날 때까지 하루 3번 점검이 계속 새로 고칩니다.
+- 18:27 [티스토리 자동발행 완료 2편째] 윈도우 11 KB5132061 11월 업데이트(Windows 11): 바뀐 점·설치 오류·빌드 번호 (주소) 그림 2/2장 · 카테고리: 세상 소식
+- 19:00 [유아교육 이웃 후보 실패] 2026-11-19 구글 시트 로그인이 만료되었거나 취소되었습니다 → python -m naver_autopost sheets-auth 구글 로그인이 만료되었거나 취소되었습니다(HTTP 400): { "error": "invalid_grant", "error_description": "Bad Request" } → python -m blogger_autopost auth 를 다시 실행하세요.
+- 19:00 [교육 정책 이웃 후보 실패] 2026-11-19 구글 시트 로그인이 만료되었거나 취소되었습니다 → python -m naver_autopost sheets-auth 구글 로그인이 만료되었거나 취소되었습니다(HTTP 400): { "error": "invalid_grant", "error_description": "Bad Request" } → python -m blogger_autopost auth 를 다시 실행하세요.
+- 19:00 [돈·생활 숫자 이웃 후보 실패] 2026-11-19 구글 시트 로그인이 만료되었거나 취소되었습니다 → python -m naver_autopost sheets-auth 구글 로그인이 만료되었거나 취소되었습니다(HTTP 400): { "error": "invalid_grant", "error_description": "Bad Request" } → python -m blogger_autopost auth 를 다시 실행하세요.
+- 21:50 [티스토리] 카카오 로그인 유지가 약 0일 뒤 끝날 수 있어요(지금까지 0.5일, 7.4일 만에 끝남). 편할 때 PC에서 `.venv\Scripts\python.exe -m tistory_autopost login`을 한 번 해 주세요('로그인 상태 유지'·'간편로그인 정보 저장' 체크). 그러면 발행이 막히지 않습니다.
