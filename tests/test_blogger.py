@@ -962,3 +962,31 @@ def test_index_watch_tracks_indexing_and_search_performance(cfg):
     inspected = [c for c in calls if c == index_watch.INSPECT]
     assert len(inspected) == 2 and s2["indexed"] == 2 and s2["days_to_index"] == 10
     assert len(index_watch.load(index_watch.state_file(cfg))["days"]) == 2
+
+
+def test_trend_slot_is_a_separate_daily_post_with_trend_focus(cfg, tmp_path, monkeypatch):
+    from blogger_autopost import trend
+    script, state = fake_codex(tmp_path)
+    cfg.codex_bin = str(script)
+    FakeBlogger().install(monkeypatch)
+    monkeypatch.setattr(trend, "candidates", lambda *a, **k: ["김장 축제", "K-패스 환급"])
+    assert pipeline.run(cfg) == 0
+    assert "Korea right now" not in (state / "prompt_0.txt").read_text(encoding="utf-8")
+    assert pipeline.run(cfg, slot="trend") == 0                  # 1편째가 있어도 2편째는 따로 쓴다
+    prompts = sorted(state.glob("prompt_*.txt"))
+    trend_prompt = [p.read_text(encoding="utf-8") for p in prompts if "Korea right now" in p.read_text(encoding="utf-8")]
+    assert trend_prompt and "김장 축제" in trend_prompt[0]
+    entries = [e for e in history.load(cfg.history_file) if e.get("source") == "autopost"]
+    assert [e.get("slot", "main") for e in entries] == ["main", "trend"]
+    n = len(list(state.glob("prompt_*.txt")))
+    assert pipeline.run(cfg, slot="trend") == 0                  # 같은 날 2편째를 두 번 쓰지 않는다
+    assert len(list(state.glob("prompt_*.txt"))) == n
+
+
+def test_trend_candidates_skip_politics_and_incidents():
+    from blogger_autopost import trend
+    xml = ("<rss><channel>" + "".join(f"<item><title>{t}</title><ht:approx_traffic>{n}</ht:approx_traffic></item>"
+                                       for t, n in (("국회 본회의", "5000+"), ("빼빼로데이", "20000+"),
+                                                    ("화재 사고", "1000+"), ("서울 첫눈", "10000+"))) + "</channel></rss>")
+    got = trend.candidates(fetch=lambda url, timeout=15: xml.encode())
+    assert got == ["빼빼로데이 (검색량 20000+)", "서울 첫눈 (검색량 10000+)"]

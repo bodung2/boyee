@@ -242,3 +242,22 @@ def test_repo_notes_have_no_urls_or_post_titles():
         text = f.read_text(encoding="utf-8")
         assert "http" not in text and "blogspot" not in text and "tistory.com" not in text, f.name
         assert text.startswith("updated: "), f.name
+
+
+def test_blogger_trend_slot_checked_separately(tmp_path):
+    import json as _json
+
+    from quest_board import checks
+    from quest_board.checks import Paths
+    from quest_board.schedule import Quest
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "published_blogger.json").write_text(_json.dumps([
+        {"date": "2026-11-21", "title": "main", "url": "https://x/1", "source": "autopost"},
+        {"date": "2026-11-21", "title": "trend", "url": "https://x/2", "source": "autopost", "slot": "trend"}]),
+        encoding="utf-8")
+    p = Paths(data=data, output=tmp_path, logs=tmp_path)
+    main = Quest("BloggerAutoPost", "run_blogger_daily.bat", "")
+    two = Quest("BloggerAutoPost2", "run_blogger_daily.bat", "--slot trend")
+    assert checks.check(p, main, "2026-11-21").title == "main"
+    assert checks.check(p, two, "2026-11-21").title == "trend"

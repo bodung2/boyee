@@ -3,6 +3,7 @@
   python -m blogger_autopost blogs          내 블로그 목록과 ID 보기
   python -m blogger_autopost check          Codex·스킬·구글 로그인·블로그 연결 한 번에 확인
   python -m blogger_autopost run            오늘 글 1편 생성·검수·발행(작업 스케줄러가 매일 실행)
+  python -m blogger_autopost run --slot trend   2편째: 한국 최신 트렌드 글(작업 스케줄러가 매일 14:10)
   python -m blogger_autopost run --draft    발행하지 않고 블로거 '초안'으로만 저장(설치 확인용)
   python -m blogger_autopost sync-history   블로그에 있는 글을 발행 이력에 가져오기
   python -m blogger_autopost diagnose       검색 유입 진단 자료(글·공개 페이지·서치 콘솔)를 모아 GitHub에 올리기
@@ -34,6 +35,8 @@ def main(argv: list[str] | None = None) -> int:
     run_p = sub.add_parser("run")
     run_p.add_argument("--draft", action="store_true", help="발행하지 않고 초안으로만 저장")
     run_p.add_argument("--force", action="store_true", help="오늘 이미 발행했어도 한 편 더")
+    run_p.add_argument("--slot", choices=["main", "trend"], default="main",
+                       help="main: 1편째(기본) / trend: 2편째, 한국 최신 트렌드 글")
     sub.add_parser("sync-history")
     sub.add_parser("check-meta")
     sub.add_parser("index")
@@ -67,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
         return _check(cfg, search=not args.no_search)
     if args.cmd == "run":
         from .pipeline import run
-        return run(cfg, draft=args.draft, force=args.force)
+        return run(cfg, draft=args.draft, force=args.force, slot=args.slot)
     if args.cmd == "check-meta":
         return _check_meta(cfg)
     if args.cmd == "index":

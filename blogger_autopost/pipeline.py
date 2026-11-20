@@ -13,7 +13,7 @@ from naver_autopost.errors import ExternalAccountError
 from naver_autopost.notify import send_text
 from naver_autopost.pipeline import KST, _Lock, today_kst
 
-from . import api, content, illustrations, infographic, photos, seo, writer
+from . import api, content, illustrations, infographic, photos, seo, trend, writer
 from .config import BloggerConfig
 
 log = logging.getLogger(__name__)
@@ -83,10 +83,11 @@ def sync_history(cfg: BloggerConfig) -> tuple[int, int, set[str]]:
     return added, removed, ids
 
 
-def published_today(cfg: BloggerConfig, today: str) -> dict | None:
-    """오늘 자동 발행(예약 포함)한 글. 예약 글은 주소가 아직 없을 수 있어 주소 유무는 보지 않는다."""
+def published_today(cfg: BloggerConfig, today: str, slot: str = "main") -> dict | None:
+    """오늘 그 차례(main 1편째 / trend 2편째)에 자동 발행(예약 포함)한 글. 예약 글은 주소가 아직 없을 수 있어
+    주소 유무는 보지 않는다."""
     for e in history.load(cfg.history_file):
-        if e.get("source") == "autopost" and e.get("date") == today:
+        if e.get("source") == "autopost" and e.get("date") == today and (e.get("slot") or "main") == slot:
             return e
     return None
 
@@ -111,10 +112,10 @@ def _check_and_fix(cfg: BloggerConfig, out_dir: Path) -> dict:
     return post
 
 
-def _attempt(cfg: BloggerConfig, today: str, out_dir: Path, feedback: str, resume: bool) -> dict:
+def _attempt(cfg: BloggerConfig, today: str, out_dir: Path, feedback: str, resume: bool, focus: str = "") -> dict:
     stage = _load(out_dir / "stage.json") if resume else {}
     if not stage.get("written"):
-        writer.write_post(cfg, out_dir, today, history.load(cfg.history_file), feedback)
+        writer.write_post(cfg, out_dir, today, history.load(cfg.history_file), feedback, focus=focus)
         _mark(out_dir, written=True)
     else:
         log.info("이미 쓴 글을 이어서 처리합니다")
@@ -176,7 +177,7 @@ def _polish(cfg: BloggerConfig, post: dict, out_dir: Path) -> None:
     log.info("본문 다듬기: 그림 %d개를 첫 문단 뒤로, 관련 글 %s", changes["moved_images"], changes["related"])
 
 
-def produce(cfg: BloggerConfig, today: str, out_dir: Path) -> dict:
+def produce(cfg: BloggerConfig, today: str, out_dir: Path, focus: str = "") -> dict:
     """발행할 글을 만든다. 떨어지면 BLOGGER_MAX_ATTEMPTS번까지 다른 주제로 새로 쓴다."""
     feedback = ""
     resume = bool(_load(out_dir / "stage.json").get("written")) and (out_dir / "post.json").exists()
@@ -186,7 +187,7 @@ def produce(cfg: BloggerConfig, today: str, out_dir: Path) -> dict:
             shutil.move(str(out_dir), str(out_dir.with_name(f"{out_dir.name}-rejected-{stamp}")))
         log.info("[blogger] 글쓰기 시도 %d/%d%s", attempt, cfg.max_attempts, " (이어서)" if resume else "")
         try:
-            return _attempt(cfg, today, out_dir, feedback, resume)
+            return _attempt(cfg, today, out_dir, feedback, resume, focus)
         except Rejected as e:
             feedback = str(e)
             log.warning(feedback)
@@ -231,9 +232,12 @@ def _publish(cfg: BloggerConfig, post: dict, out_dir: Path, draft_only: bool) ->
     return result
 
 
-def run(cfg: BloggerConfig, draft: bool = False, force: bool = False) -> int:
+def run(cfg: BloggerConfig, draft: bool = False, force: bool = False, slot: str = "main") -> int:
+    """slot: main(1편째, 스킬이 주제를 고름) / trend(2편째, 한국 최신 트렌드 — blogger_autopost.trend)."""
     today = today_kst()
-    setup_logging(cfg, f"blogger-{today}")
+    trend_slot = slot == trend.SLOT
+    label = f"{LABEL} 2편째(트렌드)" if trend_slot else LABEL
+    setup_logging(cfg, f"blogger-{today}" + ("-trend" if trend_slot else ""))
     try:
         with _Lock(cfg.log_dir / ".run-blogger.lock"):
             # 글쓰기(수십 분) 전에 구글 로그인·블로그부터 확인하고, 블로그와 발행 이력을 맞춘다
@@ -249,11 +253,11 @@ def run(cfg: BloggerConfig, draft: bool = False, force: bool = False) -> int:
             except Exception as e:  # noqa: BLE001 - 동기화 실패로 발행을 멈추지는 않는다
                 log.warning("발행 목록 동기화 실패(계속 진행): %s", e)
 
-            done = published_today(cfg, today)
+            done = published_today(cfg, today, slot)
             if done and not force:
                 log.info("오늘(%s)은 이미 발행(예약)했습니다: %s %s", today, done.get("title"), done.get("url"))
                 return 0
-            out_dir = cfg.output_dir / today
+            out_dir = cfg.output_dir / (f"{today}-trend" if trend_slot else today)
             stage = _load(out_dir / "stage.json")
             if stage.get("published"):
                 deleted = alive is not None and str(stage.get("post_id")) not in alive
@@ -264,12 +268,12 @@ def run(cfg: BloggerConfig, draft: bool = False, force: bool = False) -> int:
                 stamp = datetime.now(KST).strftime("%H%M%S")
                 shutil.move(str(out_dir), str(out_dir.with_name(f"{out_dir.name}-published-{stamp}")))
 
-            post = produce(cfg, today, out_dir)
+            post = produce(cfg, today, out_dir, trend.focus(today) if trend_slot else "")
             photo_note = _add_images(cfg, post, out_dir)
             _polish(cfg, post, out_dir)
             result = _publish(cfg, post, out_dir, draft_only=draft)
             if draft:
-                notify(cfg, f"[{LABEL} 테스트] 초안으로만 저장했습니다(발행 안 함): {post['title']}\n"
+                notify(cfg, f"[{label} 테스트] 초안으로만 저장했습니다(발행 안 함): {post['title']}\n"
                             "블로거 관리 화면 > 글 목록에서 확인하세요." + (f"\n{photo_note}" if photo_note else ""))
                 return 0
             url = result.get("url", "")
@@ -278,12 +282,13 @@ def run(cfg: BloggerConfig, draft: bool = False, force: bool = False) -> int:
                 "date": today, "title": post["title"], "url": url, "labels": post["labels"],
                 "topic": post.get("topic", ""), "post_id": result.get("id"), "source": "autopost",
                 "persona_used": persona.clean_used(post.get("persona_used"), persona.load()),
+                **({"slot": slot} if trend_slot else {}),
             })
             when = f" ({cfg.publish_time} 예약)" if scheduled else ""
             notes = "\n".join(n for n in (photo_note, cfg.model_note) if n)
-            notify(cfg, f"[{LABEL} 자동발행 완료{when}] {post['title']}\n{url}" + (f"\n{notes}" if notes else ""))
+            notify(cfg, f"[{label} 자동발행 완료{when}] {post['title']}\n{url}" + (f"\n{notes}" if notes else ""))
             return 0
     except Exception as e:
         log.exception("블로거 자동 발행 실패")
-        notify(cfg, f"[{LABEL} 자동발행 실패] {today}\n{e}")
+        notify(cfg, f"[{label} 자동발행 실패] {today}\n{e}")
         return 1
