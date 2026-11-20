@@ -4,16 +4,712 @@
     "description": "Clear explainers on Korea — society, education, and daily life, from a Korean teacher.",
     "url": "https://koreabreakdown.blogspot.com/",
     "published": "2026-08-28T00:05:23+09:00",
-    "updated": "2026-10-18T01:49:59+09:00",
-    "total_posts": 15
+    "updated": "2026-11-21T03:22:39+09:00",
+    "total_posts": 46
   },
   "scheduled": [
     {
-      "title": "Korean Apartment Maintenance Fees Explained: What Your Gwanlibi Bill Really Includes",
-      "published": "2026-10-18T21:00:00+09:00"
+      "title": "Foreign Driver’s License Exchange in Korea in 2026: Documents, Tests, and the 90-Day Rule",
+      "published": "2026-11-21T21:00:00+09:00"
     }
   ],
   "posts": [
+    {
+      "title": "Korea’s 52-Hour Workweek in 2026: The 40+12 Rule Explained",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
+      "published": "2026-11-20T21:00:00+09:00",
+      "labels": [
+        "52-Hour Workweek",
+        "Foreign Workers",
+        "Korean Work Hours",
+        "Life in Korea",
+        "Money in Korea",
+        "Working in Korea"
+      ],
+      "words": 1624,
+      "chars": 10079,
+      "h2": 9,
+      "h3": 3,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 2,
+      "internal_links": 6,
+      "external_links": 11,
+      "first_200_chars": "Korea’s 52-hour workweek means 40 regular hours plus up to 12 overtime hours—not a standard 52-hour schedule for every employee.\nThe 52-hour figure is a legal ceiling, not Korea’s standard weekly sche"
+    },
+    {
+      "title": "Korea Parental Leave in 2026: Up to 18 Months, Pay Caps, and Foreign Worker Rules",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
+      "published": "2026-11-19T21:00:00+09:00",
+      "labels": [
+        "Employment Insurance",
+        "Foreign Workers",
+        "Korea Parental Leave",
+        "Life in Korea",
+        "Money in Korea",
+        "Working in Korea"
+      ],
+      "words": 1603,
+      "chars": 9752,
+      "h2": 8,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 6,
+      "external_links": 4,
+      "first_200_chars": "Korea parental leave in 2026 provides up to 18 months per parent, but leave rights and Employment Insurance pay have separate eligibility rules.\nKorea's parental leave belongs to each eligible parent,"
+    },
+    {
+      "title": "Korea Maternity Leave in 2026: 90, 100, or 120 Days—and Who Pays",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
+      "published": "2026-11-18T21:00:00+09:00",
+      "labels": [
+        "Employment Insurance",
+        "Foreign Workers",
+        "Korea Maternity Leave",
+        "Life in Korea",
+        "Money in Korea",
+        "Working in Korea"
+      ],
+      "words": 1639,
+      "chars": 10302,
+      "h2": 10,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 6,
+      "external_links": 5,
+      "first_200_chars": "Korea maternity leave in 2026 is 90 calendar days, rising to 100 for a premature birth and 120 for multiple pregnancy, with pay split by employer.\nKorea’s maternity-leave period depends on the birth c"
+    },
+    {
+      "title": "Korea Paternity Leave in 2026: 20 Paid Days Before or After Birth",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
+      "published": "2026-11-17T21:00:00+09:00",
+      "labels": [
+        "Foreign Workers",
+        "Korea Paternity Leave",
+        "Life in Korea",
+        "Money in Korea",
+        "Working in Korea"
+      ],
+      "words": 1606,
+      "chars": 9863,
+      "h2": 8,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 4,
+      "external_links": 6,
+      "first_200_chars": "Korea paternity leave in 2026 gives employees 20 paid working days, usable from 50 days before the due date to 120 days after birth.\nKorea's 20 paid days can now be planned for both before and after c"
+    },
+    {
+      "title": "Korea Unemployment Benefits for Foreign Workers in 2026: Visa Rules, Amounts, and How to Apply",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
+      "published": "2026-11-16T21:00:00+09:00",
+      "labels": [
+        "Employment Insurance",
+        "Foreign Workers",
+        "Korean Unemployment Benefits",
+        "Life in Korea",
+        "Money in Korea",
+        "Working in Korea"
+      ],
+      "words": 1652,
+      "chars": 10884,
+      "h2": 9,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 5,
+      "external_links": 14,
+      "first_200_chars": "Korea unemployment benefits for foreign workers depend first on visa-based insurance coverage, then on work history and why the job ended.\nFor foreign workers, unemployment-benefit eligibility begins "
+    },
+    {
+      "title": "Korea Lease Renewal Rights in 2026: The 2+2 Rule and 5% Cap Explained",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
+      "published": "2026-11-15T21:00:00+09:00",
+      "labels": [
+        "Foreign Residents",
+        "Housing in Korea",
+        "Korean Rental Law",
+        "Lease Renewal",
+        "Life in Korea",
+        "Renting in Korea"
+      ],
+      "words": 1587,
+      "chars": 9635,
+      "h2": 7,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 2,
+      "internal_links": 6,
+      "external_links": 7,
+      "first_200_chars": "Korea’s lease renewal right lets most residential tenants request one extra two-year term, with rent or deposit increases generally capped at 5%.\nA clear renewal request and a written record matter as"
+    },
+    {
+      "title": "Korea?셲 National Pension for Foreign Workers in 2026: Contributions, Refunds, and Exceptions",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
+      "published": "2026-11-14T21:00:00+09:00",
+      "labels": [
+        "Foreign Workers",
+        "Korean National Pension",
+        "Life in Korea",
+        "Money in Korea",
+        "Working in Korea"
+      ],
+      "words": 1530,
+      "chars": 9756,
+      "h2": 8,
+      "h3": 5,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 6,
+      "external_links": 7,
+      "first_200_chars": "Korea's National Pension usually covers foreign workers, but refund rights depend on nationality, visa status, and social security agreements.\nForeign employees and employers normally share Korea?셲 wo"
+    },
+    {
+      "title": "Sick Leave in Korea in 2026: What Foreign Workers Are Actually Entitled To",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
+      "published": "2026-11-13T21:00:00+09:00",
+      "labels": [
+        "Foreign Workers",
+        "Korean Sick Leave",
+        "Life in Korea",
+        "Money in Korea",
+        "Working in Korea"
+      ],
+      "words": 1605,
+      "chars": 10240,
+      "h2": 8,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 4,
+      "external_links": 6,
+      "first_200_chars": "Korea has no general statutory paid sick leave for most private-sector workers; pay and time off depend on workplace rules unless illness is work-related.\nIn Korea, the source of the leave rule determ"
+    },
+    {
+      "title": "Moving in Korea in 2026: How Foreign Residents Report a New Address",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/moving-in-korea-in-2026-how-foreign.html",
+      "published": "2026-11-12T21:00:00+09:00",
+      "labels": [
+        "Everyday Korea",
+        "Foreign Residents",
+        "Korean Immigration",
+        "Life in Korea",
+        "Moving in Korea",
+        "Residence Card"
+      ],
+      "words": 1372,
+      "chars": 8467,
+      "h2": 8,
+      "h3": 5,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 6,
+      "external_links": 6,
+      "first_200_chars": "Foreign residents moving in Korea must report their new address within 15 days; F-4 domestic residence reporters have 14 days.\nMoving homes also starts a separate immigration address-reporting deadlin"
+    },
+    {
+      "title": "Korea Real Estate Agent Fees in 2026: What Renters Actually Pay",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korea-real-estate-agent-fees-in-2026.html",
+      "published": "2026-11-11T21:00:00+09:00",
+      "labels": [
+        "Brokerage Fees",
+        "Foreign Residents",
+        "Housing in Korea",
+        "Korean Real Estate",
+        "Life in Korea",
+        "Renting in Korea"
+      ],
+      "words": 1202,
+      "chars": 7225,
+      "h2": 8,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 6,
+      "external_links": 5,
+      "first_200_chars": "Korea real estate agent fees for rentals use the deposit plus converted monthly rent, then apply a negotiable legal ceiling—not a flat fee.\nThe legal rate is a ceiling; confirm the calculation and neg"
+    },
+    {
+      "title": "Korean Pharmacies in 2026: Prescriptions, Costs, and What Foreigners Should Know",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korean-pharmacies-in-2026-prescriptions.html",
+      "published": "2026-11-07T21:00:00+09:00",
+      "labels": [
+        "Everyday Korea",
+        "Foreign Residents",
+        "Healthcare in Korea",
+        "Korean Pharmacies",
+        "Life in Korea"
+      ],
+      "words": 1497,
+      "chars": 9741,
+      "h2": 9,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 5,
+      "external_links": 11,
+      "first_200_chars": "Korean pharmacies dispense prescriptions separately from clinics, while some common medicines are sold without one. Here is how the system works.\nIn Korea, the clinic issues the prescription and a pha"
+    },
+    {
+      "title": "Korean Public School Enrollment for Foreign Children in 2026: Documents, Grades, and Where to Start",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korean-public-school-enrollment-for.html",
+      "published": "2026-11-06T21:00:00+09:00",
+      "labels": [
+        "Education in Korea",
+        "Foreign Parents",
+        "Korean Schools",
+        "Life in Korea",
+        "School Enrollment"
+      ],
+      "words": 1791,
+      "chars": 11966,
+      "h2": 8,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 2,
+      "internal_links": 6,
+      "external_links": 8,
+      "first_200_chars": "Foreign children can attend Korean public school in 2026, but families usually must apply directly and prove age, address, and schooling.\nForeign families usually need to begin the public-school enrol"
+    },
+    {
+      "title": "Korea Overtime Pay in 2026: When 1.5× Becomes 2×",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korea-overtime-pay-in-2026-when-15.html",
+      "published": "2026-11-05T21:00:00+09:00",
+      "labels": [
+        "Foreign Workers",
+        "Korean Overtime Pay",
+        "Life in Korea",
+        "Money in Korea",
+        "Working in Korea"
+      ],
+      "words": 1712,
+      "chars": 10517,
+      "h2": 8,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 6,
+      "external_links": 12,
+      "first_200_chars": "Korea overtime pay in 2026 is usually at least 1.5 times ordinary wages, but workplace size, timing, and overlapping premiums matter.\nOvertime pay depends on when the hours were worked and which legal"
+    },
+    {
+      "title": "Korea Weekly Holiday Pay in 2026: The 15-Hour Rule and How to Calculate It",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korea-weekly-holiday-pay-in-2026-15.html",
+      "published": "2026-11-04T21:00:00+09:00",
+      "labels": [
+        "Foreign Workers",
+        "Korean Weekly Holiday Pay",
+        "Life in Korea",
+        "Money in Korea",
+        "Working in Korea"
+      ],
+      "words": 1323,
+      "chars": 7998,
+      "h2": 8,
+      "h3": 5,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 6,
+      "external_links": 6,
+      "first_200_chars": "Korea weekly holiday pay gives eligible workers a paid weekly rest day, including part-timers averaging at least 15 scheduled hours.\nWeekly holiday pay is pay for an eligible rest day, not a Sunday-wo"
+    },
+    {
+      "title": "Korea Annual Leave in 2026: 11 Days, 15 Days, and the Rules Foreign Workers Miss",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korea-annual-leave-in-2026-11-days-15.html",
+      "published": "2026-11-03T21:00:00+09:00",
+      "labels": [
+        "Foreign Workers",
+        "Korean Annual Leave",
+        "Life in Korea",
+        "Money in Korea",
+        "Working in Korea"
+      ],
+      "words": 1471,
+      "chars": 9073,
+      "h2": 8,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 6,
+      "external_links": 10,
+      "first_200_chars": "Korea annual leave in 2026 usually means up to 11 paid days in your first year and 15 after one full year, but key coverage limits apply.\nKorea's paid-leave rules depend on service, attendance, workpl"
+    },
+    {
+      "title": "Korea Severance Pay in 2026: The One-Year Rule, Formula, and Foreign Worker Exceptions",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korea-severance-pay-in-2026-one-year.html",
+      "published": "2026-11-02T21:00:00+09:00",
+      "labels": [
+        "Foreign Workers",
+        "Korean Severance Pay",
+        "Life in Korea",
+        "Money in Korea",
+        "Working in Korea"
+      ],
+      "words": 1659,
+      "chars": 10469,
+      "h2": 9,
+      "h3": 2,
+      "images": 4,
+      "images_without_alt": 0,
+      "ai_labelled_images": 2,
+      "internal_links": 5,
+      "external_links": 6,
+      "first_200_chars": "Korea severance pay generally covers employees who work at least 15 hours a week for one year, with 30 days' average wage owed per year.\nKorean severance eligibility depends on continuous service and "
+    },
+    {
+      "title": "Korea’s 2026 Minimum Wage: What KRW 10,320 an Hour Really Means",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/koreas-2026-minimum-wage-what-krw-10320.html",
+      "published": "2026-11-01T21:00:00+09:00",
+      "labels": [
+        "Foreign Workers",
+        "Korean Minimum Wage",
+        "Life in Korea",
+        "Money in Korea",
+        "Working in Korea"
+      ],
+      "words": 1652,
+      "chars": 9948,
+      "h2": 9,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 2,
+      "internal_links": 5,
+      "external_links": 8,
+      "first_200_chars": "Korea’s 2026 minimum wage is KRW 10,320 an hour, or KRW 2,156,880 a month on the official 209-hour full-time calculation.\nThe hourly minimum is only the starting point; hours and pay categories determ"
+    },
+    {
+      "title": "Korea Rental Deposit Protection: Move-In Report, Fixed Date, and Lease Reporting Explained",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/korea-rental-deposit-protection-move-in.html",
+      "published": "2026-10-31T21:00:00+09:00",
+      "labels": [
+        "Foreign Residents",
+        "Housing in Korea",
+        "Korean Rental Deposits",
+        "Life in Korea",
+        "Renting in Korea"
+      ],
+      "words": 1555,
+      "chars": 9872,
+      "h2": 9,
+      "h3": 5,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 2,
+      "internal_links": 5,
+      "external_links": 7,
+      "first_200_chars": "Korea rental deposit protection depends on three separate steps: taking possession, reporting your address, and securing a fixed date.\nDeposit protection begins with several separate legal and adminis"
+    },
+    {
+      "title": "Apartment vs. Officetel vs. Villa in Korea: What Renters Need to Know",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/apartment-vs-officetel-vs-villa-in.html",
+      "published": "2026-10-30T21:00:00+09:00",
+      "labels": [
+        "Foreign Residents",
+        "Housing in Korea",
+        "Korean Apartments",
+        "Life in Korea",
+        "Officetel",
+        "Renting in Korea"
+      ],
+      "words": 1510,
+      "chars": 9646,
+      "h2": 8,
+      "h3": 4,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 2,
+      "internal_links": 5,
+      "external_links": 10,
+      "first_200_chars": "Apartment, officetel, and villa mean different building types in Korea; choose by space, location, fees, and legal classification.\nThe familiar English labels describe three quite different housing ch"
+    },
+    {
+      "title": "Korea’s Deposit Insurance Limit in 2026: What the KRW 100 Million Rule Really Covers",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/koreas-deposit-insurance-limit-in-2026.html",
+      "published": "2026-10-29T21:00:00+09:00",
+      "labels": [
+        "Deposit Insurance",
+        "Everyday Korea",
+        "Foreign Residents",
+        "Korean Banking",
+        "Life in Korea",
+        "Money in Korea"
+      ],
+      "words": 1320,
+      "chars": 8785,
+      "h2": 8,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 2,
+      "internal_links": 4,
+      "external_links": 8,
+      "first_200_chars": "Korea’s deposit insurance covers up to KRW 100 million per depositor at each protected institution, including principal and designated interest.\nKorea’s deposit-protection ceiling is measured by depos"
+    },
+    {
+      "title": "Kindergarten vs. Daycare in Korea: What Parents Need to Know in 2026",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/kindergarten-vs-daycare-in-korea-what.html",
+      "published": "2026-10-28T21:00:00+09:00",
+      "labels": [
+        "Childcare in Korea",
+        "Education in Korea",
+        "Foreign Parents",
+        "Korean Kindergarten",
+        "Life in Korea"
+      ],
+      "words": 1873,
+      "chars": 12302,
+      "h2": 9,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 6,
+      "external_links": 14,
+      "first_200_chars": "In Korea, kindergarten and daycare overlap for ages 3–5, but they differ in eligible ages, schedules, admissions, and administration.\nKindergarten and daycare overlap for ages 3–5, but their schedules"
+    },
+    {
+      "title": "Why Korean Parcel Delivery Is So Fast—and Why Boxes Are Left at the Door",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/why-korean-parcel-delivery-is-so.html",
+      "published": "2026-10-27T21:00:00+09:00",
+      "labels": [
+        "Everyday Korea",
+        "Foreign Residents",
+        "Korean Delivery",
+        "Life in Korea",
+        "Online Shopping in Korea"
+      ],
+      "words": 1466,
+      "chars": 9416,
+      "h2": 8,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 5,
+      "external_links": 5,
+      "first_200_chars": "Korean parcel delivery is fast because dense apartment routes, nearby logistics hubs, and doorstep drop-offs shorten the difficult last mile.\nDense apartment routes let one delivery stop serve many ho"
+    },
+    {
+      "title": "Is Korean Public School Free? What Parents Still Pay in 2026",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/is-korean-public-school-free-what.html",
+      "published": "2026-10-26T21:00:00+09:00",
+      "labels": [
+        "Education in Korea",
+        "Foreign Parents",
+        "Korean Schools",
+        "Life in Korea",
+        "School Costs"
+      ],
+      "words": 1484,
+      "chars": 9634,
+      "h2": 7,
+      "h3": 6,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 2,
+      "internal_links": 6,
+      "external_links": 15,
+      "first_200_chars": "Korean public school is tuition-free for most students, but families may still pay for uniforms, trips, after-school classes, and supplies.\nFree tuition covers the core of public education, but some s"
+    },
+    {
+      "title": "Korean School Absence Rules: Sick Days, Family Trips, and Attendance in 2026",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-absence-rules-sick-days.html",
+      "published": "2026-10-25T21:00:00+09:00",
+      "labels": [
+        "Education in Korea",
+        "Foreign Parents",
+        "Korean Schools",
+        "Life in Korea",
+        "School Attendance"
+      ],
+      "words": 1475,
+      "chars": 9709,
+      "h2": 9,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 2,
+      "internal_links": 5,
+      "external_links": 13,
+      "first_200_chars": "Korean school absence rules distinguish ordinary absences from approved days that count as attendance; forms and deadlines vary by school.\nKorean attendance records depend on both the reason for an ab"
+    },
+    {
+      "title": "Korean National Health Insurance for Foreigners: Enrollment, Premiums, and the Six-Month Rule",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-national-health-insurance-for.html",
+      "published": "2026-10-24T21:00:00+09:00",
+      "labels": [
+        "Everyday Korea",
+        "Foreign Residents",
+        "Healthcare in Korea",
+        "Korean Health Insurance",
+        "Life in Korea",
+        "Money in Korea"
+      ],
+      "words": 1557,
+      "chars": 10296,
+      "h2": 9,
+      "h3": 4,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 5,
+      "external_links": 11,
+      "first_200_chars": "Korean National Health Insurance covers eligible foreign residents, but enrollment timing and premiums depend on work, visa, and family status.\nForeign residents use the same national coverage framewo"
+    },
+    {
+      "title": "Korean Cash Receipts Explained: Why Stores Ask for Your Phone Number",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-cash-receipts-explained-why.html",
+      "published": "2026-10-23T21:00:00+09:00",
+      "labels": [
+        "Everyday Korea",
+        "Foreign Residents",
+        "Korean Cash Receipts",
+        "Life in Korea",
+        "Money in Korea",
+        "Year-End Tax Settlement"
+      ],
+      "words": 1528,
+      "chars": 9438,
+      "h2": 9,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 5,
+      "external_links": 11,
+      "first_200_chars": "A Korean cash receipt links a cash payment to the tax system; residents may use it for deductions, while tourists need a VAT refund instead.\nA cash receipt is a tax record linked to the buyer, not mer"
+    },
+    {
+      "title": "What Time Does Korean Elementary School End? Regular Classes, Neulbom, and the 3 P.M. Debate",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/what-time-does-korean-elementary-school.html",
+      "published": "2026-10-22T21:00:00+09:00",
+      "labels": [
+        "Education in Korea",
+        "Foreign Parents",
+        "Korean Schools",
+        "Life in Korea",
+        "Neulbom School",
+        "School Dismissal"
+      ],
+      "words": 1533,
+      "chars": 9492,
+      "h2": 7,
+      "h3": 1,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 2,
+      "internal_links": 5,
+      "external_links": 8,
+      "first_200_chars": "Korean elementary school regular classes commonly end between about 12:20 and 2:30 p.m., depending on grade, weekday, lunch, and the school timetable.\nRegular dismissal and the end of a child's school"
+    },
+    {
+      "title": "Korean Electricity Bills Explained: Progressive Rates, Apartment Charges, and What You Actually Pay",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-electricity-bills-explained.html",
+      "published": "2026-10-21T21:00:00+09:00",
+      "labels": [
+        "Everyday Korea",
+        "Foreign Residents",
+        "Korean Apartments",
+        "Korean Electricity Bills",
+        "Life in Korea",
+        "Money in Korea"
+      ],
+      "words": 1611,
+      "chars": 9911,
+      "h2": 10,
+      "h3": 5,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 2,
+      "internal_links": 5,
+      "external_links": 8,
+      "first_200_chars": "Korean electricity bills use progressive rates, but apartments may bill through management. Here is how to read the charges and avoid surprises.\nIn Korea, electricity may arrive as a KEPCO bill or as "
+    },
+    {
+      "title": "The Korean School Year Explained: Why Classes Start in March",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/the-korean-school-year-explained-why.html",
+      "published": "2026-10-20T21:00:00+09:00",
+      "labels": [
+        "Education in Korea",
+        "Foreign Parents",
+        "Korean School Year",
+        "Korean Schools",
+        "Life in Korea"
+      ],
+      "words": 1456,
+      "chars": 9320,
+      "h2": 8,
+      "h3": 5,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 6,
+      "external_links": 8,
+      "first_200_chars": "The Korean school year runs from March through February, but vacation dates and the first day of class are set by each school—not nationally.\nIn Korean-system schools, the new grade and school year be"
+    },
+    {
+      "title": "Korea’s Neulbom School in 2026: What Changed for Grades 1–3",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/koreas-neulbom-school-in-2026-what.html",
+      "published": "2026-10-19T21:00:00+09:00",
+      "labels": [
+        "After-School Programs",
+        "Education in Korea",
+        "Foreign Parents",
+        "Korean Schools",
+        "Life in Korea",
+        "Neulbom School"
+      ],
+      "words": 1645,
+      "chars": 10545,
+      "h2": 8,
+      "h3": 5,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 6,
+      "external_links": 6,
+      "first_200_chars": "Korea’s Neulbom School changed in 2026: grades 1–2 keep free programs, while grade 3 gets an after-school voucher of up to ₩500,000 per year in principle, subject to locally permitted adjustments.\nThe"
+    },
+    {
+      "title": "Korean Apartment Maintenance Fees Explained: What Your Gwanlibi Bill Really Includes",
+      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-maintenance-fees.html",
+      "published": "2026-10-18T21:00:00+09:00",
+      "labels": [
+        "Apartment Maintenance Fees",
+        "Housing in Korea",
+        "Korean Apartments",
+        "Life in Korea",
+        "Renting in Korea"
+      ],
+      "words": 1538,
+      "chars": 9929,
+      "h2": 7,
+      "h3": 5,
+      "images": 5,
+      "images_without_alt": 0,
+      "ai_labelled_images": 3,
+      "internal_links": 5,
+      "external_links": 12,
+      "first_200_chars": "Korean apartment maintenance fees combine shared building costs, household utilities, and sometimes an owner-only repair reserve on one bill.\nA Korean apartment management bill can combine shared cost"
+    },
     {
       "title": "Korean School Grades Explained: How Foreign Children Are Placed in 2026",
       "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
@@ -355,7 +1051,7 @@
       "meta_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
       "meta_description_tags": 1,
       "meta_robots": null,
-      "og_image": "https://lh3.googleusercontent.com/d/132TDdOMlKM_9IYxQ29NkiVE9D6YaiPpE=w1200-h630-p-k-no-nu",
+      "og_image": "https://lh3.googleusercontent.com/d/105sNZd_q6CQfw20hCVoHxwSry3XdFzeB=w1200-h630-p-k-no-nu",
       "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
       "canonical": "https://koreabreakdown.blogspot.com/",
       "og_url": "https://koreabreakdown.blogspot.com/",
@@ -364,7 +1060,7 @@
       "h1_count": 1,
       "has_adsense": true,
       "has_search_console_verification": false,
-      "html_bytes": 163237
+      "html_bytes": 168734
     },
     "robots": {
       "url": "https://koreabreakdown.blogspot.com/robots.txt",
@@ -376,8 +1072,8 @@
       "url": "https://koreabreakdown.blogspot.com/sitemap.xml",
       "status": 200,
       "x_robots_tag": "noindex",
-      "url_count": 15,
-      "head": "<?xml version='1.0' encoding='UTF-8'?><urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\"><url><loc>https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html</loc><lastmod>2026-10-12T12:00:00Z</lastmod></url><url><loc>https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html</loc><lastmod>2026-10-11T12:00:00Z</lastmod></url><url><loc>https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html</loc><lastmod>2026-10-10T12:00:00Z</lastmod></url><url><loc>https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-kor"
+      "url_count": 46,
+      "head": "<?xml version='1.0' encoding='UTF-8'?><urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\"><url><loc>https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html</loc><lastmod>2026-11-20T12:00:00Z</lastmod></url><url><loc>https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html</loc><lastmod>2026-11-19T12:00:00Z</lastmod></url><url><loc>https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html</loc><lastmod>2026-11-18T12:00:00Z</lastmod></url><url><loc>https://koreabreakdown.blogspot.com/2026/11/korea-"
     },
     "feed": {
       "url": "https://koreabreakdown.blogspot.com/feeds/posts/default",
@@ -386,289 +1082,289 @@
     },
     "posts": [
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
         "status": 200,
         "x_robots_tag": null,
-        "title_tag": "Korean School Grades Explained: How Foreign Children Are Placed in 2026",
+        "title_tag": "Korea’s 52-Hour Workweek in 2026: The 40+12 Rule Explained",
         "meta_description": null,
         "meta_description_tags": 0,
         "meta_robots": null,
-        "og_image": "https://lh3.googleusercontent.com/d/132TDdOMlKM_9IYxQ29NkiVE9D6YaiPpE=w1200-h630-p-k-no-nu",
+        "og_image": "https://lh3.googleusercontent.com/d/105sNZd_q6CQfw20hCVoHxwSry3XdFzeB=w1200-h630-p-k-no-nu",
         "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
         "meta_refresh": null,
         "js_redirect": null,
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 135954
+        "html_bytes": 141027
       },
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
         "status": 200,
         "x_robots_tag": null,
-        "title_tag": "Korean Phone Verification for Foreigners: Why It Fails and How to Fix It",
+        "title_tag": "Korea Parental Leave in 2026: Up to 18 Months, Pay Caps, and Foreign Worker Rules",
         "meta_description": null,
         "meta_description_tags": 0,
         "meta_robots": null,
-        "og_image": "https://lh3.googleusercontent.com/d/1GgZvOhhfmAacjrD0g0TWFxcOcimOFtRz=w1200-h630-p-k-no-nu",
+        "og_image": "https://lh3.googleusercontent.com/d/13zumIMGu4NanN2oFoygPC23X_r3_J7sw=w1200-h630-p-k-no-nu",
         "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
         "meta_refresh": null,
         "js_redirect": null,
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 134822
+        "html_bytes": 140109
       },
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
         "status": 200,
         "x_robots_tag": null,
-        "title_tag": "Seoul Climate Card in 2026: What Tourists Can Still Buy After October 1",
+        "title_tag": "Korea Maternity Leave in 2026: 90, 100, or 120 Days—and Who Pays",
         "meta_description": null,
         "meta_description_tags": 0,
         "meta_robots": null,
-        "og_image": "https://lh3.googleusercontent.com/d/18hcUA4jP0qlUOzP4Rpe4HlbWzgjU7iS-=w1200-h630-p-k-no-nu",
+        "og_image": "https://lh3.googleusercontent.com/d/1vVMTdYVjUaIVROZzRq_7x07z4IGH7z1j=w1200-h630-p-k-no-nu",
         "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
         "meta_refresh": null,
         "js_redirect": null,
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 135409
+        "html_bytes": 140435
       },
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
         "status": 200,
         "x_robots_tag": null,
-        "title_tag": "Emergency Numbers in Korea: When to Call 112, 119, 110, and 1330",
+        "title_tag": "Korea Paternity Leave in 2026: 20 Paid Days Before or After Birth",
         "meta_description": null,
         "meta_description_tags": 0,
         "meta_robots": null,
-        "og_image": "https://lh3.googleusercontent.com/d/1TpGsnmKIObuaKMluHg7RiFMLuJlE2pV9=w1200-h630-p-k-no-nu",
+        "og_image": "https://lh3.googleusercontent.com/d/11DEFAJ1iaykx74yA1DKseZISQnJrytEq=w1200-h630-p-k-no-nu",
         "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
         "meta_refresh": null,
         "js_redirect": null,
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 135694
+        "html_bytes": 139741
       },
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
         "status": 200,
         "x_robots_tag": null,
-        "title_tag": "Korean Public Holidays Explained: Red Days, Substitute Holidays, and Paid Leave",
+        "title_tag": "Korea Unemployment Benefits for Foreign Workers in 2026: Visa Rules, Amounts, and How to Apply",
         "meta_description": null,
         "meta_description_tags": 0,
         "meta_robots": null,
-        "og_image": "https://lh3.googleusercontent.com/d/1ryxLDISuA5AB407bCpztO47xdzH89Pz2=w1200-h630-p-k-no-nu",
+        "og_image": "https://lh3.googleusercontent.com/d/17y2dOAiCRV8JQgjAZQWgIHFv1efoz3he=w1200-h630-p-k-no-nu",
         "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
         "meta_refresh": null,
         "js_redirect": null,
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 135074
+        "html_bytes": 142871
       },
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
         "status": 200,
         "x_robots_tag": null,
-        "title_tag": "Korean Ondol Heating Explained: How to Use the Boiler Controls",
+        "title_tag": "Korea Lease Renewal Rights in 2026: The 2+2 Rule and 5% Cap Explained",
         "meta_description": null,
         "meta_description_tags": 0,
         "meta_robots": null,
-        "og_image": "https://lh3.googleusercontent.com/d/11zdEC-yTNHIBACUel7UDZZAt8SUMyrTO=w1200-h630-p-k-no-nu",
+        "og_image": "https://lh3.googleusercontent.com/d/1YQrXXVhu4OrJI3l49wA4d7Q0ytGAKtc0=w1200-h630-p-k-no-nu",
         "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
         "meta_refresh": null,
         "js_redirect": null,
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 136330
+        "html_bytes": 140124
       },
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
         "status": 200,
         "x_robots_tag": null,
-        "title_tag": "Korean School Lunch Explained: Menus, Allergy Numbers, and Who Pays",
+        "title_tag": "Korea?셲 National Pension for Foreign Workers in 2026: Contributions, Refunds, and Exceptions",
         "meta_description": null,
         "meta_description_tags": 0,
         "meta_robots": null,
-        "og_image": "https://lh3.googleusercontent.com/d/1ixUqj1rdOS9EFSDkkt8928BAHZDZpy6p=w1200-h630-p-k-no-nu",
+        "og_image": "https://lh3.googleusercontent.com/d/1P2roZ63QxdYDjmYuaZFn1q484-swn5_z=w1200-h630-p-k-no-nu",
         "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
         "meta_refresh": null,
         "js_redirect": null,
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 134814
+        "html_bytes": 139911
       },
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
         "status": 200,
         "x_robots_tag": null,
-        "title_tag": "How Korean Addresses Work: Road Names, Lot Numbers, and the Building-Number Trick",
+        "title_tag": "Sick Leave in Korea in 2026: What Foreign Workers Are Actually Entitled To",
         "meta_description": null,
         "meta_description_tags": 0,
         "meta_robots": null,
-        "og_image": "https://lh3.googleusercontent.com/d/1rYPHQljcKMItCO5SyU7XKNiucc2BGoZb=w1200-h630-p-k-no-nu",
+        "og_image": "https://lh3.googleusercontent.com/d/1tJcKVMBCJc2r0LJ-GvlDQtEmUVRdqIjA=w1200-h630-p-k-no-nu",
         "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
         "meta_refresh": null,
         "js_redirect": null,
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 133659
+        "html_bytes": 139980
       },
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/moving-in-korea-in-2026-how-foreign.html",
         "status": 200,
         "x_robots_tag": null,
-        "title_tag": "Korean Age in 2026: What Changed, What Didn’t, and Which Age to Use",
+        "title_tag": "Moving in Korea in 2026: How Foreign Residents Report a New Address",
         "meta_description": null,
         "meta_description_tags": 0,
         "meta_robots": null,
-        "og_image": "https://lh3.googleusercontent.com/d/1zjHZbOdiTEueGr4V6Iye0AmNmFMO7IJi=w1200-h630-p-k-no-nu",
+        "og_image": "https://lh3.googleusercontent.com/d/1S2NOroxIk7TdYudLEuTvNhPrRGCXdMOj=w1200-h630-p-k-no-nu",
         "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/moving-in-korea-in-2026-how-foreign.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/moving-in-korea-in-2026-how-foreign.html",
         "meta_refresh": null,
         "js_redirect": null,
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 133819
+        "html_bytes": 138339
       },
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-real-estate-agent-fees-in-2026.html",
         "status": 200,
         "x_robots_tag": null,
-        "title_tag": "Korean Apartment Sizes Explained: Why 84 m² Can Be Called 34 Pyeong",
+        "title_tag": "Korea Real Estate Agent Fees in 2026: What Renters Actually Pay",
         "meta_description": null,
         "meta_description_tags": 0,
         "meta_robots": null,
-        "og_image": "https://lh3.googleusercontent.com/d/1Hq5yx9pgJV6HTmGn6rLArQakXuUnSSJ6=w1200-h630-p-k-no-nu",
+        "og_image": "https://lh3.googleusercontent.com/d/1nYWWDTixaJRPLpbtuCrJuJxd-hSQPIZP=w1200-h630-p-k-no-nu",
         "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-real-estate-agent-fees-in-2026.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-real-estate-agent-fees-in-2026.html",
         "meta_refresh": null,
         "js_redirect": null,
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 129488
+        "html_bytes": 137481
       },
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korean-pharmacies-in-2026-prescriptions.html",
         "status": 200,
         "x_robots_tag": null,
-        "title_tag": "How to Sort Trash in Korea: A Practical Guide for Foreign Residents",
+        "title_tag": "Korean Pharmacies in 2026: Prescriptions, Costs, and What Foreigners Should Know",
         "meta_description": null,
         "meta_description_tags": 0,
         "meta_robots": null,
-        "og_image": "https://lh3.googleusercontent.com/d/1OSo4HFXE4SwFKY1PDDOi8sieNTAhaXTn=w1200-h630-p-k-no-nu",
+        "og_image": "https://lh3.googleusercontent.com/d/1iJV4MP8ttynEKAs_rAnP7MwmBks1UEEc=w1200-h630-p-k-no-nu",
         "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korean-pharmacies-in-2026-prescriptions.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korean-pharmacies-in-2026-prescriptions.html",
         "meta_refresh": null,
         "js_redirect": null,
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 135403
+        "html_bytes": 140526
       },
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/09/jeonse-vs-wolse-in-korea-2026-guide-for.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korean-public-school-enrollment-for.html",
         "status": 200,
         "x_robots_tag": null,
-        "title_tag": "Jeonse vs. Wolse in Korea: A 2026 Guide for Foreign Renters",
-        "meta_description": "Compare jeonse and wolse by real cost, deposit risk and the checks foreign renters should complete before signing in Korea in 2026.",
-        "meta_description_tags": 1,
+        "title_tag": "Korean Public School Enrollment for Foreign Children in 2026: Documents, Grades, and Where to Start",
+        "meta_description": null,
+        "meta_description_tags": 0,
         "meta_robots": null,
-        "og_image": "https://blogger.googleusercontent.com/img/a/AVvXsEgtKLow8WTbR-roD0efpeLbiR4CmwijYHz4ljXEArS7DupSOeAjdvGRqiTVG6-L44fh58x_kdUX8ouQnXnjzRr18XTya7o9QrcdG_E2a403HMoYqLNcQBwuveP6GFBm4DYhfVfKLPJlM5TOutufroeEMmTDvfz35vZZBlzXsrh68Wh2pIElfWxWOLbTP4rk=w1200-h630-p-k-no-nu",
-        "og_description": "Compare jeonse and wolse by real cost, deposit risk and the checks foreign renters should complete before signing in Korea in 2026.",
-        "canonical": "https://koreabreakdown.blogspot.com/2026/09/jeonse-vs-wolse-in-korea-2026-guide-for.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/09/jeonse-vs-wolse-in-korea-2026-guide-for.html",
+        "og_image": "https://lh3.googleusercontent.com/d/1csDdo_IJyRNEftqf4HQSUifsav7DXbCl=w1200-h630-p-k-no-nu",
+        "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korean-public-school-enrollment-for.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korean-public-school-enrollment-for.html",
         "meta_refresh": null,
         "js_redirect": null,
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 152681
+        "html_bytes": 142738
       },
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/08/how-much-do-korean-public-school.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-overtime-pay-in-2026-when-15.html",
         "status": 200,
         "x_robots_tag": null,
-        "title_tag": "How Much Do Korean Public School Teachers Make in 2026? The Pay Scale Foreigners Often Misread",
-        "meta_description": "How much do Korean public-school teachers make in 2026? Learn the official pay scale, why Step 9 is not nine years, allowances, and net pay.",
-        "meta_description_tags": 1,
+        "title_tag": "Korea Overtime Pay in 2026: When 1.5× Becomes 2×",
+        "meta_description": null,
+        "meta_description_tags": 0,
         "meta_robots": null,
-        "og_image": "https://blogger.googleusercontent.com/img/a/AVvXsEiCMKM_kWojOUaf1RBHXP_iEEk6cJmn_SWz4yXxfSeC1n8ZFO3NJP-q8UM_BVruBmU7yNW0UElnnaxldxIofZIXHaGH7SsuGAl5gpF5hKGGWYO7MX92gvG_wuHERvT3xtrfgyP6C58UoM-kBRlwpba8HmhYtVbwqlmhgaRKR8FM7NFNd0PSl2hhZhM_N6Hz=w1200-h630-p-k-no-nu",
-        "og_description": "How much do Korean public-school teachers make in 2026? Learn the official pay scale, why Step 9 is not nine years, allowances, and net pay.",
-        "canonical": "https://koreabreakdown.blogspot.com/2026/08/how-much-do-korean-public-school.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/08/how-much-do-korean-public-school.html",
+        "og_image": "https://lh3.googleusercontent.com/d/1ZIslLecMCAvsCgYVqP5LGivE6C0VYIt1=w1200-h630-p-k-no-nu",
+        "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-overtime-pay-in-2026-when-15.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-overtime-pay-in-2026-when-15.html",
         "meta_refresh": null,
         "js_redirect": null,
         "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 152618
+        "html_bytes": 141001
       },
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/08/is-south-korea-really-banning.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-weekly-holiday-pay-in-2026-15.html",
         "status": 200,
         "x_robots_tag": null,
-        "title_tag": "Is South Korea Really Banning Smartphones at School? What Changed in 2026",
-        "meta_description": "South Korea bans smartphones during class, not all day. Learn the 2026 school rules and exceptions for educational, emergency and assistive use.",
-        "meta_description_tags": 1,
+        "title_tag": "Korea Weekly Holiday Pay in 2026: The 15-Hour Rule and How to Calculate It",
+        "meta_description": null,
+        "meta_description_tags": 0,
         "meta_robots": null,
-        "og_image": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiD2nVXBzNIYm3NphwcBPRXx6gl3Cg5gYbXanMZvNbZOTx_eB6H4F8G6_2CsriQ2t4A0lhc9GQk_f_h-fyWNVAmwbm7mai5KqHiVsclZbmqD3uT92Vscqd2jZN8AVI6HWoxmneN4frSAcroFE-cH1_av9XlZK4silBjXhcGClSYR_b8ehL3Ekj9g7EqfUKo/w1200-h630-p-k-no-nu/featured-korean-school-phone-free-classroom.png",
-        "og_description": "South Korea bans smartphones during class, not all day. Learn the 2026 school rules and exceptions for educational, emergency and assistive use.",
-        "canonical": "https://koreabreakdown.blogspot.com/2026/08/is-south-korea-really-banning.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/08/is-south-korea-really-banning.html",
+        "og_image": "https://lh3.googleusercontent.com/d/1u38HYS_V2_xUXpMT44qZ9aLLFCIlBcWX=w1200-h630-p-k-no-nu",
+        "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-weekly-holiday-pay-in-2026-15.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-weekly-holiday-pay-in-2026-15.html",
         "meta_refresh": null,
         "js_redirect": null,
-        "h1_count": 2,
+        "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 143617
+        "html_bytes": 138216
       },
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/08/why-korean-parents-spend-so-much-on.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-annual-leave-in-2026-11-days-15.html",
         "status": 200,
         "x_robots_tag": null,
-        "title_tag": "Why Korean Parents Spend So Much on Hagwons: A Teacher Explains the 2025 Numbers",
-        "meta_description": "Why do Korean parents spend so much on hagwons? A Korean teacher breaks down the 2025 numbers — and the widening gap the headline total hides.",
-        "meta_description_tags": 1,
+        "title_tag": "Korea Annual Leave in 2026: 11 Days, 15 Days, and the Rules Foreign Workers Miss",
+        "meta_description": null,
+        "meta_description_tags": 0,
         "meta_robots": null,
-        "og_image": "https://blogger.googleusercontent.com/img/a/AVvXsEjxGE-S4GYLALVOTgC8qhdkssp5E0mulVcAEvKqkqQCJ-nM-fRTqUtkg879lKR4CseJoSaFEQufhEyjJcpnwqxk36_WLbCRWkCXV714ii--AfIFxMAVy-h9lp2p1rozMeQxnS5V9CoJmsU9Y1kX0Lrk8Ufn9IDz22278NZOgGZv8e4ObefVsBht2Lzy8ZJH=w1200-h630-p-k-no-nu",
-        "og_description": "Why do Korean parents spend so much on hagwons? A Korean teacher breaks down the 2025 numbers — and the widening gap the headline total hides.",
-        "canonical": "https://koreabreakdown.blogspot.com/2026/08/why-korean-parents-spend-so-much-on.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/08/why-korean-parents-spend-so-much-on.html",
+        "og_image": "https://lh3.googleusercontent.com/d/1lMF7tmH7EUCAoOYZU6luvWb0uaImGjvP=w1200-h630-p-k-no-nu",
+        "og_description": "Clear, fact-checked guides to life in South Korea from a Korean teacher: education, schools, housing, money and everyday rules for foreigners.",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-annual-leave-in-2026-11-days-15.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-annual-leave-in-2026-11-days-15.html",
         "meta_refresh": null,
         "js_redirect": null,
-        "h1_count": 19,
+        "h1_count": 1,
         "has_adsense": true,
         "has_search_console_verification": false,
-        "html_bytes": 146075
+        "html_bytes": 139330
       }
     ]
   },
@@ -767,22 +1463,22 @@
       }
     },
     {
-      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
       "googlebot_mobile": {
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
             "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -791,17 +1487,17 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
             "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -810,12 +1506,12 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -824,22 +1520,22 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+            "url": "http://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
             "status": 302,
-            "location": "http://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1"
+            "location": "http://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html?m=1"
           },
           {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1",
+            "url": "http://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html?m=1",
             "status": 301,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -848,34 +1544,34 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
       }
     },
     {
-      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
       "googlebot_mobile": {
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
             "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -884,17 +1580,17 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
             "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -903,12 +1599,12 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -917,22 +1613,22 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+            "url": "http://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
             "status": 302,
-            "location": "http://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1"
+            "location": "http://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html?m=1"
           },
           {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1",
+            "url": "http://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html?m=1",
             "status": 301,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -941,34 +1637,34 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
       }
     },
     {
-      "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
       "googlebot_mobile": {
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
             "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -977,17 +1673,17 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
             "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -996,12 +1692,12 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1010,22 +1706,22 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+            "url": "http://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
             "status": 302,
-            "location": "http://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1"
+            "location": "http://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html?m=1"
           },
           {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1",
+            "url": "http://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html?m=1",
             "status": 301,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1034,34 +1730,34 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
       }
     },
     {
-      "url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
       "googlebot_mobile": {
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
             "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1070,17 +1766,17 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
             "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1089,12 +1785,12 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1103,22 +1799,22 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
+            "url": "http://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
             "status": 302,
-            "location": "http://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html?m=1"
+            "location": "http://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html?m=1"
           },
           {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html?m=1",
+            "url": "http://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html?m=1",
             "status": 301,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1127,34 +1823,34 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
       }
     },
     {
-      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
       "googlebot_mobile": {
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
             "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1163,17 +1859,17 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
             "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1182,12 +1878,12 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1196,22 +1892,22 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
+            "url": "http://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
             "status": 302,
-            "location": "http://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html?m=1"
+            "location": "http://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html?m=1"
           },
           {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html?m=1",
+            "url": "http://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html?m=1",
             "status": 301,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1220,34 +1916,34 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
       }
     },
     {
-      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
       "googlebot_mobile": {
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
             "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1256,17 +1952,17 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
             "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1275,12 +1971,12 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1289,22 +1985,22 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
+            "url": "http://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
             "status": 302,
-            "location": "http://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html?m=1"
+            "location": "http://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html?m=1"
           },
           {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html?m=1",
+            "url": "http://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html?m=1",
             "status": 301,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1313,34 +2009,34 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
       }
     },
     {
-      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
       "googlebot_mobile": {
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
             "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1349,17 +2045,17 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
             "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1368,12 +2064,12 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1382,22 +2078,22 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
+            "url": "http://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
             "status": 302,
-            "location": "http://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html?m=1"
+            "location": "http://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html?m=1"
           },
           {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html?m=1",
+            "url": "http://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html?m=1",
             "status": 301,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1406,34 +2102,34 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
       }
     },
     {
-      "url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
       "googlebot_mobile": {
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
             "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1442,17 +2138,17 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
             "status": 302,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1461,12 +2157,12 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1475,22 +2171,22 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
+            "url": "http://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
             "status": 302,
-            "location": "http://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html?m=1"
+            "location": "http://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html?m=1"
           },
           {
-            "url": "http://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html?m=1",
+            "url": "http://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html?m=1",
             "status": 301,
-            "location": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html?m=1"
+            "location": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html?m=1"
           },
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1499,12 +2195,12 @@
         "verdict": "ok",
         "hops": [
           {
-            "url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html?m=1",
+            "url": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html?m=1",
             "status": 200
           }
         ],
-        "canonical": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
-        "og_url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
+        "canonical": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
+        "og_url": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
         "meta_robots": null,
         "meta_refresh": null,
         "js_redirect": null
@@ -1513,36 +2209,37 @@
   ],
   "rendered_mobile": [
     {
-      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
-      "final_url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
+      "final_url": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html?m=1",
       "navigations": [
-        "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html?m=1"
+        "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html?m=1"
       ],
       "script_hints": [],
-      "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html"
+      "canonical": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html"
     },
     {
-      "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
-      "final_url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
+      "final_url": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html?m=1",
       "navigations": [
-        "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html?m=1"
+        "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html?m=1"
       ],
       "script_hints": [],
-      "canonical": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html"
+      "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html"
     },
     {
-      "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
-      "final_url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1",
+      "url": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
+      "final_url": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html?m=1",
       "navigations": [
-        "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html?m=1"
+        "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html?m=1"
       ],
       "script_hints": [],
-      "canonical": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html"
+      "canonical": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html"
     }
   ],
   "search_console": {
     "registered_sites": [
-      "https://koreabreakdown.blogspot.com/"
+      "https://koreabreakdown.blogspot.com/",
+      "https://eskimo-igloo.tistory.com/"
     ],
     "site": "https://koreabreakdown.blogspot.com/",
     "by_date": {
@@ -1978,11 +2675,337 @@
           "impressions": 0,
           "ctr": 0,
           "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-15"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-16"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-17"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-18"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-19"
+          ],
+          "clicks": 0,
+          "impressions": 1,
+          "ctr": 0,
+          "position": 6
+        },
+        {
+          "keys": [
+            "2026-10-20"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-21"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-22"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-23"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-24"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-25"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-26"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-27"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-28"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-29"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-30"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-10-31"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-11-01"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-11-02"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-11-03"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-11-04"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-11-05"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-11-06"
+          ],
+          "clicks": 0,
+          "impressions": 1,
+          "ctr": 0,
+          "position": 1
+        },
+        {
+          "keys": [
+            "2026-11-07"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-11-08"
+          ],
+          "clicks": 0,
+          "impressions": 5,
+          "ctr": 0,
+          "position": 4.6
+        },
+        {
+          "keys": [
+            "2026-11-09"
+          ],
+          "clicks": 0,
+          "impressions": 4,
+          "ctr": 0,
+          "position": 8
+        },
+        {
+          "keys": [
+            "2026-11-10"
+          ],
+          "clicks": 0,
+          "impressions": 6,
+          "ctr": 0,
+          "position": 4.833333333333334
+        },
+        {
+          "keys": [
+            "2026-11-11"
+          ],
+          "clicks": 0,
+          "impressions": 12,
+          "ctr": 0,
+          "position": 8.666666666666668
+        },
+        {
+          "keys": [
+            "2026-11-12"
+          ],
+          "clicks": 0,
+          "impressions": 2,
+          "ctr": 0,
+          "position": 19
+        },
+        {
+          "keys": [
+            "2026-11-13"
+          ],
+          "clicks": 0,
+          "impressions": 1,
+          "ctr": 0,
+          "position": 1
+        },
+        {
+          "keys": [
+            "2026-11-14"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-11-15"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-11-16"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-11-17"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
+        },
+        {
+          "keys": [
+            "2026-11-18"
+          ],
+          "clicks": 0,
+          "impressions": 0,
+          "ctr": 0,
+          "position": 0
         }
       ],
       "responseAggregationType": "byProperty"
     },
     "by_query": {
+      "rows": [
+        {
+          "keys": [
+            "seoul international primary school entry requirement"
+          ],
+          "clicks": 0,
+          "impressions": 2,
+          "ctr": 0,
+          "position": 12
+        }
+      ],
       "responseAggregationType": "byProperty"
     },
     "by_page": {
@@ -1992,9 +3015,72 @@
             "https://koreabreakdown.blogspot.com/2026/08/why-korean-parents-spend-so-much-on.html"
           ],
           "clicks": 0,
+          "impressions": 5,
+          "ctr": 0,
+          "position": 7.6
+        },
+        {
+          "keys": [
+            "https://koreabreakdown.blogspot.com/2026/10/apartment-vs-officetel-vs-villa-in.html"
+          ],
+          "clicks": 0,
+          "impressions": 5,
+          "ctr": 0,
+          "position": 6.4
+        },
+        {
+          "keys": [
+            "https://koreabreakdown.blogspot.com/2026/10/korean-national-health-insurance-for.html"
+          ],
+          "clicks": 0,
           "impressions": 2,
           "ctr": 0,
-          "position": 8
+          "position": 36
+        },
+        {
+          "keys": [
+            "https://koreabreakdown.blogspot.com/2026/10/korean-school-absence-rules-sick-days.html"
+          ],
+          "clicks": 0,
+          "impressions": 4,
+          "ctr": 0,
+          "position": 6.75
+        },
+        {
+          "keys": [
+            "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html"
+          ],
+          "clicks": 0,
+          "impressions": 3,
+          "ctr": 0,
+          "position": 8.333333333333332
+        },
+        {
+          "keys": [
+            "https://koreabreakdown.blogspot.com/2026/10/koreas-neulbom-school-in-2026-what.html"
+          ],
+          "clicks": 0,
+          "impressions": 2,
+          "ctr": 0,
+          "position": 3.5
+        },
+        {
+          "keys": [
+            "https://koreabreakdown.blogspot.com/2026/10/what-time-does-korean-elementary-school.html"
+          ],
+          "clicks": 0,
+          "impressions": 1,
+          "ctr": 0,
+          "position": 1
+        },
+        {
+          "keys": [
+            "https://koreabreakdown.blogspot.com/2026/11/korean-public-school-enrollment-for.html"
+          ],
+          "clicks": 0,
+          "impressions": 12,
+          "ctr": 0,
+          "position": 4
         }
       ],
       "responseAggregationType": "byPage"
@@ -2003,12 +3089,93 @@
       "rows": [
         {
           "keys": [
+            "arg"
+          ],
+          "clicks": 0,
+          "impressions": 1,
+          "ctr": 0,
+          "position": 9
+        },
+        {
+          "keys": [
+            "bgd"
+          ],
+          "clicks": 0,
+          "impressions": 1,
+          "ctr": 0,
+          "position": 35
+        },
+        {
+          "keys": [
+            "can"
+          ],
+          "clicks": 0,
+          "impressions": 1,
+          "ctr": 0,
+          "position": 8
+        },
+        {
+          "keys": [
+            "chl"
+          ],
+          "clicks": 0,
+          "impressions": 1,
+          "ctr": 0,
+          "position": 6
+        },
+        {
+          "keys": [
+            "egy"
+          ],
+          "clicks": 0,
+          "impressions": 1,
+          "ctr": 0,
+          "position": 5
+        },
+        {
+          "keys": [
+            "kor"
+          ],
+          "clicks": 0,
+          "impressions": 13,
+          "ctr": 0,
+          "position": 4.923076923076923
+        },
+        {
+          "keys": [
+            "nga"
+          ],
+          "clicks": 0,
+          "impressions": 1,
+          "ctr": 0,
+          "position": 37
+        },
+        {
+          "keys": [
+            "uga"
+          ],
+          "clicks": 0,
+          "impressions": 1,
+          "ctr": 0,
+          "position": 11
+        },
+        {
+          "keys": [
             "usa"
           ],
           "clicks": 0,
-          "impressions": 2,
+          "impressions": 13,
           "ctr": 0,
-          "position": 8
+          "position": 5.6923076923076925
+        },
+        {
+          "keys": [
+            "zaf"
+          ],
+          "clicks": 0,
+          "impressions": 1,
+          "ctr": 0,
+          "position": 1
         }
       ],
       "responseAggregationType": "byProperty"
@@ -2021,13 +3188,13 @@
           "isPending": false,
           "isSitemapsIndex": false,
           "type": "sitemap",
-          "lastDownloaded": "2026-10-15T20:20:38.001Z",
+          "lastDownloaded": "2026-11-20T17:10:29.883Z",
           "warnings": "0",
           "errors": "0",
           "contents": [
             {
               "type": "web",
-              "submitted": "15",
+              "submitted": "46",
               "indexed": "0"
             }
           ]
@@ -2036,7 +3203,7 @@
     },
     "inspections": [
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-grades-explained-how.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/koreas-52-hour-workweek-in-2026-4012.html",
         "error": null,
         "verdict": "NEUTRAL",
         "coverageState": "Discovered - currently not indexed",
@@ -2049,7 +3216,7 @@
         "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED"
       },
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-phone-verification-for.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-parental-leave-in-2026-up-to-18.html",
         "error": null,
         "verdict": "NEUTRAL",
         "coverageState": "Discovered - currently not indexed",
@@ -2062,20 +3229,7 @@
         "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED"
       },
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/seoul-climate-card-in-2026-what.html",
-        "error": null,
-        "verdict": "NEUTRAL",
-        "coverageState": "Redirect error",
-        "indexingState": "INDEXING_STATE_UNSPECIFIED",
-        "robotsTxtState": "ALLOWED",
-        "pageFetchState": "REDIRECT_ERROR",
-        "lastCrawlTime": "2026-10-13T08:41:11Z",
-        "googleCanonical": null,
-        "userCanonical": null,
-        "crawledAs": "MOBILE"
-      },
-      {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/emergency-numbers-in-korea-when-to-call.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-maternity-leave-in-2026-90-100-or.html",
         "error": null,
         "verdict": "NEUTRAL",
         "coverageState": "Discovered - currently not indexed",
@@ -2088,147 +3242,225 @@
         "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED"
       },
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-public-holidays-explained-red.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-paternity-leave-in-2026-20-paid.html",
         "error": null,
         "verdict": "NEUTRAL",
-        "coverageState": "Redirect error",
+        "coverageState": "URL is unknown to Google",
         "indexingState": "INDEXING_STATE_UNSPECIFIED",
-        "robotsTxtState": "ALLOWED",
-        "pageFetchState": "REDIRECT_ERROR",
-        "lastCrawlTime": "2026-10-13T08:45:18Z",
+        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
+        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
+        "lastCrawlTime": null,
         "googleCanonical": null,
         "userCanonical": null,
+        "crawledAs": null
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-unemployment-benefits-for-foreign.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "Discovered - currently not indexed",
+        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
+        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
+        "lastCrawlTime": null,
+        "googleCanonical": null,
+        "userCanonical": null,
+        "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED"
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-lease-renewal-rights-in-2026-22.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "Discovered - currently not indexed",
+        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
+        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
+        "lastCrawlTime": null,
+        "googleCanonical": null,
+        "userCanonical": null,
+        "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED"
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-national-pension-for-foreign.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "Discovered - currently not indexed",
+        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
+        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
+        "lastCrawlTime": null,
+        "googleCanonical": null,
+        "userCanonical": null,
+        "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED"
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/11/sick-leave-in-korea-in-2026-what.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "Discovered - currently not indexed",
+        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
+        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
+        "lastCrawlTime": null,
+        "googleCanonical": null,
+        "userCanonical": null,
+        "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED"
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/11/moving-in-korea-in-2026-how-foreign.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "Crawled - currently not indexed",
+        "indexingState": "INDEXING_ALLOWED",
+        "robotsTxtState": "ALLOWED",
+        "pageFetchState": "SUCCESSFUL",
+        "lastCrawlTime": "2026-11-12T14:39:41Z",
+        "googleCanonical": "https://koreabreakdown.blogspot.com/2026/11/moving-in-korea-in-2026-how-foreign.html",
+        "userCanonical": "https://koreabreakdown.blogspot.com/2026/11/moving-in-korea-in-2026-how-foreign.html",
         "crawledAs": "MOBILE"
       },
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-ondol-heating-explained-how-to.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-real-estate-agent-fees-in-2026.html",
         "error": null,
         "verdict": "NEUTRAL",
-        "coverageState": "Redirect error",
-        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "coverageState": "Crawled - currently not indexed",
+        "indexingState": "INDEXING_ALLOWED",
         "robotsTxtState": "ALLOWED",
-        "pageFetchState": "REDIRECT_ERROR",
-        "lastCrawlTime": "2026-10-13T08:45:18Z",
-        "googleCanonical": null,
-        "userCanonical": null,
+        "pageFetchState": "SUCCESSFUL",
+        "lastCrawlTime": "2026-11-11T15:33:56Z",
+        "googleCanonical": "https://koreabreakdown.blogspot.com/2026/11/korea-real-estate-agent-fees-in-2026.html",
+        "userCanonical": "https://koreabreakdown.blogspot.com/2026/11/korea-real-estate-agent-fees-in-2026.html",
         "crawledAs": "MOBILE"
       },
       {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-school-lunch-explained-menus.html",
-        "error": null,
-        "verdict": "NEUTRAL",
-        "coverageState": "Redirect error",
-        "indexingState": "INDEXING_STATE_UNSPECIFIED",
-        "robotsTxtState": "ALLOWED",
-        "pageFetchState": "REDIRECT_ERROR",
-        "lastCrawlTime": "2026-10-06T23:26:55Z",
-        "googleCanonical": null,
-        "userCanonical": null,
-        "crawledAs": "MOBILE"
-      },
-      {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/how-korean-addresses-work-road-names.html",
-        "error": null,
-        "verdict": "NEUTRAL",
-        "coverageState": "Redirect error",
-        "indexingState": "INDEXING_STATE_UNSPECIFIED",
-        "robotsTxtState": "ALLOWED",
-        "pageFetchState": "REDIRECT_ERROR",
-        "lastCrawlTime": "2026-10-06T00:14:05Z",
-        "googleCanonical": null,
-        "userCanonical": null,
-        "crawledAs": "MOBILE"
-      },
-      {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-age-in-2026-what-changed-what.html",
-        "error": null,
-        "verdict": "NEUTRAL",
-        "coverageState": "Redirect error",
-        "indexingState": "INDEXING_STATE_UNSPECIFIED",
-        "robotsTxtState": "ALLOWED",
-        "pageFetchState": "REDIRECT_ERROR",
-        "lastCrawlTime": "2026-10-05T08:24:33Z",
-        "googleCanonical": null,
-        "userCanonical": null,
-        "crawledAs": "MOBILE"
-      },
-      {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/korean-apartment-sizes-explained-why-84.html",
-        "error": null,
-        "verdict": "NEUTRAL",
-        "coverageState": "Redirect error",
-        "indexingState": "INDEXING_STATE_UNSPECIFIED",
-        "robotsTxtState": "ALLOWED",
-        "pageFetchState": "REDIRECT_ERROR",
-        "lastCrawlTime": "2026-10-05T08:32:32Z",
-        "googleCanonical": null,
-        "userCanonical": null,
-        "crawledAs": "MOBILE"
-      },
-      {
-        "url": "https://koreabreakdown.blogspot.com/2026/10/how-to-sort-trash-in-korea-practical.html",
-        "error": null,
-        "verdict": "NEUTRAL",
-        "coverageState": "Redirect error",
-        "indexingState": "INDEXING_STATE_UNSPECIFIED",
-        "robotsTxtState": "ALLOWED",
-        "pageFetchState": "REDIRECT_ERROR",
-        "lastCrawlTime": "2026-10-05T08:32:32Z",
-        "googleCanonical": null,
-        "userCanonical": null,
-        "crawledAs": "MOBILE"
-      },
-      {
-        "url": "https://koreabreakdown.blogspot.com/2026/09/jeonse-vs-wolse-in-korea-2026-guide-for.html",
-        "error": null,
-        "verdict": "NEUTRAL",
-        "coverageState": "Redirect error",
-        "indexingState": "INDEXING_STATE_UNSPECIFIED",
-        "robotsTxtState": "ALLOWED",
-        "pageFetchState": "REDIRECT_ERROR",
-        "lastCrawlTime": "2026-10-13T08:53:20Z",
-        "googleCanonical": null,
-        "userCanonical": null,
-        "crawledAs": "MOBILE"
-      },
-      {
-        "url": "https://koreabreakdown.blogspot.com/2026/08/how-much-do-korean-public-school.html",
-        "error": null,
-        "verdict": "NEUTRAL",
-        "coverageState": "Redirect error",
-        "indexingState": "INDEXING_STATE_UNSPECIFIED",
-        "robotsTxtState": "ALLOWED",
-        "pageFetchState": "REDIRECT_ERROR",
-        "lastCrawlTime": "2026-10-05T08:34:37Z",
-        "googleCanonical": null,
-        "userCanonical": null,
-        "crawledAs": "MOBILE"
-      },
-      {
-        "url": "https://koreabreakdown.blogspot.com/2026/08/is-south-korea-really-banning.html",
-        "error": null,
-        "verdict": "NEUTRAL",
-        "coverageState": "Redirect error",
-        "indexingState": "INDEXING_STATE_UNSPECIFIED",
-        "robotsTxtState": "ALLOWED",
-        "pageFetchState": "REDIRECT_ERROR",
-        "lastCrawlTime": "2026-10-05T08:36:34Z",
-        "googleCanonical": null,
-        "userCanonical": null,
-        "crawledAs": "MOBILE"
-      },
-      {
-        "url": "https://koreabreakdown.blogspot.com/2026/08/why-korean-parents-spend-so-much-on.html",
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korean-pharmacies-in-2026-prescriptions.html",
         "error": null,
         "verdict": "PASS",
         "coverageState": "Submitted and indexed",
         "indexingState": "INDEXING_ALLOWED",
         "robotsTxtState": "ALLOWED",
         "pageFetchState": "SUCCESSFUL",
-        "lastCrawlTime": "2026-09-24T15:58:32Z",
-        "googleCanonical": "https://koreabreakdown.blogspot.com/2026/08/why-korean-parents-spend-so-much-on.html",
-        "userCanonical": "https://koreabreakdown.blogspot.com/2026/08/why-korean-parents-spend-so-much-on.html",
+        "lastCrawlTime": "2026-11-07T14:28:49Z",
+        "googleCanonical": "https://koreabreakdown.blogspot.com/2026/11/korean-pharmacies-in-2026-prescriptions.html",
+        "userCanonical": "https://koreabreakdown.blogspot.com/2026/11/korean-pharmacies-in-2026-prescriptions.html",
         "crawledAs": "MOBILE"
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korean-public-school-enrollment-for.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "Crawled - currently not indexed",
+        "indexingState": "INDEXING_ALLOWED",
+        "robotsTxtState": "ALLOWED",
+        "pageFetchState": "SUCCESSFUL",
+        "lastCrawlTime": "2026-11-07T00:26:19Z",
+        "googleCanonical": "https://koreabreakdown.blogspot.com/2026/11/korean-public-school-enrollment-for.html",
+        "userCanonical": "https://koreabreakdown.blogspot.com/2026/11/korean-public-school-enrollment-for.html",
+        "crawledAs": "MOBILE"
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-overtime-pay-in-2026-when-15.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "Discovered - currently not indexed",
+        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
+        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
+        "lastCrawlTime": null,
+        "googleCanonical": null,
+        "userCanonical": null,
+        "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED"
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-weekly-holiday-pay-in-2026-15.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "Discovered - currently not indexed",
+        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
+        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
+        "lastCrawlTime": null,
+        "googleCanonical": null,
+        "userCanonical": null,
+        "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED"
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-annual-leave-in-2026-11-days-15.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "URL is unknown to Google",
+        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
+        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
+        "lastCrawlTime": null,
+        "googleCanonical": null,
+        "userCanonical": null,
+        "crawledAs": null
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/11/korea-severance-pay-in-2026-one-year.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "Discovered - currently not indexed",
+        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
+        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
+        "lastCrawlTime": null,
+        "googleCanonical": null,
+        "userCanonical": null,
+        "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED"
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/11/koreas-2026-minimum-wage-what-krw-10320.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "URL is unknown to Google",
+        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
+        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
+        "lastCrawlTime": null,
+        "googleCanonical": null,
+        "userCanonical": null,
+        "crawledAs": null
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/korea-rental-deposit-protection-move-in.html",
+        "error": null,
+        "verdict": "PASS",
+        "coverageState": "Submitted and indexed",
+        "indexingState": "INDEXING_ALLOWED",
+        "robotsTxtState": "ALLOWED",
+        "pageFetchState": "SUCCESSFUL",
+        "lastCrawlTime": "2026-11-08T21:40:13Z",
+        "googleCanonical": "https://koreabreakdown.blogspot.com/2026/10/korea-rental-deposit-protection-move-in.html",
+        "userCanonical": "https://koreabreakdown.blogspot.com/2026/10/korea-rental-deposit-protection-move-in.html",
+        "crawledAs": "MOBILE"
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/apartment-vs-officetel-vs-villa-in.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "Crawled - currently not indexed",
+        "indexingState": "INDEXING_ALLOWED",
+        "robotsTxtState": "ALLOWED",
+        "pageFetchState": "SUCCESSFUL",
+        "lastCrawlTime": "2026-11-07T20:41:16Z",
+        "googleCanonical": "https://koreabreakdown.blogspot.com/2026/10/apartment-vs-officetel-vs-villa-in.html",
+        "userCanonical": "https://koreabreakdown.blogspot.com/2026/10/apartment-vs-officetel-vs-villa-in.html",
+        "crawledAs": "MOBILE"
+      },
+      {
+        "url": "https://koreabreakdown.blogspot.com/2026/10/koreas-deposit-insurance-limit-in-2026.html",
+        "error": null,
+        "verdict": "NEUTRAL",
+        "coverageState": "Discovered - currently not indexed",
+        "indexingState": "INDEXING_STATE_UNSPECIFIED",
+        "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
+        "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED",
+        "lastCrawlTime": null,
+        "googleCanonical": null,
+        "userCanonical": null,
+        "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED"
       }
     ]
   }
