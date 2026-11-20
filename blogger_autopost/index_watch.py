@@ -137,7 +137,14 @@ def run(cfg: BloggerConfig, today: str, call=None, limit: int = MAX_INSPECT) -> 
     else:
         by_day = {r["keys"][0]: {"impressions": int(r.get("impressions", 0)), "clicks": int(r.get("clicks", 0))}
                   for r in perf.get("rows", [])}
+    pages = call(cfg, f"{WEBMASTERS}/sites/{q}/searchAnalytics/query", {
+        "startDate": (end - timedelta(days=90)).isoformat(), "endDate": end.isoformat(),
+        "dimensions": ["page"], "rowLimit": 25})
+    top = [] if "_error" in pages else [
+        {"url": r["keys"][0], "impressions": int(r.get("impressions", 0)), "clicks": int(r.get("clicks", 0)),
+         "position": round(float(r.get("position", 0)), 1)} for r in pages.get("rows", [])]
     summary = summarize(data["posts"], urls, today, by_day, errors)
+    summary["top_pages"] = sorted(top, key=lambda r: -r["impressions"])[:10]     # 최근 90일 검색에 나온 글(집 PC에만)
     data["days"] = [d for d in data["days"] if d.get("date") != today and d.get("date", "") >= (
         end - timedelta(days=KEEP_DAYS)).isoformat()] + [summary]
     path.parent.mkdir(parents=True, exist_ok=True)

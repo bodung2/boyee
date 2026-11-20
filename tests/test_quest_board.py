@@ -222,3 +222,23 @@ def test_blog_panel_blogger_index_card(tmp_path, monkeypatch):
     page = blogs.render(cards)
     assert "색인 감시 중" in page and "<b>6</b>/21편" in page and "28%" in page
     assert "발견됨·색인 안 됨 15편" in page and "11-20에는 2편" in page and "보통 9일" in page
+
+
+def test_blog_panel_shows_claude_notes_and_escapes(tmp_path):
+    from quest_board import blogs
+    (tmp_path / "invest.md").write_text("updated: 2026-11-21\n### 결론\n- **수요**가 막힘 <b>x</b>\n\n| 항목 | 값 |\n|---|---|\n| 조회 | 421 |\n",
+                                        encoding="utf-8")
+    day, html_ = blogs.note("invest", tmp_path)
+    assert day == "2026-11-21" and "<b>수요</b>" in html_ and "&lt;b&gt;x" in html_ and "<td>421</td>" in html_
+    assert blogs.note("none", tmp_path) == ("", "")
+    c = blogs.Card("invest", "네이버 투자", "", mode="lab", note_date=day, note_html=html_)
+    assert "🧠 Claude 분석 · 2026-11-21" in blogs.render([c])
+
+
+def test_repo_notes_have_no_urls_or_post_titles():
+    """diagnostics/notes는 공개 저장소에 올라간다: 주소·블로그 주소가 들어가면 안 된다."""
+    from quest_board import blogs
+    for f in blogs.NOTES_DIR.glob("*.md"):
+        text = f.read_text(encoding="utf-8")
+        assert "http" not in text and "blogspot" not in text and "tistory.com" not in text, f.name
+        assert text.startswith("updated: "), f.name

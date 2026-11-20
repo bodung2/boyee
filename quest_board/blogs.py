@@ -9,12 +9,16 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from html import escape
 from pathlib import Path
 
 from .checks import Paths
+from .schedule import ROOT
+
+NOTES_DIR = ROOT / "diagnostics" / "notes"     # Claude가 대화에서 쓴 블로그별 분석(저장소에 올라감 — 글 제목·주소 없이)
 
 log = logging.getLogger(__name__)
 
@@ -65,6 +69,9 @@ class Card:
     login: str = ""
     index: dict = field(default_factory=dict)       # 구글 블로거 색인 감시 마지막 요약
     index_first: dict = field(default_factory=dict)  # 색인 감시 첫날 요약(변화 비교용)
+    note_date: str = ""
+    note_html: str = ""
+    titles: dict = field(default_factory=dict)       # 글 주소 → 제목(검색에 나온 글 표시용)
     error: str = ""
 
 
@@ -190,6 +197,65 @@ def _login(data: Path) -> str:
         return ""
 
 
+_BOLD = re.compile(r"\*\*(.+?)\*\*")
+
+
+def _inline(text: str) -> str:
+    return _BOLD.sub(r"<b>\1</b>", escape(text))
+
+
+def md(text: str) -> str:
+    """분석 노트용 아주 작은 마크다운: ### 제목, - 목록, | 표 |, **굵게**, 빈 줄 = 문단."""
+    out, items, rows = [], [], []
+
+    def flush():
+        if items:
+            out.append("<ul>" + "".join(f"<li>{i}</li>" for i in items) + "</ul>")
+            items.clear()
+        if rows:
+            body = [r for r in rows if not set(r.replace("|", "").strip()) <= set("-: ")]
+            cells = [[c.strip() for c in r.strip().strip("|").split("|")] for r in body]
+            if cells:
+                head = "".join(f"<th>{_inline(c)}</th>" for c in cells[0])
+                trs = "".join("<tr>" + "".join(f"<td>{_inline(c)}</td>" for c in r) + "</tr>" for r in cells[1:])
+                out.append(f'<div class="nt"><table><tr>{head}</tr>{trs}</table></div>')
+            rows.clear()
+    for line in text.splitlines():
+        t = line.strip()
+        if t.startswith("|"):
+            if items:
+                flush()
+            rows.append(t)
+            continue
+        if rows:
+            flush()
+        if t.startswith(("- ", "* ")):
+            items.append(_inline(t[2:]))
+        elif t.startswith("#"):
+            flush()
+            out.append(f"<h5>{_inline(t.lstrip('#').strip())}</h5>")
+        elif t:
+            flush()
+            out.append(f"<p>{_inline(t)}</p>")
+        else:
+            flush()
+    flush()
+    return "".join(out)
+
+
+def note(key: str, notes_dir: Path | None = None) -> tuple[str, str]:
+    """diagnostics/notes/<블로그>.md → (날짜, HTML). 첫 줄 'updated: YYYY-MM-DD'."""
+    path = (notes_dir or NOTES_DIR) / f"{key}.md"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return "", ""
+    first, _, rest = text.partition("\n")
+    if first.lower().startswith("updated:"):
+        return first.split(":", 1)[1].strip(), md(rest)
+    return "", md(text)
+
+
 def _index(card: Card, data: Path, now: datetime) -> None:
     """구글 블로거: 색인 감시 결과(blogger_autopost.index_watch)."""
     days = (_json(data / "blogger_index.json", {}) or {}).get("days") or []
@@ -220,6 +286,8 @@ def collect(paths: Paths | None = None, now: datetime | None = None) -> list[Car
             card.mode = "lab-auto"
         try:
             entries = _entries(hist)
+            card.titles = {_key(e["url"]): e.get("title") or "" for e in entries}
+            card.note_date, card.note_html = note(key)
             auto_posts = [e for e in entries if e.get("source") == "autopost"]
             dates = [str(e.get("date", ""))[:10] for e in auto_posts]
             card.today = dates.count(today)
@@ -275,6 +343,13 @@ font-size:13px;margin-right:6px}
 .bc details{margin-top:10px;font-size:13px}.bc summary{cursor:pointer;color:var(--sub)}
 .bc a{color:var(--ink)}
 .bc.off .kp{grid-template-columns:repeat(3,1fr)}
+.note-box{margin-top:12px;background:var(--bg);border:1px solid var(--line);border-left:4px solid var(--run);border-radius:8px;
+padding:10px 12px;font-size:13px;line-height:1.6}
+.note-box>h4{margin:0 0 4px;font-size:13px;color:var(--run)}
+.note-box h5{margin:10px 0 2px;font-size:13px}.note-box p{margin:4px 0}.note-box ul{margin:2px 0;padding-left:18px}
+.nt{overflow-x:auto;margin:6px 0}.nt table{font-size:12px;width:auto;min-width:60%;background:var(--card);border-radius:6px}
+.nt th,.nt td{padding:3px 8px;text-align:left;white-space:normal;position:static}
+.rv{margin:4px 0 0;font-size:13px;line-height:1.6}
 """
 
 
@@ -327,8 +402,14 @@ def _card(c: Card) -> str:
     if c.error:
         out.append(f'<div class="ev">⚠️ 읽지 못한 자료가 있어요: {escape(c.error)}</div>')
     if c.mode == "off":
+        if c.note_html:
+            out.append(f'<div class="note-box"><h4>🧠 Claude 분석'
+                       f'{" · " + escape(c.note_date) if c.note_date else ""}</h4>{c.note_html}</div>')
         return "".join(out) + "</div>"
     out.append(_spark(c).replace("하루 조회", "하루 검색 노출") if c.mode == "index" else _spark(c))
+    if c.note_html:
+        out.append(f'<div class="note-box"><h4>🧠 Claude 분석'
+                   f'{" · " + escape(c.note_date) if c.note_date else ""}</h4>{c.note_html}</div>')
     if c.mode == "index":
         ix, first = c.index, c.index_first
         moved = (f"감시를 시작한 {first.get('date', '')[5:]}에는 {first.get('indexed', 0)}편이었어요."
@@ -341,6 +422,13 @@ def _card(c: Card) -> str:
         if states:
             out.append('<div class="sec"><h4>색인 안 된 이유</h4><div class="chips">' + "".join(
                 f'<span class="chip">{escape(k)} {v}편</span>' for k, v in states.items()) + "</div></div>")
+        pages = ix.get("top_pages") or []
+        if pages:
+            out.append('<div class="sec"><h4>검색에 나온 글 (최근 90일)</h4>' + _li(
+                [f'<a href="{escape(p["url"])}" target="_blank" rel="noopener">'
+                 f'{escape((c.titles.get(_key(p["url"])) or p["url"].rsplit("/", 1)[-1])[:60])}</a> '
+                 f'<small>노출 {p["impressions"]} · 클릭 {p["clicks"]} · 평균 {p["position"]}위</small>' for p in pages[:6]])
+                + "</div>")
         if ix.get("errors"):
             out.append(f'<div class="ev">⚠️ 서치 콘솔 오류: {escape(str(ix["errors"][0])[:150])}</div>')
         return "".join(out) + "</div>"
@@ -371,13 +459,14 @@ def _card(c: Card) -> str:
         out.append(f'<div class="sec"><h4>최근 {WINDOW}일 많이 읽힌 글</h4>' + _li(
             [f'<a href="{escape(u)}" target="_blank" rel="noopener">{escape(t[:60] or u)}</a> <small>{n:,}회</small>'
              for t, u, n in c.top_posts]) + "</div>")
-    more = []
     if c.report:
-        more.append(f'<p style="margin:6px 0">{escape(c.report)}</p>')
+        out.append(f'<div class="sec"><h4>📝 주간 리뷰 요약 <small>({escape(c.review_date)})</small></h4>'
+                   f'<p class="rv">{escape(c.report)}</p></div>')
+    more = []
     if c.changes:
         more.append(_li([f"<small>{escape(d[5:])}</small> {escape(w)}" for d, w in c.changes]))
     if more:
-        out.append(f'<details><summary>주간 리뷰 요약·최근 변경</summary>{"".join(more)}</details>')
+        out.append(f'<details><summary>최근 변경 기록</summary>{"".join(more)}</details>')
     return "".join(out) + "</div>"
 
 
