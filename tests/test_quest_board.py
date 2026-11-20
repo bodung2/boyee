@@ -199,3 +199,26 @@ def test_board_has_today_and_blog_analysis_sections():
     page = qh.render(b, remote=True, blogs_html="<p>BLOG-PANEL</p>")
     assert 'id="sec-today"' in page and 'id="sec-blogs"' in page and "BLOG-PANEL" in page
     assert "자동화 블로그 분석" in page and "frameElement" in page
+
+
+def test_blog_panel_blogger_index_card(tmp_path, monkeypatch):
+    import json as _json
+    from datetime import datetime as _dt
+
+    from quest_board import blogs
+    from quest_board.checks import Paths
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "published_blogger.json").write_text(_json.dumps(
+        [{"title": "a", "url": "https://x.blogspot.com/a", "date": "2026-11-21", "source": "autopost"}]), encoding="utf-8")
+    (data / "blogger_index.json").write_text(_json.dumps({"days": [
+        {"date": "2026-11-20", "posts": 20, "checked": 20, "indexed": 2, "states": {}, "impressions": 3, "clicks": 0, "by_day": {}},
+        {"date": "2026-11-21", "posts": 21, "checked": 21, "indexed": 6, "states": {"발견됨·색인 안 됨": 15},
+         "impressions": 40, "clicks": 2, "by_day": {"2026-11-20": {"impressions": 9, "clicks": 1}}, "days_to_index": 9}]},
+        ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(blogs, "_lab_modes", lambda: ([], [], []))
+    cards = blogs.collect(Paths(data=data, output=tmp_path / "out", logs=tmp_path), _dt(2026, 11, 21, 23))
+    assert cards[0].mode == "index"
+    page = blogs.render(cards)
+    assert "색인 감시 중" in page and "<b>6</b>/21편" in page and "28%" in page
+    assert "발견됨·색인 안 됨 15편" in page and "11-20에는 2편" in page and "보통 9일" in page

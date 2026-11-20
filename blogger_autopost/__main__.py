@@ -6,6 +6,7 @@
   python -m blogger_autopost run --draft    발행하지 않고 블로거 '초안'으로만 저장(설치 확인용)
   python -m blogger_autopost sync-history   블로그에 있는 글을 발행 이력에 가져오기
   python -m blogger_autopost diagnose       검색 유입 진단 자료(글·공개 페이지·서치 콘솔)를 모아 GitHub에 올리기
+  python -m blogger_autopost index          구글 색인 감시: 글마다 색인 여부·검색 노출을 모아 보여 주기(매일 22:30 자동)
   python -m blogger_autopost check-meta     글 페이지에 검색 설명(meta description)이 실제로 나오는지 확인
   python -m blogger_autopost fix-posts      이미 발행한 글 다듬기 미리보기(그림을 첫 문단 뒤로, 관련 글 링크)
   python -m blogger_autopost fix-posts --apply   실제로 고치기(바꾸기 전 본문은 output/blogger/backup/에 저장)
@@ -35,6 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument("--force", action="store_true", help="오늘 이미 발행했어도 한 편 더")
     sub.add_parser("sync-history")
     sub.add_parser("check-meta")
+    sub.add_parser("index")
     fix = sub.add_parser("fix-posts")
     fix.add_argument("--apply", action="store_true", help="미리보기가 아니라 실제로 블로그 글을 고친다")
     fix.add_argument("--restore", type=Path, help="이 백업 폴더의 본문으로 글을 되돌린다")
@@ -68,6 +70,12 @@ def main(argv: list[str] | None = None) -> int:
         return run(cfg, draft=args.draft, force=args.force)
     if args.cmd == "check-meta":
         return _check_meta(cfg)
+    if args.cmd == "index":
+        from naver_autopost.pipeline import today_kst
+        from . import index_watch
+        index_watch.run(cfg, today_kst())
+        print(index_watch.status_line(index_watch.state_file(cfg)))
+        return 0
     if args.cmd == "fix-posts":
         return _fix_posts(cfg, args.apply, args.restore)
     if args.cmd == "refresh-post":

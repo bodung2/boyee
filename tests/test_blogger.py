@@ -929,3 +929,36 @@ def test_google_api_timeout_is_reported_not_raised(cfg, monkeypatch):
     monkeypatch.setattr(diagnose.urllib.request, "urlopen", slow)
     r = diagnose._google(cfg, "https://example.org", {"a": 1})
     assert "시간 초과" in r["_error"] and len(calls) == 2
+
+
+def test_index_watch_tracks_indexing_and_search_performance(cfg):
+    from blogger_autopost import index_watch
+    cfg.blog_url = "https://myblog.blogspot.com/"
+    posts = [{"title": f"t{i}", "url": f"https://myblog.blogspot.com/2026/11/p{i}.html", "date": f"2026-11-{10 + i:02d}",
+              "source": "autopost"} for i in range(3)]
+    cfg.history_file.write_text(json.dumps(posts), encoding="utf-8")
+    states = {posts[0]["url"]: ("PASS", "Submitted and indexed"), posts[1]["url"]: ("NEUTRAL", "Discovered - currently not indexed"),
+              posts[2]["url"]: ("NEUTRAL", "Crawled - currently not indexed")}
+    calls = []
+
+    def fake(_cfg, url, body=None):
+        calls.append(url)
+        if url.endswith("/sites"):
+            return {"siteEntry": [{"siteUrl": "https://myblog.blogspot.com/"}]}
+        if url == index_watch.INSPECT:
+            verdict, state = states[body["inspectionUrl"]]
+            return {"inspectionResult": {"indexStatusResult": {"verdict": verdict, "coverageState": state}}}
+        return {"rows": [{"keys": ["2026-11-18"], "impressions": 7, "clicks": 1}, {"keys": ["2026-11-19"], "impressions": 5}]}
+
+    s = index_watch.run(cfg, "2026-11-20", call=fake)
+    assert s["indexed"] == 1 and s["posts"] == 3 and s["impressions"] == 12 and s["clicks"] == 1
+    assert s["states"] == {"발견됨·색인 안 됨": 1, "읽어 갔지만 색인 안 됨": 1}
+    line = index_watch.status_line(index_watch.state_file(cfg))
+    assert "색인 1/3편(33%" in line and "blogspot" not in line
+    # 다음 날: 색인된 글은 2주 동안 다시 보지 않고, 새로 색인된 글은 날짜를 남긴다
+    states[posts[1]["url"]] = ("PASS", "Submitted and indexed")
+    calls.clear()
+    s2 = index_watch.run(cfg, "2026-11-21", call=fake)
+    inspected = [c for c in calls if c == index_watch.INSPECT]
+    assert len(inspected) == 2 and s2["indexed"] == 2 and s2["days_to_index"] == 10
+    assert len(index_watch.load(index_watch.state_file(cfg))["days"]) == 2
