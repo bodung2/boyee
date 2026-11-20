@@ -667,3 +667,45 @@ def test_daily_status_page(tmp_path):
     assert "마지막 점검 2026-11-10 21:50 → 실패(kakao_password)" in text
     assert "08:31 [티스토리 자동발행 실패] <BLOG> 로그인이 풀려 있습니다 (주소)" in text
     assert "비밀 제목" not in text and "secretid" not in text and "어제 일" not in text   # 성공 알림·제목·아이디·어제 것은 안 싣는다
+
+
+def test_watch_blogs_collect_only_without_touching_lab_blogs(monkeypatch):
+    """교육·유아는 LAB_BLOGS(.env)를 고치지 않아도 조회수만 모은다. 글쓰기 안내는 켜지지 않는다."""
+    from growth_lab import config as lab_config
+    monkeypatch.setattr(lab_config, "_load_dotenv", lambda *_: None)
+    monkeypatch.setenv("LAB_BLOGS", "invest,tistory")
+    monkeypatch.delenv("LAB_WATCH_BLOGS", raising=False)
+    monkeypatch.delenv("LAB_AUTO_DECIDE", raising=False)
+    c = LabConfig.load()
+    assert c.blogs == ["invest", "tistory", "edu", "childhood"] and c.watch_only == ["edu", "childhood"]
+    assert c.auto_decide == ["invest", "tistory"]
+    assert not lab_config.enabled("edu") and lab_config.enabled("invest")
+    monkeypatch.setenv("LAB_WATCH_BLOGS", "")
+    assert LabConfig.load().blogs == ["invest", "tistory"]
+
+
+def test_auto_decide_approves_and_retires_only_after_trial(cfg):
+    auto = LabConfig(**{**cfg.__dict__, "auto_decide": ["invest"]})
+    store.add_approved_rule(auto, "invest", "제목 앞에 조건형 검색어", "2026-11-01")
+    store.add_approved_rule(auto, "invest", "소제목에 유입 검색어", "2026-11-20")
+    led = store.empty_ledger()
+    led["proposals"].append({"id": 4, "text": "도입 첫 문장에 결론 숫자", "status": "pending"})
+    result = {"retire_rules": [{"rule": "제목 앞에 조건형 검색어", "why": "적용 뒤 점수 1.0→0.8"},
+                               {"rule": "소제목에 유입 검색어", "why": "아직 1주"}]}
+    notes = review.auto_decide("invest", auto, led, result, "2026-11-22")
+    rules = store.approved_rules(store.load_learned(auto, "invest"))
+    assert led["proposals"][0]["status"] == "approved" and led["proposals"][0]["auto"]
+    assert "도입 첫 문장에 결론 숫자" in rules and "소제목에 유입 검색어" in rules
+    assert "제목 앞에 조건형 검색어" not in rules and led["retired_rules"][0]["why"].startswith("적용 뒤")
+    assert any("보류" in n for n in notes)
+    # 거둔 규칙은 다음 주에 다시 제안해도 받지 않는다
+    review.apply_review("invest", auto, led, {"proposals": [{"text": "제목 앞에 조건형 검색어"}]}, "2026-11-29")
+    assert not [p for p in led["proposals"] if p["status"] == "pending"]
+
+
+def test_weekly_report_lists_auto_applied_changes(cfg):
+    auto = LabConfig(**{**cfg.__dict__, "auto_decide": ["invest"]})
+    led = store.empty_ledger()
+    led["proposals"].append({"id": 5, "text": "표를 첫 화면에", "status": "approved", "auto": True, "decided": "2026-11-22"})
+    text = review.write_weekly("invest", auto, led, [], "정상", {}, "2026-11-22", [], []).read_text(encoding="utf-8")
+    assert "자동 적용한 변경" in text and "**투5** 표를 첫 화면에" in text

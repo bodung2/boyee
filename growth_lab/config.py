@@ -45,6 +45,15 @@ BLOGS: dict[str, BlogSpec] = {
         key="tistory", label="티스토리", platform="tistory", history_name="published_tistory.json",
         theme="컴퓨터·개발 도구를 쓰다 만나는 오류와 문제를 공식 문서로 해결하는 글(정확한 오류 문구 → 원인 → 해결 → 확인)",
         eval_days=(14, 28)),
+    # 조회수만 먼저 모으는 블로그(LAB_WATCH_BLOGS). 실험실 안내(주제 탐색·제안)는 LAB_BLOGS에 넣을 때 켜진다.
+    "edu": BlogSpec(
+        key="edu", label="네이버 교육", platform="naver", history_name="published_edu.json",
+        theme="현직 교사가 쓰는 교육 정책·교직 실무·학부모 교육정보 글(경기교육·교육부 정책, 교직 꿀팁, 교육 동향)",
+        eval_days=(7, 14)),
+    "childhood": BlogSpec(
+        key="childhood", label="네이버 유아", platform="naver", history_name="published_childhood.json",
+        theme="교사가 쓰는 유아교육 정보 글(유아→초등 브릿지, 연령별 발달×교육, 누리과정 부모 번역, 유아교육 정책)",
+        eval_days=(7, 14)),
 }
 
 
@@ -64,6 +73,8 @@ class LabConfig:
     health_min_views: int    # 최근 14일 블로그 전체 조회 증가가 이보다 적으면 주제 판정을 멈춘다(채널 문제)
     rank_max_queries: int    # 하루 검색 순위 확인 횟수(블로그별)
     push_report: bool        # 주간 보고(글 제목·주소 뺀 주제 단위)를 diagnostics/growth/<블로그>/weekly.md로 GitHub에 올릴지
+    watch_only: list[str] = field(default_factory=list)   # 조회수·검색 순위만 모으는 블로그(주간 리뷰·글쓰기 안내 없음)
+    auto_decide: list[str] = field(default_factory=list)  # 리뷰가 낸 제안을 블로그 주인 승인 없이 바로 적용하는 블로그
     naver_stat_urls: list[str] = field(default_factory=list)
     tistory_stat_urls: list[str] = field(default_factory=list)
     naver_search_id: str = ""
@@ -84,10 +95,16 @@ class LabConfig:
         _load_dotenv(ROOT / ".env")
         env = os.environ.get
         data = Path(env("DATA_DIR", str(ROOT / "data")))
-        blogs = [b.strip() for b in env("LAB_BLOGS", "invest,tistory").split(",") if b.strip() in BLOGS]
+        names = lambda key, default: [b.strip() for b in env(key, default).split(",") if b.strip() in BLOGS]  # noqa: E731
+        blogs = names("LAB_BLOGS", "invest,tistory")
+        # 조회수만 먼저 모으는 블로그: LAB_BLOGS(.env)를 고치지 않아도 기본으로 교육·유아를 모은다
+        watch = [b for b in names("LAB_WATCH_BLOGS", "edu,childhood") if b not in blogs]
         split = lambda name: [u.strip() for u in env(name, "").split(",") if u.strip()]  # noqa: E731
         return cls(
-            blogs=blogs,
+            blogs=blogs + watch,
+            watch_only=watch,
+            # 2026-11-21 블로그 주인이 권한을 줌: 투자·티스토리 제안은 리뷰가 판단해 바로 적용한다
+            auto_decide=names("LAB_AUTO_DECIDE", "invest,tistory"),
             data_dir=data / "lab",
             history_dir=data,
             output_dir=Path(env("OUTPUT_DIR", str(ROOT / "output"))) / "lab",

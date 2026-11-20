@@ -168,3 +168,21 @@ def add_approved_rule(cfg: LabConfig, blog: str, rule: str, today: str) -> None:
     path = learned_path(cfg, blog)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(((rest + "\n\n") if rest else "") + keep + "\n", encoding="utf-8")
+
+
+def approved_rule_lines(text: str) -> list[str]:
+    """확정 규칙 줄들("- (YYYY-MM-DD) 규칙")."""
+    return [ln for ln in approved_rules(text).splitlines() if ln.startswith("- ")]
+
+
+def retire_approved_rule(cfg: LabConfig, blog: str, line: str) -> None:
+    """확정 규칙 한 줄을 뺀다(자동 적용 블로그에서 효과가 없던 규칙을 리뷰가 거둘 때)."""
+    text = load_learned(cfg, blog)
+    keep = approved_rules(text)
+    if not keep or line not in keep.splitlines():
+        return
+    rest = text.replace(keep, "").strip()
+    lines = [ln for ln in keep.splitlines() if ln != line]
+    new_keep = "\n".join(lines) if len(lines) > 1 else ""
+    path = learned_path(cfg, blog)
+    path.write_text(((rest + "\n\n") if rest else "") + new_keep + "\n", encoding="utf-8")
