@@ -35,7 +35,9 @@ Leave it in your default generated-images directory; it will be collected automa
 
 
 class CodexImageError(RuntimeError):
-    pass
+    def __init__(self, message: str, output: str = ""):
+        super().__init__(message)
+        self.output = output          # Codex의 전체 출력(그림 대신 남긴 답을 확인할 때)
 
 
 def codex_home() -> Path:
@@ -78,9 +80,11 @@ def _to_png(src: Path, out: Path, max_width: int = 1600) -> None:
     img.save(out, "PNG", optimize=True)
 
 
-def run_for_image(cfg: Config, prompt: str, out: Path, convert, timeout: int, what: str = "그림") -> Path:
+def run_for_image(cfg: Config, prompt: str, out: Path, convert, timeout: int, what: str = "그림",
+                  images: list[Path] | None = None) -> Path:
     """Codex에 그림 한 장을 만들게 하고, 그 파일을 convert(원본, out)로 옮긴다.
-    작업 폴더에 저장한 그림이 있으면 그것을, 없으면 image_gen 기본 폴더의 새 그림을 쓴다."""
+    작업 폴더에 저장한 그림이 있으면 그것을, 없으면 image_gen 기본 폴더의 새 그림을 쓴다.
+    images를 주면 그 그림들을 첫 메시지에 붙여 참고 그림으로 보여 준다."""
     exe = shutil.which(cfg.codex_bin)
     if not exe:
         raise CodexAccountError(f"'{cfg.codex_bin}' 명령을 찾지 못했습니다(Codex CLI 미설치)")
@@ -92,6 +96,8 @@ def run_for_image(cfg: Config, prompt: str, out: Path, convert, timeout: int, wh
                "-c", "model_reasoning_effort=low"]
         if cfg.codex_model:
             cmd += ["--model", cfg.codex_model]
+        for img in images or []:                          # --image 바로 뒤에 "-"가 오지 않게 옵션 사이에 둔다
+            cmd[2:2] = ["--image", str(img)]
         cmd.append("-")                                   # 프롬프트는 stdin(EOF까지)으로
         started = time.time() - 2
         try:
@@ -109,7 +115,8 @@ def run_for_image(cfg: Config, prompt: str, out: Path, convert, timeout: int, wh
         fallback = _find_new_image(gen_dir, m.group(1) if m else None, started)
         candidates = saved[:1] + ([fallback] if fallback else [])
         if not candidates:
-            raise CodexImageError(f"Codex가 {what}을 만들지 않았습니다(exit {proc.returncode}): {output.strip()[-400:]}")
+            raise CodexImageError(f"Codex가 {what}을 만들지 않았습니다(exit {proc.returncode}): {output.strip()[-400:]}",
+                                  output=output)
         _convert_first_readable(candidates, out, convert, what)
     return out
 
