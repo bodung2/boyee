@@ -8,3 +8,6 @@ pandas>=2.0
 numpy>=1.24
 yfinance>=0.2.40
 pykrx                      # 한국 종목 목록·코스피 지수(한국거래소, KRX_ID·KRX_PW)
+# 캐릭터 공방(부스): QR 안내판, 윈도우 프린터(셀피)로 바로 인쇄
+qrcode>=7.4
+pywin32>=306; sys_platform == "win32"

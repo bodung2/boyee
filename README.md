@@ -483,3 +483,9 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_all_schedules.ps1 -Only Q
 - `requirements.txt`가 바뀌었으면 패키지를 다시 설치합니다. 문제가 있을 때만 텔레그램으로 알립니다.
 - 그래서 PR을 병합한 뒤 PC에서 따로 `git pull`을 하지 않아도, 다음 예약 작업부터 새 코드로 돕니다.
 - 기준 브랜치를 바꾸려면 `.env`에 `AUTOPOST_BRANCH=브랜치이름`을 넣습니다.
+
+## 캐릭터 공방 (부스 활동)
+
+아이가 학습지에 그린 캐릭터를 폰으로 찍어 보내면, 부스 노트북이 **ChatGPT 구독(Codex)**으로 양모펠트·클레이·2D/3D 애니메이션 등
+8가지 모습으로 바꿔 **셀피 CP1500으로 바로 인쇄**하고 **패들렛에 올립니다**(API 결제 없음). 폰 화면·대기열은 구글 Apps Script,
+변환·인쇄는 `scripts\run_booth.bat`. 준비와 당일 운영: [docs/BOOTH_CHARACTER.md](docs/BOOTH_CHARACTER.md).
