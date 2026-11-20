@@ -37,8 +37,12 @@ class Server:
             raise BoothServerError(f"웹앱 오류({action}): {data.get('error')}")
         return data
 
-    def ping(self) -> dict:
-        return self.call("ping")
+    def ping(self, **fields) -> dict:
+        return self.call("ping", **fields)
+
+    def announce(self) -> dict:
+        """아이 폰의 '패들렛에 올리기' 버튼 주소를 웹앱에 알린다. 자동 게시(API 키)면 버튼을 숨긴다(두 번 올라가지 않게)."""
+        return self.ping(padletUrl="" if self.cfg.padlet_on else self.cfg.padlet_url)
 
     def claim(self, worker: str) -> dict | None:
         return self.call("claim", worker=worker).get("job")
