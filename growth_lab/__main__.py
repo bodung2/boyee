@@ -119,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
             notes += _apply_decisions(cfg, blogs, today)
             if args.cmd in ("daily", "collect"):
                 notes += collect_all(cfg, blogs, today)
+                notes += _blogger_index(cfg, today)
             weekday = WEEKDAYS.get(os.environ.get("LAB_REVIEW_WEEKDAY", "일").strip()[:1], 6)
             weekly = args.cmd == "review" or (args.cmd == "daily" and datetime.now(KST).weekday() == weekday)
             if weekly:
@@ -140,6 +141,21 @@ def main(argv: list[str] | None = None) -> int:
         log.exception("성장 실험실 실패")
         send_text(cfg.telegram_bot_token, cfg.telegram_chat_id, f"[성장 실험실 실패] {today}\n{e}")
         return 1
+
+
+def _blogger_index(cfg: LabConfig, today: str) -> list[str]:
+    """구글 블로거 색인 감시(조회수 실험 전 단계). 블로거를 쓰지 않거나 BLOGGER_INDEX_WATCH=false면 건너뛴다."""
+    if not (cfg.history_dir / "published_blogger.json").exists() or \
+            os.environ.get("BLOGGER_INDEX_WATCH", "true").strip().lower() in ("0", "false", "no", "off"):
+        return []
+    try:
+        from blogger_autopost import index_watch
+        from blogger_autopost.config import BloggerConfig
+        index_watch.run(BloggerConfig.load(), today)
+        return []
+    except Exception as e:  # noqa: BLE001 - 색인 감시가 실패해도 다른 수집은 그대로
+        log.warning("블로거 색인 감시 실패: %s", e)
+        return [f"[구글 블로거] 색인 확인 실패: {str(e)[:200]}"]
 
 
 def _idents() -> list[str]:

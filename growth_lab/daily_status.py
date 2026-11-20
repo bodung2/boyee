@@ -66,6 +66,14 @@ def _tistory_login(data_dir: Path) -> str:
         return f"(로그인 기록을 읽지 못함: {e})"[:200]
 
 
+def _blogger_index(data_dir: Path) -> str:
+    try:
+        from blogger_autopost import index_watch
+        return index_watch.status_line(data_dir / "blogger_index.json")
+    except Exception as e:  # noqa: BLE001
+        return f"(색인 기록을 읽지 못함: {e})"[:200]
+
+
 def write(data_dir: Path, out: Path, idents: list[str], now: datetime | None = None) -> Path:
     now = now or datetime.now()
     day = now.strftime("%Y-%m-%d")
@@ -79,6 +87,9 @@ def write(data_dir: Path, out: Path, idents: list[str], now: datetime | None = N
         # 블로그마다 발행 요일·빈도가 달라(장소 글은 사진이 들어온 날만, 시황은 평일) 빠졌다고 단정하지 않는다
         lines.append(f"| {name} | {'✅ ' if n else ''}{n}편 | {last} |")
     lines += ["", "## 티스토리 로그인", "", f"- {_tistory_login(data_dir)}"]
+    index = _blogger_index(data_dir)
+    if index:
+        lines += ["", "## 구글 블로거 색인", "", f"- {index}"]
     alerts = _alerts(data_dir / "alerts.jsonl", day, idents)
     lines += ["", "## 오늘의 실패·경고 알림", ""] + ([f"- {a}" for a in alerts] or ["- 없음"])
     out.parent.mkdir(parents=True, exist_ok=True)
