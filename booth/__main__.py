@@ -44,7 +44,7 @@ def cmd_check(cfg: BoothConfig) -> int:
         print(f"{mark} {what}{(' — ' + detail) if detail else ''}")
 
     try:
-        info = Server(cfg).ping()
+        info = Server(cfg).announce()
         line(True, "웹앱 연결", f"기다리는 그림 {info.get('waiting', 0)}장")
     except Exception as e:                           # noqa: BLE001
         line(False, "웹앱 연결", str(e))
@@ -52,7 +52,7 @@ def cmd_check(cfg: BoothConfig) -> int:
          "설치됨 — 로그인은 'codex'를 실행해 확인" if shutil.which(cfg.codex_bin)
          else "없음: npm install -g @openai/codex 후 codex 실행 → Sign in with ChatGPT")
     if not cfg.print_on:
-        line(None, "인쇄", "BOOTH_PRINTER=off — 인쇄하지 않음")
+        line(None, "인쇄", "BOOTH_PRINTER가 비어 있어 자동 인쇄 안 함 — 부스에서 패들렛·갤러리 그림을 셀피 앱으로 인쇄")
     elif sys.platform != "win32":
         line(None, "인쇄", "윈도우가 아니라 확인하지 않음")
     else:
@@ -62,8 +62,10 @@ def cmd_check(cfg: BoothConfig) -> int:
             line(True, "프린터", name)
         except Exception as e:                       # noqa: BLE001
             line(False, "프린터", str(e))
-    if not cfg.padlet_on:
-        line(None, "패들렛", "PADLET_API_KEY·PADLET_BOARD가 비어 있어 올리지 않음(큰 화면 모아 보기 사용)")
+    if not cfg.padlet_on and cfg.padlet_url:
+        line(True, "패들렛", "아이가 완성 화면의 '패들렛에 올리기' 버튼으로 직접 올림")
+    elif not cfg.padlet_on:
+        line(None, "패들렛", "PADLET_BOARD가 비어 있어 패들렛 버튼 없음(큰 화면 모아 보기 사용)")
     else:
         try:
             attrs = padlet.board_info(cfg.padlet_key, cfg.padlet_board).get("data", {}).get("attributes", {})
@@ -92,7 +94,9 @@ def cmd_qr(cfg: BoothConfig) -> int:
     d.text((620, 110), "캐릭터 공방", font=_font("bold", 96), fill="#ff7a59", anchor="mm")
     d.text((620, 215), "내가 그린 캐릭터를 AI가 새로운 모습으로!", font=_font("bold", 46), fill="#1f2937", anchor="mm")
     page.paste(code, (70, 290))
-    steps = ["① 카메라로 QR을 찍어요", "② 별명 쓰고, 내 그림 찍고, 모습 고르기", "③ 보내기 → 완성 사진이 프린터에서 나와요"]
+    steps = ["① 카메라로 QR을 찍어요", "② 별명 쓰고, 학습지 그림 찍고, 모습 고르기",
+             "③ 보내기 → 완성 그림을 패들렛에 올리고 인쇄 받기" if not cfg.print_on
+             else "③ 보내기 → 완성 사진이 프린터에서 나와요"]
     for i, s in enumerate(steps):
         d.text((110, 1440 + i * 80), s, font=_font("regular", 48), fill="#1f2937")
     out = cfg.out_dir / "qr_안내판.png"
@@ -187,8 +191,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_reprint(cfg, args.job_id)
     _setup_logging(cfg)
     server = Server(cfg)
+    server.announce()
+    padlet_mode = "자동 게시" if cfg.padlet_on else ("아이가 직접 올림" if cfg.padlet_url else "끔")
     log.info("캐릭터 공방 시작 — 동시에 %d장, 인쇄 %s, 패들렛 %s%s", cfg.parallel,
-             "켬" if cfg.print_on else "끔", "켬" if cfg.padlet_on else "끔(큰 화면 모아 보기)",
+             "켬" if cfg.print_on else "끔", padlet_mode,
              " [연습 모드: ChatGPT 안 씀]" if args.fake else "")
     log.info("이 창을 켜 두세요. 멈추려면 Ctrl+C")
     worker.run(cfg, server, fake_convert if args.fake else convert, once=args.once)

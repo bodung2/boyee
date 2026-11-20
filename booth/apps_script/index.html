@@ -34,6 +34,9 @@
   @keyframes r { to { transform:rotate(360deg); } }
   #result { width:100%; border-radius:16px; margin:10px 0; display:none; }
   .big { font-size:20px; font-weight:800; margin:8px 0; }
+  a.btn { text-decoration:none; text-align:center; margin-top:10px; }
+  .howto { text-align:left; background:#fff7ed; border-radius:12px; padding:10px 14px; margin:12px 0 0; font-size:14px; line-height:1.6; }
+  .howto ol { margin:4px 0 0; padding-left:20px; }
   .badge { display:inline-block; padding:6px 12px; border-radius:99px; background:#e8f7ee; color:var(--ok); font-weight:700; margin:4px; }
   /* 큰 화면 모아 보기 */
   .wall { max-width:none; padding:24px; }
@@ -133,7 +136,8 @@ function waitView(id) {
     <div class="step"><div class="spin" id="spin"></div>
       <div class="big" id="msg">보냈어요!</div><p class="hint" id="hint"></p>
       <img id="result" alt="완성된 캐릭터">
-      <div id="badges"></div></div>
+      <div id="badges"></div>
+      <div id="share"></div></div>
     <button class="btn ghost" id="again">✏️ 다른 캐릭터 또 만들기</button>
   </div>`;
   $('#again').onclick = () => { if (timer) clearTimeout(timer); localStorage.removeItem(JOB_KEY); photo = ''; style = ''; formView(); };
@@ -155,13 +159,14 @@ async function poll(id) {
   } else if (st.status === '완성') {
     $('#spin').style.display = 'none';
     msg.textContent = `${st.nickname}의 캐릭터 완성! 🎉`;
-    hint.textContent = st.printed ? '' : '사진이 곧 프린터에서 나와요.';
+    hint.textContent = '';
     if (!shown && st.hasResult) {
       shown = true;
       call('getResultImage', id).then(src => { if (src) { $('#result').src = src; $('#result').style.display = 'block'; } });
     }
     $('#badges').innerHTML = (st.printed ? '<span class="badge">🖨️ 인쇄했어요</span>' : '') +
                              (st.padlet ? '<span class="badge">📌 패들렛에 올렸어요</span>' : '');
+    if (!$('#share').innerHTML) $('#share').innerHTML = shareBox(st);
     if ((st.printed && st.padlet) || shownLong(id)) return;   // 인쇄·패들렛이 꺼져 있어도 2분 뒤엔 그만 묻는다
   } else if (st.status === '오류') {
     $('#spin').style.display = 'none';
@@ -170,6 +175,19 @@ async function poll(id) {
     return;
   }
   timer = setTimeout(() => poll(id), 5000);
+}
+// 완성 그림 저장 + (자동 게시가 아니면) 아이가 직접 패들렛에 올리는 버튼
+function shareBox(st) {
+  let h = '<p class="hint">그림을 <b>꾹 누르면</b> 내 폰에 저장할 수 있어요.</p>';
+  if (st.resultUrl) h += `<a class="btn ghost" href="${esc(st.resultUrl)}" target="_blank" rel="noopener">🔍 크게 보기·저장</a>`;
+  if (st.padletUrl && !st.padlet) {
+    h += `<a class="btn" href="${esc(st.padletUrl)}" target="_blank" rel="noopener">📌 패들렛에 올리기</a>
+      <div class="howto"><b>패들렛에 올리는 방법</b><ol>
+        <li>위 그림을 꾹 눌러 <b>사진 저장</b></li>
+        <li>📌 버튼 → 패들렛에서 <b>＋</b> 누르기</li>
+        <li>저장한 그림을 올리고, 제목에 <b>${esc(st.nickname)}</b>(내 별명) 적기 → 게시</li></ol></div>`;
+  }
+  return h;
 }
 const doneAt = {};
 function shownLong(id) { doneAt[id] = doneAt[id] || Date.now(); return Date.now() - doneAt[id] > 120000; }

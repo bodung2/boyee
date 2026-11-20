@@ -167,6 +167,24 @@ test('노트북이 가져간 뒤 12분 넘게 소식이 없으면 다시 가져�
   assert.equal(post(gas, { token: T, action: 'claim' }).job.tries, 2);
 });
 
+test('집 PC가 알려 준 패들렛 주소와 결과 공개 주소가 아이 폰에 간다(이상한 주소는 무시)', () => {
+  const { gas, fake } = load();
+  gas.setupBooth();
+  const T = fake.props.BOOTH_TOKEN;
+  const a = gas.submitDrawing({ nickname: '곰', style: 'clay', image: IMG });
+  assert.equal(gas.getStatus(a.id).padletUrl, '');
+  post(gas, { token: T, action: 'ping', padletUrl: 'https://padlet.com/t/booth-abc123' });
+  assert.equal(gas.getStatus(a.id).padletUrl, 'https://padlet.com/t/booth-abc123');
+  post(gas, { token: T, action: 'ping', padletUrl: 'javascript:alert(1)' });
+  assert.equal(gas.getStatus(a.id).padletUrl, '');
+  post(gas, { token: T, action: 'ping', padletUrl: 'https://padlet.com/t/booth-abc123' });
+  post(gas, { token: T, action: 'ping' });                       // 주소를 안 보내면 그대로
+  assert.equal(gas.getStatus(a.id).padletUrl, 'https://padlet.com/t/booth-abc123');
+  post(gas, { token: T, action: 'claim' });
+  const d = post(gas, { token: T, action: 'done', id: a.id, image: 'UkVT' });
+  assert.equal(gas.getStatus(a.id).resultUrl, d.url);
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ' + name); } catch (e) { failed++; console.log('FAIL ' + name + '\n' + (e.stack || e)); }

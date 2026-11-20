@@ -84,8 +84,8 @@ def list_printers() -> list[str]:
 
 
 def pick_printer(wanted: str, available: list[str], default: str = "") -> str:
-    """BOOTH_PRINTER에 'SELPHY'처럼 이름 일부만 적어도 찾는다. 비어 있으면 기본 프린터."""
-    if not wanted:
+    """BOOTH_PRINTER에 'SELPHY'처럼 이름 일부만 적어도 찾는다. default면 윈도우 기본 프린터."""
+    if not wanted or wanted.lower() == "default":
         return default
     for name in available:
         if name.lower() == wanted.lower():
