@@ -156,3 +156,46 @@ def test_render_and_summary(tmp_path):
     assert text.startswith("[퀘스트 보드] 11/2(월)")
     assert "✅ 06:00 네이버 교육 블로그 — <제목>" in text
     assert "시황" not in text                                  # 쉬는 날은 요약에서 뺀다
+
+
+def test_blog_panel_shows_lab_status_and_survives_missing_files(tmp_path, monkeypatch):
+    import json as _json
+    from datetime import datetime as _dt
+
+    from quest_board import blogs
+    from quest_board.checks import Paths
+    data, out = tmp_path / "data", tmp_path / "output"
+    (data / "lab").mkdir(parents=True)
+    now = _dt(2026, 11, 21, 10)
+    posts = [{"title": f"글{i}", "url": f"https://blog.naver.com/x/{i}", "date": f"2026-11-{21 - i:02d}", "source": "autopost"}
+             for i in range(5)]
+    for f in ("published_invest.json", "published_edu.json", "published_market.json"):
+        (data / f).write_text(_json.dumps(posts), encoding="utf-8")
+    (data / "lab" / "daily_invest.json").write_text(_json.dumps({
+        "fetched": [f"2026-11-{d:02d}" for d in range(1, 21)],
+        "posts": {"https://blog.naver.com/x/1": {f"2026-11-{d:02d}": 3 for d in range(1, 21)}}}), encoding="utf-8")
+    (data / "lab" / "ledger_invest.json").write_text(_json.dumps({
+        "topics": {"사교육비": {"status": "promising", "ratio": 2.9}}, "graveyard": [{"name": "등록금"}],
+        "proposals": [{"id": 3, "text": "연도를 제목 끝에", "status": "pending"}]}, ensure_ascii=False), encoding="utf-8")
+    (data / "lab" / "learned_invest.md").write_text(
+        "## 확정 규칙 (블로그 주인 승인)\n- (2026-11-10) 조건형 검색어를 제목 앞에\n", encoding="utf-8")
+    monkeypatch.setattr(blogs, "_lab_modes", lambda: (["invest", "tistory"], ["edu", "childhood"], ["invest"]))
+    cards = blogs.collect(Paths(data=data, output=out, logs=tmp_path), now)
+    by = {c.key: c for c in cards}
+    assert set(by) == {"invest", "edu", "market"}
+    assert by["invest"].mode == "lab-auto" and by["invest"].views == 42 and by["invest"].today == 1
+    assert by["invest"].rules == [("2026-11-10", "조건형 검색어를 제목 앞에")]
+    assert by["edu"].mode == "watch" and by["edu"].views is None and by["market"].mode == "off"
+    page = blogs.render(cards, now)
+    assert "실험실 · 자동 개선" in page and "조건형 검색어를 제목 앞에" in page and "투3 연도를 제목 끝에" in page
+    assert "조회수 수집 중" in page and "등록금" in page and "<script" not in page
+
+
+def test_board_has_today_and_blog_analysis_sections():
+    from datetime import datetime as _dt
+
+    from quest_board import board as qb, html as qh
+    b = qb.Board(_dt(2026, 11, 21, 10, tzinfo=qb.KST), ["2026-11-20", "2026-11-21"], [], True, [])
+    page = qh.render(b, remote=True, blogs_html="<p>BLOG-PANEL</p>")
+    assert 'id="sec-today"' in page and 'id="sec-blogs"' in page and "BLOG-PANEL" in page
+    assert "자동화 블로그 분석" in page and "frameElement" in page

@@ -1,6 +1,6 @@
 """사용법:
   python -m growth_lab daily                 매일: 통계·검색 순위 수집(예약 작업). 리뷰 요일(기본 일요일)이면 주간 리뷰까지
-  python -m growth_lab collect [--blog invest]   수집만
+  python -m growth_lab collect [--blog invest]   수집만(교육·유아는 LAB_WATCH_BLOGS로 조회수만 모은다)
   python -m growth_lab review [--blog invest] [--no-claude]   주간 리뷰를 지금 실행(--no-claude: 판정·장부만)
   python -m growth_lab status [--blog invest]    장부 요약(주제 상태·무덤·탐색 후보·실험·제안)
   python -m growth_lab brief --blog invest       오늘 글쓰기에 넘길 안내문 미리 보기
@@ -16,6 +16,7 @@ import argparse
 import logging
 import os
 import sys
+from contextlib import ExitStack
 from datetime import datetime
 from types import SimpleNamespace
 
@@ -26,7 +27,9 @@ from .config import BLOGS, LabConfig
 log = logging.getLogger("growth_lab")
 WEEKDAYS = {"월": 0, "화": 1, "수": 2, "목": 3, "금": 4, "토": 5, "일": 6}
 # 통계 화면은 발행과 같은 크롬 프로필을 쓴다 → 그 블로그가 발행 중이면 건너뛴다(프로필은 동시에 못 연다).
-BLOG_LOCK = {"invest": ".run-invest.lock", "tistory": ".run-tistory.lock"}
+# 같은 블로그(같은 크롬 프로필)에 올리는 프로필(투자↔시황, 유아↔장소)이 돌고 있어도 건너뛴다.
+BLOG_LOCK = {"invest": (".run-invest.lock", ".run-market.lock"), "tistory": (".run-tistory.lock",),
+             "edu": (".run-edu.lock",), "childhood": (".run-childhood.lock", ".run-place.lock")}
 
 
 def _setup_logging(cfg: LabConfig, today: str) -> None:
@@ -53,7 +56,9 @@ def collect_all(cfg: LabConfig, blogs: list[str], today: str) -> list[str]:
     notes = []
     for blog in blogs:
         try:
-            with _Lock(cfg.log_dir / BLOG_LOCK[blog]):
+            with ExitStack() as locks:
+                for name in BLOG_LOCK.get(blog, (f".run-{blog}.lock",)):
+                    locks.enter_context(_Lock(cfg.log_dir / name))
                 snap = metrics.collect(blog, cfg, today)
             if not snap.get("logged_in", True):
                 notes.append(f"[{BLOGS[blog].label}] 로그인이 풀려 통계를 못 읽었습니다(발행 쪽 login 명령으로 다시 로그인)")
@@ -118,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
             weekly = args.cmd == "review" or (args.cmd == "daily" and datetime.now(KST).weekday() == weekday)
             if weekly:
                 _pull_telegram(cfg)
-                for blog in blogs:
+                for blog in [b for b in blogs if b not in cfg.watch_only]:   # 조회수만 모으는 블로그는 리뷰하지 않는다
                     review.run(blog, cfg, today, use_claude=not getattr(args, "no_claude", False), idents=_idents())
             if notes:
                 send_text(cfg.telegram_bot_token, cfg.telegram_chat_id, "[성장 실험실]\n" + "\n".join(notes))

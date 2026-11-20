@@ -19,10 +19,12 @@ from . import brief, demand, scoring, store, styles
 from .config import BLOGS, LabConfig, theme_of
 
 log = logging.getLogger(__name__)
-PREFIX = {"invest": "투", "tistory": "티"}          # 텔레그램 답장에서 블로그를 가리는 글자("승인 투3")
+PREFIX = {"invest": "투", "tistory": "티", "edu": "교", "childhood": "유"}          # 텔레그램 답장에서 블로그를 가리는 글자("승인 투3")
 STATUS_KO = {"testing": "시험 중", "promising": "유망", "core": "주력", "neutral": "보통", "saturated": "포화",
              "dead": "중단(무덤)", "hold": "보류(채널 점검)"}
 MAX_PROPOSALS = 3
+RULE_TRIAL_DAYS = 14        # 자동 적용한 규칙은 최소 이만큼 써 본 뒤에만 거둘 수 있다
+_RULE_DATE = re.compile(r"^- \((\d{4}-\d{2}-\d{2})\)\s*(.*)$")
 MAX_QUEUE = 15
 REVIEW_TOOLS = ["WebSearch", "WebFetch", "Read", "Glob", "Grep", "Skill"]
 
@@ -88,7 +90,8 @@ def advance_experiment(blog: str, ledger: dict, table: list[dict], today: str, r
     return f"🧪 화풍 실험 중: {exp['arms'][0]} vs {exp['arms'][1]} (~{exp['post_until']})"
 
 
-def decide(blog: str, cfg: LabConfig, ledger: dict, pid: int, verb: str, today: str, text: str = "") -> str | None:
+def decide(blog: str, cfg: LabConfig, ledger: dict, pid: int, verb: str, today: str, text: str = "",
+           auto: bool = False) -> str | None:
     """제안 하나를 승인·거절한다. 승인된 규칙은 플레이북의 '확정 규칙'이 된다(text가 있으면 고친 문장으로).
     처리했으면 알림 문구, 없는 제안·이미 정한 제안이면 None."""
     prop = next((p for p in ledger["proposals"] if p["id"] == pid), None)
@@ -96,12 +99,45 @@ def decide(blog: str, cfg: LabConfig, ledger: dict, pid: int, verb: str, today: 
         return None
     prop["status"] = "approved" if verb == "승인" else "rejected"
     prop["decided"] = today
+    if auto:
+        prop["auto"] = True
     if text.strip():
         prop["text"] = text.strip()[:300]
     if prop["status"] == "approved":
         store.add_approved_rule(cfg, blog, prop["text"], today)
-    store.log_change(ledger, today, f"제안 {PREFIX[blog]}{prop['id']} {verb}", prop["text"][:120])
-    return f"제안 {PREFIX[blog]}{prop['id']} {verb}: {prop['text'][:60]}"
+    how = "자동 " if auto else ""
+    store.log_change(ledger, today, f"제안 {PREFIX[blog]}{prop['id']} {how}{verb}", prop["text"][:120])
+    return f"제안 {PREFIX[blog]}{prop['id']} {how}{verb}: {prop['text'][:60]}"
+
+
+def auto_decide(blog: str, cfg: LabConfig, ledger: dict, result: dict, today: str) -> list[str]:
+    """블로그 주인이 권한을 준 블로그: 리뷰가 낸 제안을 바로 적용하고, 써 봤는데 효과가 없던 확정 규칙은 거둔다.
+    거두기는 리뷰가 근거와 함께 고른 규칙만, 적용한 지 RULE_TRIAL_DAYS일이 지난 것만 한다(한 주 만에 뒤집지 않게)."""
+    notes = []
+    for p in [p for p in ledger["proposals"] if p["status"] == "pending"]:
+        note = decide(blog, cfg, ledger, p["id"], "승인", today, auto=True)
+        if note:
+            notes.append("✅ " + note)
+    lines = store.approved_rule_lines(store.load_learned(cfg, blog))
+    for item in (result.get("retire_rules") or [])[:2]:
+        want = str((item or {}).get("rule") if isinstance(item, dict) else item or "").strip()
+        why = str((item or {}).get("why", "") if isinstance(item, dict) else "")[:200]
+        if not want:
+            continue
+        for line in lines:
+            m = _RULE_DATE.match(line)
+            if not m or not (brief.similar(want, m.group(2)) or want in m.group(2)):
+                continue
+            if (date.fromisoformat(today) - date.fromisoformat(m.group(1))).days < RULE_TRIAL_DAYS:
+                notes.append(f"규칙 거두기 보류(적용 {RULE_TRIAL_DAYS}일 전): {m.group(2)[:60]}")
+                break
+            store.retire_approved_rule(cfg, blog, line)
+            ledger.setdefault("retired_rules", []).append({"rule": m.group(2), "since": m.group(1), "date": today,
+                                                           "why": why})
+            store.log_change(ledger, today, "규칙 거둠", f"{m.group(2)[:100]} — {why}")
+            notes.append(f"↩️ 규칙 거둠: {m.group(2)[:60]} ({why[:80]})")
+            break
+    return notes
 
 
 def handle_commands(blog: str, cfg: LabConfig, ledger: dict, today: str, inbox_file: Path) -> list[str]:
@@ -188,6 +224,14 @@ def write_weekly(blog: str, cfg: LabConfig, ledger: dict, verdicts: list[dict], 
     lines += ["", "## 무덤"] + ([f"- {s(g['name'])} — {s(g.get('reason', ''))}" for g in ledger["graveyard"]] or ["- (없음)"])
     lines += ["", "## 탐색 후보 (검색 수요 = 기준 검색어 대비 배수)"] + (
         [f"- {s(c['name'])} (수요 {c.get('demand', '-')})" for c in ledger["explore_queue"][:10]] or ["- (없음)"])
+    if blog in cfg.auto_decide:
+        recent = [p for p in ledger["proposals"] if p.get("auto") and p.get("decided") == today]
+        lines += ["", "## 이번 주 자동 적용한 변경 (블로그 주인이 권한을 줌)"] + (
+            [f"- **{PREFIX[blog]}{p['id']}** {s(p['text'])}  \n  근거: {s(p.get('evidence', ''))}" for p in recent]
+            or ["- (없음)"])
+        gone = [r for r in ledger.get("retired_rules", []) if r.get("date") == today]
+        if gone:
+            lines += ["", "## 이번 주 거둔 규칙"] + [f"- {s(r['rule'])} — {s(r.get('why', ''))}" for r in gone]
     pend = [p for p in ledger["proposals"] if p["status"] == "pending"]
     lines += ["", "## 결정이 필요한 제안"] + ([f"- **{PREFIX[blog]}{p['id']}** {s(p['text'])}  \n  근거: {s(p.get('evidence', ''))}"
                                          for p in pend] or ["- (없음)"])
@@ -219,6 +263,9 @@ def review_input(blog: str, cfg: LabConfig, ledger: dict, table: list[dict], ver
         "proposals": [p for p in ledger["proposals"] if p["status"] in ("pending", "rejected")][-20:],
         "experiment": ledger.get("experiment"), "experiments_done": ledger.get("experiments_done", [])[-5:],
         "learned_file": _rel(store.learned_path(cfg, blog)),
+        # true면 제안은 리뷰 직후 바로 적용되고, retire_rules로 효과 없던 확정 규칙을 거둘 수 있다
+        "auto_decide": blog in cfg.auto_decide,
+        "approved_rules": store.approved_rule_lines(store.load_learned(cfg, blog)),
     }
 
 
@@ -299,7 +346,8 @@ def apply_review(blog: str, cfg: LabConfig, ledger: dict, result: dict, today: s
     if len(learned) >= 50:
         store.save_learned(cfg, blog, learned, today)
         store.log_change(ledger, today, "플레이북 갱신", str((result.get("funnel") or {}).get("evidence", ""))[:160])
-    rejected = [p["text"] for p in ledger["proposals"] if p["status"] == "rejected"]
+    rejected = [p["text"] for p in ledger["proposals"] if p["status"] == "rejected"] + [
+        r["rule"] for r in ledger.get("retired_rules", [])]          # 거둔 규칙을 다음 주에 다시 내지 않게
     for prop in (result.get("proposals") or [])[:MAX_PROPOSALS]:
         text = str(prop.get("text") or "").strip()
         if not text or any(brief.similar(text, r) for r in rejected):
@@ -359,6 +407,8 @@ def run(blog: str, cfg: LabConfig, today: str, use_claude: bool = True, demand_p
         try:
             result = run_claude(blog, cfg, work, today)
             notes += apply_review(blog, cfg, ledger, result, today, demand_post)
+            if blog in cfg.auto_decide:
+                notes += auto_decide(blog, cfg, ledger, result, today)
         except generate.ClaudeLimitError as e:
             notes.append(f"⚠️ Claude 사용 한도로 진단·리서치는 건너뜀({e.reset_at:%H:%M} 이후 `python -m growth_lab review`)")
         except Exception as e:  # noqa: BLE001 - 진단이 실패해도 판정·장부는 남긴다

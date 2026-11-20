@@ -31,7 +31,7 @@ $Schedule = @(
     @{ Name = "NaverNeighbors";                Bat = "run_neighbors.bat";        Arg = "";                  Times = @("19:00"); Hours = 2;   Wake = $true;  Desc = "네이버 이웃 후보 추천" }
     @{ Name = "NaverAutoPost-Social-edu";      Bat = "run_social.bat";           Arg = "--profile edu";     Times = @("20:00"); Hours = 2;   Wake = $true;  Desc = "교육 블로그 인스타·쓰레드" }
     @{ Name = "NaverAutoPost-Social-childhood"; Bat = "run_social.bat";          Arg = "--profile childhood"; Times = @("21:00"); Hours = 2; Wake = $true; Desc = "유아 블로그 인스타·쓰레드" }
-    @{ Name = "GrowthLab";                     Bat = "run_growth_lab.bat";       Arg = "";                  Times = @("22:30"); Hours = 3;   Wake = $true;  Desc = "성장 실험실: 투자·티스토리 통계 수집(일요일엔 주간 리뷰)" }
+    @{ Name = "GrowthLab";                     Bat = "run_growth_lab.bat";       Arg = "";                  Times = @("22:30"); Hours = 3;   Wake = $true;  Desc = "성장 실험실: 투자·티스토리·교육·유아 통계 수집(일요일엔 투자·티스토리 주간 리뷰)" }
     @{ Name = "QuestBoard";                    Bat = "run_quest_board.bat";      Arg = "--notify";          Times = @("23:40"); Hours = 0.5; Wake = $false; Desc = "퀘스트 보드: 오늘 작업 결과 정리·텔레그램 요약" }
     @{ Name = "QuestBoardRefresh";             Bat = "run_quest_board_refresh.bat"; Arg = "";             Times = @("00:05"); Hours = 0.25; Wake = $false; Every = 1; Hidden = $true; Desc = "퀘스트 보드 화면 매시간 갱신(창 없이)" }
 )

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from html import escape
 
+from . import blogs as blog_panel
 from .board import STATES, Board, Row, Status, label_day
 
 CSS = """
@@ -60,6 +61,15 @@ border-radius:6px;padding:3px 10px;cursor:pointer}.acts button:hover,.edit butto
 border-radius:6px;background:var(--card);color:var(--ink)}.edit small{color:var(--sub)}
 #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;
 border-radius:8px;font-size:14px;max-width:calc(100% - 32px);display:none;z-index:9}
+.split-tabs{display:flex;gap:6px;margin:16px 0 4px;position:sticky;top:0;z-index:2;background:var(--bg);padding:6px 0}
+.split-tabs button{flex:1;font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);background:var(--card);
+color:var(--sub);border-radius:10px;padding:9px 8px;cursor:pointer}
+.split-tabs button[aria-selected=true]{color:var(--ink);border-color:var(--ink)}
+.split{display:block}.split>section[hidden]{display:none}
+.split>section>h2:first-child{margin-top:12px}
+@media (min-width:1100px){main.wide{max-width:1500px}.split-tabs{display:none}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}
+.split>section[hidden]{display:block}}
 @media (max-width:560px){.q{grid-template-columns:46px 1fr}.q .badge{grid-column:2;justify-self:start;margin-top:2px}
 .q .d,.q .nx,.acts,.edit{grid-column:2}}
 """
@@ -123,6 +133,17 @@ setInterval(async () => {
   }
 }, 60000);
 </script>"""
+# 두 칸(오늘 일정 / 블로그 분석). 넓은 화면은 나란히, 좁은 화면은 위 단추로 바꾼다.
+# 인생 대시보드는 이 화면을 iframe에 넣고 처음 높이만 맞추므로, 칸을 바꾸면 iframe 높이를 다시 맞춘다.
+SPLIT_SCRIPT = """<script>(function(){
+var tabs=document.querySelectorAll(".split-tabs button"),secs=document.querySelectorAll(".split>section");
+function fitFrame(){try{var f=window.frameElement;if(f)f.style.height=document.documentElement.scrollHeight+"px";}catch(e){}}
+function show(id){tabs.forEach(function(b){b.setAttribute("aria-selected",b.dataset.sec===id);});
+secs.forEach(function(s){s.hidden=s.id!==id;});try{localStorage.setItem("qb-sec",id);}catch(e){}
+setTimeout(fitFrame,30);}
+tabs.forEach(function(b){b.addEventListener("click",function(){show(b.dataset.sec);});});
+var saved=null;try{saved=localStorage.getItem("qb-sec");}catch(e){}
+if(saved&&document.getElementById(saved))show(saved);})();</script>"""
 CELL_MARK = {"done": "✓", "ran": "✓", "fail": "✕", "skip": "–", "unknown": "?", "running": "…", "waiting": "",
              "retry": "!", "missed": "!", "none": "", "off": "", "na": ""}
 
@@ -207,8 +228,11 @@ def _first_time(r: Row) -> str:
     return min(r.quest.times) if r.quest.times else "99:99"
 
 
-def render(b: Board, token: str = "", remote: bool = False) -> str:
-    """token이 있으면 버튼이 있는 화면(python -m quest_board serve), 없으면 보기 전용 파일."""
+def render(b: Board, token: str = "", remote: bool = False, blogs_html: str | None = None) -> str:
+    """token이 있으면 버튼이 있는 화면(python -m quest_board serve), 없으면 보기 전용 파일.
+    blogs_html: '자동화 블로그 분석' 칸. None이면 이 PC의 기록으로 만든다."""
+    if blogs_html is None:
+        blogs_html = blog_panel.panel()
     interactive = bool(token) and not remote
     stamp = STAMP_REMOTE if remote else STAMP_LIVE if interactive else STAMP_FILE
     foot = FOOT_REMOTE if remote else FOOT_LIVE if interactive else FOOT_FILE
@@ -248,18 +272,24 @@ def render(b: Board, token: str = "", remote: bool = False) -> str:
 
     return f"""<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-{refresh}<title>퀘스트 보드</title><style>{CSS}</style></head>
-<body data-generated="{b.now.isoformat(timespec='seconds')}"><main>
+{refresh}<title>퀘스트 보드</title><style>{CSS}{blog_panel.CSS}</style></head>
+<body data-generated="{b.now.isoformat(timespec='seconds')}"><main class="wide">
 <div class="top"><h1>오늘의 퀘스트 · {label_day(today)}</h1>
 <span class="stamp">{b.now.strftime('%Y-%m-%d %H:%M')} 기준 · {stamp}</span></div>
 <div class="tally">{"".join(tally)}</div><div class="bar">{"".join(bar)}</div>
 {note_html}
+<div class="split-tabs" role="tablist"><button role="tab" data-sec="sec-today" aria-selected="true">📋 오늘 일정</button>
+<button role="tab" data-sec="sec-blogs" aria-selected="false">📊 자동화 블로그 분석</button></div>
+<div class="split"><section id="sec-today">
 <h2>오늘 일정</h2><div class="list">{"".join(_card(r, interactive) for r in sorted(b.rows, key=_first_time))}</div>
 <h2>최근 {len(b.days)}일 기록</h2>
 <div class="grid"><table><thead><tr><th>퀘스트</th>{head}<th>성공</th></tr></thead><tbody>{"".join(body)}</tbody></table></div>
 <div class="legend">{legend}<span>칸을 누르면 그날 글이 열립니다 · 성공 = 오늘을 뺀 기간의 완료/예정 일수</span></div>
+</section><section id="sec-blogs" hidden>
+<h2>자동화 블로그 분석</h2>{blogs_html}
+</section></div>
 <footer>퀘스트 목록: scripts/setup_all_schedules.ps1의 예약 표 + 작업 스케줄러 · 발행 여부: data/published_*.json·SNS 기록·로그
 {foot}</footer>
 </main><div id="toast" role="status"></div><script>/* 좁은 화면에서는 기록 표를 최근 날짜(오른쪽)부터 보이게 */
 var g=document.querySelector(".grid");if(g)g.scrollLeft=g.scrollWidth;</script>
-{script}</body></html>"""
+{SPLIT_SCRIPT}{script}</body></html>"""
