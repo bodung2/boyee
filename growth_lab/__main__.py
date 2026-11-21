@@ -133,6 +133,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.cmd in ("daily", "collect"):
                 notes += collect_all(cfg, blogs, today)
                 notes += _blogger_index(cfg, today)
+                notes += _export_watch(cfg, today)
             weekday = WEEKDAYS.get(os.environ.get("LAB_REVIEW_WEEKDAY", "일").strip()[:1], 6)
             weekly = args.cmd == "review" or (args.cmd == "daily" and datetime.now(KST).weekday() == weekday)
             if weekly:
@@ -154,6 +155,22 @@ def main(argv: list[str] | None = None) -> int:
         log.exception("성장 실험실 실패")
         send_text(cfg.telegram_bot_token, cfg.telegram_chat_id, f"[성장 실험실 실패] {today}\n{e}")
         return 1
+
+
+def _export_watch(cfg: LabConfig, today: str) -> list[str]:
+    """조회수만 모으는 블로그(교육·유아)의 분석 자료를 매일 주인 드라이브(lab_export_<블로그>.md)에 올린다.
+    Claude가 대화에서 읽어 분석한다. LAB_EXPORT_DRIVE=false로 끈다."""
+    if os.environ.get("LAB_EXPORT_DRIVE", "true").strip().lower() in ("0", "false", "no", "off"):
+        return []
+    from . import export
+    notes = []
+    for blog in cfg.watch_only:
+        try:
+            export.run(blog, cfg, today)
+        except Exception as e:  # noqa: BLE001 - 드라이브에 못 올려도 수집은 그대로
+            log.warning("[%s] 분석 자료 드라이브 업로드 실패: %s", BLOGS[blog].label, e)
+            notes.append(f"[{BLOGS[blog].label}] 분석 자료를 드라이브에 올리지 못했습니다: {str(e)[:150]}")
+    return notes
 
 
 def _blogger_index(cfg: LabConfig, today: str) -> list[str]:
