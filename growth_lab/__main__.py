@@ -5,6 +5,7 @@
   python -m growth_lab status [--blog invest]    장부 요약(주제 상태·무덤·탐색 후보·실험·제안)
   python -m growth_lab brief --blog invest       오늘 글쓰기에 넘길 안내문 미리 보기
   python -m growth_lab diagnose --blog invest [--no-push]   통계 화면 구조 진단(조회수를 못 찾을 때)
+  python -m growth_lab export --blog edu [--no-collect]   지금 조회수를 모아 분석 자료를 구글 드라이브(lab_export_edu.md)에 올리기
   python -m growth_lab approve 투3 [--text "고친 문장"]   제안 승인(투=투자, 티=티스토리) / reject 투3: 거절
 
 주간 보고는 diagnostics/growth/<블로그>/weekly.md로 GitHub에 올라간다(글 제목·주소 없이, LAB_PUSH_REPORT=false로 끔).
@@ -80,6 +81,9 @@ def main(argv: list[str] | None = None) -> int:
         p = sub.add_parser(name)
         p.add_argument("proposal", help="제안 번호(예: 투3, 티2)")
         p.add_argument("--text", default="", help="승인하면서 규칙 문장을 고칠 때")
+    exp = sub.add_parser("export")
+    exp.add_argument("--blog", choices=list(BLOGS), required=True)
+    exp.add_argument("--no-collect", action="store_true", help="지금 모으지 않고 이미 모은 자료만 내보낸다")
     for name in ("daily", "collect", "review", "status", "brief", "diagnose"):
         p = sub.add_parser(name)
         p.add_argument("--blog", choices=list(BLOGS), help="한 블로그만(기본: LAB_BLOGS 전체)")
@@ -98,6 +102,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "status":
         return _status(cfg, blogs)
+    if args.cmd == "export":
+        _setup_logging(cfg, today)
+        from . import export
+        if not args.no_collect:
+            for note in collect_all(cfg, [args.blog], today):
+                print(note)
+        path = export.run(args.blog, cfg, today)
+        print(f"분석 자료를 구글 드라이브에 올렸습니다: {export.drive_name(args.blog)} (이 PC: {path})")
+        return 0
     if args.cmd in ("approve", "reject"):
         return _decide(cfg, args.proposal, "승인" if args.cmd == "approve" else "거절", args.text, today)
     _setup_logging(cfg, today)
