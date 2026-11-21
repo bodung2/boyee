@@ -193,7 +193,9 @@ def persona_block(cfg: BloggerConfig) -> str:
     return PERSONA_BLOCK.format(recent=", ".join(recent) or "none", text=text.strip())
 
 
-def write_post(cfg: BloggerConfig, out_dir: Path, today: str, history: list[dict], feedback: str = "") -> Path:
+def write_post(cfg: BloggerConfig, out_dir: Path, today: str, history: list[dict], feedback: str = "",
+               focus: str = "") -> Path:
+    """focus: 이 글만의 주제 방향(2편째 '한국 최신 트렌드' 등). 스킬의 다른 규칙은 그대로 둔다."""
     out_dir.mkdir(parents=True, exist_ok=True)
     skill_file = find_skill(cfg)
     hint = (f"(If the skill is not loaded automatically, read its instructions from {skill_file} and follow them.)"
@@ -202,7 +204,7 @@ def write_post(cfg: BloggerConfig, out_dir: Path, today: str, history: list[dict
           f"{feedback}\n") if feedback else ""
     prompt = WRITE_PROMPT.replace("${skill}", f"${cfg.skill}").format(
         skill=cfg.skill, skill_hint=hint, today=today, history=_history_lines(history), feedback=fb,
-        persona=persona_block(cfg),
+        persona=persona_block(cfg) + (focus or ""),
         min_sources=cfg.min_sources, photos=cfg.photos,
         illustrations=cfg.illustrations)
     (out_dir / "write_prompt.txt").write_text(prompt, encoding="utf-8")

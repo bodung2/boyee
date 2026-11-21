@@ -108,8 +108,10 @@ def _tistory(p: Paths, q: Quest, day: str) -> Result:
 
 
 def _blogger(p: Paths, q: Quest, day: str) -> Result:
+    slot = _opt(q.arg, "--slot", "main")
     for e in _json(p.data / "published_blogger.json", []):
-        if e.get("source") == "autopost" and e.get("date") == day and e.get("url"):
+        if (e.get("source") == "autopost" and e.get("date") == day and e.get("url")
+                and (e.get("slot") or "main") == slot):
             return Result("done", e.get("title", ""), e["url"])
     return Result()
 
@@ -179,7 +181,9 @@ def _prof(q: Quest) -> str:
 KINDS: dict[str, Kind] = {
     "run_daily.bat": Kind("발행", _naver, lambda q, d: [f"{_prof(q)}-{d}.log"], lambda q: [f".run-{_prof(q)}.lock"]),
     "run_tistory_daily.bat": Kind("발행", _tistory, lambda q, d: [f"tistory-{d}.log"], lambda q: [".run-tistory.lock"]),
-    "run_blogger_daily.bat": Kind("발행", _blogger, lambda q, d: [f"blogger-{d}.log"], lambda q: [".run-blogger.lock"]),
+    "run_blogger_daily.bat": Kind("발행", _blogger,
+                                  lambda q, d: [f"blogger-{d}{'-trend' if _opt(q.arg, '--slot', 'main') == 'trend' else ''}.log"],
+                                  lambda q: [".run-blogger.lock"]),
     "run_social.bat": Kind("SNS", _social, lambda q, d: [f"{_prof(q)}-social-{d}.log"], lambda q: []),
     "run_neighbors.bat": Kind("보조", _neighbors, lambda q, d: [f"neighbors-{p}-{d}.log" for p in _NEIGHBOR_PROFILES],
                               lambda q: [f".neighbors-{p}.lock" for p in _NEIGHBOR_PROFILES]),
