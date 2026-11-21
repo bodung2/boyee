@@ -709,3 +709,23 @@ def test_weekly_report_lists_auto_applied_changes(cfg):
     led["proposals"].append({"id": 5, "text": "표를 첫 화면에", "status": "approved", "auto": True, "decided": "2026-11-22"})
     text = review.write_weekly("invest", auto, led, [], "정상", {}, "2026-11-22", [], []).read_text(encoding="utf-8")
     assert "자동 적용한 변경" in text and "**투5** 표를 첫 화면에" in text
+
+
+def test_export_builds_per_post_and_lane_tables_and_uploads(cfg):
+    from growth_lab import export
+    cfg.history_dir.mkdir(parents=True, exist_ok=True)
+    entries = [{"date": day(i), "title": f"교육 글 {i}", "url": url(i), "lane": "AB"[i % 2], "category": "교육 정책",
+                "topic": f"주제{i}", "source": "autopost"} for i in range(4)]
+    (cfg.history_dir / "published_edu.json").write_text(json.dumps(entries, ensure_ascii=False), encoding="utf-8")
+    store.merge_daily(cfg, "edu", {stats_key(url(i)): {day(i + d): i for d in range(16)} for i in range(4)},
+                      [day(i) for i in range(25)])
+    sent = {}
+    path = export.run("edu", cfg, day(25), upload=lambda data, name, mime, state: sent.update(name=name, text=data.decode()))
+    text = path.read_text(encoding="utf-8")
+    assert sent["name"] == "lab_export_edu.md" and sent["text"] == text
+    assert "## 갈래별 요약" in text and "| A | 2 |" in text and "교육 글 3" in text
+
+
+def stats_key(u: str) -> str:
+    from growth_lab.stats import post_key
+    return post_key(u)
