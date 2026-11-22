@@ -279,3 +279,31 @@ def test_auto_register_missing_tasks_once_a_day(tmp_path, monkeypatch):
     assert register.auto_register(["X"], tmp_path, "2026-11-23", fake, "linux") is False         # 윈도우에서만
     monkeypatch.setenv("AUTOPOST_AUTO_REGISTER", "false")
     assert register.auto_register(["Y"], tmp_path, "2026-11-23", fake, "win32") is False
+
+
+def test_childhood_card_shows_activity_sheet_posts_and_queries(tmp_path, monkeypatch):
+    import json as _json
+    from datetime import datetime as _dt
+
+    from quest_board import blogs
+    from quest_board.checks import Paths
+    data, out = tmp_path / "data", tmp_path / "output"
+    (data / "lab").mkdir(parents=True)
+    posts = [{"title": "한글 활동지", "url": "https://blog.naver.com/k/1", "source": "blog"},       # 날짜 없는 직접 쓴 글
+             {"title": "[유아 워크북 제작기 ①] 7영역", "url": "https://blog.naver.com/k/2", "source": "blog"},
+             {"title": "누리과정 인간상", "url": "https://blog.naver.com/k/3", "date": "2026-11-11", "source": "autopost"}]
+    (data / "published_childhood.json").write_text(_json.dumps(posts, ensure_ascii=False), encoding="utf-8")
+    (data / "lab" / "daily_childhood.json").write_text(_json.dumps({
+        "fetched": ["2026-11-19", "2026-11-20"],
+        "posts": {"https://blog.naver.com/k/1": {"2026-11-19": 2, "2026-11-20": 3, "2026-09-01": 10}}}), encoding="utf-8")
+    cap = out / "lab" / "childhood" / "2026-11-21"
+    cap.mkdir(parents=True)
+    (cap / "capture.json").write_text(_json.dumps({"responses": [{"url": "https://x/api/blog/user/referer/total", "json": {
+        "result": {"statDataList": [{"data": {"rows": {"searchQuery": ["유아 한글 활동지", "누리과정 인간상"],
+                                                       "cv": [2, 5]}}}]}}}]}, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(blogs, "_lab_modes", lambda: ([], ["childhood"], []))
+    card = blogs.collect(Paths(data=data, output=out, logs=tmp_path), _dt(2026, 11, 21, 10))[0]
+    assert [r[0] for r in card.freebie] == ["한글 활동지", "[유아 워크북 제작기 ①] 7영역"]
+    assert card.freebie[0][2:] == (5, 15) and card.freebie_queries == [("유아 한글 활동지", 2)]
+    page = blogs.render([card])
+    assert "🎨 활동지 글 (최근 14일 조회 5회)" in page and "유아 한글 활동지(2)" in page
