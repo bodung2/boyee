@@ -26,7 +26,8 @@ log = logging.getLogger(__name__)
 BLOGS = [
     ("invest", "네이버 투자", "published_invest.json", "돈·생활 질문을 공식 숫자로"),
     ("tistory", "티스토리", "published_tistory.json", "방금 나온 것을 먼저 정리하는 선점형"),
-    ("edu", "네이버 교육", "published_edu.json", "교육 정책·교직 실무"),
+    ("edu", "네이버 교육", "published_edu.json", "매일 글: 교육 정책·학부모 교육정보(A·C·D·E)"),
+    ("edu_series", "교육 · 저경력 교사 필수 시리즈", "published_edu_series.json", "교직 실무 시리즈(월·수·금, 교육 블로그)"),
     ("childhood", "네이버 유아", "published_childhood.json", "유아교육 정보"),
     ("market", "네이버 시황", "published_market.json", "평일 매일 시황(투자 블로그)"),
     ("place", "아이와 가볼 곳", "published_place.json", "직접 다녀온 장소(유아 블로그)"),

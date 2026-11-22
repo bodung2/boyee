@@ -32,6 +32,8 @@ class Profile:
     title_pattern: str = ""     # 구조 검증: 제목이 이 정규식을 포함해야 한다(시황 글의 'M월 D일 시황' 등)
     off_topic: str = ""         # 구조 검증: 제목·주제가 이 정규식에 걸리면 다른 블로그 몫이라 쓰지 않는다
     off_topic_note: str = ""    # 그때 글쓰기에 돌려줄 설명
+    lanes: str = ""             # 구조 검증: 이 프로필이 쓰는 레인(비면 제한 없음)
+    lanes_note: str = ""        # 다른 레인이면 글쓰기에 돌려줄 설명
     same_blog_as: str = ""      # 다른 프로필과 같은 블로그에 올린다(블로그 주소·로그인 브라우저를 그 프로필 것으로)
     photos: bool = False        # 블로그 주인이 직접 찍은 사진(places_inbox 폴더)으로 쓰는 글. 새 폴더가 있는 날만 발행
 
@@ -46,9 +48,25 @@ PROFILES: dict[str, Profile] = {
         # 유아(영유아·유치원·어린이집) 주제는 유아 블로그 몫이다(같은 독자를 두 블로그가 나눠 갖지 않게)
         off_topic=r"유아|유치원|어린이집|영유아|누리과정",
         off_topic_note="유아(영유아·유치원·어린이집·누리과정) 주제는 유아 블로그가 씁니다. 초·중·고 주제로 바꾸세요",
+        # 2026-11-22: 교직 실무(B)는 매일 글에서 빼고 '저경력 교사 필수' 시리즈(edu_series, 월·수·금)로만 쓴다
+        lanes="ACDE",
+        lanes_note="교직 실무(B)는 '저경력 교사 필수' 시리즈에서만 씁니다. A·C·D·E 갈래 주제로 바꾸세요",
         neighbor_tab="교육 이웃 후보",
         neighbor_keywords=("교육정책", "고교학점제", "초등 교사", "교직 생활", "학부모 교육정보",
                            "경기도교육청", "수업 나눔", "교사 연수", "초등 학부모", "2022 개정 교육과정"),
+    ),
+    # 교육 블로그 '저경력 교사가 꼭 알아야 할 것' 시리즈(교직 실무, 옛 B 레인): 월·수·금 한 편 더. 규정 수치를 다루므로
+    # 1차 출처 기준을 올리고 더 엄격한 팩트체크 스킬을 쓴다. 같은 블로그(교육)·같은 로그인 브라우저를 쓴다.
+    "edu_series": Profile(
+        name="edu_series", label="교직 실무 시리즈",
+        write_skill="edu-series-post", factcheck_skill="edu-series-factcheck",
+        thumbnail_style="edu", illustrations=True,
+        lane_categories=(("*", "교직 꿀팁"),),
+        off_topic=r"유아|유치원|어린이집|영유아|누리과정",
+        off_topic_note="유아 주제는 유아 블로그가 씁니다. 초·중·고 교사 실무 주제로 바꾸세요",
+        title_pattern=r"^\[저경력 교사 필수",
+        min_sources=10, min_primary=4, min_claims=8,
+        social=False, same_blog_as="edu",
     ),
     "childhood": Profile(
         name="childhood", label="유아교육",

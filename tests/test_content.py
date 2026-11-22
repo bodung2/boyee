@@ -66,3 +66,29 @@ def test_edu_blog_rejects_early_childhood_topics():
     baby = {**post, "title": "유치원 입학 신청 총정리 / 2027 처음학교로 일정"}
     assert any("유아 블로그" in e for e in content.validate(baby, edu))
     assert not [e for e in content.validate(baby, child) if "블로그 주제" in e]
+
+
+def test_edu_daily_skips_lane_b_and_series_requires_strict_sources():
+    """교육 매일 글은 A·C·D·E만, 교직 실무(B)는 '저경력 교사 필수' 시리즈로만 — 시리즈는 1차 출처 기준이 더 높다."""
+    from naver_autopost import profiles
+    edu, series = profiles.get("edu"), profiles.get("edu_series")
+    post = content.normalize(make_post())
+    b_daily = {**post, "lane": "B"}
+    assert any("시리즈" in e for e in content.validate(b_daily, edu))
+    assert not [e for e in content.validate({**post, "lane": "D"}, edu) if "갈래" in e]
+    s = {**post, "lane": "B", "title": "[저경력 교사 필수 ⑨] 비정기 전보 내신, 언제 쓰나?"}
+    errors = content.validate(s, series)
+    assert not [e for e in errors if "제목 형식" in e or "갈래" in e]
+    primary = sum(1 for x in s["sources"] if x.get("primary"))
+    assert (primary < 4) == any("1차 출처가 4개" in e for e in errors)
+    assert any("제목 형식" in e for e in content.validate({**s, "title": "비정기 전보 총정리"}, series))
+
+
+def test_edu_series_shares_the_edu_blog_and_posts_to_tips_category(monkeypatch):
+    from naver_autopost import config
+    for k in ("NAVER_CATEGORY_EDU_SERIES", "NAVER_CATEGORY_EDU", "NAVER_CATEGORY"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("NAVER_BLOG_ID_EDU", "edublog")
+    s, e = config.Config.load("edu_series"), config.Config.load("edu")
+    assert s.blog_id == "edublog" and s.profile_dir == e.profile_dir
+    assert s.history_file.name == "published_edu_series.json" and s.category_for("B") == "교직 꿀팁"
