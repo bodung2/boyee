@@ -30,6 +30,10 @@ def main(argv: list[str] | None = None) -> int:
 
     paths = Paths.load()
     quests, has_live, missing = schedule.load(live=schedule.read_scheduler())
+    if missing:
+        from .register import auto_register
+        if auto_register(missing, paths.data):          # 새로 등록했으면 작업 스케줄러를 다시 읽는다
+            quests, has_live, missing = schedule.load(live=schedule.read_scheduler())
     b = board.build(quests, has_live, missing, days=max(2, args.days), paths=paths)
     out = args.out or paths.output / "quest_board.html"
     out.parent.mkdir(parents=True, exist_ok=True)
