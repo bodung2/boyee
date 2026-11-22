@@ -191,9 +191,47 @@ def _market_brief(cfg: Config, out_dir: Path, today: str) -> str:
     return f"MARKET_BRIEF={_rel(path)}\nDASHBOARD_URL={site}\n"
 
 
+VIEW_AGE = 7      # 발행 후 이 날수까지의 조회수 합으로 클러스터 성적을 본다
+
+
+def _views_brief(cfg: Config, out_dir: Path, today: str) -> str:
+    """성장 실험실이 모은 글별 일별 조회수(data/lab/daily_<프로필>.json)가 있으면, 발행 이력에 7일 조회수를 붙여
+    OUTPUT_DIR/views.json으로 넘긴다(클러스터를 이어 쓸지·접을지 판단용). 없거나 실패하면 빈 문자열."""
+    daily_path = cfg.data_dir / "lab" / f"daily_{cfg.profile.name}.json"
+    if not daily_path.exists():
+        return ""
+    try:
+        from datetime import date as _date, timedelta as _td
+
+        from . import history
+        daily = json.loads(daily_path.read_text(encoding="utf-8"))
+        fetched, posts = set(daily.get("fetched") or []), daily.get("posts") or {}
+        d0 = _date.fromisoformat(today)
+        rows = []
+        for e in history.load(cfg.history_file):
+            if e.get("source") != "autopost" or not e.get("url"):
+                continue
+            pub = _date.fromisoformat(str(e.get("date", ""))[:10])
+            key = e["url"].split("?")[0].split("#")[0].rstrip("/")
+            by_day = posts.get(key, {})
+            days = [(pub + _td(days=i)).isoformat() for i in range(VIEW_AGE + 1)]
+            v7 = (sum(int(by_day.get(d, 0)) for d in days)
+                  if (pub + _td(days=VIEW_AGE)) < d0 and all(d in fetched for d in days) else None)
+            rows.append({"date": pub.isoformat(), "title": e.get("title", ""), "lane": e.get("lane", ""),
+                         "cluster": e.get("cluster", ""), f"views_{VIEW_AGE}d": v7,
+                         "views_total": sum(int(v) for v in by_day.values())})
+        path = out_dir / "views.json"
+        path.write_text(json.dumps(sorted(rows, key=lambda r: r["date"], reverse=True)[:80], ensure_ascii=False,
+                                   indent=1), encoding="utf-8")
+        return f"VIEWS_FILE={_rel(path)}\n"
+    except Exception as e:  # noqa: BLE001 - 조회수 자료가 없어도 글은 쓴다
+        log.warning("조회수 자료를 넘기지 못했습니다: %s", e)
+        return ""
+
+
 def write_post(cfg: Config, out_dir: Path, today: str, feedback: str = "") -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
-    market = _market_brief(cfg, out_dir, today)
+    market = _market_brief(cfg, out_dir, today) + _views_brief(cfg, out_dir, today)
     related = [p for p in sorted(cfg.data_dir.glob("published_*.json")) if p != cfg.history_file]
     prompt = (
         f"/{cfg.profile.write_skill}\n\n"
