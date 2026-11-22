@@ -245,6 +245,10 @@ def write_post(cfg: Config, out_dir: Path, today: str, feedback: str = "") -> Pa
     )
     if cfg.profile.photos:
         prompt = _place_prompt(cfg, out_dir, today, related)
+    if cfg.profile.worksheet:
+        prompt += (f"\nWORKSHEET_FILE={_rel(out_dir / 'worksheet.json')}\n"
+                   "오늘 글은 이미 만들어 둔 무료 활동지(WORKSHEET_FILE, 장 이미지 worksheet_p*.png·미리보기 worksheet_cover.png)의 "
+                   "나눔글이다. 새 활동지를 지어내지 말고 그 활동지를 소개하라. 다운로드 주소는 WORKSHEET_FILE의 pdf_url만 쓴다.")
     lab = _lab_brief(cfg, today)
     if lab:
         prompt += "\n\n" + lab

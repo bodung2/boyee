@@ -266,6 +266,13 @@ def _attempt(cfg: Config, today: str, out_dir: Path, feedback: str, resume: bool
     stage = _stage(out_dir) if resume else {}
     if place is not None and not (out_dir / "photos.json").exists():
         places.prepare(place, out_dir, models_dir=cfg.data_dir / "models")
+    if cfg.profile.worksheet and not stage.get("worksheet"):
+        from worksheets.build import WorksheetRejected, build as build_worksheet
+        try:
+            build_worksheet(cfg, out_dir, today, feedback)
+        except WorksheetRejected as e:
+            raise Rejected(str(e)) from e
+        _mark(out_dir, worksheet=True)
     if not stage.get("written"):
         try:
             generate.write_post(cfg, out_dir, today, feedback)
@@ -493,6 +500,8 @@ def _preflight(cfg: Config) -> None:
             raise RuntimeError(".env에 GEMINI_API_KEY가 없습니다(Gemini 일러스트 생성에 필요)")
         if cfg.image_backend == "openai" and not cfg.openai_api_key:
             raise RuntimeError(".env에 OPENAI_API_KEY가 없습니다(IMAGE_BACKEND=openai)")
+    if cfg.profile.worksheet and cfg.image_backend == "codex" and not shutil.which(cfg.codex_bin):
+        raise RuntimeError("Codex CLI를 찾지 못했습니다(활동지 원화 생성에 필요)")
     if cfg.gpt_factcheck:
         has_codex = cfg.factcheck_backend == "codex" and shutil.which(cfg.codex_bin)
         if not has_codex and not cfg.openai_api_key:

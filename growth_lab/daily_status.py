@@ -14,7 +14,8 @@ from naver_autopost import history
 
 # (이름, 발행 이력 파일). 네이버 프로필은 이력 파일이 있는 것만 싣는다.
 BLOGS = [("네이버 교육", "published_edu.json"), ("교육 시리즈", "published_edu_series.json"), ("네이버 유아", "published_childhood.json"),
-         ("네이버 유아 장소", "published_place.json"), ("네이버 투자", "published_invest.json"),
+         ("네이버 유아 장소", "published_place.json"), ("유아 무료 활동지", "published_worksheet.json"),
+         ("네이버 투자", "published_invest.json"),
          ("네이버 시황", "published_market.json"), ("티스토리", "published_tistory.json"),
          ("구글 블로거", "published_blogger.json")]
 # 실패·경고로 볼 알림(성공 알림에는 글 제목이 들어 있어 싣지 않는다)
