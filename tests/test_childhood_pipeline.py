@@ -779,3 +779,27 @@ def test_unrepairable_post_is_still_rejected(cfg, monkeypatch):
     monkeypatch.setattr(generate, "repair_post", lambda *a: None)
     with pytest.raises(pipeline.Rejected):
         pipeline._attempt(cfg, "2026-10-10", cfg.output_dir / "d", "")
+
+
+def test_views_brief_gives_7_day_views_per_post(tmp_path, monkeypatch):
+    """유아 글쓰기에 지난 글의 7일 조회수를 넘긴다(안 읽히는 클러스터를 일찍 접는 규칙용)."""
+    import json as _json
+
+    from naver_autopost import config, generate
+    cfg = config.Config.load("childhood")
+    cfg.data_dir = tmp_path
+    cfg.history_file = tmp_path / "published_childhood.json"
+    cfg.history_file.write_text(_json.dumps([
+        {"date": "2026-11-01", "title": "a", "url": "https://blog.naver.com/x/1", "cluster": "말하기", "source": "autopost"},
+        {"date": "2026-11-18", "title": "b", "url": "https://blog.naver.com/x/2", "cluster": "누리과정", "source": "autopost"}]),
+        encoding="utf-8")
+    (tmp_path / "lab").mkdir()
+    days = [f"2026-11-{d:02d}" for d in range(1, 21)]
+    (tmp_path / "lab" / "daily_childhood.json").write_text(_json.dumps({
+        "fetched": days, "posts": {"https://blog.naver.com/x/1": {d: 1 for d in days}}}), encoding="utf-8")
+    line = generate._views_brief(cfg, tmp_path, "2026-11-21")
+    rows = {r["title"]: r for r in _json.loads((tmp_path / "views.json").read_text(encoding="utf-8"))}
+    assert line.startswith("VIEWS_FILE=") and rows["a"]["views_7d"] == 8 and rows["a"]["views_total"] == 20
+    assert rows["b"]["views_7d"] is None                       # 아직 7일이 안 됨
+    (tmp_path / "lab" / "daily_childhood.json").unlink()
+    assert generate._views_brief(cfg, tmp_path, "2026-11-21") == ""
