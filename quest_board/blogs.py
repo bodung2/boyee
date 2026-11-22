@@ -31,6 +31,7 @@ BLOGS = [
     ("childhood", "네이버 유아", "published_childhood.json", "유아교육 정보"),
     ("market", "네이버 시황", "published_market.json", "평일 매일 시황(투자 블로그)"),
     ("place", "아이와 가볼 곳", "published_place.json", "직접 다녀온 장소(유아 블로그)"),
+    ("worksheet", "무료 활동지", "published_worksheet.json", "유아 무료 활동지 나눔(화·목·토, 유아 블로그)"),
     ("blogger", "구글 블로거", "published_blogger.json", "영어 글"),
 ]
 WINDOW = 14            # 최근 조회 비교 기간(일)
@@ -334,7 +335,11 @@ def collect(paths: Paths | None = None, now: datetime | None = None) -> list[Car
             if key == "tistory":
                 card.login = _login(p.data)
             if key == "childhood":
-                _freebie(card, p.data / "lab", p.output, entries, now)
+                # 무료 활동지 나눔글(published_worksheet.json)도 유아 블로그 글이라 함께 센다(주소가 같으면 한 번만)
+                urls = {e.get("url") for e in entries}
+                sheets = [e for e in _json(p.data / "published_worksheet.json", []) or []
+                          if e.get("url") and e.get("url") not in urls]
+                _freebie(card, p.data / "lab", p.output, entries + sheets, now)
             if key == "blogger":
                 _index(card, p.data, now)
         except Exception as e:  # noqa: BLE001 - 한 블로그를 못 읽어도 나머지는 보여 준다

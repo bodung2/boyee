@@ -40,3 +40,6 @@ data/life_dashboard_app_drive.json
 # 모든 알림 기록(하루 상태 보고가 실패·경고를 모은다)
 data/alerts.jsonl
 data/remote_requests_done.json
+
+# 무료 활동지: 원화 보관함·드라이브 파일 기록(집 PC에만, 그림이 쌓여 계속 다시 씀)
+data/worksheets/

@@ -171,7 +171,7 @@ def _article(post: dict) -> str:
 
 def _instructions(cfg: Config) -> str:
     extra = {"childhood": CHILDHOOD_EXTRA, "invest": INVEST_EXTRA, "market": MARKET_EXTRA,
-             "place": PLACE_EXTRA}.get(cfg.profile.name, "")
+             "place": PLACE_EXTRA, "worksheet": CHILDHOOD_EXTRA}.get(cfg.profile.name, "")
     return FACTCHECK_INSTRUCTIONS.format(extra=extra)
 
 

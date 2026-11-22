@@ -36,6 +36,7 @@ class Profile:
     lanes_note: str = ""        # 다른 레인이면 글쓰기에 돌려줄 설명
     same_blog_as: str = ""      # 다른 프로필과 같은 블로그에 올린다(블로그 주소·로그인 브라우저를 그 프로필 것으로)
     photos: bool = False        # 블로그 주인이 직접 찍은 사진(places_inbox 폴더)으로 쓰는 글. 새 폴더가 있는 날만 발행
+    worksheet: bool = False     # 글 쓰기 전에 무료 활동지 한 세트(worksheets 패키지)를 먼저 만들어 그 나눔글을 쓴다
 
 
 PROFILES: dict[str, Profile] = {
@@ -96,6 +97,20 @@ PROFILES: dict[str, Profile] = {
         ),
         min_sources=2, min_primary=1, min_claims=3, min_body_chars=1200, max_title=45,
         social=False, same_blog_as="childhood",   # 함께 보면 좋은 글은 스킬이 직접 고른다
+    ),
+    # 무료 활동지 나눔(2026-11-22 블로그 주인 결정, 주 3회): 유아 블로그에 1~2장짜리 무료 활동지와 나눔글을 올린다.
+    # 활동지는 worksheets 패키지가 먼저 만든다(설계 → 원화 보관함의 그림 재사용·없는 것만 새로 → 코드로 그리기 →
+    # Claude 검수 → 드라이브 공유 링크). 판매 링크·구매 표현은 겸직 허가 전까지 금지(무료 나눔만).
+    "worksheet": Profile(
+        name="worksheet", label="무료 활동지",
+        write_skill="worksheet-post", factcheck_skill="worksheet-factcheck",
+        thumbnail_style="childhood", illustrations=False, worksheet=True,
+        extra_forbidden=(
+            "정상/지연", "통과해야", "못하면 발달", "smartstore.naver.com", "coupang.com", "kmong.com",
+            "크몽", "구매 링크", "구매하기", "판매 중", "결제",
+        ),
+        min_sources=3, min_primary=1, min_claims=3, min_body_chars=1000, max_title=40,
+        social=False, same_blog_as="childhood",
     ),
     # 투자 블로그: 티스토리 '숫자로 보는 한국'(stats-auto-post)의 '통념 × 공식 숫자' 방식을 돈·부동산·일상 주제로 옮긴 글.
     # 홈피드·검색 유입용 후킹 제목/썸네일. 글쓴이 신원(교사)은 드러내지 않는다.

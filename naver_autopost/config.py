@@ -122,7 +122,8 @@ class Config:
         return cls(
             profile=profile,
             blog_id=(per_blog("NAVER_BLOG_ID") or env("NAVER_BLOG_ID", "")).strip(),
-            category=(env(f"NAVER_CATEGORY_{own}") or {"market": "매일 시황", "place": "아이와 가볼 곳"}.get(profile.name)
+            category=(env(f"NAVER_CATEGORY_{own}") or {"market": "매일 시황", "place": "아이와 가볼 곳",
+                                                       "worksheet": "무료 활동지"}.get(profile.name)
                       or env("NAVER_CATEGORY", "")).strip(),
             browser_channel=env("BROWSER_CHANNEL", "chrome").strip(),
             headless=_bool("HEADLESS", False),
@@ -158,7 +159,8 @@ class Config:
             gpt_factcheck=_bool("GPT_FACTCHECK", True),
             gpt_check_rounds=max(1, int(env("GPT_CHECK_ROUNDS", "2"))),
             illustration_count=int(env("ILLUSTRATION_COUNT", "2")),
-            infographic=_bool("INFOGRAPHIC", True) and not profile.photos,   # 사진 글에는 AI 인포그래픽을 넣지 않는다
+            infographic=(_bool("INFOGRAPHIC", True) and not profile.photos    # 사진 글·활동지 나눔글에는 인포그래픽을 넣지 않는다
+                         and not profile.worksheet),
             infographic_skill=env("INFOGRAPHIC_SKILL", "onepage").strip(),
             infographic_timeout=int(env("INFOGRAPHIC_TIMEOUT_SEC", "900")),
             # 소셜 계정은 블로그마다 따로: THREADS_ACCESS_TOKEN_EDU / THREADS_ACCESS_TOKEN_CHILDHOOD …
@@ -177,7 +179,8 @@ class Config:
             # 아침 발행이 막히면 이 시각에 예약 작업이 한 번 더 돌린다(setup_windows.ps1 -RetryTime과 같게). off면 끔
             # 기본값: 교육 11:00(06:00 발행), 유아 15:00(12:00 발행), 투자 10:00(07:00 발행), 시황 19:30(17:30 발행)
             retry_time=(env(f"RETRY_TIME_{profile.name.upper()}")
-                        or {"childhood": "15:00", "invest": "10:00", "market": "19:30", "place": "off"}.get(profile.name, "11:00")).strip(),
+                        or {"childhood": "15:00", "invest": "10:00", "market": "19:30", "place": "off",
+                            "worksheet": "off"}.get(profile.name, "11:00")).strip(),
             telegram_bot_token=env("TELEGRAM_BOT_TOKEN", "").strip(),
             telegram_chat_id=env("TELEGRAM_CHAT_ID", "").strip(),
             places_inbox=Path(env("PLACES_INBOX") or str(ROOT / "places_inbox")),
