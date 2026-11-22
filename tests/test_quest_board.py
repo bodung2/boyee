@@ -261,3 +261,21 @@ def test_blogger_trend_slot_checked_separately(tmp_path):
     two = Quest("BloggerAutoPost2", "run_blogger_daily.bat", "--slot trend")
     assert checks.check(p, main, "2026-11-21").title == "main"
     assert checks.check(p, two, "2026-11-21").title == "trend"
+
+
+def test_auto_register_missing_tasks_once_a_day(tmp_path, monkeypatch):
+    from quest_board import register
+    calls = []
+
+    def fake(names):
+        calls.append(list(names))
+        return True, "등록: " + ",".join(names)
+    monkeypatch.delenv("AUTOPOST_AUTO_REGISTER", raising=False)
+    assert register.auto_register(["A", "B"], tmp_path, "2026-11-22", fake, "win32") is True
+    assert register.auto_register(["A", "B"], tmp_path, "2026-11-22", fake, "win32") is False   # 같은 날 다시 안 함
+    assert register.auto_register(["A", "C"], tmp_path, "2026-11-22", fake, "win32") is True     # 새 작업만
+    assert calls == [["A", "B"], ["C"]]
+    assert register.auto_register(["A"], tmp_path, "2026-11-23", fake, "win32") is True          # 다음 날 다시 시도
+    assert register.auto_register(["X"], tmp_path, "2026-11-23", fake, "linux") is False         # 윈도우에서만
+    monkeypatch.setenv("AUTOPOST_AUTO_REGISTER", "false")
+    assert register.auto_register(["Y"], tmp_path, "2026-11-23", fake, "win32") is False
