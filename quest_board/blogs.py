@@ -70,6 +70,8 @@ class Card:
     login: str = ""
     index: dict = field(default_factory=dict)       # 구글 블로거 색인 감시 마지막 요약
     index_first: dict = field(default_factory=dict)  # 색인 감시 첫날 요약(변화 비교용)
+    freebie: list[tuple[str, str, int, int]] = field(default_factory=list)   # 활동지 글 (제목, 주소, 최근 조회, 누적)
+    freebie_queries: list[tuple[str, int]] = field(default_factory=list)    # 활동지 관련 유입 검색어 (검색어, 조회)
     note_date: str = ""
     note_html: str = ""
     titles: dict = field(default_factory=dict)       # 글 주소 → 제목(검색에 나온 글 표시용)
@@ -133,6 +135,37 @@ def _views(card: Card, lab: Path, entries: list[dict], now: datetime) -> None:
         if n:
             top.append((titles[k][0], titles[k][1], n))
     card.top_posts = sorted(top, key=lambda t: -t[2])[:3]
+
+
+FREEBIE = re.compile(r"활동지|워크북|학습지|프린트|색칠|오리기")    # 블로그 주인이 만든 유아 활동지 홍보 글·검색어
+
+
+def _freebie(card: Card, lab: Path, output: Path, entries: list[dict], now: datetime) -> None:
+    """유아 블로그 목표 중 하나인 '활동지 알리기'가 얼마나 읽히는지: 활동지 글 조회수와 활동지 관련 유입 검색어.
+    직접 쓴 글(발행 날짜가 기록에 없는 글)도 일별 조회수는 모이고 있어 그대로 센다."""
+    posts = (_json(lab / f"daily_{card.key}.json", {}) or {}).get("posts") or {}
+    recent = {(now - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(1, WINDOW + 1)}
+    rows = []
+    for e in entries:
+        if not FREEBIE.search(str(e.get("title", ""))):
+            continue
+        by_day = posts.get(_key(e["url"]), {})
+        rows.append((e.get("title", ""), e["url"], sum(int(v or 0) for d, v in by_day.items() if d in recent),
+                     sum(int(v or 0) for v in by_day.values())))
+    card.freebie = sorted(rows, key=lambda r: (-r[2], -r[3]))
+    caps = sorted((output / "lab" / card.key).glob("*/capture.json"))
+    if not caps:
+        return
+    found: dict[str, int] = {}
+    for r in (_json(caps[-1], {}) or {}).get("responses", []):
+        if "referer" not in str(r.get("url", "")):
+            continue
+        for item in (((r.get("json") or {}).get("result") or {}).get("statDataList") or []):
+            rows_ = ((item.get("data") or {}).get("rows") or {})
+            for q, cv in zip(rows_.get("searchQuery") or [], rows_.get("cv") or []):
+                if FREEBIE.search(str(q)):
+                    found[str(q)] = max(found.get(str(q), 0), int(cv or 0))
+    card.freebie_queries = sorted(found.items(), key=lambda x: -x[1])[:8]
 
 
 def _ledger(card: Card, lab: Path) -> None:
@@ -300,6 +333,8 @@ def collect(paths: Paths | None = None, now: datetime | None = None) -> list[Car
                 _review(card, p.output)
             if key == "tistory":
                 card.login = _login(p.data)
+            if key == "childhood":
+                _freebie(card, p.data / "lab", p.output, entries, now)
             if key == "blogger":
                 _index(card, p.data, now)
         except Exception as e:  # noqa: BLE001 - 한 블로그를 못 읽어도 나머지는 보여 준다
@@ -456,6 +491,14 @@ def _card(c: Card) -> str:
     if c.explore:
         out.append(f'<div class="sec"><h4>🔍 다음에 시험할 주제</h4><div class="chips">'
                    + "".join(f'<span class="chip">{escape(x)}</span>' for x in c.explore) + "</div></div>")
+    if c.freebie:
+        total = sum(r[2] for r in c.freebie)
+        qs = (" · 활동지 관련 유입 검색어: " + ", ".join(f"{escape(q)}({n})" for q, n in c.freebie_queries)
+              if c.freebie_queries else " · 활동지 관련 유입 검색어는 아직 없어요")
+        out.append(f'<div class="sec"><h4>🎨 활동지 글 (최근 {WINDOW}일 조회 {total:,}회)</h4>'
+                   f'<div class="ev">{qs}</div>' + _li(
+                       [f'<a href="{escape(u)}" target="_blank" rel="noopener">{escape(t[:50])}</a> '
+                        f'<small>최근 {n:,}회 · 누적 {tot:,}회</small>' for t, u, n, tot in c.freebie[:6]]) + "</div>")
     if c.top_posts:
         out.append(f'<div class="sec"><h4>최근 {WINDOW}일 많이 읽힌 글</h4>' + _li(
             [f'<a href="{escape(u)}" target="_blank" rel="noopener">{escape(t[:60] or u)}</a> <small>{n:,}회</small>'

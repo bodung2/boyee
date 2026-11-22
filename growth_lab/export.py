@@ -62,6 +62,9 @@ def build(blog: str, cfg: LabConfig, today: str) -> str:
               "|---|---|---|---|---|---|---|---|---|"]
     for e in sorted(entries, key=lambda e: str(e.get("date", "")), reverse=True):
         p = by_key.get(post_key(e["url"]), {})
+        if not p:       # 날짜가 기록에 없는 직접 쓴 글도 일별 조회수는 모인다 → 누적만이라도 보여 준다
+            by_day = (daily.get("posts") or {}).get(post_key(e["url"]), {})
+            p = {"views_now": sum(int(v) for v in by_day.values())} if by_day else {}
         title = str(e.get("title", "")).replace("|", "/")
         lines.append(f"| {str(e.get('date', ''))[:10]} | {group(e)} | {e.get('category', '') or '-'} | "
                      f"{str(e.get('topic', '') or '-').replace('|', '/')[:40]} | {title} | {_fmt(p.get('v1'))} | "
