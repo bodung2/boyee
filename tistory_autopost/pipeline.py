@@ -82,7 +82,8 @@ def _scoop_brief(cfg: TistoryConfig, today: date, slot: int, entries: list[dict]
     """선점형: 레이더로 방금 나온 것을 모아 후보를 준다. 레이더가 비어도 글쓰기 단계가 직접 찾는다."""
     from . import radar
     try:
-        ranked = radar.collect(cfg.topics_file, radar.written_ids(entries))
+        ranked = radar.collect(cfg.topics_file, radar.written_ids(entries),
+                               cooldown=radar.ai_tools_on_cooldown(entries, today.isoformat()))
     except Exception as e:  # noqa: BLE001 - 레이더 문제로 그날 글이 멈추면 안 된다
         log.warning("레이더 실패(글쓰기 단계가 직접 찾습니다): %s", e)
         ranked = []

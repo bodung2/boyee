@@ -22,7 +22,9 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"
-KIND_WEIGHT = {"game": 30, "ai_tool": 28, "trend": 20}
+# 2026-11-22 조회수 분석: 스팀 세일·윈도우 업데이트·게임은 읽히고 AI 도구 버전 글은 거의 0 → AI 도구 비중을 낮춘다
+KIND_WEIGHT = {"game": 30, "ai_tool": 14, "trend": 22}
+AI_TOOL_COOLDOWN_DAYS = 14     # 같은 도구(저장소)는 이 기간에 한 번만 후보로 올린다
 
 
 @dataclass
@@ -147,9 +149,26 @@ SOURCES = {"steam": steam, "github": github, "rss": rss}
 
 # ---------------------------------------------------------------- 모으기·점수
 
+def _tool_key(topic_id: str) -> str:
+    """'ai-openai-codex-0-171-0' → 'ai-openai-codex'(버전 앞까지)."""
+    m = re.match(r"^(ai-.*?)-v?\d", topic_id)
+    return m.group(1) if m else topic_id
+
+
+def ai_tools_on_cooldown(history: list[dict], today: str, days: int = AI_TOOL_COOLDOWN_DAYS) -> set[str]:
+    """최근 days일 안에 글을 쓴 AI 도구 저장소(topic_id 'ai-<저장소>-<버전>'의 앞부분)."""
+    since = (datetime.fromisoformat(today) - timedelta(days=days - 1)).date().isoformat()
+    out = set()
+    for e in history:
+        tid = str(e.get("topic_id") or "")
+        if tid.startswith("ai-") and str(e.get("date", ""))[:10] >= since and e.get("source", "autopost") == "autopost":
+            out.add(_tool_key(tid))
+    return out
+
+
 def collect(sources_file: Path, written_ids: set[str], now: datetime | None = None, fetch=None,
-            with_suggestions: int = 4) -> list[Scoop]:
-    """켜진 소스에서 후보를 모아 점수순으로 돌려준다. 이미 쓴 id는 뺀다."""
+            with_suggestions: int = 4, cooldown: set[str] | None = None) -> list[Scoop]:
+    """켜진 소스에서 후보를 모아 점수순으로 돌려준다. 이미 쓴 id와 쉬는 AI 도구(cooldown)는 뺀다."""
     now = now or datetime.now(timezone.utc)
     fetch = fetch or _get
     conf = json.loads(sources_file.read_text(encoding="utf-8")) if sources_file.exists() else {}
@@ -168,6 +187,8 @@ def collect(sources_file: Path, written_ids: set[str], now: datetime | None = No
     ranked = []
     for s in found:
         if s.id in seen or s.id in written_ids:
+            continue
+        if s.kind == "ai_tool" and _tool_key(s.id) in (cooldown or set()):
             continue
         seen.add(s.id)
         s.score, s.why = _score(s, now)
