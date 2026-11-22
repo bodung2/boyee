@@ -1,6 +1,15 @@
 {
   "_about": "Claude 대화에서 보낸 '지금 해 줘' 요청. 집 PC가 매시간 퀘스트 보드 갱신 때 한 번씩 실행한다(quest_board/requests.py의 허용 목록만).",
   "requests": [
-    {"id": "2026-11-22-invest-export", "action": "export", "blog": "invest"}
+    {
+      "id": "2026-11-22-invest-export",
+      "action": "export",
+      "blog": "invest"
+    },
+    {
+      "id": "2026-11-22-tistory-export",
+      "action": "export",
+      "blog": "tistory"
+    }
   ]
 }
