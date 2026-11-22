@@ -307,3 +307,20 @@ def test_childhood_card_shows_activity_sheet_posts_and_queries(tmp_path, monkeyp
     assert card.freebie[0][2:] == (5, 15) and card.freebie_queries == [("유아 한글 활동지", 2)]
     page = blogs.render([card])
     assert "🎨 활동지 글 (최근 14일 조회 5회)" in page and "유아 한글 활동지(2)" in page
+
+
+def test_remote_requests_run_once_and_only_allowed(tmp_path):
+    import json as _json
+
+    from quest_board import requests
+    repo, local = tmp_path / "repo", tmp_path / "local"
+    repo.mkdir()
+    (repo / requests.REQUESTS).write_text(_json.dumps({"requests": [
+        {"id": "a", "action": "export", "blog": "invest"},
+        {"id": "b", "action": "shell", "cmd": "del *"},
+        {"id": "c", "action": "export", "blog": "nope"}]}), encoding="utf-8")
+    ran = []
+    spawn = lambda cmd, log: ran.append(cmd[-3:])  # noqa: E731
+    assert requests.run_pending(repo, local, tmp_path / "logs", spawn) == ["a"]
+    assert ran == [["export", "--blog", "invest"]]
+    assert requests.run_pending(repo, local, tmp_path / "logs", spawn) == []          # 한 번만

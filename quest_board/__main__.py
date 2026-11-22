@@ -9,6 +9,7 @@ from pathlib import Path
 
 from . import board, html, schedule
 from .checks import Paths
+from .schedule import ROOT
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -29,6 +30,13 @@ def main(argv: list[str] | None = None) -> int:
         return serve(args.port)
 
     paths = Paths.load()
+    try:   # Claude 대화에서 보낸 '지금 해 줘' 요청(예: 투자 블로그 자료 지금 수집)을 띄운다
+        from .requests import run_pending
+        started = run_pending(ROOT / "data", paths.data, paths.logs)
+        if started:
+            print("대화에서 온 요청을 실행했습니다: " + ", ".join(started))
+    except Exception as e:  # noqa: BLE001 - 요청 처리 실패로 보드가 멈추지 않게
+        print(f"⚠️ 대화 요청 처리 실패: {e}")
     quests, has_live, missing = schedule.load(live=schedule.read_scheduler())
     if missing:
         from .register import auto_register
