@@ -803,3 +803,21 @@ def test_views_brief_gives_7_day_views_per_post(tmp_path, monkeypatch):
     assert rows["b"]["views_7d"] is None                       # 아직 7일이 안 됨
     (tmp_path / "lab" / "daily_childhood.json").unlink()
     assert generate._views_brief(cfg, tmp_path, "2026-11-21") == ""
+
+
+def test_childhood_thumbnail_uses_first_illustration_scene(tmp_path, monkeypatch):
+    """유아 블로그도 투자 블로그처럼 검수를 통과한 첫 일러스트를 썸네일 배경으로 쓴다(없으면 단색)."""
+    from PIL import Image
+
+    from naver_autopost import config, images, pipeline
+    calls = []
+    monkeypatch.setattr(images, "make_thumbnail_scene", lambda thumb, bg, out, tone, **k: calls.append(("scene", bg.name)) or out)
+    monkeypatch.setattr(images, "make_thumbnail_childhood", lambda thumb, dom, out, **k: calls.append(("solid", None)) or out)
+    monkeypatch.setattr(images, "make_card", lambda card, out, **k: out)
+    cfg = config.Config.load("childhood")
+    post = {"thumbnail": {"main_lines": ["질문"]}, "card": {}, "domain": "L", "body_html": "<p>x</p>",
+            "illustrations": [{"name": "illust_a"}, {"name": "illust_b"}]}
+    pipeline.render_images(cfg, post, tmp_path)                       # 그림 파일이 없으면 단색
+    Image.new("RGB", (64, 36), "#ffffff").save(tmp_path / "illust_b.png")
+    pipeline.render_images(cfg, post, tmp_path)                       # 검수를 통과해 남은 첫 그림
+    assert calls == [("solid", None), ("scene", "illust_b.png")]
