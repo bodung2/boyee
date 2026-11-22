@@ -13,7 +13,7 @@ from pathlib import Path
 from naver_autopost import history
 
 # (이름, 발행 이력 파일). 네이버 프로필은 이력 파일이 있는 것만 싣는다.
-BLOGS = [("네이버 교육", "published_edu.json"), ("네이버 유아", "published_childhood.json"),
+BLOGS = [("네이버 교육", "published_edu.json"), ("교육 시리즈", "published_edu_series.json"), ("네이버 유아", "published_childhood.json"),
          ("네이버 유아 장소", "published_place.json"), ("네이버 투자", "published_invest.json"),
          ("네이버 시황", "published_market.json"), ("티스토리", "published_tistory.json"),
          ("구글 블로거", "published_blogger.json")]

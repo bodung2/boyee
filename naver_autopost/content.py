@@ -154,6 +154,8 @@ def validate(post: dict, profile: Profile | None = None, after_factcheck: bool =
 
     if profile and profile.off_topic and re.search(profile.off_topic, f"{title} {post.get('topic', '')}"):
         errors.append(f"이 블로그 주제가 아닙니다: '{title}' — {profile.off_topic_note or profile.off_topic}")
+    if profile and profile.lanes and str(post.get("lane") or "").strip().upper()[:1] not in profile.lanes:
+        errors.append(f"이 글의 갈래({post.get('lane') or '-'})는 여기서 쓰지 않습니다 — {profile.lanes_note or profile.lanes}")
     if profile and profile.title_pattern and not re.search(profile.title_pattern, title):
         errors.append(f"제목 형식이 다릅니다: '{title}' (이 블로그는 '{profile.title_pattern}' 형식으로 시작해야 합니다)")
 
