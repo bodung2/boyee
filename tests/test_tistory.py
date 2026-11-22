@@ -1482,3 +1482,26 @@ def test_keepalive_pops_up_login_window_with_short_wait(cfg, monkeypatch):
     monkeypatch.setattr(pipeline, "_share_login_failure", lambda c: None)
     monkeypatch.setattr(pipeline, "notify", lambda c, text: None)
     assert pipeline.keepalive(cfg) == 0 and opened == [30]
+
+
+def test_radar_cools_down_ai_tool_versions_and_ranks_them_lower(tmp_path):
+    """AI 코딩 도구 버전 글은 거의 안 읽혀서(11편 2회) 같은 도구는 14일에 한 번만, 점수도 게임·화제보다 낮게."""
+    import json as _json
+
+    from tistory_autopost import radar
+    hist = [{"date": "2026-11-20", "topic_id": "ai-openai-codex-0-170-0", "source": "autopost"},
+            {"date": "2026-10-01", "topic_id": "ai-anthropics-claude-code-2-1-300", "source": "autopost"}]
+    cool = radar.ai_tools_on_cooldown(hist, "2026-11-22")
+    assert cool == {"ai-openai-codex"}                       # 10/1 클로드 코드는 14일이 지나 다시 후보
+    src = tmp_path / "src.json"
+    src.write_text(_json.dumps({"github": {"enabled": True, "repos": ["openai/codex", "anthropics/claude-code"]}}),
+                   encoding="utf-8")
+
+    def fetch(url, timeout=15):
+        repo = url.split("/repos/")[1].split("/releases")[0]
+        return _json.dumps([{"tag_name": "0.171.0" if "codex" in repo else "2.1.330",
+                             "published_at": "2026-11-21T00:00:00Z", "html_url": "https://x", "body": ""}]).encode()
+    ranked = radar.collect(src, set(), fetch=fetch, with_suggestions=0,
+                           cooldown=radar.ai_tools_on_cooldown(hist, "2026-11-22"))
+    assert [s.title for s in ranked] == ["anthropics/claude-code 2.1.330"]
+    assert radar.KIND_WEIGHT["ai_tool"] < radar.KIND_WEIGHT["game"]

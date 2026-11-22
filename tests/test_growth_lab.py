@@ -745,3 +745,34 @@ def test_export_reads_the_newest_capture_not_the_diagnose_folder(cfg):
         os.utime(f, (when, when))
     text = export.build("invest", cfg, "2026-11-22")
     assert "NEW" in text and "OLD" not in text
+
+
+def test_cooling_caps_same_topic_at_two_posts_a_week(cfg):
+    """같은 주제는 7일에 2편까지: 3편째는 안내에서 빼고, 써 오면 다시 쓰게 한다(사교육비 8연속 방지)."""
+    cfg.history_dir.mkdir(parents=True, exist_ok=True)
+    entries = [{"date": f"2026-11-{d}", "title": f"글{d}", "url": url(d), "lab_topic": "사교육비", "lab_mode": "집중",
+                "source": "autopost"} for d in (20, 21)]
+    (cfg.history_dir / "published_invest.json").write_text(json.dumps(entries, ensure_ascii=False), encoding="utf-8")
+    led = store.empty_ledger()
+    led["topics"]["사교육비"] = {"status": "promising", "ratio": 2.9}
+    store.save_ledger(cfg, "invest", led)
+    assert brief.cooling("invest", cfg, entries, "2026-11-22") == {"사교육비": 2}
+    assert brief.cooling("invest", cfg, entries, "2026-11-28") == {}            # 7일이 지나면 다시 쓸 수 있다
+    text = brief._brief("invest", "2026-11-22", 1, cfg)
+    assert "쉬는 주제" in text and "사교육비(2편)" in text and "- 사교육비 | 점수" not in text   # 유망 목록에서도 빠짐
+    assert "최근 7일" in brief.check_post("invest", {"lab_topic": "사교육비"}, cfg, "2026-11-22")
+    assert brief.check_post("invest", {"lab_topic": "직렬별 봉급표"}, cfg, "2026-11-22") == ""
+
+
+def test_demand_by_autocomplete_without_api_key():
+    from growth_lab import demand
+
+    def fetch(u, timeout=8):
+        q = u.split("q=")[1].split("&")[0]
+        if "naver" in u:
+            items = [[["공무원 봉급표 2027"], ["공무원 봉급표 9급"], ["다른 말"]]] if "%EA%B3%B5" in q else [[]]
+            return json.dumps({"items": items}).encode()
+        return json.dumps(["x", ["공무원 봉급표 7급"] if "%EA%B3%B5" in q else []]).encode()
+    assert demand.suggest_score(["공무원 봉급표"], fetch) == 0.3
+    assert demand.suggest_score(["아무도안치는말"], fetch) == 0.0
+    assert demand.suggest_score(["공무원 봉급표"], lambda u, timeout=8: (_ for _ in ()).throw(OSError("x"))) is None

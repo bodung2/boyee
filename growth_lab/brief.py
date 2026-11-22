@@ -21,6 +21,11 @@ log = logging.getLogger(__name__)
 LAB_MODES = ("시험 계속", "집중", "탐색", "기본")
 EXPLOIT = ("core", "promising")
 STALE_AFTER = 3
+# 같은 주제 연속 쓰기 상한(2026-11-22 블로그 주인 승인): 투자 블로그 사교육비 8연속(11/14~21, 전부 0~1회)과
+# 티스토리 AI 도구 버전 글 11편(거의 0회)처럼, 잘 된 주제를 몰아 쓰면 비슷한 글끼리 노출을 나눠 먹고 홈피드에서도 밀린다.
+# 최근 COOL_DAYS일 안에 COOL_MAX편을 쓴 주제는 그 기간이 지날 때까지 쉰다.
+COOL_DAYS = 7
+COOL_MAX = 2
 
 
 def _norm(name: str) -> str:
@@ -78,6 +83,28 @@ def plan(blog: str, cfg: LabConfig, ledger: dict, entries: list[dict], can_measu
     return {"mode": "기본", "topic": "", "exploit": []}
 
 
+def cooling(blog: str, cfg: LabConfig, entries: list[dict], today: str) -> dict[str, int]:
+    """최근 COOL_DAYS일 안에 COOL_MAX편 이상 쓴 주제 → 그 편수. 오늘은 그 주제를 쓰지 않는다."""
+    from datetime import date, timedelta
+    try:
+        since = (date.fromisoformat(today) - timedelta(days=COOL_DAYS - 1)).isoformat()
+    except ValueError:
+        return {}
+    maps = topic_maps(cfg.history_dir)
+    counts: dict[str, int] = {}
+    for e in entries:
+        if e.get("source") != "autopost" or str(e.get("date", ""))[:10] < since:
+            continue
+        t = topic_of(blog, e, maps)
+        if t and t != OWN:
+            counts[t] = counts.get(t, 0) + 1
+    return {t: n for t, n in counts.items() if n >= COOL_MAX}
+
+
+def _cooled(name: str, cool: dict[str, int]) -> bool:
+    return any(similar(name, c) for c in cool)
+
+
 def _graveyard_lines(ledger: dict, n: int = 40) -> list[str]:
     return [f"- {g['name']} — {g.get('reason', '')[:80]}" for g in ledger.get("graveyard", [])[-n:]]
 
@@ -99,6 +126,14 @@ def _brief(blog: str, today: str, slot: int, cfg: LabConfig) -> str:
     ledger = store.load_ledger(cfg, blog)
     entries = history.load(cfg.history_file(blog))
     p = plan(blog, cfg, ledger, entries, measuring(cfg, blog))
+    cool = cooling(blog, cfg, entries, today)
+    if cool:
+        p["exploit"] = [t for t in p.get("exploit", []) if not _cooled(t, cool)]
+        if p["mode"] == "시험 계속" and _cooled(p["topic"], cool):
+            p = {"mode": "기본", "topic": "", "exploit": p["exploit"],
+                 "note": f"시험 중인 「{p['topic']}」는 최근 {COOL_DAYS}일에 {COOL_MAX}편을 써서 쉬는 중"}
+        elif p["mode"] == "집중" and not p["exploit"]:
+            p = {"mode": "탐색", "topic": "", "exploit": []}
     topics = ledger.get("topics", {})
     lines = [
         "[성장 실험실 안내] 블로그 주인이 아니라 자동 실험 시스템이 조회수·검색 순위를 보고 정한 오늘의 방향이다.",
@@ -134,6 +169,10 @@ def _brief(blog: str, today: str, slot: int, cfg: LabConfig) -> str:
         lines.append("\n탐색 후보(검색 수요 = 기준 검색어 대비 배수):")
         for c in queue[:5]:
             lines.append(f"- {c['name']} | 검색어: {', '.join(c.get('keywords', [])[:5])} | 수요 {c.get('demand', '-')} | {c.get('why', '')[:80]}")
+    if cool:
+        lines.append(f"\n쉬는 주제(최근 {COOL_DAYS}일에 {COOL_MAX}편 이상 씀 — 오늘은 이 주제·비슷한 주제 금지, "
+                     "같은 주제를 몰아 쓰면 비슷한 글끼리 노출을 나눠 먹는다): "
+                     + ", ".join(f"{t}({n}편)" for t, n in sorted(cool.items(), key=lambda x: -x[1])))
     known = sorted({n for n in topics if n != OWN} | {topic_of(blog, e, topic_maps(cfg.history_dir))
                                                        for e in entries[-40:] if e.get("source") == "autopost"})
     if known:
@@ -155,7 +194,7 @@ def _brief(blog: str, today: str, slot: int, cfg: LabConfig) -> str:
     return "\n".join(lines)
 
 
-def check_post(blog: str, post: dict, cfg: LabConfig | None = None) -> str:
+def check_post(blog: str, post: dict, cfg: LabConfig | None = None, today: str | None = None) -> str:
     """쓴 글이 무덤 주제면 거절 사유를 돌려준다(다른 주제로 다시 쓰게). 문제없으면 빈 문자열."""
     try:
         cfg = cfg or LabConfig.load()
@@ -166,6 +205,12 @@ def check_post(blog: str, post: dict, cfg: LabConfig | None = None) -> str:
         if g:
             return (f"성장 실험실 무덤에 있는 주제입니다(「{g['name']}」: {g.get('reason', '')[:80]}). "
                     "무덤·이미 다룬 주제와 다른 주제로 다시 써라.")
+        from datetime import date
+        cool = cooling(blog, cfg, history.load(cfg.history_file(blog)), today or date.today().isoformat())
+        topic = str(post.get("lab_topic") or "")
+        if topic and _cooled(topic, cool):
+            return (f"「{topic}」는 최근 {COOL_DAYS}일에 이미 {COOL_MAX}편을 써서 쉬는 주제입니다. "
+                    "같은 주제를 몰아 쓰면 노출을 나눠 먹으니 다른 주제로 다시 써라.")
     except Exception as e:  # noqa: BLE001
         log.warning("무덤 확인 실패(통과로 봅니다): %s", e)
     return ""

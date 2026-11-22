@@ -311,7 +311,8 @@ def _last_words(log_file: Path) -> str:
         return "(기록 없음)"
 
 
-def apply_review(blog: str, cfg: LabConfig, ledger: dict, result: dict, today: str, demand_post=None) -> list[str]:
+def apply_review(blog: str, cfg: LabConfig, ledger: dict, result: dict, today: str, demand_post=None,
+                 demand_suggest=None) -> list[str]:
     notes = []
     for name, kws in (result.get("topic_keywords") or {}).items():
         t = ledger["topics"].get(name)
@@ -331,6 +332,13 @@ def apply_review(blog: str, cfg: LabConfig, ledger: dict, result: dict, today: s
     if cands:
         scores = demand.compare({c["name"]: c["keywords"] for c in cands}, demand.anchor_for(blog),
                                 cfg.naver_search_id, cfg.naver_search_secret, date.fromisoformat(today), demand_post)
+        if "_error" in scores and scores["_error"].startswith("꺼짐"):
+            # 데이터랩 키가 없으면 자동완성으로 수요를 대신 잰다(0~1, 자동완성에 안 뜨는 말은 0)
+            try:
+                scores = demand.compare_by_suggest({c["name"]: c["keywords"] for c in cands}, demand_suggest)
+                notes.append("ℹ️ 검색 수요: 데이터랩 키가 없어 네이버·구글 자동완성으로 쟀습니다(0~1)")
+            except Exception as e:  # noqa: BLE001
+                scores = {"_error": f"자동완성 확인 실패: {e}"[:200]}
         if "_error" in scores:
             mark = "ℹ️" if scores["_error"].startswith("꺼짐") else "⚠️"
             notes.append(f"{mark} 검색 수요 확인 {scores['_error']}")
