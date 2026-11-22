@@ -33,7 +33,8 @@ def test_edu_category_by_lane(monkeypatch):
         monkeypatch.delenv(k, raising=False)
     edu = config.Config.load("edu")
     assert edu.category_for("B") == "교직 꿀팁"
-    for lane in ("A", "C", "D", "E", None):
+    assert edu.category_for("D") == "교육정보"                  # 2026-11-22: 초·중·고 학부모 정보는 새 카테고리
+    for lane in ("A", "C", "E", None):
         assert edu.category_for(lane) == "교육 정책 인사이트"
     monkeypatch.setenv("NAVER_CATEGORY_EDU_B", "교직 실무 꿀팁")
     assert config.Config.load("edu").category_for("B") == "교직 실무 꿀팁"
