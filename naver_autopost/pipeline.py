@@ -431,9 +431,14 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
         }
     elif cfg.profile.thumbnail_style == "childhood":
         tone = images.childhood_tone(post.get("domain"))
+        # 2026-11-22 블로그 주인 결정: 투자 블로그처럼 검수를 통과한 첫 일러스트 장면 위에 질문 글씨를 얹는다
+        # (홈피드에서 눈에 띄게). 일러스트가 없으면 예전 단색 썸네일.
+        scene = next((out_dir / f"{i.get('name')}.png" for i in post.get("illustrations") or []
+                      if (out_dir / f"{i.get('name')}.png").exists()), None)
+        thumb_out = fname("thumbnail", "thumbnail")
         imgs = {
-            "thumbnail": images.make_thumbnail_childhood(post["thumbnail"], post.get("domain"),
-                                                         fname("thumbnail", "thumbnail")),
+            "thumbnail": (images.make_thumbnail_scene(post["thumbnail"], scene, thumb_out, tone) if scene
+                          else images.make_thumbnail_childhood(post["thumbnail"], post.get("domain"), thumb_out)),
             "card": images.make_card(post["card"], fname("card", "card"), tone=tone),
         }
     else:
