@@ -158,13 +158,14 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _export_watch(cfg: LabConfig, today: str) -> list[str]:
-    """조회수만 모으는 블로그(교육·유아)의 분석 자료를 매일 주인 드라이브(lab_export_<블로그>.md)에 올린다.
+    """실험실이 조회수를 모으는 모든 블로그(투자·티스토리·교육·유아)의 분석 자료를 매일 주인 드라이브
+    (lab_export_<블로그>.md)에 올린다.
     Claude가 대화에서 읽어 분석한다. LAB_EXPORT_DRIVE=false로 끈다."""
     if os.environ.get("LAB_EXPORT_DRIVE", "true").strip().lower() in ("0", "false", "no", "off"):
         return []
     from . import export
     notes = []
-    for blog in cfg.watch_only:
+    for blog in cfg.blogs:
         try:
             export.run(blog, cfg, today)
         except Exception as e:  # noqa: BLE001 - 드라이브에 못 올려도 수집은 그대로
