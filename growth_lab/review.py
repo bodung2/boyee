@@ -249,7 +249,7 @@ def review_input(blog: str, cfg: LabConfig, ledger: dict, table: list[dict], ver
                  gain, today: str) -> dict:
     spec = BLOGS[blog]
     recent = sorted(table, key=lambda p: p["date"])[-60:]
-    caps = sorted((cfg.output_dir / blog).glob("*/capture.json"))[-3:]
+    caps = sorted((cfg.output_dir / blog).glob("*/capture.json"), key=lambda f: f.stat().st_mtime)[-3:]
     return {
         "blog": blog, "label": spec.label, "platform": spec.platform, "theme": theme_of(spec), "today": today,
         "eval_days": spec.eval_days, "channel": channel, "views_gain_14d": gain,

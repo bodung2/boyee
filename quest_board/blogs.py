@@ -153,7 +153,7 @@ def _freebie(card: Card, lab: Path, output: Path, entries: list[dict], now: date
         rows.append((e.get("title", ""), e["url"], sum(int(v or 0) for d, v in by_day.items() if d in recent),
                      sum(int(v or 0) for v in by_day.values())))
     card.freebie = sorted(rows, key=lambda r: (-r[2], -r[3]))
-    caps = sorted((output / "lab" / card.key).glob("*/capture.json"))
+    caps = sorted((output / "lab" / card.key).glob("*/capture.json"), key=lambda f: f.stat().st_mtime)
     if not caps:
         return
     found: dict[str, int] = {}

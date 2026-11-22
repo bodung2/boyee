@@ -71,7 +71,7 @@ def build(blog: str, cfg: LabConfig, today: str) -> str:
                      f"{_fmt(p.get('v2'))} | {_fmt(p.get('views_now'))} | {_fmt(p.get('best_rank'))} |")
 
     # 유입 경로·검색어 원본(최근 수집)
-    caps = sorted((cfg.output_dir / blog).glob("*/capture.json"))
+    caps = sorted((cfg.output_dir / blog).glob("*/capture.json"), key=lambda f: f.stat().st_mtime)
     if caps:
         try:
             cap = json.loads(caps[-1].read_text(encoding="utf-8"))
