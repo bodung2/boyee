@@ -729,3 +729,19 @@ def test_export_builds_per_post_and_lane_tables_and_uploads(cfg):
 def stats_key(u: str) -> str:
     from growth_lab.stats import post_key
     return post_key(u)
+
+
+def test_export_reads_the_newest_capture_not_the_diagnose_folder(cfg):
+    """폴더 이름순이면 'diagnose-…'가 날짜 폴더보다 뒤라 옛 진단 자료를 읽었다 → 만든 시각 순으로 고른다."""
+    import os
+    from growth_lab import export
+    cfg.history_dir.mkdir(parents=True, exist_ok=True)
+    (cfg.history_dir / "published_invest.json").write_text("[]", encoding="utf-8")
+    for name, when, mark in (("diagnose-2026-10-25", 1_000, "OLD"), ("2026-11-22", 2_000, "NEW")):
+        d = cfg.output_dir / "invest" / name
+        d.mkdir(parents=True)
+        f = d / "capture.json"
+        f.write_text(json.dumps({"responses": [{"url": "https://x/referer/total", "json": {"m": mark}}]}), encoding="utf-8")
+        os.utime(f, (when, when))
+    text = export.build("invest", cfg, "2026-11-22")
+    assert "NEW" in text and "OLD" not in text

@@ -10,6 +10,16 @@
       "id": "2026-11-22-tistory-export",
       "action": "export",
       "blog": "tistory"
+    },
+    {
+      "id": "2026-11-22-invest-export-2",
+      "action": "export",
+      "blog": "invest"
+    },
+    {
+      "id": "2026-11-22-tistory-export-2",
+      "action": "export",
+      "blog": "tistory"
     }
   ]
 }
