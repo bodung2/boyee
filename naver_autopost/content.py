@@ -152,6 +152,8 @@ def validate(post: dict, profile: Profile | None = None, after_factcheck: bool =
     if len(title) > max_title:
         errors.append(f"제목이 너무 깁니다({len(title)}자 > {max_title}자). 검색어로 시작하는 짧은 질문으로 줄이세요")
 
+    if profile and profile.off_topic and re.search(profile.off_topic, f"{title} {post.get('topic', '')}"):
+        errors.append(f"이 블로그 주제가 아닙니다: '{title}' — {profile.off_topic_note or profile.off_topic}")
     if profile and profile.title_pattern and not re.search(profile.title_pattern, title):
         errors.append(f"제목 형식이 다릅니다: '{title}' (이 블로그는 '{profile.title_pattern}' 형식으로 시작해야 합니다)")
 

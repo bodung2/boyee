@@ -30,6 +30,8 @@ class Profile:
     use_persona: bool = True    # 교사 페르소나(꾸쓰) 파일을 글쓰기에 넘길지. 신원을 감추는 블로그는 False
     social: bool = True         # 블로그 발행 뒤 인스타·쓰레드 초안을 만들지
     title_pattern: str = ""     # 구조 검증: 제목이 이 정규식을 포함해야 한다(시황 글의 'M월 D일 시황' 등)
+    off_topic: str = ""         # 구조 검증: 제목·주제가 이 정규식에 걸리면 다른 블로그 몫이라 쓰지 않는다
+    off_topic_note: str = ""    # 그때 글쓰기에 돌려줄 설명
     same_blog_as: str = ""      # 다른 프로필과 같은 블로그에 올린다(블로그 주소·로그인 브라우저를 그 프로필 것으로)
     photos: bool = False        # 블로그 주인이 직접 찍은 사진(places_inbox 폴더)으로 쓰는 글. 새 폴더가 있는 날만 발행
 
@@ -39,7 +41,11 @@ PROFILES: dict[str, Profile] = {
         name="edu", label="교육 정책",
         write_skill="edu-auto-post", factcheck_skill="edu-auto-factcheck",
         thumbnail_style="edu", illustrations=True,
-        lane_categories=(("B", "교직 꿀팁"), ("*", "교육 정책 인사이트")),
+        # 2026-11-22 블로그 주인 결정: A·C·E는 '교육 정책 인사이트', B는 '교직 꿀팁', D(초·중·고 학부모)는 '교육정보'
+        lane_categories=(("B", "교직 꿀팁"), ("D", "교육정보"), ("*", "교육 정책 인사이트")),
+        # 유아(영유아·유치원·어린이집) 주제는 유아 블로그 몫이다(같은 독자를 두 블로그가 나눠 갖지 않게)
+        off_topic=r"유아|유치원|어린이집|영유아|누리과정",
+        off_topic_note="유아(영유아·유치원·어린이집·누리과정) 주제는 유아 블로그가 씁니다. 초·중·고 주제로 바꾸세요",
         neighbor_tab="교육 이웃 후보",
         neighbor_keywords=("교육정책", "고교학점제", "초등 교사", "교직 생활", "학부모 교육정보",
                            "경기도교육청", "수업 나눔", "교사 연수", "초등 학부모", "2022 개정 교육과정"),

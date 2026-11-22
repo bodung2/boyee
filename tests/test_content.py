@@ -55,3 +55,14 @@ def test_heading_dash_becomes_bar_but_body_keeps_dash():
     assert post["title"] == "AIDT 총정리 | 핵심만"
     assert "<h2>2. 언제 바뀌었나 | 타임라인</h2>" in post["body_html"]
     assert "<p>설명 — 그대로</p>" in post["body_html"]
+
+
+def test_edu_blog_rejects_early_childhood_topics():
+    """유아 주제는 유아 블로그 몫: 교육 블로그 글이면 발행 전에 막고 글쓰기에 이유를 돌려준다."""
+    from naver_autopost import profiles
+    edu, child = profiles.get("edu"), profiles.get("childhood")
+    post = content.normalize(make_post())
+    assert not [e for e in content.validate(post, edu) if "블로그 주제" in e]
+    baby = {**post, "title": "유치원 입학 신청 총정리 / 2027 처음학교로 일정"}
+    assert any("유아 블로그" in e for e in content.validate(baby, edu))
+    assert not [e for e in content.validate(baby, child) if "블로그 주제" in e]
