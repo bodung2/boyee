@@ -324,3 +324,26 @@ def test_remote_requests_run_once_and_only_allowed(tmp_path):
     assert requests.run_pending(repo, local, tmp_path / "logs", spawn) == ["a"]
     assert ran == [["export", "--blog", "invest"]]
     assert requests.run_pending(repo, local, tmp_path / "logs", spawn) == []          # 한 번만
+
+
+def test_remote_diag_and_rerun_requests_are_whitelisted():
+    from quest_board import requests as rq
+    assert rq.command({"action": "diag", "profile": "edu_series", "day": "2026-11-23"})[-4:] == [
+        "--profile", "edu_series", "--day", "2026-11-23"]
+    assert rq.command({"action": "diag", "profile": "edu_series", "day": "today; rm -rf"}) is None
+    assert rq.command({"action": "rerun", "profile": "edu_series"})[-3:] == ["run", "--profile", "edu_series"]
+    assert rq.command({"action": "rerun", "profile": "../x"}) is None
+
+
+def test_diag_collects_log_tail_and_claude_last_answer(tmp_path):
+    import json as _json
+    from quest_board import diag
+    (tmp_path / "logs").mkdir()
+    (tmp_path / "logs" / "edu_series-2026-11-23.log").write_text("시작\n실패: post.json 없음\n", encoding="utf-8")
+    f = tmp_path / "output" / "edu_series" / "2026-11-23-rejected-163500"
+    f.mkdir(parents=True)
+    (f / "claude_write.log").write_text(_json.dumps({"result": "원문을 열 수 없어 쓰지 않았습니다", "is_error": False,
+                                                    "num_turns": 40, "duration_ms": 1200000}, ensure_ascii=False)
+                                        + "\n--- stderr ---\n", encoding="utf-8")
+    text = diag.build("edu_series", "2026-11-23", root=tmp_path)
+    assert "실패: post.json 없음" in text and "원문을 열 수 없어" in text and "turns=40" in text

@@ -19,6 +19,7 @@ from .schedule import ROOT
 REQUESTS = "remote_requests.json"
 DONE = "remote_requests_done.json"
 BLOGS = {"invest", "tistory", "edu", "childhood"}
+PROFILES = {"edu", "edu_series", "childhood", "invest", "market", "place", "worksheet"}   # 네이버 자동 발행 프로필
 
 
 def command(req: dict) -> list[str] | None:
@@ -27,7 +28,18 @@ def command(req: dict) -> list[str] | None:
         return [sys.executable, "-m", "growth_lab", "export", "--blog", req["blog"]]
     if req.get("action") == "blogger_index":
         return [sys.executable, "-m", "blogger_autopost", "index"]
+    # 실패 원인 보기: 그날 로그·Claude 마지막 답을 드라이브 diag_<프로필>.md로
+    if req.get("action") == "diag" and req.get("profile") in PROFILES and _is_day(req.get("day")):
+        return [sys.executable, "-m", "quest_board.diag", "--profile", req["profile"], "--day", req["day"]]
+    # 원인을 고친 뒤 오늘 글을 바로 다시 쓰기(이미 발행했으면 아무것도 안 함)
+    if req.get("action") == "rerun" and req.get("profile") in PROFILES:
+        return [sys.executable, "-m", "naver_autopost", "run", "--profile", req["profile"]]
     return None
+
+
+def _is_day(value) -> bool:
+    import re
+    return bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(value or "")))
 
 
 def _load(path: Path, default):
