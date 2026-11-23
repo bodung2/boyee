@@ -268,11 +268,19 @@ def _attempt(cfg: Config, today: str, out_dir: Path, feedback: str, resume: bool
     if place is not None and not (out_dir / "photos.json").exists():
         places.prepare(place, out_dir, models_dir=cfg.data_dir / "models")
     if cfg.profile.worksheet and not stage.get("worksheet"):
-        from worksheets.build import WorksheetRejected, build as build_worksheet
-        try:
-            build_worksheet(cfg, out_dir, today, feedback)
-        except WorksheetRejected as e:
-            raise Rejected(str(e)) from e
+        from worksheets.build import WorksheetRejected, build as build_worksheet, prepared_dir
+        ready_set = prepared_dir(cfg, today)
+        if (ready_set / "worksheet.json").exists() and not feedback:
+            # 전날 밤 미리 만들어 둔 활동지(python -m worksheets prepare): 그대로 가져와 나눔글만 쓴다
+            out_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(ready_set, out_dir, dirs_exist_ok=True)
+            shutil.rmtree(ready_set, ignore_errors=True)
+            log.info("미리 만들어 둔 활동지를 씁니다: %s", ready_set)
+        else:
+            try:
+                build_worksheet(cfg, out_dir, today, feedback)
+            except WorksheetRejected as e:
+                raise Rejected(str(e)) from e
         _mark(out_dir, worksheet=True)
     if not stage.get("written"):
         try:

@@ -16,6 +16,11 @@ log = logging.getLogger(__name__)
 QA_ROUNDS = 3
 
 
+def prepared_dir(cfg, day: str) -> Path:
+    """전날 밤 미리 만들어 두는 활동지 자리(python -m worksheets prepare --day 날짜)."""
+    return cfg.data_dir / "worksheets" / "prepared" / day
+
+
 class WorksheetRejected(Exception):
     """이번 설계로는 발행할 만한 활동지를 만들지 못함(다른 주제로 다시)."""
 
