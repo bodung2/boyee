@@ -64,6 +64,9 @@ description: "교사 SR의 네이버 교육 블로그(flw3148) '정보성 글'�
   - (f) 교원 현장 특수성 1개 이상
 - **종합:** 단순 요약이 아니라 "왜 중요한가, 무엇이 어떻게 바뀌나, 배경, 상반 관점, 현장 시사점"을 엮은 해석을 만든다.
 
+
+- **원문이 WebFetch로 안 열릴 때**(법령·교육청 누리집·PDF): `.venv/Scripts/python.exe -m naver_autopost.pagetext "<주소>" --out OUTPUT_DIR/src_이름.txt`(조문은 `--law 법령이름 --article 조번호`)로 읽고 그 파일을 Read한다. 없으면 `python -m naver_autopost.pagetext …`.
+
 ## 3. 작성 규칙 (원본 3단계 요약 — 자동 발행용 조정 포함)
 
 문체와 구조:
