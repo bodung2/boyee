@@ -82,7 +82,7 @@ def test_worksheet_profile_posts_to_childhood_blog_without_infographic(monkeypat
     w, child = Config.load("worksheet"), Config.load("childhood")
     assert w.profile.worksheet and not w.profile.illustrations
     assert w.profile_dir == child.profile_dir and w.blog_id == child.blog_id
-    assert w.category == "무료 활동지" and w.infographic is False and w.social_draft is False
+    assert w.category == "유아 교육자료" and w.infographic is False and w.social_draft is False
     assert w.retry_time == "off"
 
 
