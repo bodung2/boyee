@@ -632,6 +632,9 @@ def restyle(cfg: Config, day: str, number: int | None = None) -> list[str]:
     out_dir = cfg.output_dir / day
     if not (out_dir / "post.json").exists() or not _stage(out_dir).get("written"):
         raise ValueError(f"{out_dir}에 다듬을 글(post.json)이 없습니다")
+    done = history.published_on(cfg.history_file, day)
+    if done and cfg.profile.title_pattern and re.search(cfg.profile.title_pattern, str(done.get("title", ""))):
+        return [f"이미 새 형식으로 발행했습니다(다시 하지 않음): {done.get('title')} {done.get('url')}"]
     lines = []
     for e in history.remove(cfg.history_file, day):
         lines.append(f"발행 기록에서 뺐습니다: {e.get('title')} {e.get('url', '')}")
