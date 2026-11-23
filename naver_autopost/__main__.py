@@ -130,8 +130,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "restyle":
         from .pipeline import restyle, run, setup_logging
         setup_logging(cfg, f"{cfg.profile.name}-{args.day}")
-        for line in restyle(cfg, args.day, args.no):
+        lines = restyle(cfg, args.day, args.no)
+        for line in lines:
             print(line)
+        if lines and lines[0].startswith("이미 새 형식으로 발행"):
+            return 0
         return run(cfg, day=args.day) if args.publish else 0
     if args.cmd == "preview":
         from . import content
