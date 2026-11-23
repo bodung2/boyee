@@ -338,3 +338,57 @@ def test_queue_errors_are_reported_quietly(caplog):
     lines = [r.getMessage() for r in caplog.records]
     assert len([m for m in lines if "잠깐 확인하지 못했습니다" in m]) == 2
     assert "지금까지 11번" in lines[1] and lines[-1] == "대기열 확인이 다시 됩니다"
+
+
+def test_padlet_requests_name_the_program():
+    """파이썬 기본 이름표(Python-urllib)는 패들렛 앞단에서 403으로 거절됐다 → 프로그램 이름을 밝힌다."""
+    import urllib.request
+    seen = {}
+
+    class Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b"{}"
+
+    def fake_open(req, timeout):
+        seen["ua"] = req.get_header("User-agent")
+        return Resp()
+
+    orig = urllib.request.urlopen
+    urllib.request.urlopen = fake_open
+    try:
+        padlet.create_post("K", "B", "s", "b")
+    finally:
+        urllib.request.urlopen = orig
+    assert seen["ua"] == padlet.USER_AGENT and "Python-urllib" not in seen["ua"]
+    assert "클라우드플레어" in padlet.explain(403, '{"type":"https://developers.cloudflare.com/support/troubleshooting/","error_code":1010}')
+    assert "1010" in padlet.explain(403, '{"type":"https://developers.cloudflare.com/x","error_code":1010}')
+    assert "보드를 찾지 못했습니다" in padlet.explain(404, "{}")
+
+
+def test_failed_padlet_posts_are_kept_and_retried(tmp_path):
+    srv = FakeServer()
+    blocked = [True]
+    posted = []
+
+    def post(key, board, subject, body, url):
+        if blocked[0]:
+            raise padlet.PadletError("패들렛 앞단 보안(클라우드플레어)이 요청을 거절했습니다(HTTP 403)")
+        posted.append((subject, url))
+
+    cfg = _cfg(tmp_path, padlet_key="K", padlet_board="B")
+    b = worker.Booth(cfg, srv, convert.fake_convert, post_fn=post)
+    assert b.process(dict(JOB)) == "done"
+    assert b.process(dict(JOB, id="j2", nickname="곰")) == "done"
+    pending = json.loads((cfg.out_dir / "padlet_pending.json").read_text(encoding="utf-8"))
+    assert [x["id"] for x in pending] == [JOB["id"], "j2"]
+    blocked[0] = False
+    assert b.retry_padlet() == (2, 0)
+    assert [s for s, _ in posted] == ["별빛토끼의 캐릭터 · 양모펠트 인형", "곰의 캐릭터 · 양모펠트 인형"]
+    assert json.loads((cfg.out_dir / "padlet_pending.json").read_text(encoding="utf-8")) == []
+    assert ("mark", "j2", {"padlet": "ok"}) in srv.calls

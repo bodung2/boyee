@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import logging
 import socket
 import threading
@@ -125,14 +126,47 @@ class Booth:
             log.error("  %s 패들렛: 드라이브 공유 주소가 없어 올리지 못했습니다(구글 계정 공유 제한)", jid)
             self.server.mark(jid, padlet="실패: 공유 주소 없음")
             return
+        item = {"id": jid, "subject": f"{job['nickname']}의 캐릭터 · {job['styleLabel']}",
+                "body": job.get("intro", ""), "url": url}
+        if self._post_one(item):
+            self.retry_padlet()                      # 잘 올라가면 전에 실패한 것도 이어서 올린다
+
+    def _post_one(self, item: dict) -> bool:
         try:
-            self.post_fn(self.cfg.padlet_key, self.cfg.padlet_board, f"{job['nickname']}의 캐릭터 · {job['styleLabel']}",
-                         job.get("intro", ""), url)
-            log.info("  %s 패들렛에 올림", jid)
-            self.server.mark(jid, padlet="ok")
+            self.post_fn(self.cfg.padlet_key, self.cfg.padlet_board, item["subject"], item["body"], item["url"])
         except Exception as e:                       # noqa: BLE001
-            log.error("  %s 패들렛 실패: %s", jid, e)
-            self.server.mark(jid, padlet=f"실패: {e}"[:80])
+            log.error("  %s 패들렛 실패: %s  (나중에 다시: python -m booth padlet-retry)", item["id"], e)
+            self._pending(add=item)
+            self.server.mark(item["id"], padlet=f"실패: {e}"[:80])
+            return False
+        log.info("  %s 패들렛에 올림", item["id"])
+        self._pending(remove=item["id"])
+        self.server.mark(item["id"], padlet="ok")
+        return True
+
+    def _pending(self, add: dict | None = None, remove: str | None = None) -> list[dict]:
+        """패들렛에 못 올린 그림 목록(output/booth/padlet_pending.json). 나중에 padlet-retry로 다시 올린다."""
+        path = self.cfg.out_dir / "padlet_pending.json"
+        with self.print_lock:
+            before = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+            items = [x for x in before if x["id"] != remove]
+            if add and all(x["id"] != add["id"] for x in items):
+                items.append(add)
+            if items != before:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(items, ensure_ascii=False, indent=1), encoding="utf-8")
+            return items
+
+    def retry_padlet(self) -> tuple[int, int]:
+        """못 올린 그림을 다시 올린다. 돌려주는 값: (올린 수, 남은 수)"""
+        if not self.cfg.padlet_on:
+            return 0, 0
+        done = 0
+        for item in self._pending():
+            if not self._post_one(item):
+                break                                 # 아직 막혀 있으면 나머지는 다음에
+            done += 1
+        return done, len(self._pending())
 
     def loop(self, name: str, stop: threading.Event, once: bool = False) -> None:
         quiet = QuietErrors()
@@ -162,6 +196,12 @@ class Booth:
 
 def run(cfg: BoothConfig, server: Server, convert_fn, once: bool = False) -> None:
     booth = Booth(cfg, server, convert_fn)
+    try:
+        done, left = booth.retry_padlet()
+        if done or left:
+            log.info("전에 패들렛에 못 올린 그림: %d장 올림, %d장 남음", done, left)
+    except Exception as e:                           # noqa: BLE001
+        log.warning("전에 못 올린 패들렛 그림을 다시 올리지 못했습니다: %s", e)
     stop = threading.Event()
     host = socket.gethostname()
     threads = [threading.Thread(target=booth.loop, args=(f"{host}-{i + 1}", stop, once), daemon=True)
