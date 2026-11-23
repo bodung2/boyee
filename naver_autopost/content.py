@@ -8,6 +8,7 @@ import re
 from .profiles import Profile
 
 IMAGE_MARKER = re.compile(r"(?:<p>\s*)?\[\[IMAGE:(\w+)\]\](?:\s*</p>)?")
+ATTACH_NAME = "worksheet_pdf"     # 무료 활동지 나눔글의 PDF 첨부파일 자리(이미지 표시와 같은 모양으로 쓴다)
 
 # 자동 발행 글에 남아 있으면 안 되는 자리표시자·초안용 문구
 FORBIDDEN_PHRASES = [
@@ -141,7 +142,8 @@ def validate(post: dict, profile: Profile | None = None, after_factcheck: bool =
     after_factcheck: 팩트체크가 틀린 문장을 지운 뒤라 분량 기준은 기본값(MIN_BODY_CHARS)만 본다
     (분량 때문에 검수까지 끝난 글을 버리지 않게)."""
     errors: list[str] = []
-    for key in ("title", "body_html", "tags", "sources", "claims", "thumbnail", "card"):
+    card_on = profile.summary_card if profile else True
+    for key in ("title", "body_html", "tags", "sources", "claims", "thumbnail") + (("card",) if card_on else ()):
         if not post.get(key):
             errors.append(f"필수 항목 없음: {key}")
     if errors:
@@ -161,9 +163,15 @@ def validate(post: dict, profile: Profile | None = None, after_factcheck: bool =
 
     body = post["body_html"]
     markers = [m.group(1) for m in IMAGE_MARKER.finditer(body)]
-    if markers.count("card") != 1:
+    if card_on and markers.count("card") != 1:
         errors.append(f"[[IMAGE:card]] 표시는 정확히 1번이어야 합니다(현재 {markers.count('card')}번)")
+    if not card_on and markers.count("card"):
+        errors.append("이 글에는 요약 카드([[IMAGE:card]])를 넣지 않습니다")
     illust_names = {i.get("name") for i in post.get("illustrations") or []} | photo_names(post)
+    if profile and profile.worksheet:
+        illust_names |= {ATTACH_NAME}
+        if markers.count(ATTACH_NAME) != 1:
+            errors.append(f"PDF 첨부 자리([[IMAGE:{ATTACH_NAME}]])는 정확히 1번이어야 합니다(현재 {markers.count(ATTACH_NAME)}번)")
     unknown = sorted(set(markers) - {"card", "infographic"} - illust_names)  # 인포그래픽은 발행 직전에 넣는다
     if unknown:
         errors.append(f"알 수 없는 이미지 표시: {unknown}")
@@ -172,7 +180,7 @@ def validate(post: dict, profile: Profile | None = None, after_factcheck: bool =
         errors.append(f"이미지 표시가 중복됩니다: {dupes}")
 
     text = html_to_text(IMAGE_MARKER.sub("", body))
-    everything = "\n".join([title, text, str(post["thumbnail"]), str(post["card"])])
+    everything = "\n".join([title, text, str(post["thumbnail"]), str(post.get("card", ""))])
     for phrase in FORBIDDEN_PHRASES:
         if phrase in everything:
             errors.append(f"자리표시자/초안 문구가 남아 있습니다: '{phrase}'")
@@ -217,8 +225,8 @@ def validate(post: dict, profile: Profile | None = None, after_factcheck: bool =
         errors.append(f"썸네일 메인 문구가 깁니다({len(thumb['main'])}자)")
     if len(thumb.get("sub", "")) > 26:
         errors.append(f"썸네일 보조 문구가 깁니다({len(thumb['sub'])}자)")
-    bullets = post["card"].get("bullets") or []
-    if not 3 <= len(bullets) <= 6:
+    bullets = (post.get("card") or {}).get("bullets") or []
+    if card_on and not 3 <= len(bullets) <= 6:
         errors.append(f"카드 요점은 3~6개여야 합니다(현재 {len(bullets)}개)")
     if not post["tags"]:
         errors.append("태그가 없습니다")

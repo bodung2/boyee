@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
+import shutil
 from pathlib import Path
 
 from . import library, render, share
@@ -151,8 +152,15 @@ def build(cfg, out_dir: Path, today: str, feedback: str = "", run=None, gen=None
     spec_path.write_text(json.dumps(spec, ensure_ascii=False, indent=1), encoding="utf-8")
 
     pdf = Path(result["pdf"])
-    link = (upload or share.publish_pdf)(pdf, f"꾸쓰쌤_무료활동지_{spec['set_id']}.pdf",
-                                         cfg.data_dir / "worksheets" / "drive")
+    # 블로그 첨부파일 이름(독자에게 보이는 이름): 꾸쓰쌤_무료활동지_겨울옷.pdf
+    nice = out_dir / ("꾸쓰쌤_무료활동지_" + "".join(ch for ch in spec["theme"] if ch.isalnum()) + ".pdf")
+    shutil.copyfile(pdf, nice)
+    try:                                          # 드라이브 사본(첨부가 안 될 때 대신 넣을 주소). 실패해도 계속한다
+        link = (upload or share.publish_pdf)(pdf, f"꾸쓰쌤_무료활동지_{spec['set_id']}.pdf",
+                                             cfg.data_dir / "worksheets" / "drive") or {}
+    except Exception as e:  # noqa: BLE001
+        log.warning("드라이브에 PDF 사본을 올리지 못했습니다(블로그 첨부파일로만 나눔): %s", e)
+        link = {}
     info = {
         "set_id": spec["set_id"], "theme": spec["theme"], "title": spec["title"], "age": spec["age"],
         "domain": spec.get("domain", ""), "competency": spec.get("competency", ""), "nuri": spec.get("nuri", ""),
@@ -161,9 +169,10 @@ def build(cfg, out_dir: Path, today: str, feedback: str = "", run=None, gen=None
                    "instruction": p["instruction"], "image": f"worksheet_p{i}"}
                   for i, p in enumerate(spec["pages"], 1)],
         "cover": "worksheet_cover", "answers": result.get("answers") or {},
-        "parent_tip": spec.get("parent_tip", ""), "pdf_url": link["url"], "pdf_pages": len(spec["pages"]),
+        "parent_tip": spec.get("parent_tip", ""), "pdf_url": link.get("url", ""), "pdf_file": nice.name,
+        "pdf_pages": len(spec["pages"]),
         "qa_summary": verdict.get("summary", ""),
     }
     (out_dir / "worksheet.json").write_text(json.dumps(info, ensure_ascii=False, indent=1), encoding="utf-8")
-    log.info("활동지 준비 완료: %s (%d장) → %s", spec["title"], len(spec["pages"]), link["url"])
+    log.info("활동지 준비 완료: %s (%d장) → %s", spec["title"], len(spec["pages"]), nice.name)
     return info
