@@ -415,8 +415,10 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
         stem = "".join(ch for ch in str(names.get(key) or default) if ch not in '\\/:*?"<>|').strip() or default
         return out_dir / f"{stem}.png"
 
-    if cfg.profile.thumbnail_style == "bold":
-        tone = images.invest_tone(post.get("lane"))
+    if cfg.profile.thumbnail_style in ("bold", "edu_scene"):
+        # edu_scene: 교육 블로그 시리즈 글(저경력 교사 필수)도 투자 블로그처럼 본문 그림 위에 글씨(색은 교육 레인 색)
+        tone = images.edu_tone(post.get("lane")) if cfg.profile.thumbnail_style == "edu_scene" \
+            else images.invest_tone(post.get("lane"))
         # 홈피드용: 검수를 통과한 첫 일러스트 장면 위에 질문 글씨를 얹는다(새 그림을 만들지 않음). 없으면 단색.
         scene = next((out_dir / f"{i.get('name')}.png" for i in post.get("illustrations") or []
                       if (out_dir / f"{i.get('name')}.png").exists()), None)
