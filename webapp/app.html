@@ -178,6 +178,16 @@ body.has-run #toast{bottom:auto;top:64px}body.has-run{padding-bottom:calc(76px +
 @media (prefers-reduced-motion:reduce){#ko .kc,#ko .cf,.gplus{animation:none}}
 @media (max-width:520px){.grid{grid-template-columns:repeat(2,1fr)}.hero .big{font-size:26px}.legend{grid-template-columns:1fr}}
 #syncdot{position:fixed;left:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:60;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--chip);color:var(--sub);box-shadow:var(--shadow)}
+.tchart .seg{display:flex;gap:2px;padding:3px;border-radius:10px;background:var(--chip);margin-left:auto}
+.tchart .seg button{border:0;background:none;padding:5px 10px;border-radius:8px;font-size:12.5px;font-weight:700;color:var(--sub);cursor:pointer}
+.tchart .seg button[aria-pressed=true]{background:var(--tabon);color:var(--ink);box-shadow:var(--tabsh)}
+.tchart .th{font-size:12px;font-weight:700;color:var(--mute);margin-bottom:4px}
+.tbar{display:grid;grid-template-columns:minmax(70px,30%) 1fr 116px;gap:8px;align-items:center;padding:7px 0;cursor:pointer}
+.tbar .tbl{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tbar .tbt{height:14px;border-radius:0 4px 4px 0;background:color-mix(in srgb,var(--line) 60%,transparent)}
+.tbar .tbt i{display:block;height:100%;border-radius:0 4px 4px 0;background:var(--accent)}
+.tbar .tbv{display:flex;align-items:baseline;justify-content:flex-end;gap:5px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.tbar .tbv b{font-size:13.5px}.tbar .tbv small{font-size:11.5px;color:var(--sub);min-width:28px;text-align:right}
 .tot-g>summary{display:flex;flex-direction:column;gap:2px;cursor:pointer;list-style:none;margin-bottom:6px}
 .tot-g>summary::-webkit-details-marker{display:none}
 .tot-h,.tot>summary{display:grid;grid-template-columns:minmax(0,1fr) 52px 70px 72px;gap:6px;align-items:center}
@@ -1958,6 +1968,7 @@ function renderGrowth() {
         ${snaps.slice(-12).reverse().map(x => `<tr><td style="padding:3px 4px;white-space:nowrap">${esc(x.date.slice(2).replace(/-/g, "."))}</td>${GOALS.map(g => `<td style="text-align:center;padding:3px 4px">${fmtPct(x.f[g.k] != null ? num(x.f[g.k]) : null)}</td>`).join("")}</tr>`).join("")}
       </table></div>` : ""}` : ""}
     <button class="btn primary" type="button" data-g="totals" style="width:100%;margin:10px 0 4px;padding:12px;font-size:16px;font-weight:800">📚 누적 기록 보기</button>
+    ${safeCard("timechart", () => timeChart())}
     <p class="muted">줄을 누르면 그 영역의 점수 내역과 기록이 나와요 · 점수는 늘 기본 비교군(남자·30대)으로 쌓여요 · <a href="#" data-g="bench">점수 기준·출처 보기</a></p>
     <h2>빠르게 기록</h2><div class="grid">${GOALS.map(g => `<button type="button" class="stat" data-g="log" data-goal="${g.k}"><div class="l">${g.icon} ${g.label}</div><div class="n" style="font-size:15px">＋ 기록</div></button>`).join("")}</div>
     ${feed ? `<h2>최근 얻은 점수</h2><div class="card">${feed}</div>` : ""}
@@ -1968,7 +1979,7 @@ function renderGrowth() {
 }
 
 // 화면 버전: 폰이 새 화면을 받았는지 성장 탭 맨 아래에서 확인할 수 있게(바꿀 때마다 올린다)
-const APP_BUILD = "2026.11.23-d";
+const APP_BUILD = "2026.11.23-e";
 // 카드 하나를 그리다 오류가 나도 나머지 화면은 그대로 보이게, 오류 내용은 그 자리에 보여 준다
 function safeCard(name, fn) {
   try { return fn(); }
@@ -2334,9 +2345,33 @@ function logItem(l) {
   if (f.type === "etc") return "✏️ 기타(직접 적기)";
   if (f.type === "win") return (Object.fromEntries(WIN_SUBS[g] || [])[f.sub] || typeName) + " (성취)";
   if (f.type === "family") return Object.fromEntries(FAMILY_KINDS)[f.kind] || "👪 가족 관계";
+  if (f.type === "together") return "🤝 친구·모임";
   if (f.type === "pss") return "🧘 스트레스 점검";
   if (f.type === "saving") return "💰 월 저축률";
   return typeName;
+}
+// ⏳ 시간을 어디에 썼나: 시간(분)이 남는 기록만 모아 영역별·항목별 가로 막대로 비교한다(최근 7일 · 30일 · 전체)
+// 한 가지 값만 비교하므로 막대는 한 색(--accent, 밝은/어두운 모드 각각 대비 검사 통과), 값은 막대 끝에 글자색으로
+let TRANGE = ["7", "30", "all"].includes(store.get("trange")) ? store.get("trange") : "30";
+function timeChart() {
+  const from = TRANGE === "all" ? "" : addDays(DATA.today, -(Number(TRANGE) - 1));
+  const L = gLogs().filter(l => (num(l.f.minutes) || 0) > 0 && (!from || l.date >= from));
+  const first = L.map(l => l.date).sort()[0], days = TRANGE === "all" ? (first ? Math.round((parseDay(DATA.today) - parseDay(first)) / 864e5) + 1 : 1) : Number(TRANGE);
+  const total = L.reduce((a, l) => a + num(l.f.minutes), 0);
+  const seg = `<div class="seg" role="group" aria-label="기간">${[["7", "최근 7일"], ["30", "최근 30일"], ["all", "전체"]].map(([k, t]) =>
+    `<button type="button" data-trange="${k}" aria-pressed="${TRANGE === k}">${t}</button>`).join("")}</div>`;
+  if (!total) return `<div class="card tchart"><div class="row"><b>⏳ 시간을 어디에 썼나</b>${seg}</div><p class="muted">이 기간에 시간으로 남긴 기록이 없어요. ⏱ 기록 탭에서 시작·끝을 누르면 여기에 쌓여요.</p></div>`;
+  const bars = (rows, max) => rows.map(r => `<div class="tbar" title="${esc(r.label)} · ${fmtMin(r.min)} · ${r.n}건 · 하루 평균 ${fmtMin(Math.round(r.min / days))}">
+      <span class="tbl">${esc(r.label)}</span><span class="tbt"><i style="width:${Math.max(2, r.min / max * 100).toFixed(1)}%"></i></span>
+      <span class="tbv"><b>${fmtMin(r.min)}</b><small>${Math.round(r.min / total * 100)}%</small></span></div>`).join("");
+  const agg = keyFn => { const m = new Map(); L.forEach(l => { const k = keyFn(l), x = m.get(k) || {label: k, min: 0, n: 0}; x.min += num(l.f.minutes); x.n++; m.set(k, x); }); return [...m.values()].sort((a, b) => b.min - a.min); };
+  const byGoal = agg(l => `${GOAL[l.f.goal].icon} ${GOAL[l.f.goal].label}`), byItem = agg(l => logItem(l)).slice(0, 8);
+  const none = GOALS.filter(g => !L.some(l => l.f.goal === g.k)).map(g => g.label);
+  return `<div class="card tchart"><div class="row" style="flex-wrap:wrap;gap:6px"><b>⏳ 시간을 어디에 썼나</b>${seg}</div>
+    <div class="muted" style="font-size:13px;margin:2px 0 10px">모두 <b style="color:var(--ink)">${fmtMin(total)}</b> · 하루 평균 ${fmtMin(Math.round(total / days))} · 가장 많이 쓴 곳 ${esc(byGoal[0].label)}</div>
+    <div class="th">영역별</div>${bars(byGoal, byGoal[0].min)}
+    <div class="th" style="margin-top:12px">항목별${byItem.length >= 8 ? " (상위 8개)" : ""}</div>${bars(byItem, byItem[0].min)}
+    ${none.length ? `<p class="muted" style="font-size:12px;margin:8px 0 0">시간 기록이 없는 영역: ${esc(none.join(" · "))} (횟수로 쌓는 기록은 📚 누적 기록에서 봐요)</p>` : ""}</div>`;
 }
 function showTotals() {
   const S = scoreAll(), logs = gLogs(), all = new Set(logs.map(l => l.date));
@@ -2383,6 +2418,9 @@ function showBench() {
 document.addEventListener("click", async e => {
   const v = e.target.closest("[data-gview]");
   if (v) { GVIEW = v.dataset.gview; store.set("gview", GVIEW); renderGrowth(); return; }
+  const tb = e.target.closest(".tbar[title]"); if (tb) { toast(tb.title); return; }      // 폰에는 마우스 올림이 없어 눌러서 자세히
+  const tr = e.target.closest("[data-trange]");
+  if (tr) { TRANGE = tr.dataset.trange; store.set("trange", TRANGE); const c = document.querySelector(".tchart"); if (c) c.outerHTML = timeChart(); return; }
   const b = e.target.closest("[data-g]"); if (!b) return;
   e.preventDefault();
   const a = b.dataset.g;
