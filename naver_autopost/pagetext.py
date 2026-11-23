@@ -22,6 +22,7 @@ import urllib.request
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36"
 PRINT_MAX = 12000
+PREVIEW_MAX = 1500      # --out으로 저장할 때 화면에 보여 줄 앞부분
 
 
 def law_url(law: str, article: str | None = None) -> str:
@@ -107,11 +108,13 @@ def main(argv=None) -> int:
     except Exception as e:  # noqa: BLE001
         print(f"읽기 실패: {url}\n{type(e).__name__}: {e}")
         return 1
-    if a.out:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if a.out:                                        # 토큰 아끼기: 파일로 저장하면 화면에는 짧게만
         with open(a.out, "w", encoding="utf-8") as f:
             f.write(f"[출처] {url}\n\n{text}")
-        print(f"저장: {a.out} ({len(text)}자)")
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        print(f"저장: {a.out} ({len(text)}자). 필요한 조·단어는 Grep으로 찾아 읽으세요.\n")
+        print(text[:PREVIEW_MAX] + ("\n…" if len(text) > PREVIEW_MAX else ""))
+        return 0
     print(text[:PRINT_MAX] + ("\n…(앞부분만 표시, 전체는 --out 파일)" if len(text) > PRINT_MAX else ""))
     return 0
 
