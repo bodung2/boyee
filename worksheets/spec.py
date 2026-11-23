@@ -34,7 +34,7 @@ PAGE_TYPES = {
 COUNTS = {
     "word_cards": (4, 8), "cut_lines": (3, 4), "trace_outline": (4, 4), "coloring": (2, 4), "match_same": (3, 4),
     "match_shadow": (3, 4), "half_draw": (4, 4), "cut_paste": (2, 3), "trace_letters": (3, 4), "vocab_poster": (6, 8),
-    "emotion_match": (3, 4), "check_game": (4, 6), "trace_lines": (3, 4), "count_write": (3, 4),
+    "emotion_match": (3, 4), "check_game": (4, 6), "trace_lines": (3, 4), "count_write": (6, 8),
 }
 NEEDS_WORD = {"word_cards", "trace_letters", "vocab_poster", "emotion_match", "check_game"}
 LINE_ONLY = {"coloring"}
@@ -126,8 +126,12 @@ def problems(spec: dict, library_index: dict | None = None) -> list[str]:
         if t in ("match_same", "match_shadow") and len({it.get("asset") for it in items}) != len(items):
             errs.append(f"{i}장: 짝 잇기 그림은 서로 달라야 합니다")
         if t == "cut_paste":
-            if kind(p.get("container")) != "line":
-                errs.append(f"{i}장: 오려 붙이기 큰 그림(container)은 선 그림이어야 합니다({p.get('container')})")
+            c = p.get("container")
+            if kind(c) != "line":
+                errs.append(f"{i}장: 오려 붙이기 큰 그림(container)은 선 그림이어야 합니다({c})")
+            if not ((assets.get(c) or {}).get("open") or (lib.get(c) or {}).get("open")):
+                errs.append(f"{i}장: 오려 붙이기 큰 그림은 뚜껑 없이 열린 그릇·상자·접시처럼 안에 붙일 자리가 보이는 것이어야 합니다"
+                            f"(assets에 \"open\": true와 열린 모양 프롬프트, {c})")
         if p.get("header") == "characters" and len(p.get("characters") or spec.get("characters") or []) < 2:
             errs.append(f"{i}장: 캐릭터 머리는 characters 2~4개가 필요합니다")
     for k in used_assets(spec):

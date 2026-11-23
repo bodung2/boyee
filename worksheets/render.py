@@ -27,6 +27,7 @@ PATHS = ("straight", "wave", "zigzag", "curve", "loop", "steps")
 class Assets:
     def __init__(self, lib: Path):
         self.lib = lib
+        self.index = library.load(lib)
         self._cache: dict = {}
 
     def has(self, key: str | None) -> bool:
@@ -54,21 +55,56 @@ class Assets:
         sh.putalpha(art.getchannel("A"))
         return sh
 
-    def outline(self, key: str, size: int, dashed: bool = True, color=S.TRACE) -> Image.Image:
-        """따라 그리기용 흐린 점선 밑그림. 선 그림(<key>_line)이 있으면 그 선을, 없으면 그림 외곽선을 쓴다."""
-        ck = ("outline", key, size, dashed)
+    def _edges(self, key: str, size: int) -> Image.Image:
+        """색 그림에서 바로 뽑은 윤곽선(같은 그림이라 원화와 정확히 겹친다). opencv가 없으면 바깥 외곽선만."""
+        src = self._src(key, size)
+        alpha = library.cutout(src).getchannel("A")
+        try:
+            import cv2
+            import numpy as np
+        except ImportError:
+            k = max(3, size // 90) | 1
+            return ImageChops.subtract(alpha, alpha.filter(ImageFilter.MinFilter(k))).filter(ImageFilter.MaxFilter(3))
+        rgb = np.asarray(src).astype(np.int16)
+        g = cv2.cvtColor(np.asarray(src), cv2.COLOR_RGB2GRAY)
+        sat = rgb.max(axis=2) - rgb.min(axis=2)
+        # 그림 몸통: 바깥 흰색이 아니면서, 연한 회갈색 바닥 그림자(밝고 채도 낮음)는 뺀다
+        body = (np.asarray(alpha) > 128) & ((g < 215) | (sat > 45))
+        body = body.astype(np.uint8) * 255
+        k = max(5, size // 60) | 1
+        body = cv2.morphologyEx(body, cv2.MORPH_CLOSE, np.ones((k, k), np.uint8))
+        body = cv2.morphologyEx(body, cv2.MORPH_OPEN, np.ones((k, k), np.uint8))
+        n, lab, st, _ = cv2.connectedComponentsWithStats(body)
+        if n > 1:                                   # 가장 큰 덩어리 + 그 절반 이상인 덩어리만(떨어진 얼룩 제거)
+            big = st[1:, 4].max()
+            body = np.isin(lab, [i for i in range(1, n) if st[i][4] >= big * 0.08]).astype(np.uint8) * 255
+        body = (cv2.GaussianBlur(body, (k * 2 + 1, k * 2 + 1), 0) > 127).astype(np.uint8) * 255   # 계단 줄이기
+        w = max(4, size // 110)
+        rim = cv2.subtract(cv2.dilate(body, np.ones((w, w), np.uint8)), body)
+        gb = cv2.GaussianBlur(cv2.bilateralFilter(g.astype(np.uint8), 9, 60, 9), (5, 5), 0)
+        inner = cv2.Canny(gb, 60, 140) & cv2.erode(body, np.ones((k * 2, k * 2), np.uint8))
+        n, lab, st, _ = cv2.connectedComponentsWithStats(inner)
+        keep = np.zeros_like(inner)
+        for i in range(1, n):                       # 안쪽 선은 긴 것만(수채 질감 점은 버림)
+            if st[i][4] > size // 4:
+                keep[lab == i] = 255
+        keep = cv2.dilate(keep, np.ones((max(3, w - 2),) * 2, np.uint8))
+        return Image.fromarray(cv2.bitwise_or(rim, keep))
+
+    def outline(self, key: str, size: int, dashed: bool = True, color=S.TRACE, same_art: bool = False) -> Image.Image:
+        """따라 그리기용 흐린 점선 밑그림. 돌려주는 그림은 art(key, size)와 같은 크기·같은 자리다.
+        same_art(반쪽 그림)면 원화 자체의 윤곽선을, 아니면 검수를 통과한 선 그림(<key>_line)을 쓰고 없으면 원화 윤곽선."""
+        ck = ("outline", key, size, dashed, same_art)
         if ck in self._cache:
             return self._cache[ck]
         line_key = key if key.endswith("_line") else f"{key}_line"
-        if self.has(line_key):
+        if not same_art and self.has(line_key) and not self.index.get(line_key, {}).get("clipped"):
             g = self._src(line_key, size).convert("L")
             mask = g.point(lambda v: 255 if v < 150 else 0)
             alpha_src = library.cutout(self._src(line_key, size)).getchannel("A")
         else:
+            mask = self._edges(key, size)
             alpha_src = library.cutout(self._src(key, size)).getchannel("A")
-            k = max(3, size // 90) | 1
-            mask = ImageChops.subtract(alpha_src, alpha_src.filter(ImageFilter.MinFilter(k)))
-            mask = mask.filter(ImageFilter.MaxFilter(3))
         if dashed:                                     # 칸무늬를 곱해 선을 짧은 점선으로 끊는다
             step = max(8, size // 45)
             pat = Image.new("L", mask.size, 0)
@@ -229,22 +265,25 @@ def trace_outline(img, d, page, A, top, seed):
 
 
 def half_draw(img, d, page, A, top, seed):
-    """반쪽 그림 완성: 왼쪽 반은 원화, 오른쪽 반은 점선 밑그림, 가운데 기준선."""
+    """반쪽 그림 완성: 왼쪽 반은 원화, 오른쪽 반은 같은 원화의 점선 윤곽(정확히 이어지게), 가운데 기준선."""
     for b, it in zip(grid(2, 2, top, CONTENT_BOTTOM), page["items"]):
         S.card(d, b)
         x0, y0, x1, y1 = b
         lh = 170
         area = (x0 + 90, y0 + 80, x1 - 90, y1 - lh - 60)
         art = A.art(it["asset"], 1100)
-        ghost = A.outline(it["asset"], 1100)
-        ghost = ghost.resize(art.size, Image.LANCZOS)
-        pos = paste_fit(img, ghost, area)
-        left = art.crop((0, 0, art.width // 2, art.height))
-        lw = (pos[2] - pos[0]) // 2
-        img.paste(left.resize((lw, pos[3] - pos[1]), Image.LANCZOS), (pos[0], pos[1]),
-                  left.resize((lw, pos[3] - pos[1]), Image.LANCZOS))
-        cx = pos[0] + lw
-        S.dashed_line(d, [(cx, pos[1] - 30), (cx, pos[3] + 30)], fill=(190, 180, 170), width=5, dash=20, gap=14)
+        ghost = A.outline(it["asset"], 1100, same_art=True)          # art와 같은 크기·같은 자리
+        s = min((area[2] - area[0]) / art.width, (area[3] - area[1]) / art.height)
+        w, h = int(art.width * s), int(art.height * s)
+        px, py = int(area[0] + (area[2] - area[0] - w) / 2), int(area[1] + (area[3] - area[1] - h) / 2)
+        art, ghost = art.resize((w, h), Image.LANCZOS), ghost.resize((w, h), Image.LANCZOS)
+        half = w // 2
+        left = art.crop((0, 0, half, h))
+        right = ghost.crop((half, 0, w, h))
+        img.paste(left, (px, py), left)
+        img.paste(right, (px + half, py), right)
+        cx = px + half
+        S.dashed_line(d, [(cx, py - 30), (cx, py + h + 30)], fill=(190, 180, 170), width=5, dash=20, gap=14)
         if it.get("word"):
             S.label(d, (x0 + 110, y1 - lh - 30, x1 - 110, y1 - 50), it["word"])
     return {}
@@ -435,22 +474,29 @@ def cut_paste(img, d, page, A, top, seed):
 
 
 def count_write(img, d, page, A, top, seed):
-    rows = grid(1, len(page["items"]), top, CONTENT_BOTTOM, gap=44)
-    for (x0, y0, x1, y1), it in zip(rows, page["items"]):
-        S.card(d, (x0, y0, x1 - 420, y1), radius=50)
+    """세어 보고 숫자 쓰기: 6~8문제. 그림은 한 줄(많으면 두 줄)로 작게, 오른쪽에 숫자 칸."""
+    items = page["items"]
+    cols = 1 if len(items) <= 6 else 2
+    rows = grid(cols, math.ceil(len(items) / cols), top, CONTENT_BOTTOM, gap=34)
+    for (x0, y0, x1, y1), it in zip(rows, items):
+        h = y1 - y0
+        ans = min(h - 50, 300)
+        S.card(d, (x0, y0, x1 - ans - 50, y1), radius=40)
         n = it["count"]
-        per = 5 if n > 5 else n
-        lines = 2 if n > 5 else 1
-        cell = min((x1 - 420 - x0 - 120) / 5, (y1 - y0 - 80) / lines)
+        inner_w = x1 - ans - 50 - x0 - 100
+        one_line = inner_w / n
+        lines = 1 if one_line >= (h - 60) * 0.6 or n <= 5 else 2
+        per = n if lines == 1 else math.ceil(n / 2)
+        cell = min(inner_w / per, (h - 60) / lines)
         for k in range(n):
             row, col = divmod(k, per)
-            here = per if row < lines - 1 or n % per == 0 else n % per
-            cx0 = x0 + (x1 - 420 - x0 - here * cell) / 2 + col * cell
+            here = per if row < lines - 1 else n - per * (lines - 1)
+            cx0 = x0 + 50 + (inner_w - here * cell) / 2 + col * cell
             cy0 = (y0 + y1) / 2 - lines * cell / 2 + row * cell
-            paste_fit(img, A.art(it["asset"], 400), (cx0 + 10, cy0 + 10, cx0 + cell - 10, cy0 + cell - 10))
-        b = (x1 - 360, (y0 + y1) / 2 - 170, x1 - 20, (y0 + y1) / 2 + 170)
-        d.rounded_rectangle(b, radius=50, fill=(255, 255, 255), outline=S.LABEL_EDGE, width=8)
-    return {"answers": [it["count"] for it in page["items"]]}
+            paste_fit(img, A.art(it["asset"], 400), (cx0 + 8, cy0 + 8, cx0 + cell - 8, cy0 + cell - 8))
+        b = (x1 - ans - 10, (y0 + y1) / 2 - ans / 2, x1 - 10, (y0 + y1) / 2 + ans / 2)
+        d.rounded_rectangle(b, radius=40, fill=(255, 255, 255), outline=S.LABEL_EDGE, width=8)
+    return {"answers": [it["count"] for it in items]}
 
 
 DRAW = {

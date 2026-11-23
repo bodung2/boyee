@@ -87,7 +87,8 @@
    ],
    "name": "바구니",
    "kind": "color",
-   "prompt": "a woven wicker picnic basket with a lid and an arched handle"
+   "prompt": "a woven wicker picnic basket with a lid and an arched handle",
+   "note": "뚜껑이 닫힌 바구니라 오려 붙이기 큰 그림으로 쓰지 않는다"
   },
   "picnic_mat": {
    "image": "image12.png",
@@ -135,7 +136,8 @@
    ],
    "name": "바구니(선)",
    "kind": "line",
-   "prompt": "a woven picnic basket with a lid and an arched handle"
+   "prompt": "a woven picnic basket with a lid and an arched handle",
+   "skip": "원본 예시 그림의 오른쪽이 잘려 있어 쓰지 않는다(필요하면 새로 그림)"
   },
   "picnic_mat_line": {
    "image": "image4.png",

@@ -119,6 +119,13 @@ def build(cfg, out_dir: Path, today: str, feedback: str = "", run=None, gen=None
     verdict: dict = {}
     for round_no in range(1, QA_ROUNDS + 1):
         library.ensure(cfg, lib, _asset_list(spec, lib), gen)
+        index = library.load(lib)
+        clipped = [k for k in used_assets(spec) if index.get(k, {}).get("clipped") and not index[k].get("master")]
+        if clipped:                               # 다시 그려도 잘린 그림은 검수 전에 지우고 또 그린다
+            log.warning("잘린 원화(다시 그림, %d/%d): %s", round_no, QA_ROUNDS, clipped)
+            library.reject(lib, clipped, {k: "bad: 가장자리에서 잘림" for k in clipped})
+            verdict = {"summary": f"잘린 원화: {', '.join(clipped)}"}
+            continue
         result = render.render(spec, lib, out_dir, blog_url)
         verdict = qa(cfg, out_dir, spec, result, lib, run)
         bad = {k: str(v) for k, v in (verdict.get("assets") or {}).items() if not str(v).startswith("ok")}
