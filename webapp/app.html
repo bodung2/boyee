@@ -1937,7 +1937,7 @@ function renderGrowth() {
 }
 
 // 화면 버전: 폰이 새 화면을 받았는지 성장 탭 맨 아래에서 확인할 수 있게(바꿀 때마다 올린다)
-const APP_BUILD = "2026.11.23-a";
+const APP_BUILD = "2026.11.23-b";
 // 카드 하나를 그리다 오류가 나도 나머지 화면은 그대로 보이게, 오류 내용은 그 자리에 보여 준다
 function safeCard(name, fn) {
   try { return fn(); }
@@ -2883,7 +2883,7 @@ const BOARD = (() => {
   function make(type) {
     if (!guard()) return;
     if (view === "done") setView("active");
-    const p = center(), size = {note: [210, 160], text: [240, 64], table: [280, 150]}[type];
+    const p = center(), size = {note: [315, 240], text: [240, 64], table: [280, 150]}[type];
     let x = p.x - size[0] / 2, y = p.y - size[1] / 2;                 // 같은 자리에 이미 카드가 있으면 비스듬히 비켜 놓는다
     for (let k = 0; k < 12 && cards().some(o => Math.abs(o.x - x) < 24 && Math.abs(o.y - y) < 24); k++) { x += 34; y += 34; }
     const c = touch({id: uid(), type, x, y, w: size[0], h: size[1], link: "", attachments: [],
