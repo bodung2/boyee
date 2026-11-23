@@ -3,108 +3,265 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
 <style>
-  :root { --ink:#1f2937; --muted:#6b7280; --bg:#fff8ef; --card:#fff; --main:#ff7a59; --main2:#ffb347; --ok:#16a34a; }
-  * { box-sizing:border-box; }
-  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
-         background:var(--bg); color:var(--ink); }
-  .wrap { max-width:520px; margin:0 auto; padding:18px 16px 40px; }
-  h1 { font-size:26px; margin:6px 0 2px; text-align:center; }
-  .sub { text-align:center; color:var(--muted); margin:0 0 18px; font-size:14px; }
-  .step { background:var(--card); border-radius:18px; padding:16px; margin-bottom:14px; box-shadow:0 2px 8px rgba(0,0,0,.05); }
-  .step h2 { font-size:17px; margin:0 0 10px; }
-  .step h2 b { display:inline-block; width:26px; height:26px; line-height:26px; border-radius:50%; background:var(--main);
-               color:#fff; text-align:center; font-size:14px; margin-right:6px; }
-  input[type=text] { width:100%; font-size:17px; padding:12px; border:2px solid #f1e3d3; border-radius:12px; }
-  .hint { color:var(--muted); font-size:13px; margin:8px 0 0; }
-  .btn { display:block; width:100%; border:0; border-radius:14px; padding:15px; font-size:18px; font-weight:700;
-         background:linear-gradient(90deg,var(--main),var(--main2)); color:#fff; }
-  .btn.ghost { background:#fff; color:var(--main); border:2px solid var(--main); }
-  .btn:disabled { opacity:.45; }
-  #preview { display:none; width:100%; border-radius:12px; margin-top:12px; }
+  :root { --ink:#2b2340; --muted:#7a7090; --card:#ffffffee; --main:#ff6b8b; --main2:#ffb84d; --sky:#6cc6ff; --ok:#16a34a;
+          --fun:"Jua","Apple SD Gothic Neo","Malgun Gothic",sans-serif; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { min-height:100%; }
+  body { margin:0; color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+         background:#ffe8f0; }
+
+  /* ── 배경: 떠다니는 낙서 ── */
+  .bg { position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:0;
+        background:
+          radial-gradient(circle, rgba(43,35,64,.08) 1.5px, transparent 1.6px) 0 0/22px 22px,
+          linear-gradient(160deg, #ffe9b8 0%, #ffd3e2 38%, #dcd2ff 68%, #c9eaff 100%); }
+  .blob { position:absolute; border-radius:50%; filter:blur(40px); opacity:.55; }
+  .blob.a { width:260px; height:260px; background:#ffc2d4; top:-60px; left:-80px; }
+  .blob.b { width:300px; height:300px; background:#c9e8ff; bottom:-90px; right:-100px; }
+  .blob.c { width:200px; height:200px; background:#fff0a8; top:45%; left:60%; }
+  .doodle { position:absolute; font-size:30px; opacity:.6; animation:float 9s ease-in-out infinite; }
+  @keyframes float { 0%,100% { transform:translateY(0) rotate(-8deg); } 50% { transform:translateY(-18px) rotate(10deg); } }
+
+  .wrap { position:relative; z-index:1; max-width:520px; margin:0 auto; padding:14px 16px 48px; }
+
+  /* ── 머리말 ── */
+  .hero { text-align:center; padding:10px 0 4px; }
+  .hero h1 { font-family:var(--fun); font-weight:400; font-size:40px; margin:0; letter-spacing:1px;
+             background:linear-gradient(90deg,#ff6b8b,#ff9f43,#7c5cff,#3fb5ff); -webkit-background-clip:text; background-clip:text;
+             color:transparent; filter:drop-shadow(0 3px 0 #fff); }
+  .hero .sub { color:var(--muted); margin:6px 0 12px; font-size:15px; }
+  .magic { display:flex; align-items:center; justify-content:center; gap:10px; margin:6px 0 14px; }
+  .magic .box { width:74px; height:74px; border-radius:20px; background:#fff; display:grid; place-items:center; font-size:38px;
+                box-shadow:0 6px 0 rgba(43,35,64,.08), 0 10px 24px rgba(124,92,255,.15); }
+  .magic .box.paper { transform:rotate(-6deg); }
+  .magic .box.out { transform:rotate(6deg); animation:pop 1.4s ease-in-out infinite; }
+  .magic .wand { font-size:30px; animation:wiggle 1.4s ease-in-out infinite; }
+  .magic small { display:block; font-family:var(--fun); font-size:13px; color:var(--muted); margin-top:6px; text-align:center; }
+  @keyframes pop { 0%,100% { transform:rotate(6deg) scale(1); } 50% { transform:rotate(6deg) scale(1.08); } }
+  @keyframes wiggle { 0%,100% { transform:rotate(-12deg); } 50% { transform:rotate(18deg) translateY(-4px); } }
+
+  /* ── 진행 단계 ── */
+  .steps { display:flex; justify-content:space-between; margin:0 4px 14px; position:relative; }
+  .steps::before { content:""; position:absolute; left:22px; right:22px; top:17px; height:4px; border-radius:4px; background:#fff; }
+  .steps .s { position:relative; text-align:center; width:25%; font-family:var(--fun); font-size:13px; color:var(--muted); }
+  .steps .s i { display:grid; place-items:center; width:38px; height:38px; margin:0 auto 4px; border-radius:50%; background:#fff;
+                font-style:normal; font-size:17px; border:3px solid #fff; transition:.25s; }
+  .steps .s.done i { background:linear-gradient(135deg,var(--main),var(--main2)); color:#fff; transform:scale(1.08); }
+  .steps .s.done { color:var(--ink); }
+
+  /* ── 카드 ── */
+  .step { background:var(--card); border-radius:24px; padding:16px; margin-bottom:14px; border:3px solid #fff;
+          box-shadow:0 6px 0 rgba(43,35,64,.06), 0 12px 30px rgba(124,92,255,.10); backdrop-filter:blur(6px); }
+  .step h2 { font-family:var(--fun); font-weight:400; font-size:21px; margin:0 0 10px; display:flex; align-items:center; gap:8px; }
+  .step h2 b { display:inline-grid; place-items:center; width:30px; height:30px; border-radius:50%; font-size:16px; color:#fff;
+               background:linear-gradient(135deg,var(--main),var(--main2)); font-weight:400; }
+  .step h2 small { font-family:inherit; color:var(--muted); font-size:14px; }
+  input[type=text] { width:100%; font-size:18px; padding:13px 14px; border:3px solid #f0e6ff; border-radius:16px; outline:none;
+                     background:#fff; transition:.2s; font-family:inherit; }
+  input[type=text]:focus { border-color:var(--sky); box-shadow:0 0 0 4px #d6f0ff; }
+  .hint { color:var(--muted); font-size:13px; margin:8px 0 0; line-height:1.5; }
+
+  /* 사진 찍기 */
+  .camera { display:block; width:100%; border:3px dashed #c9b8ff; border-radius:20px; background:#faf7ff; padding:22px 10px;
+            font-family:var(--fun); font-size:20px; color:#7c5cff; cursor:pointer; transition:.2s; }
+  .camera .ic { display:block; font-size:46px; margin-bottom:4px; animation:bob 2.2s ease-in-out infinite; }
+  .camera:active { transform:scale(.98); }
+  .camera.has { padding:10px; font-size:16px; border-style:solid; border-color:#ffd1dc; background:#fff; }
+  .camera.has .ic { display:none; }
+  @keyframes bob { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-6px); } }
+  .polaroid { display:none; background:#fff; padding:10px 10px 30px; border-radius:6px; margin:14px auto 4px; width:82%;
+              transform:rotate(-3deg); box-shadow:0 10px 24px rgba(0,0,0,.15); position:relative; }
+  .polaroid::before { content:""; position:absolute; top:-10px; left:50%; width:70px; height:22px; margin-left:-35px;
+                      background:#ffe48ab0; transform:rotate(4deg); border-radius:3px; }
+  .polaroid img { width:100%; display:block; border-radius:3px; }
+  .polaroid span { position:absolute; bottom:6px; left:0; right:0; text-align:center; font-family:var(--fun); color:var(--muted); }
+
+  /* 모습 고르기 */
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  .style { border:2px solid #f1e3d3; border-radius:14px; padding:10px; background:#fff; text-align:left; font-size:15px; }
-  .style .e { font-size:26px; display:block; }
-  .style small { display:block; color:var(--muted); font-size:12px; margin-top:2px; }
-  .style.on { border-color:var(--main); background:#fff1ea; }
-  .err { color:#dc2626; font-weight:700; text-align:center; min-height:20px; margin:10px 0; }
+  .style { position:relative; border:3px solid transparent; border-radius:18px; padding:12px 10px 10px; text-align:left;
+           font-family:var(--fun); font-size:17px; color:var(--ink); cursor:pointer; transition:transform .15s, box-shadow .15s;
+           box-shadow:0 4px 0 rgba(43,35,64,.08); }
+  .style .e { display:grid; place-items:center; width:50px; height:50px; border-radius:16px; background:#ffffffb0; font-size:30px; margin-bottom:6px; }
+  .style small { display:block; font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; color:var(--muted);
+                 font-size:12px; margin-top:2px; }
+  .style:active { transform:scale(.96); }
+  .style.on { border-color:var(--ink); transform:translateY(-3px) rotate(-1deg); box-shadow:0 8px 0 rgba(43,35,64,.15); }
+  .style.on::after { content:"✔"; position:absolute; top:8px; right:10px; width:26px; height:26px; border-radius:50%;
+                     background:var(--ink); color:#fff; display:grid; place-items:center; font-size:14px; animation:popin .3s; }
+  .style.on .e { animation:jump .5s; }
+  @keyframes popin { from { transform:scale(0); } to { transform:scale(1); } }
+  @keyframes jump { 30% { transform:translateY(-8px) rotate(-8deg); } 60% { transform:translateY(0) rotate(6deg); } }
+
+  /* 버튼 */
+  .btn { display:block; width:100%; border:0; border-radius:20px; padding:17px; font-family:var(--fun); font-size:23px; color:#fff;
+         background:linear-gradient(90deg,var(--main),var(--main2)); box-shadow:0 6px 0 #d94d6d; cursor:pointer;
+         transition:transform .1s, box-shadow .1s; text-decoration:none; text-align:center; }
+  .btn:active { transform:translateY(4px); box-shadow:0 2px 0 #d94d6d; }
+  .btn:disabled { background:#d9d3e6; box-shadow:0 6px 0 #c3bbd4; color:#fff; }
+  .btn:not(:disabled).go { animation:pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.03); } }
+  .btn.ghost { background:#fff; color:var(--main); box-shadow:0 6px 0 #ffd1dc; border:3px solid #ffd1dc; }
+  .btn.sky { background:linear-gradient(90deg,#3fb5ff,#7c5cff); box-shadow:0 6px 0 #5a45c9; }
+  a.btn { margin-top:12px; font-size:20px; padding:14px; }
+  .todo { text-align:center; font-family:var(--fun); color:var(--muted); font-size:15px; margin:8px 0 0; min-height:20px; }
+  .err { color:#e11d48; font-family:var(--fun); text-align:center; min-height:22px; margin:8px 0; font-size:16px; }
+
+  /* ── 기다리는 화면 ── */
   .center { text-align:center; }
-  .spin { width:64px; height:64px; margin:20px auto; border-radius:50%; border:7px solid #ffe2d6; border-top-color:var(--main);
-          animation:r 1s linear infinite; }
-  @keyframes r { to { transform:rotate(360deg); } }
-  #result { width:100%; border-radius:16px; margin:10px 0; display:none; }
-  .big { font-size:20px; font-weight:800; margin:8px 0; }
-  a.btn { text-decoration:none; text-align:center; margin-top:10px; }
-  .howto { text-align:left; background:#fff7ed; border-radius:12px; padding:10px 14px; margin:12px 0 0; font-size:14px; line-height:1.6; }
+  .stage { position:relative; width:150px; height:150px; margin:8px auto 6px; }
+  .stage .core { position:absolute; inset:22px; border-radius:50%; display:grid; place-items:center; font-size:58px;
+                 background:radial-gradient(circle at 35% 30%, #fff, #ffe3ec 60%, #e4ddff); box-shadow:0 10px 30px rgba(255,107,139,.3);
+                 animation:breathe 1.8s ease-in-out infinite; }
+  .stage .orbit { position:absolute; inset:0; border-radius:50%; border:3px dashed #ffb3c4; animation:spin 6s linear infinite; }
+  .stage .orbit span { position:absolute; font-size:24px; }
+  .stage .orbit span:nth-child(1) { top:-12px; left:50%; margin-left:-12px; }
+  .stage .orbit span:nth-child(2) { bottom:4px; left:6px; }
+  .stage .orbit span:nth-child(3) { bottom:4px; right:6px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @keyframes breathe { 0%,100% { transform:scale(1); } 50% { transform:scale(1.06); } }
+  .big { font-family:var(--fun); font-size:25px; margin:6px 0; line-height:1.35; }
+  .fun { font-family:var(--fun); color:#7c5cff; font-size:17px; min-height:24px; transition:opacity .3s; }
+  .fun:empty { display:none; }
+  .queue { display:flex; justify-content:center; flex-wrap:wrap; gap:4px; margin:10px 0 2px; font-size:26px; }
+  .queue .me { animation:bob 1.2s ease-in-out infinite; }
+  .frame { display:none; background:#fff; padding:12px 12px 40px; border-radius:8px; margin:12px auto 4px; width:92%;
+           transform:rotate(-2deg); box-shadow:0 14px 30px rgba(0,0,0,.18); position:relative; animation:reveal .7s cubic-bezier(.2,1.4,.4,1); }
+  .frame img { width:100%; display:block; border-radius:4px; }
+  .frame span { position:absolute; bottom:8px; left:0; right:0; text-align:center; font-family:var(--fun); font-size:19px; }
+  .frame::before { content:""; position:absolute; top:-12px; left:50%; width:90px; height:26px; margin-left:-45px;
+                   background:#a8e6ffc0; transform:rotate(-3deg); border-radius:3px; }
+  @keyframes reveal { from { transform:rotate(-12deg) scale(.4); opacity:0; } to { transform:rotate(-2deg) scale(1); opacity:1; } }
+  .badge { display:inline-block; padding:7px 14px; border-radius:99px; background:#e8f7ee; color:var(--ok); font-family:var(--fun); margin:4px; }
+  .howto { text-align:left; background:#fff7ed; border:2px dashed #ffd29a; border-radius:16px; padding:10px 14px; margin:14px 0 0;
+           font-size:14px; line-height:1.7; }
+  .howto b.t { font-family:var(--fun); font-weight:400; font-size:17px; }
   .howto ol { margin:4px 0 0; padding-left:20px; }
-  .badge { display:inline-block; padding:6px 12px; border-radius:99px; background:#e8f7ee; color:var(--ok); font-weight:700; margin:4px; }
-  /* 큰 화면 모아 보기 */
-  .wall { max-width:none; padding:24px; }
-  .wall h1 { font-size:40px; }
-  .wgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:18px; }
-  .wcard { background:#fff; border-radius:18px; padding:10px; box-shadow:0 2px 10px rgba(0,0,0,.07); }
-  .wcard img { width:100%; aspect-ratio:1; object-fit:cover; border-radius:12px; background:#f3f4f6; }
-  .wcard .n { font-weight:800; font-size:18px; margin:8px 2px 0; }
+  .confetti { position:fixed; top:-20px; width:10px; height:14px; z-index:9; border-radius:2px; pointer-events:none;
+              animation:fall linear forwards; }
+  @keyframes fall { to { transform:translateY(110vh) rotate(720deg); } }
+
+  /* ── 큰 화면 모아 보기 ── */
+  .wall { max-width:none; padding:26px 32px; }
+  .wall .hero h1 { font-size:60px; }
+  .wall .hero .sub { font-size:22px; font-family:var(--fun); }
+  .wgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:28px 22px; margin-top:18px; }
+  .wcard { background:#fff; padding:10px 10px 14px; border-radius:6px; box-shadow:0 10px 24px rgba(0,0,0,.14); position:relative;
+           transform:rotate(var(--r)); animation:drop .7s cubic-bezier(.2,1.4,.4,1) both; }
+  .wcard.old { animation:none; }
+  @keyframes drop { from { transform:rotate(calc(var(--r) - 12deg)) scale(.4); opacity:0; } to { transform:rotate(var(--r)) scale(1); opacity:1; } }
+  .wcard::before { content:""; position:absolute; top:-11px; left:50%; width:80px; height:22px; margin-left:-40px; border-radius:3px;
+                   background:#ffe48ab0; transform:rotate(3deg); }
+  .wcard img { width:100%; aspect-ratio:1; object-fit:cover; border-radius:3px; background:#f3f0fa; display:block; }
+  .wcard .n { font-family:var(--fun); font-size:22px; margin:10px 2px 0; }
   .wcard .s { color:var(--muted); font-size:14px; margin:2px; }
+  .empty { text-align:center; font-family:var(--fun); font-size:26px; color:var(--muted); margin-top:60px; }
+
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } }
 </style>
 </head>
 <body>
+<div class="bg" aria-hidden="true">
+  <div class="blob a"></div><div class="blob b"></div><div class="blob c"></div>
+  <span class="doodle" style="top:7%;left:5%">⭐</span>
+  <span class="doodle" style="top:14%;right:7%;animation-delay:-2s">🖍️</span>
+  <span class="doodle" style="top:36%;left:2%;animation-delay:-4s;font-size:24px">✏️</span>
+  <span class="doodle" style="top:52%;right:4%;animation-delay:-1s">☁️</span>
+  <span class="doodle" style="top:70%;left:6%;animation-delay:-6s">🌈</span>
+  <span class="doodle" style="top:84%;right:9%;animation-delay:-3s;font-size:24px">✨</span>
+  <span class="doodle" style="top:94%;left:40%;animation-delay:-5s;font-size:22px">🎨</span>
+</div>
 <div id="app"></div>
 <script>
 const VIEW = '<?= view ?>';
 // 키·이름은 Code.gs의 STYLES, booth/styles.py와 같아야 한다.
 const STYLES = [
-  { key:'felt',       label:'양모펠트 인형',  e:'🧶', d:'보송보송 털실 인형' },
-  { key:'clay',       label:'클레이 인형',    e:'🟠', d:'찰흙으로 빚은 인형' },
-  { key:'anime2d',    label:'2D 애니메이션',  e:'📺', d:'TV 만화 주인공' },
-  { key:'anim3d',     label:'3D 애니메이션',  e:'🎬', d:'극장 애니메이션 주인공' },
-  { key:'plush',      label:'봉제 인형',      e:'🧸', d:'폭신한 천 인형' },
-  { key:'pixel',      label:'픽셀아트 게임',  e:'🎮', d:'옛날 게임 캐릭터' },
-  { key:'watercolor', label:'수채화 그림책',  e:'🎨', d:'그림책 속 주인공' },
-  { key:'sticker',    label:'스티커',         e:'🌟', d:'흰 테두리 귀여운 스티커' }
+  { key:'felt',       label:'양모펠트 인형',  e:'🧶', d:'보송보송 털실 인형',     c:'#ffe1ea', m:['털실 색을 고르는 중… 🧶', '바늘로 콕콕 모양 잡는 중…', '보송보송 털을 다듬는 중…'] },
+  { key:'clay',       label:'클레이 인형',    e:'🟠', d:'찰흙으로 빚은 인형',     c:'#ffe9d2', m:['찰흙을 조물조물 주무르는 중…', '동글동글 모양 빚는 중…', '반짝반짝 광택 내는 중… ✨'] },
+  { key:'anime2d',    label:'2D 애니메이션',  e:'📺', d:'TV 만화 주인공',        c:'#dcebff', m:['쓱쓱 선을 그리는 중… ✏️', '알록달록 색칠하는 중…', '눈을 반짝이게 만드는 중…'] },
+  { key:'anim3d',     label:'3D 애니메이션',  e:'🎬', d:'극장 애니메이션 주인공', c:'#ebe4ff', m:['입체로 빚어 내는 중…', '조명을 켜는 중… 💡', '영화처럼 마무리하는 중… 🎬'] },
+  { key:'plush',      label:'봉제 인형',      e:'🧸', d:'폭신한 천 인형',        c:'#fff1c9', m:['천을 싹둑 자르는 중… ✂️', '한 땀 한 땀 바느질하는 중…', '솜을 폭신하게 채우는 중…'] },
+  { key:'pixel',      label:'픽셀아트 게임',  e:'🎮', d:'옛날 게임 캐릭터',      c:'#d9f7e3', m:['픽셀을 하나씩 콕콕 찍는 중… 👾', '8비트 색을 고르는 중…', '게임 속으로 넣는 중… 🎮'] },
+  { key:'watercolor', label:'수채화 그림책',  e:'🎨', d:'그림책 속 주인공',      c:'#d9f1ff', m:['물감을 섞는 중… 🎨', '붓으로 살살 칠하는 중…', '종이를 말리는 중… 🌬️'] },
+  { key:'sticker',    label:'스티커',         e:'🌟', d:'흰 테두리 귀여운 스티커', c:'#fbe3ff', m:['스티커 테두리를 오리는 중… ✂️', '반짝 코팅하는 중…', '뒷면을 붙이는 중… 🌟'] }
 ];
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const call = (fn, ...args) => new Promise((ok, no) =>
   google.script.run.withSuccessHandler(ok).withFailureHandler(no)[fn](...args));
+const styleOf = k => STYLES.find(s => s.key === k) || STYLES[0];
 const JOB_KEY = 'booth_job';
-let photo = '', style = '', timer = null;
+let photo = '', style = '', timer = null, spinTimer = null;
+
+function hero(sub) {
+  return `<div class="hero"><h1>캐릭터 공방</h1><p class="sub">${sub}</p></div>`;
+}
 
 function formView() {
   $('#app').innerHTML = `<div class="wrap">
-    <h1>🎨 캐릭터 공방</h1>
-    <p class="sub">내가 그린 캐릭터를 AI가 새로운 모습으로 바꿔 줘요</p>
-    <div class="step"><h2><b>1</b>내 별명</h2>
+    ${hero('종이에 그린 내 캐릭터가 AI 마법으로 변신해요!')}
+    <div class="magic">
+      <div><div class="box paper">📝</div><small>내 그림</small></div>
+      <div class="wand">🪄</div>
+      <div><div class="box out" id="morph">🧶</div><small>짜잔!</small></div>
+    </div>
+    <div class="steps" id="steps">
+      <div class="s" data-n="1"><i>1</i>별명</div><div class="s" data-n="2"><i>2</i>그림</div>
+      <div class="s" data-n="3"><i>3</i>모습</div><div class="s" data-n="4"><i>🚀</i>보내기</div>
+    </div>
+    <div class="step"><h2><b>1</b>내 별명은?</h2>
       <input id="nick" type="text" maxlength="12" placeholder="예: 별빛토끼, 3번" autocomplete="off">
-      <p class="hint">진짜 이름 대신 별명이나 번호를 적어요. 패들렛과 사진에 이 별명이 나와요.</p></div>
-    <div class="step"><h2><b>2</b>그림 찍기</h2>
-      <button class="btn ghost" id="shot">📷 내 그림 찍기</button>
+      <p class="hint">진짜 이름 대신 <b>별명이나 번호</b>를 적어요. 패들렛에 이 별명이 나와요.</p></div>
+    <div class="step"><h2><b>2</b>내 그림 찍기</h2>
+      <button class="camera" id="shot"><span class="ic">📷</span><span id="shotTxt">눌러서 학습지 그림 찍기</span></button>
       <input id="file" type="file" accept="image/*" capture="environment" hidden>
-      <img id="preview" alt="찍은 그림">
-      <p class="hint">얼굴은 찍지 말고, <b>캐릭터 그림만</b> 화면에 꽉 차게 찍어요.</p></div>
-    <div class="step"><h2><b>3</b>어떤 모습으로 바꿀까요?</h2>
-      <div class="grid">${STYLES.map(s => `<button class="style" data-k="${s.key}"><span class="e">${s.e}</span>${s.label}<small>${s.d}</small></button>`).join('')}</div></div>
-    <div class="step"><h2><b>4</b>캐릭터 소개 <small style="color:#6b7280;font-weight:400">(안 써도 돼요)</small></h2>
+      <div class="polaroid" id="pol"><img id="preview" alt="찍은 그림"><span>내 그림 ✔</span></div>
+      <p class="hint">얼굴은 찍지 말고, <b>캐릭터 그림만</b> 화면에 꽉 차게! 밝은 곳에서 찍으면 더 잘 나와요.</p></div>
+    <div class="step"><h2><b>3</b>어떤 모습으로 변신할까?</h2>
+      <div class="grid">${STYLES.map(s => `<button class="style" data-k="${s.key}" style="background:${s.c}"><span class="e">${s.e}</span>${s.label}<small>${s.d}</small></button>`).join('')}</div></div>
+    <div class="step"><h2><b>4</b>캐릭터 소개 <small>(안 써도 돼요)</small></h2>
       <input id="intro" type="text" maxlength="60" placeholder="예: 축구를 좋아하고 노래를 잘해요">
-      <p class="hint">취미·특기를 적으면 AI가 그림에 살짝 담아 줘요.</p></div>
+      <p class="hint">취미·특기를 적으면 AI가 그림에 살짝 담아 줘요. ⚽🎤</p></div>
     <div class="err" id="err"></div>
-    <button class="btn" id="send" disabled>보내기 🚀</button>
+    <button class="btn" id="send" disabled>변신시키기 🪄</button>
+    <p class="todo" id="todo"></p>
   </div>`;
+  let i = 0;
+  clearInterval(spinTimer);
+  spinTimer = setInterval(() => { const m = $('#morph'); if (m && !style) m.textContent = STYLES[i++ % STYLES.length].e; }, 1100);
   $('#shot').onclick = () => $('#file').click();
   $('#file').onchange = async e => {
     const f = e.target.files[0]; if (!f) return;
-    try { photo = await shrink(f); $('#preview').src = photo; $('#preview').style.display = 'block'; $('#shot').textContent = '📷 다시 찍기'; }
-    catch (err) { $('#err').textContent = '사진을 읽지 못했어요. 다시 찍어 주세요.'; }
+    try {
+      photo = await shrink(f);
+      $('#preview').src = photo; $('#pol').style.display = 'block';
+      $('#shot').classList.add('has'); $('#shotTxt').textContent = '📷 다시 찍기';
+      $('#err').textContent = '';
+    } catch (err) { $('#err').textContent = '사진을 읽지 못했어요. 다시 찍어 주세요.'; }
     ready();
   };
   document.querySelectorAll('.style').forEach(b => b.onclick = () => {
-    style = b.dataset.k; document.querySelectorAll('.style').forEach(x => x.classList.toggle('on', x === b)); ready();
+    style = b.dataset.k;
+    document.querySelectorAll('.style').forEach(x => x.classList.toggle('on', x === b));
+    $('#morph').textContent = styleOf(style).e;
+    ready();
   });
   $('#nick').oninput = ready;
   $('#send').onclick = send;
+  ready();
 }
 
-function ready() { $('#send').disabled = !($('#nick').value.trim() && photo && style); }
+function ready() {
+  const have = { 1: !!$('#nick').value.trim(), 2: !!photo, 3: !!style };
+  const ok = have[1] && have[2] && have[3];
+  document.querySelectorAll('#steps .s').forEach(s => s.classList.toggle('done', s.dataset.n === '4' ? ok : have[s.dataset.n]));
+  $('#send').disabled = !ok;
+  $('#send').classList.toggle('go', ok);
+  const left = [!have[1] && '별명', !have[2] && '그림 사진', !have[3] && '모습'].filter(Boolean);
+  $('#todo').textContent = ok ? '준비 끝! 버튼을 눌러요 👆' : `${left.join(', ')}만 하면 돼요!`;
+}
 
 // 폰 사진(수 MB)을 긴 변 1600px JPEG로 줄인다. 회전 정보(EXIF)는 브라우저가 반영한다.
 async function shrink(file) {
@@ -119,61 +276,104 @@ async function shrink(file) {
 }
 
 async function send() {
-  $('#send').disabled = true; $('#send').textContent = '보내는 중…'; $('#err').textContent = '';
+  $('#send').disabled = true; $('#send').classList.remove('go'); $('#send').textContent = '마법 가루 뿌리는 중… ✨'; $('#err').textContent = '';
   try {
     const r = await call('submitDrawing', { nickname: $('#nick').value, style, intro: $('#intro').value, image: photo });
     localStorage.setItem(JOB_KEY, r.id);
+    clearInterval(spinTimer);
     waitView(r.id);
   } catch (err) {
     $('#err').textContent = (err && err.message) || '보내지 못했어요. 다시 눌러 주세요.';
-    $('#send').textContent = '보내기 🚀'; ready();
+    $('#send').textContent = '변신시키기 🪄'; ready();
   }
 }
 
 function waitView(id) {
   $('#app').innerHTML = `<div class="wrap center">
-    <h1>🎨 캐릭터 공방</h1>
-    <div class="step"><div class="spin" id="spin"></div>
-      <div class="big" id="msg">보냈어요!</div><p class="hint" id="hint"></p>
-      <img id="result" alt="완성된 캐릭터">
+    ${hero('AI가 내 캐릭터를 변신시키고 있어요')}
+    <div class="step">
+      <div class="stage" id="spin"><div class="orbit"><span>✨</span><span>⭐</span><span>💫</span></div><div class="core" id="core">🪄</div></div>
+      <div class="big" id="msg">보냈어요!</div>
+      <div class="fun" id="fun"></div>
+      <div class="queue" id="queue"></div>
+      <p class="hint" id="hint"></p>
+      <div class="frame" id="frame"><img id="result" alt="완성된 캐릭터"><span id="cap"></span></div>
       <div id="badges"></div>
       <div id="share"></div></div>
     <button class="btn ghost" id="again">✏️ 다른 캐릭터 또 만들기</button>
   </div>`;
-  $('#again').onclick = () => { if (timer) clearTimeout(timer); localStorage.removeItem(JOB_KEY); photo = ''; style = ''; formView(); };
+  $('#again').onclick = () => { if (timer) clearTimeout(timer); clearInterval(spinTimer); localStorage.removeItem(JOB_KEY); photo = ''; style = ''; shown = false; formView(); };
   poll(id);
 }
 
-let shown = false;
+// 변환 중에는 스타일마다 재밌는 문장을 번갈아 보여 준다
+function funLines(st) {
+  clearInterval(spinTimer);
+  const lines = styleOf(st.style).m;
+  let i = 0;
+  const show = () => { const f = $('#fun'); if (!f) return; f.style.opacity = 0; setTimeout(() => { f.textContent = lines[i++ % lines.length]; f.style.opacity = 1; }, 250); };
+  show();
+  spinTimer = setInterval(show, 3500);
+}
+
+function confetti() {
+  const colors = ['#ff6b8b', '#ffb84d', '#7c5cff', '#3fb5ff', '#4ade80', '#fde047'];
+  for (let i = 0; i < 70; i++) {
+    const p = document.createElement('div');
+    p.className = 'confetti';
+    p.style.left = Math.random() * 100 + 'vw';
+    p.style.background = colors[i % colors.length];
+    p.style.animationDuration = (1.8 + Math.random() * 1.8) + 's';
+    p.style.animationDelay = (Math.random() * 0.5) + 's';
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), 4500);
+  }
+}
+
+let shown = false, phase = '';
 async function poll(id) {
   let st;
   try { st = await call('getStatus', id); } catch (e) { timer = setTimeout(() => poll(id), 6000); return; }
   if (st.status === 'missing') { localStorage.removeItem(JOB_KEY); formView(); return; }
-  const msg = $('#msg'), hint = $('#hint');
+  const msg = $('#msg'), hint = $('#hint'), s = styleOf(st.style);
   if (st.status === '대기') {
-    msg.textContent = st.ahead > 0 ? `앞에 ${st.ahead}명이 기다리고 있어요` : '곧 그리기 시작해요!';
+    $('#core').textContent = s.e;
+    msg.textContent = st.ahead > 0 ? `앞에 ${st.ahead}명이 기다리고 있어요` : '곧 내 차례예요!';
+    $('#queue').innerHTML = '🧒'.repeat(Math.min(st.ahead, 12)) + (st.ahead > 12 ? '…' : '') + '<span class="me">🙋</span>';
+    $('#fun').textContent = '';
     hint.textContent = st.note || (st.workerOnline ? `${st.nickname}의 그림을 ${st.styleLabel}(으)로 바꿀 거예요.` : '부스 컴퓨터가 준비되면 시작해요. 잠깐만 기다려 주세요.');
   } else if (st.status === '변환 중') {
-    msg.textContent = `AI가 ${st.styleLabel}(으)로 그리는 중… 🖌️`;
-    hint.textContent = '1~2분쯤 걸려요. 이 화면을 켜 두세요.';
+    $('#core').textContent = s.e;
+    $('#queue').innerHTML = '';
+    msg.textContent = `${st.styleLabel}(으)로 변신 중!`;
+    if (phase !== 'work') funLines(st);
+    hint.textContent = '1~2분쯤 걸려요. 이 화면을 켜 두세요!';
   } else if (st.status === '완성') {
-    $('#spin').style.display = 'none';
-    msg.textContent = `${st.nickname}의 캐릭터 완성! 🎉`;
+    clearInterval(spinTimer);
+    $('#spin').style.display = 'none'; $('#queue').innerHTML = ''; $('#fun').textContent = '';
+    msg.textContent = `짜잔! ${st.nickname}의 캐릭터 완성 🎉`;
+    $('.hero .sub').textContent = '변신 성공! 내 캐릭터를 저장하고 자랑해 보세요';
     hint.textContent = '';
     if (!shown && st.hasResult) {
       shown = true;
-      call('getResultImage', id).then(src => { if (src) { $('#result').src = src; $('#result').style.display = 'block'; } });
+      call('getResultImage', id).then(src => {
+        if (!src) return;
+        $('#result').src = src; $('#cap').textContent = `${st.nickname} · ${st.styleLabel}`; $('#frame').style.display = 'block';
+        confetti();
+      });
     }
     $('#badges').innerHTML = (st.printed ? '<span class="badge">🖨️ 인쇄했어요</span>' : '') +
                              (st.padlet ? '<span class="badge">📌 패들렛에 올렸어요</span>' : '');
     if (!$('#share').innerHTML) $('#share').innerHTML = shareBox(st);
     if ((st.printed && st.padlet) || shownLong(id)) return;   // 인쇄·패들렛이 꺼져 있어도 2분 뒤엔 그만 묻는다
   } else if (st.status === '오류') {
-    $('#spin').style.display = 'none';
-    msg.textContent = '앗, 이번엔 잘 안 됐어요 😢';
+    clearInterval(spinTimer);
+    $('#core').textContent = '😢'; $('#spin').querySelector('.orbit').style.display = 'none'; $('#fun').textContent = '';
+    msg.textContent = '앗, 이번엔 잘 안 됐어요';
     hint.textContent = st.note || '선생님께 말해 주세요. 다시 만들어 줄게요.';
     return;
   }
+  phase = st.status === '변환 중' ? 'work' : st.status;
   timer = setTimeout(() => poll(id), 5000);
 }
 // 완성 그림 저장 + (자동 게시가 아니면) 아이가 직접 패들렛에 올리는 버튼
@@ -181,8 +381,8 @@ function shareBox(st) {
   let h = '<p class="hint">그림을 <b>꾹 누르면</b> 내 폰에 저장할 수 있어요.</p>';
   if (st.resultUrl) h += `<a class="btn ghost" href="${esc(st.resultUrl)}" target="_blank" rel="noopener">🔍 크게 보기·저장</a>`;
   if (st.padletUrl && !st.padlet) {
-    h += `<a class="btn" href="${esc(st.padletUrl)}" target="_blank" rel="noopener">📌 패들렛에 올리기</a>
-      <div class="howto"><b>패들렛에 올리는 방법</b><ol>
+    h += `<a class="btn sky" href="${esc(st.padletUrl)}" target="_blank" rel="noopener">📌 패들렛에 올리기</a>
+      <div class="howto"><b class="t">📌 패들렛에 올리는 방법</b><ol>
         <li>위 그림을 꾹 눌러 <b>사진 저장</b></li>
         <li>📌 버튼 → 패들렛에서 <b>＋</b> 누르기</li>
         <li>저장한 그림을 올리고, 제목에 <b>${esc(st.nickname)}</b>(내 별명) 적기 → 게시</li></ol></div>`;
@@ -193,13 +393,18 @@ const doneAt = {};
 function shownLong(id) { doneAt[id] = doneAt[id] || Date.now(); return Date.now() - doneAt[id] > 120000; }
 
 async function wallView() {
-  document.body.style.background = '#fff8ef';
-  $('#app').innerHTML = `<div class="wrap wall"><h1>🎨 캐릭터 공방 갤러리</h1><p class="sub" id="wsub"></p><div class="wgrid" id="wgrid"></div></div>`;
+  $('#app').innerHTML = `<div class="wrap wall">${hero('')}<div id="wgrid" class="wgrid"></div><div id="wempty"></div></div>`;
+  const seen = new Set();
   const tick = async () => {
     try {
       const d = await call('getWall', 30);
-      $('#wsub').textContent = d.waiting ? `지금 ${d.waiting}명의 캐릭터를 그리는 중이에요` : 'QR을 찍고 내 캐릭터를 보내 보세요!';
-      $('#wgrid').innerHTML = d.items.map(it => `<div class="wcard"><img src="${esc(it.url)}" alt=""><div class="n">${esc(it.nickname)}</div><div class="s">${esc(it.styleLabel)}${it.intro ? ' · ' + esc(it.intro) : ''}</div></div>`).join('');
+      $('.hero .sub').textContent = d.waiting ? `🪄 지금 ${d.waiting}명의 캐릭터가 변신 중이에요!` : '📷 QR을 찍고 내 캐릭터를 변신시켜 보세요!';
+      $('#wempty').innerHTML = d.items.length ? '' : '<p class="empty">첫 번째 캐릭터를 기다리고 있어요 ✨</p>';
+      $('#wgrid').innerHTML = d.items.map((it, i) => {
+        const rot = ((i * 37) % 7) - 3;
+        return `<div class="wcard${seen.has(it.id) ? ' old' : ''}" style="--r:${rot}deg"><img src="${esc(it.url)}" alt=""><div class="n">${esc(it.nickname)}</div><div class="s">${esc(it.styleLabel)}${it.intro ? ' · ' + esc(it.intro) : ''}</div></div>`;
+      }).join('');
+      d.items.forEach(it => seen.add(it.id));
     } catch (e) { /* 다음 차례에 다시 */ }
     setTimeout(tick, 15000);
   };
