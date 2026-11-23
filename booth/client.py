@@ -1,10 +1,20 @@
 """Apps Script 웹앱(대기열)과 이야기한다. 웹앱은 POST에 302로 답하고, 따라가면(GET) 결과 JSON이 나온다."""
 from __future__ import annotations
 
+import http.client
 import json
+import logging
+import time
+import urllib.error
 import urllib.request
 
 from .config import BoothConfig
+
+
+log = logging.getLogger("booth")
+# 구글 Apps Script는 가끔 수십 초씩 답이 늦거나 연결을 끊는다 → 결과를 알리는 요청은 몇 번 다시 보낸다
+NETWORK_ERRORS = (TimeoutError, ConnectionError, urllib.error.URLError, http.client.HTTPException)
+RETRY_WAITS = (5, 15)
 
 
 class BoothServerError(RuntimeError):
@@ -23,9 +33,19 @@ class Server:
             raise BoothServerError(".env에 BOOTH_WEBAPP_URL과 BOOTH_TOKEN을 적어 주세요(docs/BOOTH_CHARACTER.md 2단계)")
         self.cfg, self._send = cfg, send
 
-    def call(self, action: str, timeout: int = 60, **fields) -> dict:
+    def call(self, action: str, timeout: int = 60, resend: bool = False, **fields) -> dict:
+        """resend=True면 시간 초과·연결 끊김 때 RETRY_WAITS만큼 쉬었다가 다시 보낸다(결과 알리기처럼 두 번 해도 되는 요청만)."""
         body = json.dumps({"token": self.cfg.token, "action": action, **fields}).encode("utf-8")
-        raw = self._send(self.cfg.webapp_url, body, timeout)
+        waits = RETRY_WAITS if resend else ()
+        for attempt in range(len(waits) + 1):
+            try:
+                raw = self._send(self.cfg.webapp_url, body, timeout)
+                break
+            except NETWORK_ERRORS as e:
+                if attempt == len(waits):
+                    raise
+                log.warning("  웹앱이 답하지 않아(%s) %d초 뒤 다시 보냅니다(%s)", e, waits[attempt], action)
+                _sleep(waits[attempt])
         try:
             data = json.loads(raw.decode("utf-8"))
         except ValueError as e:
@@ -48,10 +68,13 @@ class Server:
         return self.call("claim", worker=worker).get("job")
 
     def done(self, job_id: str, jpeg_b64: str) -> dict:
-        return self.call("done", timeout=120, id=job_id, image=jpeg_b64)
+        return self.call("done", timeout=120, resend=True, id=job_id, image=jpeg_b64)
 
     def mark(self, job_id: str, **fields) -> None:
-        self.call("mark", id=job_id, **fields)
+        self.call("mark", timeout=90, resend=True, id=job_id, **fields)
 
     def fail(self, job_id: str, note: str, retry: bool, force: bool = False) -> str:
-        return self.call("fail", id=job_id, note=note, retry=retry, force=force).get("status", "")
+        return self.call("fail", timeout=90, resend=True, id=job_id, note=note, retry=retry, force=force).get("status", "")
+
+
+_sleep = time.sleep

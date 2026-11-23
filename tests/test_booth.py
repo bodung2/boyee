@@ -289,3 +289,38 @@ def test_announce_sends_padlet_button_url_only_without_api_key(tmp_path, key, ex
     client.Server(cfg, send=lambda u, b, t: sent.append(json.loads(b)) or b'{"ok": true}').announce()
     assert sent[0]["action"] == "ping" and sent[0]["padletUrl"] == expected
     assert config.board_url("abc123xyz9") == ""
+
+
+def test_result_reports_are_resent_when_web_app_times_out(tmp_path, monkeypatch):
+    """구글 Apps Script가 답을 늦게 해도(시간 초과) 결과 알리기는 다시 보내 그림이 '변환 중'에 멈추지 않는다."""
+    monkeypatch.setattr(client, "_sleep", lambda s: None)
+    calls = []
+
+    def flaky(url, body, timeout):
+        calls.append(json.loads(body))
+        if len(calls) < 3:
+            raise TimeoutError("The read operation timed out")
+        return b'{"ok": true, "status": "\xec\x98\xa4\xeb\xa5\x98"}'
+
+    s = client.Server(_cfg(tmp_path), send=flaky)
+    assert s.fail("j1", "다시 찍어 주세요", retry=False) == "오류"
+    assert len(calls) == 3 and calls[0]["retry"] is False and calls[0]["action"] == "fail"
+
+    def dead(url, body, timeout):
+        raise TimeoutError("timed out")
+
+    with pytest.raises(TimeoutError):
+        client.Server(_cfg(tmp_path), send=dead).mark("j1", padlet="ok")
+
+
+def test_claim_is_not_resent(tmp_path):
+    """가져가기는 다시 보내면 다음 그림까지 가져갈 수 있어 한 번만 보낸다(대기열 루프가 10초 뒤 다시 묻는다)."""
+    n = []
+
+    def dead(url, body, timeout):
+        n.append(1)
+        raise TimeoutError("timed out")
+
+    with pytest.raises(TimeoutError):
+        client.Server(_cfg(tmp_path), send=dead).claim("pc")
+    assert len(n) == 1
