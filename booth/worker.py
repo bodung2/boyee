@@ -27,6 +27,27 @@ NOTE_GIVE_UP = "이번엔 잘 안 됐어요. 선생님께 말해 주세요."
 NOTE_PAUSED = "AI가 잠깐 쉬는 중이에요. 조금만 기다려 주세요."
 
 
+class QuietErrors:
+    """대기열 확인이 잠깐 안 될 때 창을 같은 줄로 채우지 않는다: 처음 한 번 알리고, 그 뒤엔 5분에 한 번 몇 번째인지만."""
+
+    def __init__(self, every: float = 300, clock=time.monotonic):
+        self.every, self.clock = every, clock
+        self.count, self.last = 0, None
+
+    def report(self, e: Exception) -> None:
+        self.count += 1
+        now = self.clock()
+        if self.last is None or now - self.last >= self.every:
+            self.last = now
+            more = f" (지금까지 {self.count}번, 저절로 다시 시도합니다)" if self.count > 1 else " (저절로 다시 시도합니다)"
+            log.warning("대기열을 잠깐 확인하지 못했습니다: %s%s", str(e)[:120], more)
+
+    def recovered(self) -> None:
+        if self.count:
+            log.info("대기열 확인이 다시 됩니다")
+        self.count, self.last = 0, None
+
+
 class Paused(RuntimeError):
     """ChatGPT 로그인 풀림·사용 한도 — 잠시 쉬었다가 다시 한다."""
 
@@ -114,13 +135,15 @@ class Booth:
             self.server.mark(jid, padlet=f"실패: {e}"[:80])
 
     def loop(self, name: str, stop: threading.Event, once: bool = False) -> None:
+        quiet = QuietErrors()
         while not stop.is_set():
             try:
                 job = self.server.claim(name)
-            except Exception as e:                   # noqa: BLE001 — 와이파이가 잠깐 끊겨도 계속
-                log.warning("대기열을 확인하지 못했습니다(인터넷 확인): %s", e)
+            except Exception as e:                   # noqa: BLE001 — 와이파이·구글이 잠깐 느려도 계속
+                quiet.report(e)
                 stop.wait(10)
                 continue
+            quiet.recovered()
             if not job:
                 if once:
                     return

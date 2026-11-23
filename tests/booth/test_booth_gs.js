@@ -8,7 +8,7 @@ const CODE = fs.readFileSync(path.join(__dirname, '..', '..', 'booth', 'apps_scr
 
 function load(opts) {
   opts = opts || {};
-  const fake = { props: {}, files: {}, sheets: [], now: Date.parse('2026-11-28T01:00:00Z'), shareFails: !!opts.shareFails };
+  const fake = { props: {}, files: {}, sheets: [], locks: 0, lockBusy: false, now: Date.parse('2026-11-28T01:00:00Z'), shareFails: !!opts.shareFails };
   let seq = 0;
   function Sheet() { this.data = []; }
   Sheet.prototype = {
@@ -61,7 +61,10 @@ function load(opts) {
       base64Decode: s => Buffer.from(s, 'base64').toString('latin1'),
       base64Encode: b => Buffer.from(b, 'latin1').toString('base64')
     },
-    LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
+    LockService: { getScriptLock: () => ({
+      waitLock() { fake.locks++; if (fake.lockBusy) throw new Error('잠금 시간초과'); },
+      tryLock() { fake.locks++; return !fake.lockBusy; },
+      releaseLock() {} }) },
     ContentService: { MimeType: { JSON: 'json' }, createTextOutput: t => ({ text: t, setMimeType() { return this; } }) },
     console: { log() {} },
     Date: class extends Date { constructor(...a) { if (a.length) super(...a); else super(fake.now); } static now() { return fake.now; } }
@@ -183,6 +186,23 @@ test('집 PC가 알려 준 패들렛 주소와 결과 공개 주소가 아이 �
   post(gas, { token: T, action: 'claim' });
   const d = post(gas, { token: T, action: 'done', id: a.id, image: 'UkVT' });
   assert.equal(gas.getStatus(a.id).resultUrl, d.url);
+});
+
+test('기다리는 그림이 없으면 잠그지 않고, 잠금이 바쁘면 기다리지 않고 없음으로 답한다', () => {
+  const { gas, fake } = load();
+  gas.setupBooth();
+  const T = fake.props.BOOTH_TOKEN;
+  fake.locks = 0;
+  for (let i = 0; i < 5; i++) assert.equal(post(gas, { token: T, action: 'claim' }).job, null);
+  assert.equal(fake.locks, 0);
+  const a = gas.submitDrawing({ nickname: '곰', style: 'clay', image: IMG });
+  fake.lockBusy = true;
+  const busy = post(gas, { token: T, action: 'claim' });
+  assert.equal(busy.ok, true); assert.equal(busy.job, null); assert.equal(busy.busy, true);
+  assert.equal(gas.getStatus(a.id).status, '대기');
+  fake.lockBusy = false;
+  assert.equal(post(gas, { token: T, action: 'claim' }).job.id, a.id);
+  assert.equal(post(gas, { token: T, action: 'ping' }).api, 3);
 });
 
 let failed = 0;

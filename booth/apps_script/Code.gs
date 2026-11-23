@@ -8,7 +8,7 @@
  * 처음 한 번: 편집기 위쪽 함수 목록에서 setupBooth를 골라 ▶실행 → 실행 로그의 토큰을 노트북 .env의 BOOTH_TOKEN에 적는다.
  * 원본 그림은 비공개, 결과 그림만 '링크가 있는 사람 보기'로 공유한다(패들렛·큰 화면이 그림을 불러와야 해서).
  */
-const BOOTH_API = 2;
+const BOOTH_API = 3;
 const BOOK_NAME = '캐릭터 공방 대기열 (부스)';
 const FOLDER_NAME = '캐릭터 공방 (부스)';
 const STALE_MIN = 12;                 // 노트북이 가져간 뒤 이만큼 소식이 없으면 다시 대기열로
@@ -218,27 +218,41 @@ function apiPing_(req) {
   return { api: BOOTH_API, styles: STYLES, waiting: r.rows.filter(x => x[C['상태']] === S.WAIT).length };
 }
 
+/** 가져갈 그림의 줄 번호(대기 중이거나, 가져간 뒤 STALE_MIN 넘게 소식이 없는 것). 없으면 -1 */
+function pick_(rows, now) {
+  for (let i = 0; i < rows.length; i++) {
+    const st = rows[i][C['상태']];
+    if (st === S.WAIT) return i;
+    if (st === S.WORK && now - time_(rows[i][C['가져간 시각']]) > STALE_MIN * 60 * 1000) return i;
+  }
+  return -1;
+}
+
+/** 집 PC가 몇 초마다 부른다. 대부분은 기다리는 그림이 없으니 잠그지 않고 먼저 보고,
+ *  있을 때만 잠깐 잠가 '변환 중'으로 바꾼다. 잠금이 바쁘면 기다리지 않고 '없음'으로 답한다(다음 확인 때 다시). */
 function apiClaim_(req) {
-  return lock_(() => {
+  if (pick_(rows_().rows, Date.now()) < 0) return { job: null };
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) return { job: null, busy: true };
+  let row;
+  try {
     const r = rows_();
     const now = Date.now();
-    for (let i = 0; i < r.rows.length; i++) {
-      const row = r.rows[i];
-      const st = row[C['상태']];
-      const stale = st === S.WORK && now - time_(row[C['가져간 시각']]) > STALE_MIN * 60 * 1000;
-      if (st !== S.WAIT && !stale) continue;
-      row[C['상태']] = S.WORK; row[C['가져간 시각']] = new Date(now);
-      row[C['시도']] = Number(row[C['시도']] || 0) + 1;
-      setRow_(r.sh, i, row);
-      const b = DriveApp.getFileById(row[C['원본 파일']]).getBlob();
-      return { job: {
-        id: row[C.id], nickname: row[C['닉네임']], style: row[C['스타일']],
-        styleLabel: STYLES[row[C['스타일']]] || row[C['스타일']], intro: row[C['소개']], tries: row[C['시도']],
-        mime: b.getContentType(), image: Utilities.base64Encode(b.getBytes())
-      } };
-    }
-    return { job: null };
-  });
+    const i = pick_(r.rows, now);
+    if (i < 0) return { job: null };
+    row = r.rows[i];
+    row[C['상태']] = S.WORK; row[C['가져간 시각']] = new Date(now);
+    row[C['시도']] = Number(row[C['시도']] || 0) + 1;
+    setRow_(r.sh, i, row);
+  } finally {
+    lock.releaseLock();
+  }
+  const b = DriveApp.getFileById(row[C['원본 파일']]).getBlob();       // 사진 읽기는 잠금 밖에서
+  return { job: {
+    id: row[C.id], nickname: row[C['닉네임']], style: row[C['스타일']],
+    styleLabel: STYLES[row[C['스타일']]] || row[C['스타일']], intro: row[C['소개']], tries: row[C['시도']],
+    mime: b.getContentType(), image: Utilities.base64Encode(b.getBytes())
+  } };
 }
 
 function apiDone_(req) {
