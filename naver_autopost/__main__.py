@@ -57,6 +57,8 @@ def main(argv: list[str] | None = None) -> int:
     rst.add_argument("--day", required=True, help="다시 다듬을 글 날짜 YYYY-MM-DD(옛 글은 블로그에서 지운 뒤)")
     rst.add_argument("--no", type=int, help="시리즈 번호(기본: 지난 시리즈 글 수 + 1)")
     rst.add_argument("--publish", action="store_true", help="고친 뒤 바로 검수·발행까지")
+    rth = with_profile(sub.add_parser("rethumb"))
+    rth.add_argument("--day", required=True, help="썸네일을 다시 그릴 글 날짜 YYYY-MM-DD")
     prev = with_profile(sub.add_parser("preview"))
     prev.add_argument("dir", type=Path)
     rec = with_profile(sub.add_parser("record"))
@@ -127,6 +129,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "run":
         from .pipeline import run
         return run(cfg, dry_run=args.dry_run, force=args.force)
+    if args.cmd == "rethumb":
+        from .pipeline import rethumb, setup_logging
+        setup_logging(cfg, f"{cfg.profile.name}-{args.day}")
+        print(rethumb(cfg, args.day))
+        return 0
     if args.cmd == "restyle":
         from .pipeline import restyle, run, setup_logging
         setup_logging(cfg, f"{cfg.profile.name}-{args.day}")

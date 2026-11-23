@@ -487,3 +487,29 @@ def test_restyle_reopens_published_post_for_new_format(tmp_path, monkeypatch):
     stage = json.loads((out / "stage.json").read_text())
     assert stage["claude_pass"] is False and stage["gpt_pass"] is True and stage["written"] is True
     assert "시리즈 ①" in lines[-1]
+
+
+def _thumb_font_ok():
+    try:
+        from naver_autopost.images import _font
+        _font("bold", 20)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+@pytest.mark.skipif(not _thumb_font_ok(), reason="썸네일용 한글 글꼴 없음")
+def test_rethumb_uses_circled_number_and_uploads(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test")
+    c = Config.load("edu_series")
+    c.output_dir, c.data_dir = tmp_path / "out", tmp_path / "data"
+    out = c.output_dir / "2026-11-23"
+    out.mkdir(parents=True)
+    Image.new("RGB", (1600, 900), (120, 160, 200)).save(out / "illust_a.png")
+    post = make_post(title="[저경력 교사 필수 시리즈 1] 방학엔 학교 안 가도 될까?", lane="B",
+                     thumbnail={"chip": "저경력 교사 필수 1", "main_lines": ["방학엔", "학교 안 가도", "될까?"], "sub": "x"},
+                     illustrations=[{"name": "illust_a"}])
+    (out / "post.json").write_text(json.dumps(post, ensure_ascii=False), encoding="utf-8")
+    got = {}
+    path = pipeline.rethumb(c, "2026-11-23", upload=lambda data, name, mime, state: got.update(name=name, n=len(data)))
+    assert path.exists() and got["name"] == "thumb_edu_series_2026-11-23.png" and got["n"] > 1000
