@@ -1,6 +1,6 @@
 ---
 name: worksheet-design
-description: "유아 블로그 '무료 활동지'(주 3회) 한 세트(1~2장)를 설계해 spec.json으로 저장한다. 연령·발달 영역·누리과정 내용과 계절에 맞는 주제를 고르고, 원화 보관함(LIBRARY_FILE)에 있는 그림은 다시 쓰고 없는 그림만 영어 프롬프트로 적는다. 글씨·점선·칸은 코드가 그리므로 그림에는 한 가지 사물만 담는다. worksheets 패키지(naver_autopost --profile worksheet)가 호출한다."
+description: "유아 블로그 '무료 활동지'(주 3회) 한 세트(1~2장)를 블로그 주인의 「경량 활동 12종 명세서」 규칙으로 설계해 spec.json으로 저장한다. 연령·발달 영역·누리과정 내용과 계절에 맞는 주제를 고르고, 원화 보관함(LIBRARY_FILE)에 있는 그림은 다시 쓰고 없는 그림만 영어 프롬프트로 적는다. 글씨·점선·칸은 코드가 그리므로 그림에는 한 가지 사물만 담는다. worksheets 패키지(naver_autopost --profile worksheet)가 호출한다."
 ---
 
 # 무료 활동지 설계 — spec.json
@@ -17,51 +17,73 @@ description: "유아 블로그 '무료 활동지'(주 3회) 한 세트(1~2장)�
 4. 대상은 **만 3~5세**가 기본이다. 숫자 쓰기·낱말 따라 쓰기는 "4~5세", 선 긋기·색칠·그림자 잇기는 "3~5세"처럼 실제 난이도에 맞춰 `age`를 적는다.
 5. `nuri`에는 2019 개정 누리과정 5개 영역 중 맞는 영역과 내용 범주를 적는다(예: "신체운동·건강 – 신체 활동 즐기기", "의사소통 – 읽기와 쓰기에 관심 가지기", "자연탐구 – 수학적 탐구하기").
 
-## 2. 활동 구성 (1~2장)
+## 2. 활동 구성 — 「경량 활동 12종 명세서」 규칙
 
-한 세트는 **한 주제(theme)** 안에서 서로 다른 활동 2장이 기본이다. 1장짜리는 색칠하기처럼 한 장으로 완결될 때만 쓴다.
+블로그 주인의 「유아 워크북 홍보용 경량 활동 12종 상세 프롬프트 명세서」를 따른다. 핵심은 **"예쁘지만 단순하게"**다. 원화 품질로 관심을 끌고, 활동은 한눈에 이해되게만 만든다.
 
-| type | 이름 | 필요한 값 | 맞는 나이 |
-|---|---|---|---|
-| trace_lines | 선 따라 긋기 | `rows` 3~5개: `{"from": 그림, "to": 그림, "path": straight/wave/zigzag/loop/steps/arc}` | 3~5세 |
-| trace_letters | 낱말 따라 쓰기 | `words` 3~4개: `{"asset": 그림, "word": 한글 1~4자}` | 4~5세 |
-| count_write | 세어 보고 숫자 쓰기 | `rows` 3~4개: `{"asset": 그림, "count": 1~10}` | 3세 1~5, 4~5세 1~10 |
-| match_shadow | 그림자 짝 잇기 | `assets` 3~5개(색 그림) | 3~5세 |
-| match_word | 그림과 낱말 잇기 | `pairs` 3~5개: `{"asset": 그림, "word": 한글 1~4자}` | 4~5세 |
-| coloring | 색칠하기 | `asset` 1개(**kind "line"** 그림) | 3~5세 |
-| find_same | 같은 그림 찾기 | `rows` 3~4개: `{"target": 그림, "options": [서로 다른 그림 4개, target 포함]}` | 3~5세 |
+- 각 장마다 먼저 정한다: ① 핵심역량 1개(`competency`, 34역량 코드. 예: `M5 그래포모터·그리기`) → ② 활동 1개 → ③ 아이 행동 1개 → ④ 눈에 보이는 완료 결과 1개.
+- **경량 제한:** 지시문 1문장, 핵심 행동 1개, 5~10분 안에 끝남. 본편의 이야기·부모 발문·관찰기록표·복합 규칙은 넣지 않는다.
+- 한 세트는 한 주제로 **서로 다른 활동 2장**이 기본이다.
+- 같은 세트의 두 장은 영역이 겹치지 않게 고른다(예: 소근육 1장 + 한글 1장, 관찰 1장 + 색칠 1장).
 
-- 선 긋기는 쉬운 것 → 어려운 것 순서(straight → wave → zigzag → steps → loop).
-- 낱말은 아이가 아는 일상 낱말, 받침이 적은 낱말부터. 그림이 낱말과 1:1로 바로 알아볼 수 있어야 한다.
-- 세기 줄은 같은 그림 반복이다. 줄마다 다른 그림·다른 수로 한다.
-- 같은 그림 찾기 보기는 모양이 확실히 다른 그림으로 한다(좌우 반전·색만 다른 그림 금지).
-- 각 장 `title`은 18자 이내, `instruction`은 아이에게 읽어 주는 말투로 30자 이내(예: "점선을 따라 선을 그어요").
+| type | 이름 | 핵심역량 | 항목(`items`) | 연령 조정 |
+|---|---|---|---|---|
+| word_cards | 그림 한글 카드 | L5 | 4·6·8개(짝수) `{asset, word}` | 2–3세 4 / 3–4세 6 / 4–5세 8 |
+| vocab_poster | 그림 낱말판 | L2 | 6~8개 `{asset, word}` | |
+| check_game | 찾으면 콕! 체크 놀이 | E1 | 4~6개 `{asset, word}` | |
+| trace_letters | 낱말 따라 쓰기 | L5 | 3~4개 `{asset, word(4자 이하)}` | 4–5세 |
+| trace_lines | 선 따라 그리기 | M4 | 3~4개 `{path, asset(도착 그림, 선택)}` | straight→wave→zigzag→curve |
+| cut_lines | 오리기 연습 | M6 | 3~4개 `{path, asset}` | 가위 안전 안내 필요 |
+| trace_outline | 흐린 밑그림 따라 그리기 | M5 | 4개 `{asset, word}` 색 그림 | |
+| half_draw | 반쪽 그림 완성 | C2 | 4개 `{asset, word}` 좌우 대칭 사물만 | 캐릭터 제외 |
+| coloring | 색칠하기 | A2 | 2~4개 `{asset(선 그림), word}` | 2–3세 2개 |
+| match_same | 같은 그림 선 잇기 | C1 | 3~4개 `{asset, name}` 서로 다른 그림 | |
+| match_shadow | 그림자 찾기 | M8 | 3~4개 `{asset, name}` 실루엣이 확실히 다른 것 | |
+| emotion_match | 기분 찾기 | S1 | 3~4개 `{asset(표정이 분명한 캐릭터), word(기분말)}` | 정답 맞히기 아닌 대화 |
+| cut_paste | 오려 붙이기 미니판 | M6 | 2~3개 `{asset}` + `container`(큰 선 그림) | |
+| count_write | 세어 보고 숫자 쓰기 | N | 3~4개 `{asset, count(1~10)}` | 3세 1~5 |
 
-## 3. 그림(원화) — 다시 쓰기 우선
+- 요소 수 상한: 2–3세 3~4개, 3–4세 4~6개, 4–5세 6~8개.
+- 낱말은 2~4음절의 쉬운 명사다. 그림과 낱말이 1:1로 바로 알아볼 수 있어야 한다.
+- `title`은 14자 이내다(예: "겨울 준비물 따라 그려요"). `instruction`은 아이에게 읽어 주는 말투 한 문장(32자 이내).
+- 머리 모양 `header`
+  - `"characters"`: 고정 캐릭터 4명이 제목 양옆에 선다. 캐릭터가 주인공인 장이나 세트 첫 장에 쓴다.
+  - `"leaves"`: 잎·꽃 장식만 둔다. 활동 그림이 캐릭터인 장(그림자 찾기 등)에 쓴다.
+- 정답은 인쇄하지 않는다(코드가 자동으로 섞고 정답은 글에만 적는다).
 
-- `LIBRARY_FILE`에 맞는 그림이 있으면 **그 key를 그대로 쓴다**(`assets`에 `{"key": "apple"}`만 적어도 된다). 보관함 그림을 쓸수록 그림체가 일관되고 빨라진다.
-- 없는 그림만 새 key로 적고 `prompt`(영어)를 쓴다. 새 그림은 한 세트에 **6개 이하**.
-  - key: 영문 소문자·숫자·_ (예: `red_mitten`, `snowman`, `pine_tree_line`). 선 그림은 `_line`으로 끝낸다.
-  - `kind`: 색 그림 `color`, 색칠용 선 그림 `line`.
-  - `prompt`: **한 가지 사물**만, 생김새가 분명하게(색·모양·특징). 예: `"a pair of red knitted mittens with a white snowflake pattern"`. 그림체·흰 배경·글씨 금지는 코드가 붙이므로 쓰지 않는다. 사람(아이) 얼굴이 크게 나오는 그림, 실제 상표·캐릭터는 쓰지 않는다.
-  - `name`: 한국어 이름(예: "빨간 장갑").
-- 안내 캐릭터(곰)는 코드가 자동으로 넣는다. 적지 않는다.
+## 3. 그림(원화) — 워크북 원화 우선
+
+- `LIBRARY_FILE`의 `character: true` 그림은 블로그 주인 워크북의 **고정 캐릭터**(토끼·곰·여우·다람쥐)다.
+  - `characters`에 이 key들을 그대로 넣는다.
+  - 캐릭터를 새로 만들지 않는다.
+- `master: true`는 워크북 원본 그림이다. 맞는 그림이 있으면 **그 key를 그대로 쓴다**(`assets`에 `{"key": "apple"}`만 적어도 된다). `has_line: true`면 `<key>_line` 선 그림도 있다.
+- 없는 그림만 새 key로 적고 `prompt`(영어)를 쓴다.
+  - 새 그림은 한 세트에 **6개 이하**다.
+  - 새 그림은 워크북 원화를 참고 그림으로 붙여 같은 그림체(수채·색연필 그림책)로 그려진다.
+  - key: 영문 소문자·숫자·_. 색칠·오려 붙이기 큰 그림·흐린 밑그림용 선 그림은 `<사물>_line`(kind `line`)으로 함께 만든다.
+  - `prompt`: **한 가지 사물**만, 생김새가 분명하게 쓴다(색·모양·특징). 그림체·흰 배경·글씨 금지는 코드가 붙이므로 쓰지 않는다.
+  - 새 사물은 가장 전형적인 실루엣으로 쓴다(아이가 바로 알아보는 모양).
+  - 실제 상표·캐릭터·사람 얼굴은 쓰지 않는다.
+  - 기분 찾기용 표정 그림이 필요하면 고정 캐릭터 설명 + 표정으로 2~4개만 만든다. 예: `"the same cream-white bunny with a green bandana, crying with tears, sad face"`. key는 `rabbit_sad`처럼 쓴다.
 
 ## 4. 저장 — `OUTPUT_DIR/spec.json`
 
 ```json
 {
   "set_id": "2026-11-24-winter-clothes",
-  "theme": "겨울 옷", "title": "겨울 옷 입고 나가요 활동지", "age": "3~5세",
-  "domain": "소근육·눈과 손 협응", "nuri": "신체운동·건강 – 신체 활동 즐기기",
-  "skills": ["선 따라 긋기", "같은 모양 찾기"],
-  "assets": [{"key": "red_mitten", "name": "빨간 장갑", "kind": "color", "prompt": "..."}, {"key": "snowman"}],
+  "theme": "겨울 옷", "title": "겨울 옷 활동지", "age": "3~5세",
+  "domain": "소근육", "competency": "M5 그래포모터·그리기", "nuri": "신체운동·건강 – 신체 활동 즐기기",
+  "characters": ["rabbit", "bear", "fox", "squirrel"],
+  "assets": [{"key": "red_mitten", "name": "장갑", "kind": "color", "prompt": "..."},
+             {"key": "red_mitten_line", "name": "장갑(선)", "kind": "line", "prompt": "..."}],
   "pages": [
-    {"type": "trace_lines", "title": "장갑을 찾아가요", "instruction": "점선을 따라 선을 그어요", "rows": [...]},
-    {"type": "match_shadow", "title": "내 그림자는 어디?", "instruction": "같은 모양 그림자와 이어요", "assets": [...]}
+    {"type": "trace_outline", "title": "겨울 옷 따라 그려요", "instruction": "옅은 선을 따라 그려 보세요.",
+     "header": "characters", "items": [{"asset": "red_mitten", "word": "장갑"}]},
+    {"type": "match_shadow", "title": "그림자 찾기", "instruction": "같은 모양의 그림자를 찾아 선으로 이어요.",
+     "header": "leaves", "items": [{"asset": "rabbit", "name": "토끼"}]}
   ],
   "parent_tip": "부모님께: 활동을 함께할 때 해 줄 말 2~3문장(정답 맞히기보다 대화).",
-  "why": "이 주제·활동을 고른 이유 한 줄(계절·지난 활동지와 겹치지 않음 등)"
+  "why": "이 주제·활동을 고른 이유 한 줄"
 }
 ```
 

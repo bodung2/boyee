@@ -15,7 +15,8 @@ pytest.importorskip("PIL")
 
 def _font_ok():
     try:
-        render.font("bold", 20)
+        from worksheets import style
+        style.font("title", 20)
         return True
     except Exception:  # noqa: BLE001
         return False
@@ -47,9 +48,9 @@ def SPEC(**over):
                    {"key": "boot", "name": "장화", "kind": "color", "prompt": "a yellow boot"}],
         "pages": [
             {"type": "trace_lines", "title": "장갑을 찾아가요", "instruction": "점선을 따라 선을 그어요",
-             "rows": [{"from": "hat", "to": "mitten", "path": p} for p in ("straight", "wave", "zigzag")]},
-            {"type": "find_same", "title": "똑같은 그림", "instruction": "같은 그림에 동그라미 해요",
-             "rows": [{"target": t, "options": ["mitten", "hat", "scarf", "boot"]} for t in ("hat", "boot", "scarf")]},
+             "items": [{"asset": "mitten", "path": p} for p in ("straight", "wave", "zigzag")]},
+            {"type": "match_shadow", "title": "그림자 찾기", "instruction": "같은 모양의 그림자를 찾아 이어요",
+             "items": [{"asset": k, "name": n} for k, n in (("hat", "모자"), ("boot", "장화"), ("scarf", "목도리"))]},
         ],
         "parent_tip": "정답보다 대화가 먼저예요.",
     }
@@ -61,6 +62,7 @@ def SPEC(**over):
 def cfg(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test")
     monkeypatch.delenv("WORKSHEET_ASSETS", raising=False)
+    monkeypatch.setattr("worksheets.style.ensure_fonts", lambda *a, **k: None)
     c = Config.load("worksheet")
     c.output_dir = tmp_path / "out"
     c.data_dir = tmp_path / "data"
@@ -99,15 +101,16 @@ def test_spec_ok_and_problems():
 
 def test_spec_checks_activity_rules():
     s = SPEC()
-    s["pages"][1]["rows"][0]["options"] = ["mitten", "mitten", "scarf", "boot"]   # target 없음·중복
-    s["pages"].append({"type": "coloring", "title": "색칠", "instruction": "칠해요", "asset": "mitten"})
+    s["pages"][1]["items"].append({"asset": "hat", "name": "모자"})          # 그림자 짝이 겹침
+    s["pages"].append({"type": "coloring", "title": "색칠", "instruction": "칠해요",
+                       "items": [{"asset": "mitten", "word": "장갑"}, {"asset": "hat", "word": "모자"}]})
     s["pages"].append({"type": "trace_letters", "title": "쓰기", "instruction": "써요",
-                       "words": [{"asset": "hat", "word": "Hat"}]})
+                       "items": [{"asset": "hat", "word": "Hat"}]})
     errs = sp.problems(s)
     assert any("1~2장" in e for e in errs)
-    assert any("보기 4개" in e for e in errs)
+    assert any("서로 달라야" in e for e in errs)
     assert any("선 그림" in e for e in errs)
-    assert any("한글 1~4자" in e for e in errs)
+    assert any("한글 1~5자" in e for e in errs) and any("항목은 3~4개" in e for e in errs)
 
 
 def test_spec_reuses_library_assets_without_prompt():
@@ -117,8 +120,8 @@ def test_spec_reuses_library_assets_without_prompt():
     assert any("prompt" in e for e in sp.problems(s, {}))
 
 
-def test_used_assets_order():
-    assert sp.used_assets(SPEC()) == ["hat", "mitten", "scarf", "boot"]
+def test_used_assets_order_includes_header_characters():
+    assert sp.used_assets(SPEC(characters=["rabbit", "bear"])) == ["rabbit", "bear", "mitten", "hat", "boot", "scarf"]
 
 
 # ---------------------------------------------------------------- 원화 보관함
@@ -137,7 +140,7 @@ def test_library_draws_only_missing_and_uses_references(cfg):
     assert json.loads((lib / "rejected.json").read_text(encoding="utf-8"))[0]["reason"] == "bad: 글자"
     fake_gen.calls.clear()
     assert library.ensure(cfg, lib, assets, gen=fake_gen) == ["scarf"]    # 지운 것만 다시
-    assert fake_gen.calls[0][1] == 2 and "same worksheet series" in fake_gen.calls[0][2]
+    assert fake_gen.calls[0][1] == 2 and "master illustrations" in fake_gen.calls[0][2]
 
 
 def test_line_prompt_asks_for_coloring_art():
@@ -158,21 +161,42 @@ def test_silhouette_keeps_shape_only():
 def test_render_makes_pages_pdf_cover_and_answers(cfg, tmp_path):
     lib = library.root(cfg.data_dir)
     s = SPEC()
-    s["pages"].append({"type": "count_write", "title": "몇 개?", "instruction": "세어 보고 써요",
-                       "rows": [{"asset": "hat", "count": 3}, {"asset": "boot", "count": 7}, {"asset": "mitten", "count": 10}]})
-    s["pages"] = s["pages"][1:]
+    s["pages"] = [s["pages"][1], {"type": "count_write", "title": "몇 개일까요?", "instruction": "세어 보고 써요",
+                                  "items": [{"asset": "hat", "count": 3}, {"asset": "boot", "count": 7},
+                                            {"asset": "mitten", "count": 10}]}]
     library.ensure(cfg, lib, s["assets"], gen=fake_gen)
     r = render.render(s, lib, tmp_path / "o", "https://blog.naver.com/example")
-    assert r["answers"] == {"p1": [2, 4, 3], "p2": [3, 7, 10]}
-    assert Image.open(tmp_path / "o" / "page1_full.png").size == (render.W, render.H)
+    assert r["answers"]["p2"] == [3, 7, 10] and sorted(r["answers"]["p1"]) == [1, 2, 3]
+    assert Image.open(tmp_path / "o" / "page1_full.png").size == (2480, 3508)          # A4 300dpi
     assert Image.open(tmp_path / "o" / "worksheet_p1.png").width == render.BLOG_WIDTH
     assert Image.open(tmp_path / "o" / "worksheet_cover.png").size == (1600, 900)
     assert Path(r["pdf"]).read_bytes()[:4] == b"%PDF"
 
 
+@needs_font
+def test_every_activity_type_renders(cfg, tmp_path):
+    lib = library.root(cfg.data_dir)
+    keys = ["a1", "a2", "a3", "a4", "a5", "a6"]
+    library.ensure(cfg, lib, [{"key": k, "prompt": "x"} for k in keys] +
+                   [{"key": "big_line", "prompt": "x", "kind": "line"}, {"key": "a1_line", "prompt": "x", "kind": "line"}],
+                   gen=fake_gen)
+    it = lambda n, **kw: [{"asset": keys[i % 6], "word": "사과", "name": "사과", **kw} for i in range(n)]
+    pages = {
+        "word_cards": it(8), "vocab_poster": it(6), "check_game": it(6), "trace_letters": it(4),
+        "trace_lines": it(4, path="wave"), "cut_lines": it(3, path="zigzag"), "trace_outline": it(4),
+        "half_draw": it(4), "coloring": [{"asset": "big_line", "word": "공"}] * 2, "match_same": it(4),
+        "match_shadow": it(3), "emotion_match": it(3), "cut_paste": it(3), "count_write": it(3, count=4),
+    }
+    assert set(pages) == set(sp.PAGE_TYPES)
+    for t, items in pages.items():
+        page = {"type": t, "title": "제목", "instruction": "안내", "items": items, "container": "big_line"}
+        img, _ = render.render_page({"set_id": "2026-11-24-x", "pages": [page]}, page, render.Assets(lib), "")
+        assert img.size == (2480, 3508), t
+
+
 def test_shuffle_never_keeps_a_pair_in_place():
     for n in range(3, 6):
-        order = render._shuffled(list(range(n)), f"seed{n}")
+        order = render._shuffled(n, f"seed{n}")
         assert sorted(order) == list(range(n)) and all(i != j for j, i in enumerate(order))
 
 
@@ -209,14 +233,14 @@ def test_build_redraws_rejected_asset_then_shares(cfg, monkeypatch):
     info = build.build(cfg, out, "2026-11-24", run=run, gen=fake_gen, upload=upload)
     assert run.calls == ["/worksheet-design", "/worksheet-qa", "/worksheet-qa"]
     drawn = [c[0] for c in fake_gen.calls]
-    assert drawn.count("scarf") == 2 and drawn.count("guide_bear") == 1
+    assert drawn.count("scarf") == 2 and len(drawn) == 5
     assert "a plain striped scarf" in fake_gen.calls[-1][2]
     lib = library.root(cfg.data_dir)
-    assert {a["key"] for a in library.catalog(lib)} == {"guide_bear", "hat", "mitten", "boot", "scarf"}
+    assert {a["key"] for a in library.catalog(lib)} == {"hat", "mitten", "boot", "scarf"}
     assert info["pdf_url"].endswith("usp=sharing") and shared[0][1].endswith("2026-11-24-winter-clothes.pdf")
     saved = json.loads((out / "worksheet.json").read_text(encoding="utf-8"))
     assert [p["image"] for p in saved["pages"]] == ["worksheet_p1", "worksheet_p2"]
-    assert saved["answers"] == {"p2": [2, 4, 3]}
+    assert sorted(saved["answers"]["p2"]) == [1, 2, 3]
 
 
 @needs_font
@@ -290,3 +314,56 @@ def test_write_prompt_points_to_worksheet_file(cfg, monkeypatch):
     with pytest.raises(generate.NoPostError):
         generate.write_post(cfg, out, "2026-11-24")
     assert "/worksheet-post" in seen["p"] and "WORKSHEET_FILE=" in seen["p"] and "pdf_url" in seen["p"]
+
+
+# ---------------------------------------------------------------- 워크북 원화(master) 넣기
+
+def _fake_docx(path: Path):
+    import io
+    import zipfile
+    with zipfile.ZipFile(path, "w") as z:
+        for n in (4, 8, 10, 12):
+            page = Image.new("RGB", (2480, 3508), (250, 247, 238))
+            ImageDraw.Draw(page).rectangle([0, 0, 2480, 3508], fill=(250, 247, 238))
+            for k, info in json.loads(library.SEED_FILE.read_text(encoding="utf-8"))["assets"].items():
+                if info["image"] == f"image{n}.png":
+                    x, y, w, h = info["box"]
+                    ImageDraw.Draw(page).ellipse([x + 10, y + 10, x + w - 10, y + h - 10], fill=(200, 90, 40))
+            buf = io.BytesIO()
+            page.save(buf, "PNG")
+            z.writestr(f"word/media/image{n}.png", buf.getvalue())
+
+
+def test_seed_from_workbook_docx_makes_masters_and_style_references(cfg, tmp_path):
+    lib = library.root(cfg.data_dir)
+    docx = cfg.data_dir / "worksheets" / "명세서.docx"
+    docx.parent.mkdir(parents=True)
+    _fake_docx(docx)
+    added = build.seed_masters(lib, cfg.data_dir)
+    assert {"rabbit", "bear", "fox", "squirrel", "apple", "apple_line"} <= set(added)
+    cat = {a["key"]: a for a in library.catalog(lib)}
+    assert cat["rabbit"].get("character") and cat["apple"].get("master") and cat["apple"].get("has_line")
+    assert build.seed_masters(lib, cfg.data_dir) == []                  # 두 번째는 건드리지 않는다
+    refs = library._references(lib, library.load(lib), "color")
+    index = library.load(lib)
+    assert index[refs[0].stem].get("character") and not index[refs[1].stem].get("character")
+
+
+def test_master_art_is_never_deleted_by_qa(cfg, monkeypatch):
+    monkeypatch.setattr(build, "_rel", lambda p: p)
+    lib = library.root(cfg.data_dir)
+    docx = cfg.data_dir / "worksheets" / "w.docx"
+    docx.parent.mkdir(parents=True)
+    _fake_docx(docx)
+    spec = SPEC(characters=["rabbit", "bear"])
+    run = _runner([{"verdict": "fail", "assets": {"rabbit": "bad: 다름"}, "summary": "캐릭터 문제"}])
+
+    def design_run(cfg, prompt, log_file):
+        if prompt.startswith("/worksheet-design"):
+            out = cfg.output_dir / "d"
+            (out / "spec.json").write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
+        else:
+            run(cfg, prompt, log_file)
+    with pytest.raises(build.WorksheetRejected):
+        build.build(cfg, cfg.output_dir / "d", "2026-11-24", run=design_run, gen=fake_gen, upload=lambda *a: {})
+    assert library.path(lib, "rabbit").exists()

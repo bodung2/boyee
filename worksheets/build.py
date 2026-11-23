@@ -13,9 +13,6 @@ from .spec import PAGE_TYPES, problems, used_assets
 
 log = logging.getLogger(__name__)
 QA_ROUNDS = 3
-GUIDE = {"key": "guide_bear", "name": "안내 곰(꾸쓰쌤 활동지 캐릭터)", "kind": "color",
-         "prompt": ("the series mascot: a friendly little brown bear teacher with small round glasses and a "
-                    "green scarf, smiling and waving one paw, full body, standing")}
 
 
 class WorksheetRejected(Exception):
@@ -64,11 +61,25 @@ def design(cfg, out_dir: Path, today: str, lib: Path, feedback: str = "", run=No
     return spec
 
 
+def seed_masters(lib: Path, data_dir: Path) -> list[str]:
+    """보관함에 워크북 원화(master)가 없고 data/worksheets에 명세서 docx가 있으면 거기서 원화를 잘라 넣는다."""
+    if any(v.get("master") for v in library.load(lib).values()):
+        return []
+    for docx in sorted((data_dir / "worksheets").glob("*.docx")):
+        try:
+            added = library.seed(docx, lib)
+            log.info("워크북 원화 %d개를 보관함에 넣었습니다(%s)", len(added), docx.name)
+            return added
+        except Exception as e:  # noqa: BLE001 - 다른 docx일 수 있다
+            log.warning("%s에서 원화를 꺼내지 못했습니다: %s", docx.name, e)
+    return []
+
+
 def _asset_list(spec: dict, lib: Path) -> list[dict]:
-    """페이지에 쓰는 그림 + 안내 곰. 설계서에 프롬프트가 없으면 보관함 기록을 쓴다."""
+    """페이지에 쓰는 그림. 설계서에 프롬프트가 없으면 보관함 기록을 쓴다."""
     index = library.load(lib)
     given = {a["key"]: a for a in spec.get("assets") or [] if a.get("key")}
-    out = [GUIDE]
+    out = []
     for k in used_assets(spec):
         a = {**index.get(k, {}), **given.get(k, {}), "key": k}
         a["prompt"] = given.get(k, {}).get("prompt") or index.get(k, {}).get("prompt", "")
@@ -78,7 +89,7 @@ def _asset_list(spec: dict, lib: Path) -> list[dict]:
 
 def qa(cfg, out_dir: Path, spec: dict, result: dict, lib: Path, run=None) -> dict:
     index = library.load(lib)
-    keys = [GUIDE["key"]] + used_assets(spec)
+    keys = used_assets(spec)
     new = [k for k in keys if index.get(k, {}).get("status") == "new"]
     (out_dir / "qa.json").unlink(missing_ok=True)
     prompt = (
@@ -100,10 +111,10 @@ def qa(cfg, out_dir: Path, spec: dict, result: dict, lib: Path, run=None) -> dic
 def build(cfg, out_dir: Path, today: str, feedback: str = "", run=None, gen=None, upload=None) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
     lib = library.root(cfg.data_dir)
+    seed_masters(lib, cfg.data_dir)
     spec_path = out_dir / "spec.json"
     spec = (json.loads(spec_path.read_text(encoding="utf-8")) if spec_path.exists()
             else design(cfg, out_dir, today, lib, feedback, run))
-    spec["guide"] = GUIDE["key"]
     blog_url = f"https://blog.naver.com/{cfg.blog_id}" if cfg.blog_id else ""
     verdict: dict = {}
     for round_no in range(1, QA_ROUNDS + 1):
@@ -111,14 +122,15 @@ def build(cfg, out_dir: Path, today: str, feedback: str = "", run=None, gen=None
         result = render.render(spec, lib, out_dir, blog_url)
         verdict = qa(cfg, out_dir, spec, result, lib, run)
         bad = {k: str(v) for k, v in (verdict.get("assets") or {}).items() if not str(v).startswith("ok")}
-        bad = {k: v for k, v in bad.items() if library.path(lib, k).exists()}
+        index = library.load(lib)               # 워크북 원화(master)는 지우지 않는다
+        bad = {k: v for k, v in bad.items() if library.path(lib, k).exists() and not index.get(k, {}).get("master")}
         if verdict.get("verdict") == "pass" and not bad:
             break
         if bad:
             log.warning("검수에서 떨어진 원화(다시 그림, %d/%d): %s", round_no, QA_ROUNDS, bad)
             assets = {a["key"]: a for a in _asset_list(spec, lib)}
             for k in bad:                         # 다시 그릴 때 프롬프트를 잃지 않게 설계서에 남긴다
-                if k in assets and k != GUIDE["key"]:
+                if k in assets:
                     spec.setdefault("assets", [])
                     spec["assets"] = [a for a in spec["assets"] if a.get("key") != k] + [
                         {**assets[k], "prompt": (verdict.get("fix_prompts") or {}).get(k) or assets[k]["prompt"]}]
@@ -128,7 +140,7 @@ def build(cfg, out_dir: Path, today: str, feedback: str = "", run=None, gen=None
                                 + json.dumps(verdict.get("pages") or {}, ensure_ascii=False)[:800])
     else:
         raise WorksheetRejected(f"원화를 {QA_ROUNDS}번 그려도 검수를 통과하지 못했습니다: {verdict.get('summary', '')}")
-    library.accept(lib, [GUIDE["key"]] + used_assets(spec), spec["set_id"])
+    library.accept(lib, used_assets(spec), spec["set_id"])
     spec_path.write_text(json.dumps(spec, ensure_ascii=False, indent=1), encoding="utf-8")
 
     pdf = Path(result["pdf"])
@@ -136,7 +148,8 @@ def build(cfg, out_dir: Path, today: str, feedback: str = "", run=None, gen=None
                                          cfg.data_dir / "worksheets" / "drive")
     info = {
         "set_id": spec["set_id"], "theme": spec["theme"], "title": spec["title"], "age": spec["age"],
-        "domain": spec.get("domain", ""), "nuri": spec.get("nuri", ""), "skills": spec.get("skills") or [],
+        "domain": spec.get("domain", ""), "competency": spec.get("competency", ""), "nuri": spec.get("nuri", ""),
+        "skills": spec.get("skills") or [],
         "pages": [{"no": i, "type": p["type"], "activity": PAGE_TYPES[p["type"]], "title": p["title"],
                    "instruction": p["instruction"], "image": f"worksheet_p{i}"}
                   for i, p in enumerate(spec["pages"], 1)],
