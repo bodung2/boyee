@@ -53,6 +53,10 @@ def main(argv: list[str] | None = None) -> int:
     run_p = with_profile(sub.add_parser("run"))
     run_p.add_argument("--dry-run", action="store_true", help="발행 버튼은 누르지 않는다")
     run_p.add_argument("--force", action="store_true", help="오늘 이미 발행했어도 한 편 더 발행")
+    rst = with_profile(sub.add_parser("restyle"))
+    rst.add_argument("--day", required=True, help="다시 다듬을 글 날짜 YYYY-MM-DD(옛 글은 블로그에서 지운 뒤)")
+    rst.add_argument("--no", type=int, help="시리즈 번호(기본: 지난 시리즈 글 수 + 1)")
+    rst.add_argument("--publish", action="store_true", help="고친 뒤 바로 검수·발행까지")
     prev = with_profile(sub.add_parser("preview"))
     prev.add_argument("dir", type=Path)
     rec = with_profile(sub.add_parser("record"))
@@ -123,6 +127,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "run":
         from .pipeline import run
         return run(cfg, dry_run=args.dry_run, force=args.force)
+    if args.cmd == "restyle":
+        from .pipeline import restyle, run, setup_logging
+        setup_logging(cfg, f"{cfg.profile.name}-{args.day}")
+        for line in restyle(cfg, args.day, args.no):
+            print(line)
+        return run(cfg, day=args.day) if args.publish else 0
     if args.cmd == "preview":
         from . import content
         from .pipeline import render_images

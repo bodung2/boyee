@@ -623,11 +623,37 @@ def retry_note(cfg: Config, now: datetime | None = None) -> str:
     return f"\n→ {cfg.retry_time}에 자동으로 한 번 더 시도합니다(멈춘 단계부터 이어서)."
 
 
-def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
+def restyle(cfg: Config, day: str, number: int | None = None) -> list[str]:
+    """이미 발행한 글을 새 형식(제목·도입·썸네일)으로 고쳐 다시 발행할 준비를 한다(블로그 주인이 옛 글을 지움).
+    원문 확인·사실·출처는 그대로 두고 형식만 고치므로 처음부터 쓰는 것보다 훨씬 적게 든다.
+    - 그날 발행 기록을 지운다(다시 발행할 수 있게). 다른 이력 파일에서도 옛 주소를 뺀다.
+    - Claude(글쓰기 스킬 MODE=restyle)가 post.json의 형식만 고친다.
+    - 바뀐 문장만 다시 보도록 Claude 팩트체크 단계만 되돌린다(ChatGPT 교차검증은 이미 통과)."""
+    out_dir = cfg.output_dir / day
+    if not (out_dir / "post.json").exists() or not _stage(out_dir).get("written"):
+        raise ValueError(f"{out_dir}에 다듬을 글(post.json)이 없습니다")
+    lines = []
+    for e in history.remove(cfg.history_file, day):
+        lines.append(f"발행 기록에서 뺐습니다: {e.get('title')} {e.get('url', '')}")
+        for other in sorted(cfg.data_dir.glob("published_*.json")):
+            if e.get("url") and history.remove(other, e["url"]):
+                lines.append(f"{other.name}에서도 옛 주소를 뺐습니다")
+    if number is None:
+        number = 1 + sum(1 for e in history.load(cfg.history_file)
+                         if str(e.get("title", "")).startswith("[저경력 교사 필수") and e.get("date") != day)
+    generate.restyle_post(cfg, out_dir, number)
+    (out_dir / "ready.json").unlink(missing_ok=True)
+    _save_json(out_dir / "stage.json", {**_stage(out_dir), "claude_pass": False})
+    post = _load_post(out_dir / "post.json")
+    lines.append(f"새 형식으로 고쳤습니다: {post.get('title')}")
+    return lines
+
+
+def run(cfg: Config, dry_run: bool = False, force: bool = False, day: str | None = None) -> int:
     # 브라우저 자동화는 무거우므로 필요할 때만 불러온다.
     from . import publisher
 
-    today = today_kst()
+    today = day or today_kst()
     label = f"{cfg.profile.label}"
     setup_logging(cfg, f"{cfg.profile.name}-{today}")
     try:

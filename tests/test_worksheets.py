@@ -454,3 +454,36 @@ def test_busy_pattern_is_simplified_to_outline_and_one_inner_line(cfg, monkeypat
     monkeypatch.setattr(render, "BUSY_RATIO", 3.5)
     simple = sum(1 for v in render.Assets(lib)._edges("weave", 800).getdata() if v)
     assert simple < full * 0.6
+
+
+def test_restyle_reopens_published_post_for_new_format(tmp_path, monkeypatch):
+    from naver_autopost import history
+    monkeypatch.setenv("OPENAI_API_KEY", "test")
+    c = Config.load("edu_series")
+    c.output_dir, c.data_dir = tmp_path / "out", tmp_path / "data"
+    c.history_file = c.data_dir / "published_edu_series.json"
+    out = c.output_dir / "2026-11-23"
+    out.mkdir(parents=True)
+    (out / "post.json").write_text(json.dumps(make_post(title="[저경력 교사 필수 ⑦] 41조 연수"), ensure_ascii=False),
+                                   encoding="utf-8")
+    (out / "stage.json").write_text(json.dumps({"written": True, "illustrated": True, "claude_pass": True,
+                                                "gpt_pass": True}), encoding="utf-8")
+    (out / "ready.json").write_text("{}", encoding="utf-8")
+    history.append(c.history_file, {"date": "2026-11-23", "title": "[저경력 교사 필수 ⑦] 41조 연수",
+                                    "url": "https://blog.naver.com/x/1", "source": "autopost"})
+    other = c.data_dir / "published_edu.json"
+    history.append(other, {"date": "", "title": "[저경력 교사 필수 ⑦] 41조 연수", "url": "https://blog.naver.com/x/1"})
+    seen = {}
+
+    def fake_restyle(cfg, out_dir, number):
+        seen["no"] = number
+        post = json.loads((out_dir / "post.json").read_text(encoding="utf-8"))
+        post["title"] = f"[저경력 교사 필수 시리즈 {number}] 방학엔 학교 안 가도 될까?"
+        (out_dir / "post.json").write_text(json.dumps(post, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(generate, "restyle_post", fake_restyle)
+    lines = pipeline.restyle(c, "2026-11-23")
+    assert seen["no"] == 1 and history.published_on(c.history_file, "2026-11-23") is None
+    assert history.load(other) == [] and not (out / "ready.json").exists()
+    stage = json.loads((out / "stage.json").read_text())
+    assert stage["claude_pass"] is False and stage["gpt_pass"] is True and stage["written"] is True
+    assert "시리즈 1" in lines[-1]
