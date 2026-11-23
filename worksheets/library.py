@@ -20,18 +20,26 @@ log = logging.getLogger(__name__)
 SIZE = 1024
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9_]{1,40}$")
 
+# 블로그 주인 워크북(「동물 친구들의 소풍 준비」) 원화와 같은 수준·그림체. 첫 원화부터 출판 그림책 수준을 요구한다.
 STYLE = {
-    # 블로그 주인 워크북(「동물 친구들의 소풍 준비」) 원화와 같은 그림체: 수채·색연필 그림책 느낌
-    "color": ("Hand-painted children's picture-book illustration in soft watercolor and colored pencil, warm natural "
-              "colors, gentle paper texture, delicate warm-brown outlines, cute and friendly, for a preschool "
-              "worksheet (ages 3-6). Typical, instantly recognizable shape. ONE subject only, centered, filling about "
-              "80% of the square, fully inside the frame (nothing cut off). Plain pure white background (#FFFFFF), "
-              "only a very faint soft shadow under it, no scenery, no frame."),
-    "line": ("Clean black-and-white coloring-book line art for preschoolers (ages 3-6), matching a soft picture-book "
-             "style. Smooth closed black outlines of even weight (about 6-8px at 1024px), a few simple inner details, "
-             "no shading, no gray, no hatching, no filled black areas. ONE subject only, centered, filling about 80% "
-             "of the square, fully inside the frame. Plain pure white background, no scenery, no frame."),
+    "color": ("Premium hand-painted children's picture-book illustration, the quality of a published Korean picture book. "
+              "Soft layered watercolor washes with fine colored-pencil texture on top, warm natural palette, delicate "
+              "warm-brown pencil outlines (never thick black lines), gentle highlights and soft shading with light from "
+              "the upper left, subtle paper grain. Rounded, friendly proportions; animals have cute expressive eyes and "
+              "a small smile. Rich detail inside, but a clean, instantly recognizable silhouette (the most typical shape "
+              "of this subject that a 4-year-old would know). "
+              "ONE subject only, centered, filling about 75% of the square, fully inside the frame with a clear white "
+              "margin on every side (nothing cut off). Plain pure white background (#FFFFFF), only a very faint soft "
+              "contact shadow under it, no scenery, no frame."),
+    "line": ("Clean black-and-white coloring-book line art for preschoolers (ages 3-6), traced in the same proportions as "
+             "a premium picture-book illustration. Smooth, closed black outlines of even weight (about 6-8px at 1024px), "
+             "a few simple inner details that help coloring, no shading, no gray, no hatching, no filled black areas, no "
+             "broken or sketchy lines. ONE subject only, centered, filling about 75% of the square, fully inside the "
+             "frame with a clear white margin. Plain pure white background, no scenery, no frame."),
 }
+QUALITY_CHECK = ("Before you finish, check the image yourself: the subject exactly matches the description, its shape is "
+                 "the typical one a child recognizes, the style matches the reference images, there is no text at all, "
+                 "and nothing touches or is cut off by the edges. If any check fails, generate it again.\n")
 TAIL = """
 Square image, 1024x1024.
 Absolutely no text, no letters, no numbers, no captions, no logos, no watermark anywhere in the image.
@@ -139,7 +147,7 @@ def to_square(src: Path, out: Path) -> None:
 def prompt_for(asset: dict, margin: bool = False) -> str:
     kind = asset.get("kind", "color")
     return (f"{MARGIN_NOTE if margin else ''}{STYLE.get(kind, STYLE['color'])}\n"
-            f"Subject: {asset['prompt'].strip()}\n{TAIL}")
+            f"Subject: {asset['prompt'].strip()}\n{QUALITY_CHECK}{TAIL}")
 
 
 def _references(lib: Path, index: dict, kind: str, limit: int = 2) -> list[Path]:
@@ -187,36 +195,83 @@ def _draw_once(cfg, out: Path, prompt: str, refs: list[Path], gen=None) -> None:
         tmp.unlink(missing_ok=True)
 
 
-def draw(cfg, lib: Path, asset: dict, gen=None) -> Path:
-    """그림 한 장을 새로 그려 보관함에 넣는다(status new). gen(cfg, prompt, out, refs)는 테스트용."""
-    index = load(lib)
-    out = path(lib, asset["key"])
-    refs = _references(lib, index, asset.get("kind", "color"))
-    prompt = (REF_NOTE if refs else "") + prompt_for(asset)
-    _draw_once(cfg, out, prompt, refs, gen)
-    if touches_edge(Image.open(out)):             # 잘린 그림: 여백을 크게 해서 한 번 더 그린다
+def candidates_count(lib: Path) -> int:
+    """원화 하나에 몇 장을 그려 고를지. 보관함이 작은 초반(새 원화 40장 미만)에는 2장 그려 더 나은 것을 고른다."""
+    import os
+    if os.environ.get("WORKSHEET_CANDIDATES"):
+        return max(1, int(os.environ["WORKSHEET_CANDIDATES"]))
+    made = sum(1 for v in load(lib).values() if v.get("status") == "ok" and not v.get("master"))
+    return 2 if made < 40 else 1
+
+
+def _draw_one(cfg, out: Path, asset: dict, refs: list[Path], gen=None) -> bool:
+    """한 장 그리기. 가장자리에서 잘리면 여백을 크게 해서 한 번 더. 잘렸으면 True."""
+    _draw_once(cfg, out, (REF_NOTE if refs else "") + prompt_for(asset), refs, gen)
+    if touches_edge(Image.open(out)):
         log.warning("원화가 가장자리에서 잘렸습니다(다시 그림): %s", asset["key"])
         _draw_once(cfg, out, (REF_NOTE if refs else "") + prompt_for(asset, margin=True), refs, gen)
+    return touches_edge(Image.open(out))
+
+
+def _register(lib: Path, asset: dict, clipped: bool) -> None:
     index = load(lib)
     index[asset["key"]] = {"name": asset.get("name", ""), "prompt": asset["prompt"], "kind": asset.get("kind", "color"),
                            "status": "new", "created": date.today().isoformat(), "used": [],
                            **({"open": True} if asset.get("open") else {}),
-                           **({"clipped": True} if touches_edge(Image.open(out)) else {})}
+                           **({"character": True} if asset.get("character") else {}),
+                           **({"clipped": True} if clipped else {})}
     save(lib, index)
     log.info("원화 새로 그림: %s (%s)", asset["key"], asset.get("name", ""))
+
+
+def draw(cfg, lib: Path, asset: dict, gen=None) -> Path:
+    """그림 한 장을 새로 그려 보관함에 넣는다(status new). gen(cfg, prompt, out, refs)는 테스트용."""
+    out = path(lib, asset["key"])
+    refs = _references(lib, load(lib), asset.get("kind", "color"))
+    _register(lib, asset, _draw_one(cfg, out, asset, refs, gen))
     return out
 
 
-def ensure(cfg, lib: Path, assets: list[dict], gen=None) -> list[str]:
-    """spec의 그림이 보관함에 없으면 그린다. 새로 그린 key 목록을 돌려준다."""
-    index, made = load(lib), []
-    for a in assets:
-        known = index.get(a["key"])
-        if known and known.get("status") in ("ok", "new") and path(lib, a["key"]).exists():
-            continue
-        draw(cfg, lib, a, gen)
-        made.append(a["key"])
-    return made
+def ensure(cfg, lib: Path, assets: list[dict], gen=None, pick=None) -> list[str]:
+    """spec의 그림이 보관함에 없으면 그린다. 새로 그린 key 목록을 돌려준다.
+    pick(후보 {key: [경로…]}, 기준 그림 [경로…]) → {key: 고른 번호(1부터) 또는 0(모두 별로)}을 주면,
+    초반에는 원화마다 후보를 여러 장 그려 Claude가 워크북 원화와 비교해 가장 나은 것을 고른다."""
+    import shutil
+    index = load(lib)
+    todo = [a for a in assets if not (index.get(a["key"], {}).get("status") in ("ok", "new")
+                                      and path(lib, a["key"]).exists())]
+    n = candidates_count(lib) if pick else 1
+    if n <= 1 or not todo:
+        for a in todo:
+            draw(cfg, lib, a, gen)
+        return [a["key"] for a in todo]
+    cand_dir = lib / "_candidates"
+    cands: dict[str, list[Path]] = {}
+    clipped: dict[Path, bool] = {}
+    refs_all: list[Path] = []
+    for a in todo:
+        refs = _references(lib, load(lib), a.get("kind", "color"))
+        refs_all += [r for r in refs if r not in refs_all]
+        cands[a["key"]] = []
+        for i in range(1, n + 1):
+            p = cand_dir / f"{a['key']}__{i}.png"
+            clipped[p] = _draw_one(cfg, p, a, refs, gen)
+            cands[a["key"]].append(p)
+    choice = pick(cands, refs_all) or {}
+    for a in todo:
+        ps = cands[a["key"]]
+        k = int(choice.get(a["key"], 1) or 0)
+        if 1 <= k <= len(ps):
+            chosen = ps[k - 1]
+        else:                                   # 후보가 모두 별로: 고칠 프롬프트로 한 장 더(그다음은 검수가 본다)
+            fix = (choice.get("_fix") or {}).get(a["key"])
+            a = {**a, "prompt": fix or a["prompt"]}
+            chosen = cand_dir / f"{a['key']}__fix.png"
+            clipped[chosen] = _draw_one(cfg, chosen, a, _references(lib, load(lib), a.get("kind", "color")), gen)
+        shutil.copyfile(chosen, path(lib, a["key"]))
+        _register(lib, a, clipped.get(chosen, False))
+    shutil.rmtree(cand_dir, ignore_errors=True)
+    return [a["key"] for a in todo]
 
 
 def accept(lib: Path, keys: list[str], set_id: str) -> None:

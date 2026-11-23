@@ -63,6 +63,8 @@ def cfg(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test")
     monkeypatch.delenv("WORKSHEET_ASSETS", raising=False)
     monkeypatch.setattr("worksheets.style.ensure_fonts", lambda *a, **k: None)
+    monkeypatch.setenv("WORKSHEET_CANDIDATES", "1")
+    monkeypatch.setattr("worksheets.share.backup_assets", lambda lib, *a, **k: 0)
     c = Config.load("worksheet")
     c.output_dir = tmp_path / "out"
     c.data_dir = tmp_path / "data"
@@ -236,6 +238,8 @@ def _runner(qa_results):
         calls.append(prompt.split("\n", 1)[0])
         if prompt.startswith("/worksheet-design"):
             (out / "spec.json").write_text(json.dumps(SPEC(), ensure_ascii=False), encoding="utf-8")
+        elif "MODE=pick" in prompt:
+            calls[-1] = "/worksheet-qa pick"
         else:
             (out / "qa.json").write_text(json.dumps(qa_results.pop(0), ensure_ascii=False), encoding="utf-8")
     run.calls = calls
@@ -513,3 +517,43 @@ def test_rethumb_uses_circled_number_and_uploads(tmp_path, monkeypatch):
     got = {}
     path = pipeline.rethumb(c, "2026-11-23", upload=lambda data, name, mime, state: got.update(name=name, n=len(data)))
     assert path.exists() and got["name"] == "thumb_edu_series_2026-11-23.png" and got["n"] > 1000
+
+
+
+def test_early_library_draws_two_candidates_and_keeps_the_picked_one(cfg, monkeypatch):
+    monkeypatch.setenv("WORKSHEET_CANDIDATES", "2")
+    lib = library.root(cfg.data_dir)
+    seen = {}
+
+    def gen(cfg, prompt, out, refs):
+        img = Image.new("RGB", (1024, 1024), "white")
+        color = (200, 0, 0) if out.stem.endswith("__2") else (0, 0, 200)
+        ImageDraw.Draw(img).ellipse([300, 300, 724, 724], fill=color)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        img.save(out)
+        seen.setdefault("prompts", []).append(prompt)
+
+    def pick(cands, refs):
+        seen["cands"] = {k: [p.name for p in v] for k, v in cands.items()}
+        return {"mitten": 2}
+    made = library.ensure(cfg, lib, [{"key": "mitten", "prompt": "red mittens"}], gen=gen, pick=pick)
+    assert made == ["mitten"] and seen["cands"] == {"mitten": ["mitten__1.png", "mitten__2.png"]}
+    assert Image.open(library.path(lib, "mitten")).convert("RGB").getpixel((512, 512)) == (200, 0, 0)
+    assert not (lib / "_candidates").exists()
+    assert "picture book" in seen["prompts"][0] and "check the image yourself" in seen["prompts"][0]
+
+
+def test_backup_uploads_new_ok_assets_once(tmp_path):
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    Image.new("RGB", (10, 10)).save(library.path(lib, "apple"))
+    library.save(lib, {"apple": {"status": "ok"}, "pear": {"status": "new"}})
+    sent = []
+
+    def send(url, body, ctype, method, token):
+        sent.append(method)
+        return {"id": f"id{len(sent)}"}
+    assert share.backup_assets(lib, token="t", send=send) == 1
+    assert sent == ["POST", "POST", "POST"]            # 폴더 + apple.png + index.json
+    sent.clear()
+    assert share.backup_assets(lib, token="t", send=send) == 0 and sent == []
