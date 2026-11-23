@@ -424,11 +424,21 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&": "&am
 const store = {get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
                set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* 저장 못 해도 동작 */ } }};
 
-function api(fn, ...args) {
+function api1(fn, args) {
   return new Promise((ok, fail) => {
     if (!window.google || !google.script) return fail(new Error("구글 웹앱 안에서 열어 주세요"));
     google.script.run.withSuccessHandler(ok).withFailureHandler(e => fail(e instanceof Error ? e : new Error(String(e && e.message || e))))[fn](...args);
   });
+}
+// 폰 데이터(LTE)가 잠깐 끊기면 google.script.run이 'NetworkError: … HTTP 0'으로 실패한다.
+// 읽기만 하는 요청은 두 번까지 조금 기다렸다 다시 묻는다(저장은 두 번 들어갈 수 있어 다시 보내지 않음)
+const NET_ERR = /NetworkError|HTTP 0|network|연결 실패|Failed to fetch/i;
+const READ_ONLY = new Set(["apiVersion", "getData", "getQuestBoard", "loadBoard", "checkLinks"]);
+async function api(fn, ...args) {
+  for (let i = 0; ; i++) {
+    try { return await api1(fn, args); }
+    catch (e) { if (!READ_ONLY.has(fn) || !NET_ERR.test(e.message) || i >= 2) throw e; await new Promise(r => setTimeout(r, i ? 4000 : 1500)); }
+  }
 }
 // 빠른 반영: 화면(DATA)은 먼저 바꾸고, 서버 저장은 뒤에서 차례로 한다(버튼이 저장·새로 불러오기 4~8초를 기다리지 않게).
 // 저장이 다 끝나면 잠시 뒤 한 번만 조용히 새로 불러와 서버와 맞춘다. 실패하면 알리고 바로 새로 불러와 화면을 서버 상태로 되돌린다.
@@ -555,10 +565,19 @@ async function loadAssets(quiet) {
     if (typeof renderCamp === "function") renderCamp();
     if (!quiet && stalePrices()) refresh(true);
   } catch (e) {
-    $("#amain").innerHTML = `<div class="note">자산 데이터를 불러오지 못했습니다: ${esc(e.message)}<br>
-      웹앱 코드(Code.gs)를 새 버전으로 붙여 넣고 '새 버전'으로 다시 배포했는지 확인해 주세요.</div>`;
+    if (DATA) { if (!quiet) toast("새로 불러오지 못했어요 — 연결을 확인해 주세요", true); return; }   // 이미 보이는 화면은 그대로 둔다
+    const net = NET_ERR.test(e.message);
+    $("#amain").innerHTML = `<div class="note">${net
+      ? "인터넷 연결이 잠깐 끊겨 자산 데이터를 불러오지 못했어요(데이터는 그대로 있어요).<br>연결되면 자동으로 다시 불러옵니다."
+      : `자산 데이터를 불러오지 못했습니다: ${esc(e.message)}<br>웹앱 코드(Code.gs)를 새 버전으로 붙여 넣고 '새 버전'으로 다시 배포했는지 확인해 주세요.`}
+      <div style="margin-top:8px"><button class="btn primary" type="button" data-reload="1">다시 불러오기</button></div></div>`;
+    if (net) { clearTimeout(loadAssets.t); loadAssets.t = setTimeout(() => { if (!DATA) loadAssets(); }, 10000); }
   }
 }
+// 연결이 돌아오거나 앱으로 돌아오면, 아직 못 불러온 데이터를 다시 불러온다
+document.addEventListener("click", e => { if (e.target.closest("[data-reload]")) { $("#amain").innerHTML = '<p class="empty">불러오는 중…</p>'; loadAssets(); } });
+addEventListener("online", () => { if (!DATA) loadAssets(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && !DATA) loadAssets(); });
 function stalePrices() {
   const hasPriced = DATA.items.some(it => it.category === "finance" && priced(it.f || {}) && (it.f.ticker || "").trim());
   return hasPriced && (!DATA.pricesAt || Date.now() - Date.parse(DATA.pricesAt) > 30 * 6e4);
@@ -1937,7 +1956,7 @@ function renderGrowth() {
 }
 
 // 화면 버전: 폰이 새 화면을 받았는지 성장 탭 맨 아래에서 확인할 수 있게(바꿀 때마다 올린다)
-const APP_BUILD = "2026.11.23-b";
+const APP_BUILD = "2026.11.23-c";
 // 카드 하나를 그리다 오류가 나도 나머지 화면은 그대로 보이게, 오류 내용은 그 자리에 보여 준다
 function safeCard(name, fn) {
   try { return fn(); }
