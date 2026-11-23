@@ -557,3 +557,22 @@ def test_backup_uploads_new_ok_assets_once(tmp_path):
     assert sent == ["POST", "POST", "POST"]            # 폴더 + apple.png + index.json
     sent.clear()
     assert share.backup_assets(lib, token="t", send=send) == 0 and sent == []
+
+
+
+def test_attempt_uses_set_prepared_the_night_before(cfg, monkeypatch):
+    import worksheets.build as wb
+    ready = wb.prepared_dir(cfg, "2026-11-24")
+    ready.mkdir(parents=True)
+    (ready / "worksheet.json").write_text("{}", encoding="utf-8")
+    (ready / "worksheet_p1.png").write_bytes(b"png")
+    monkeypatch.setattr(wb, "build", lambda *a, **k: (_ for _ in ()).throw(AssertionError("다시 만들면 안 됨")))
+
+    def stop(*a, **k):
+        raise pipeline.Rejected("여기까지만")
+    monkeypatch.setattr(generate, "write_post", stop)
+    out = cfg.output_dir / "2026-11-24"
+    with pytest.raises(pipeline.Rejected, match="여기까지만"):
+        pipeline._attempt(cfg, "2026-11-24", out, "")
+    assert (out / "worksheet_p1.png").exists() and not ready.exists()
+    assert json.loads((out / "stage.json").read_text())["worksheet"] is True

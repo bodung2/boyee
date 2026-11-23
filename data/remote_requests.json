@@ -43,6 +43,11 @@
       "action": "rethumb",
       "profile": "edu_series",
       "day": "2026-11-23"
+    },
+    {
+      "id": "2026-11-24-worksheet-prepare",
+      "action": "worksheet_prepare",
+      "day": "2026-11-24"
     }
   ]
 }
