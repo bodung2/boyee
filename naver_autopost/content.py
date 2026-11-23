@@ -213,7 +213,7 @@ def validate(post: dict, profile: Profile | None = None, after_factcheck: bool =
                           "<p>[[IMAGE:photo_01]]</p>처럼 넣기)")
 
     thumb = post["thumbnail"]
-    if profile and profile.thumbnail_style in ("childhood", "bold", "photo"):
+    if profile and profile.thumbnail_style in ("childhood", "bold", "photo", "edu_scene"):
         lines = thumb.get("main_lines") or []
         if not 1 <= len(lines) <= 3:
             errors.append(f"썸네일 메인은 1~3줄이어야 합니다(현재 {len(lines)}줄)")
