@@ -411,3 +411,22 @@ def test_half_draw_ghost_lines_up_with_art(cfg):
 def test_seed_skips_clipped_example_art():
     seeds = json.loads(library.SEED_FILE.read_text(encoding="utf-8"))["assets"]
     assert seeds["picnic_basket_line"].get("skip")
+
+
+def test_busy_pattern_is_simplified_to_outline_and_one_inner_line(cfg, monkeypatch):
+    pytest.importorskip("cv2")
+    lib = library.root(cfg.data_dir)
+
+    def striped(cfg, prompt, out, refs):                     # 바구니 짜임처럼 안쪽 무늬가 아주 많은 그림
+        img = Image.new("RGB", (1024, 1024), "white")
+        d = ImageDraw.Draw(img)
+        d.ellipse([150, 150, 874, 874], fill=(220, 160, 80), outline=(90, 50, 20), width=10)
+        for y in range(220, 820, 28):
+            d.line([(200, y), (824, y)], fill=(90, 50, 20), width=6)
+        img.save(out)
+    library.draw(cfg, lib, {"key": "weave", "prompt": "x"}, gen=striped)
+    monkeypatch.setattr(render, "BUSY_RATIO", 99)
+    full = sum(1 for v in render.Assets(lib)._edges("weave", 800).getdata() if v)
+    monkeypatch.setattr(render, "BUSY_RATIO", 3.5)
+    simple = sum(1 for v in render.Assets(lib)._edges("weave", 800).getdata() if v)
+    assert simple < full * 0.6
