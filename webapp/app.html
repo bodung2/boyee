@@ -178,6 +178,17 @@ body.has-run #toast{bottom:auto;top:64px}body.has-run{padding-bottom:calc(76px +
 @media (prefers-reduced-motion:reduce){#ko .kc,#ko .cf,.gplus{animation:none}}
 @media (max-width:520px){.grid{grid-template-columns:repeat(2,1fr)}.hero .big{font-size:26px}.legend{grid-template-columns:1fr}}
 #syncdot{position:fixed;left:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:60;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--chip);color:var(--sub);box-shadow:var(--shadow)}
+.tot-g>summary{display:flex;flex-direction:column;gap:2px;cursor:pointer;list-style:none;margin-bottom:6px}
+.tot-g>summary::-webkit-details-marker{display:none}
+.tot-h,.tot>summary{display:grid;grid-template-columns:minmax(0,1fr) 52px 70px 72px;gap:6px;align-items:center}
+.tot>summary .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tot-h{font-size:11px;color:var(--mute);padding:4px 2px;border-bottom:1px solid var(--line)}
+.tot>summary{padding:9px 2px;border-bottom:1px solid var(--line);cursor:pointer;list-style:none;font-size:14.5px;font-variant-numeric:tabular-nums}
+.tot>summary::-webkit-details-marker{display:none}
+.tot>summary b{text-align:right}.tot>summary .m{text-align:right;color:var(--sub);font-size:13px}.tot>summary small{text-align:right;color:var(--mute);font-size:11.5px}
+.tot[open]>summary{background:var(--chip);border-radius:8px}
+.tot-list{padding:4px 6px 10px;font-size:13px;max-height:280px;overflow:auto}
+.tot-list>div{display:grid;grid-template-columns:86px 1fr;gap:6px;padding:4px 0;border-bottom:1px dashed var(--line)}
 /* ---------------------------------------------------------------- 📌 스케줄 보드(포스트잇 캔버스) */
 #board{display:flex;flex-direction:column;height:calc(100dvh - var(--tabsH,58px));overflow:hidden}
 #board[hidden]{display:none}
@@ -424,11 +435,21 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&": "&am
 const store = {get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
                set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* 저장 못 해도 동작 */ } }};
 
-function api(fn, ...args) {
+function api1(fn, args) {
   return new Promise((ok, fail) => {
     if (!window.google || !google.script) return fail(new Error("구글 웹앱 안에서 열어 주세요"));
     google.script.run.withSuccessHandler(ok).withFailureHandler(e => fail(e instanceof Error ? e : new Error(String(e && e.message || e))))[fn](...args);
   });
+}
+// 폰 데이터(LTE)가 잠깐 끊기면 google.script.run이 'NetworkError: … HTTP 0'으로 실패한다.
+// 읽기만 하는 요청은 두 번까지 조금 기다렸다 다시 묻는다(저장은 두 번 들어갈 수 있어 다시 보내지 않음)
+const NET_ERR = /NetworkError|HTTP 0|network|연결 실패|Failed to fetch/i;
+const READ_ONLY = new Set(["apiVersion", "getData", "getQuestBoard", "loadBoard", "checkLinks"]);
+async function api(fn, ...args) {
+  for (let i = 0; ; i++) {
+    try { return await api1(fn, args); }
+    catch (e) { if (!READ_ONLY.has(fn) || !NET_ERR.test(e.message) || i >= 2) throw e; await new Promise(r => setTimeout(r, i ? 4000 : 1500)); }
+  }
 }
 // 빠른 반영: 화면(DATA)은 먼저 바꾸고, 서버 저장은 뒤에서 차례로 한다(버튼이 저장·새로 불러오기 4~8초를 기다리지 않게).
 // 저장이 다 끝나면 잠시 뒤 한 번만 조용히 새로 불러와 서버와 맞춘다. 실패하면 알리고 바로 새로 불러와 화면을 서버 상태로 되돌린다.
@@ -555,10 +576,19 @@ async function loadAssets(quiet) {
     if (typeof renderCamp === "function") renderCamp();
     if (!quiet && stalePrices()) refresh(true);
   } catch (e) {
-    $("#amain").innerHTML = `<div class="note">자산 데이터를 불러오지 못했습니다: ${esc(e.message)}<br>
-      웹앱 코드(Code.gs)를 새 버전으로 붙여 넣고 '새 버전'으로 다시 배포했는지 확인해 주세요.</div>`;
+    if (DATA) { if (!quiet) toast("새로 불러오지 못했어요 — 연결을 확인해 주세요", true); return; }   // 이미 보이는 화면은 그대로 둔다
+    const net = NET_ERR.test(e.message);
+    $("#amain").innerHTML = `<div class="note">${net
+      ? "인터넷 연결이 잠깐 끊겨 자산 데이터를 불러오지 못했어요(데이터는 그대로 있어요).<br>연결되면 자동으로 다시 불러옵니다."
+      : `자산 데이터를 불러오지 못했습니다: ${esc(e.message)}<br>웹앱 코드(Code.gs)를 새 버전으로 붙여 넣고 '새 버전'으로 다시 배포했는지 확인해 주세요.`}
+      <div style="margin-top:8px"><button class="btn primary" type="button" data-reload="1">다시 불러오기</button></div></div>`;
+    if (net) { clearTimeout(loadAssets.t); loadAssets.t = setTimeout(() => { if (!DATA) loadAssets(); }, 10000); }
   }
 }
+// 연결이 돌아오거나 앱으로 돌아오면, 아직 못 불러온 데이터를 다시 불러온다
+document.addEventListener("click", e => { if (e.target.closest("[data-reload]")) { $("#amain").innerHTML = '<p class="empty">불러오는 중…</p>'; loadAssets(); } });
+addEventListener("online", () => { if (!DATA) loadAssets(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && !DATA) loadAssets(); });
 function stalePrices() {
   const hasPriced = DATA.items.some(it => it.category === "finance" && priced(it.f || {}) && (it.f.ticker || "").trim());
   return hasPriced && (!DATA.pricesAt || Date.now() - Date.parse(DATA.pricesAt) > 30 * 6e4);
@@ -1927,6 +1957,7 @@ function renderGrowth() {
         <tr><th style="text-align:left;padding:3px 4px">주</th>${GOALS.map(g => `<th style="padding:3px 4px">${g.icon}</th>`).join("")}</tr>
         ${snaps.slice(-12).reverse().map(x => `<tr><td style="padding:3px 4px;white-space:nowrap">${esc(x.date.slice(2).replace(/-/g, "."))}</td>${GOALS.map(g => `<td style="text-align:center;padding:3px 4px">${fmtPct(x.f[g.k] != null ? num(x.f[g.k]) : null)}</td>`).join("")}</tr>`).join("")}
       </table></div>` : ""}` : ""}
+    <button class="btn primary" type="button" data-g="totals" style="width:100%;margin:10px 0 4px;padding:12px;font-size:16px;font-weight:800">📚 누적 기록 보기</button>
     <p class="muted">줄을 누르면 그 영역의 점수 내역과 기록이 나와요 · 점수는 늘 기본 비교군(남자·30대)으로 쌓여요 · <a href="#" data-g="bench">점수 기준·출처 보기</a></p>
     <h2>빠르게 기록</h2><div class="grid">${GOALS.map(g => `<button type="button" class="stat" data-g="log" data-goal="${g.k}"><div class="l">${g.icon} ${g.label}</div><div class="n" style="font-size:15px">＋ 기록</div></button>`).join("")}</div>
     ${feed ? `<h2>최근 얻은 점수</h2><div class="card">${feed}</div>` : ""}
@@ -1937,7 +1968,7 @@ function renderGrowth() {
 }
 
 // 화면 버전: 폰이 새 화면을 받았는지 성장 탭 맨 아래에서 확인할 수 있게(바꿀 때마다 올린다)
-const APP_BUILD = "2026.11.23-b";
+const APP_BUILD = "2026.11.23-d";
 // 카드 하나를 그리다 오류가 나도 나머지 화면은 그대로 보이게, 오류 내용은 그 자리에 보여 준다
 function safeCard(name, fn) {
   try { return fn(); }
@@ -2293,6 +2324,49 @@ function showGoalDetail(goal) {
     ${["career", "economy", "social"].includes(goal) ? `<p class="muted" style="font-size:12px">직위·수상·저작물·순자산·파이프라인·가족 같은 업적은 '내 자산' 탭에서 고쳐요.</p>` : ""}`;
   $("#form").dataset.mode = "detail"; $("#sheet").hidden = false;
 }
+// 누적 기록 보기: 지금까지 쌓은 모든 기록을 영역별 · 항목별로 모아(횟수 · 시간 · 처음/최근) 보여 준다. 항목을 누르면 하나하나 펼쳐 본다
+const fmtMin = m => m >= 60 ? `${Math.floor(m / 60)}시간${m % 60 ? " " + (m % 60) + "분" : ""}` : `${m}분`;
+function logItem(l) {
+  const f = l.f, g = f.goal, typeName = (LOG_TYPES[g].find(([k]) => k === f.type) || [, f.type])[1];
+  if (f.type === "exercise") return "🏃 운동 · " + ({aerobic: "유산소", strength: "근력", etc: "기타"}[f.kind] || "기타");
+  if (f.type === "habit") return HABIT[f.field] ? HABIT[f.field][1] : "하루 습관";
+  if (f.type === "time") return Object.fromEntries(CRAFT_FIELDS)[f.field] || "시간 기록";
+  if (f.type === "etc") return "✏️ 기타(직접 적기)";
+  if (f.type === "win") return (Object.fromEntries(WIN_SUBS[g] || [])[f.sub] || typeName) + " (성취)";
+  if (f.type === "family") return Object.fromEntries(FAMILY_KINDS)[f.kind] || "👪 가족 관계";
+  if (f.type === "pss") return "🧘 스트레스 점검";
+  if (f.type === "saving") return "💰 월 저축률";
+  return typeName;
+}
+function showTotals() {
+  const S = scoreAll(), logs = gLogs(), all = new Set(logs.map(l => l.date));
+  const sum = (L, k) => L.reduce((a, l) => a + (num(l.f[k]) || 0), 0);
+  const allMin = sum(logs, "minutes"), first = logs.map(l => l.date).sort()[0];
+  const sec = GOALS.map(g => {
+    const L = logs.filter(l => l.f.goal === g.k).sort((a, b) => (b.date + b.updated) < (a.date + a.updated) ? -1 : 1);
+    const ev = S.events.filter(e => e.goal === g.k && !e.week).sort((a, b) => (b.date || "") < (a.date || "") ? -1 : 1);
+    const groups = new Map();
+    L.forEach(l => { const k = logItem(l), x = groups.get(k) || {k, n: 0, min: 0, list: []}; x.n += num(l.f.count) || 1; x.min += num(l.f.minutes) || 0; x.list.push(l); groups.set(k, x); });
+    const rows = [...groups.values()].sort((a, b) => b.n - a.n || b.min - a.min).map(x => {
+      const ds = x.list.map(l => l.date).sort();
+      return `<details class="tot"><summary><span class="t">${esc(x.k)}</span><b>${x.n.toLocaleString("ko-KR")}회</b>${x.min ? `<span class="m">${fmtMin(x.min)}</span>` : `<span class="m"></span>`}
+          <small>${esc(fmtDay(ds[0]).slice(5))}~${esc(fmtDay(ds[ds.length - 1]).slice(5))}</small></summary>
+        <div class="tot-list">${x.list.slice(0, 60).map(l => `<div><span>${esc(fmtDay(l.date))}</span><span>${esc(l.name)}${l.f.text && !/\(⏱\)$|하루 습관/.test(l.f.text) ? ` <small class="muted">${esc(l.f.text.slice(0, 60))}</small>` : ""}</span></div>`).join("")}
+          ${x.list.length > 60 ? `<div class="muted">… 외 ${x.list.length - 60}건</div>` : ""}</div></details>`;
+    }).join("");
+    const miles = ev.map(e => `<div class="dday"><span>${esc(e.label)}<br><small class="muted">${esc(e.date ? fmtDay(e.date) : "과거 업적")}</small></span><b>+${Math.round(e.pts)}</b></div>`).join("");
+    const days = new Set(L.map(l => l.date)).size;
+    return `<details class="card tot-g" open style="border-top:3px solid var(--g-${g.k})"><summary><b style="font-size:17px">${g.icon} ${g.label}</b>
+        <span class="muted">기록 ${L.length}건 · ${days}일${sum(L, "minutes") ? " · " + fmtMin(sum(L, "minutes")) : ""} · 쌓은 점수 ${Math.round(S.byGoal[g.k]).toLocaleString("ko-KR")}</span></summary>
+      ${rows ? `<div class="tot-h"><span>항목</span><span>횟수</span><span>시간</span><span>기간</span></div>${rows}` : '<p class="muted">아직 기록이 없어요.</p>'}
+      ${miles ? `<h4 style="margin:12px 0 2px">🏆 돌파·업적 <span class="muted" style="font-weight:400">${ev.length}개</span></h4>${miles}` : ""}</details>`;
+  }).join("");
+  $("#form").innerHTML = `<div class="row"><h3 style="margin:0">📚 누적 기록</h3><button class="btn" type="button" data-act="close">닫기</button></div>
+    <div class="track" style="margin:10px 0;grid-template-columns:repeat(3,1fr)"><span>모든 기록 <b>${logs.length.toLocaleString("ko-KR")}</b><small>건</small></span>
+      <span>기록한 날 <b>${all.size}</b><small>${first ? esc(fmtDay(first)) + "부터" : "일"}</small></span><span>기록한 시간 <b>${Math.round(allMin / 60)}</b><small>시간</small></span></div>
+    <p class="muted" style="font-size:12.5px;margin:0 0 8px">영역마다 항목별로 모았어요. 항목을 누르면 하나하나의 기록이 펼쳐져요(최근 순).</p>${sec}`;
+  $("#form").dataset.mode = "totals"; $("#sheet").hidden = false;
+}
 function showBench() {
   const rows = GOALS.map(g => { const b = BENCH[g.k]; return `<div class="dday" style="display:block"><strong>${g.icon} ${g.label} · ${esc(b.title)}</strong><br>
     <span class="muted">비교 집단: ${esc(b.group)} · 근거: ${esc(b.level)}<br>${esc(b.src)}</span></div>`; }).join("") +
@@ -2325,6 +2399,7 @@ document.addEventListener("click", async e => {
   if (a === "day") showDay(b.dataset.d);
   if (a === "badges") showBadges();
   if (a === "bench") showBench();
+  if (a === "totals") showTotals();
   if (a === "cmp") showCmp();
   if (a === "rivals") showRivals();
   if (a === "rivalsmore") { RIVAL_SHOW += 20; showRivals(true); }
