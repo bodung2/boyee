@@ -11,3 +11,4 @@ pykrx                      # 한국 종목 목록·코스피 지수(한국거래
 # 캐릭터 공방(부스): QR 안내판, 윈도우 프린터(셀피)로 바로 인쇄
 qrcode>=7.4
 pywin32>=306; sys_platform == "win32"
+pypdf>=4.0                # 법령·교육청 PDF 원문 읽기(naver_autopost/pagetext.py)
