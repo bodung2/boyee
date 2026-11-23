@@ -324,3 +324,17 @@ def test_claim_is_not_resent(tmp_path):
     with pytest.raises(TimeoutError):
         client.Server(_cfg(tmp_path), send=dead).claim("pc")
     assert len(n) == 1
+
+
+def test_queue_errors_are_reported_quietly(caplog):
+    """대기열 확인이 잠깐 안 돼도 창을 같은 줄로 채우지 않는다(5분에 한 번)."""
+    t = [0.0]
+    q = worker.QuietErrors(every=300, clock=lambda: t[0])
+    with caplog.at_level("INFO", logger="booth"):
+        for i in range(20):
+            t[0] = i * 30                            # 30초마다 실패 → 10분
+            q.report(RuntimeError("웹앱 오류(claim): 잠금 시간초과"))
+        q.recovered()
+    lines = [r.getMessage() for r in caplog.records]
+    assert len([m for m in lines if "잠깐 확인하지 못했습니다" in m]) == 2
+    assert "지금까지 11번" in lines[1] and lines[-1] == "대기열 확인이 다시 됩니다"

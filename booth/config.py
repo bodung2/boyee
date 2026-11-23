@@ -38,7 +38,7 @@ class BoothConfig:
             padlet_board=board_id(env("PADLET_BOARD") or ""),
             padlet_url=board_url(env("PADLET_BOARD") or ""),
             parallel=max(1, min(3, int(env("BOOTH_PARALLEL") or 1))),
-            poll_sec=float(env("BOOTH_POLL_SEC") or 3),
+            poll_sec=float(env("BOOTH_POLL_SEC") or 5),
             codex_bin=(env("CODEX_BIN") or "codex").strip(),
             codex_model=(env("CODEX_MODEL") or "").strip(),
             image_timeout=int(env("BOOTH_IMAGE_TIMEOUT_SEC") or 360),

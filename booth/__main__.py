@@ -23,6 +23,7 @@ from .config import BoothConfig
 from .convert import convert, fake_convert
 
 log = logging.getLogger("booth")
+NEED_API = 3                      # Code.gs의 BOOTH_API가 이보다 작으면 다시 붙여 넣으라고 알린다
 
 
 def _setup_logging(cfg: BoothConfig) -> None:
@@ -46,6 +47,8 @@ def cmd_check(cfg: BoothConfig) -> int:
     try:
         info = Server(cfg).announce()
         line(True, "웹앱 연결", f"기다리는 그림 {info.get('waiting', 0)}장")
+        if int(info.get("api") or 0) < NEED_API:
+            line(False, "웹앱 코드", "옛 버전 — booth/apps_script/Code.gs를 다시 붙여 넣고 배포 관리 → 새 버전으로 배포")
     except Exception as e:                           # noqa: BLE001
         line(False, "웹앱 연결", str(e))
     line(bool(shutil.which(cfg.codex_bin)), "Codex CLI(ChatGPT 구독)",
@@ -191,7 +194,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_reprint(cfg, args.job_id)
     _setup_logging(cfg)
     server = Server(cfg)
-    server.announce()
+    info = server.announce()
+    if int(info.get("api") or 0) < NEED_API:
+        log.warning("⚠ 웹앱 코드(Code.gs)가 옛 버전입니다. 저장소의 booth/apps_script/Code.gs를 다시 붙여 넣고 "
+                    "배포 관리 → 새 버전으로 배포하세요(그러지 않으면 '잠금 시간초과'가 날 수 있습니다)")
     padlet_mode = "자동 게시" if cfg.padlet_on else ("아이가 직접 올림" if cfg.padlet_url else "끔")
     log.info("캐릭터 공방 시작 — 동시에 %d장, 인쇄 %s, 패들렛 %s%s", cfg.parallel,
              "켬" if cfg.print_on else "끔", padlet_mode,
