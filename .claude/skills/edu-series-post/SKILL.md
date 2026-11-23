@@ -70,6 +70,15 @@ description: "교사 SR의 네이버 교육 블로그에 '저경력 교사가 �
 - **개인 판단을 요구하는 부분**(세금 신고, 소송, 징계)은 "담당 부서(행정실·교육지원청)·전문가에게 확인"으로 안내하고 단정하지 않는다.
 - **최소 기준(파이프라인이 검사):** 1차 출처 4개 이상, `claims` 8개 이상. 못 채우면 그 편은 쓰지 말고 같은 시기에 맞는 다른 편으로 바꾼다.
 
+### 원문 읽기 도구 (WebFetch로 본문이 안 나올 때 — 필수)
+
+국가법령정보센터(law.go.kr)·교육청 누리집은 자바스크립트로 본문을 그려서, WebFetch로는 페이지 틀만 나온다. 교육청·부처 PDF도 WebFetch로는 깨진다. **이럴 때는 포기하지 말고 아래 도구로 읽는다**(Bash).
+- 조문: `.venv/Scripts/python.exe -m naver_autopost.pagetext --law 교육공무원법 --article 41 --out OUTPUT_DIR/src_law41.txt`
+- 아무 공식 페이지·PDF: `.venv/Scripts/python.exe -m naver_autopost.pagetext "<주소>" --out OUTPUT_DIR/src_이름.txt`
+- `.venv/Scripts/python.exe`가 없으면 `python -m naver_autopost.pagetext …`로 실행한다.
+- 저장한 파일을 Read로 읽고, 거기서 `quote`를 그대로 복사한다. 별표·시행령은 법령 이름에 그대로 쓴다(예: `--law "공무원 수당 등에 관한 규정"`, `--law "교육공무원법 시행령"`).
+- 이 도구로도 열리지 않을 때만 그 출처를 포기한다.
+
 ## 4. 글 모양 (edu-auto-post 3절과 다른 점)
 
 - **제목:** `[저경력 교사 필수 ⑨] 비정기 전보 내신, 언제·어떻게 쓰나?`처럼 시리즈 표시 + 번호(원문자)로 시작한다. 뒤에는 검색어가 들어간 질문형으로 쓴다. 40자 이내를 권장한다.

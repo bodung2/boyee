@@ -27,6 +27,15 @@ description: "edu-series-post가 만든 '저경력 교사가 꼭 알아야 할 �
 5. **제목·썸네일·카드·3줄 요약**의 수치와 표현도 본문과 원문에 맞는지 똑같이 검증한다.
 6. **시리즈 표시를 확인한다.** 제목이 `[저경력 교사 필수 N]`으로 시작하는지, 다음 편 예고가 날짜를 약속하지 않는지 본다.
 
+## 원문 읽기 도구 (WebFetch로 본문이 안 나올 때 — 필수)
+
+국가법령정보센터(law.go.kr)·교육청 누리집은 자바스크립트로 본문을 그려서, WebFetch로는 페이지 틀만 나온다. 교육청·부처 PDF도 WebFetch로는 깨진다. **이럴 때는 포기하지 말고 아래 도구로 읽는다**(Bash).
+- 조문: `.venv/Scripts/python.exe -m naver_autopost.pagetext --law 교육공무원법 --article 41 --out OUTPUT_DIR/src_law41.txt`
+- 아무 공식 페이지·PDF: `.venv/Scripts/python.exe -m naver_autopost.pagetext "<주소>" --out OUTPUT_DIR/src_이름.txt`
+- `.venv/Scripts/python.exe`가 없으면 `python -m naver_autopost.pagetext …`로 실행한다.
+- 저장한 파일을 Read로 읽고, 거기서 `quote`를 그대로 복사한다. 별표·시행령은 법령 이름에 그대로 쓴다(예: `--law "공무원 수당 등에 관한 규정"`, `--law "교육공무원법 시행령"`).
+- 이 도구로도 열리지 않을 때만 그 출처를 포기한다.
+
 ## 판정 기준 (edu-auto-factcheck보다 엄격)
 
 - 고쳐서 살릴 수 있으면 고치고 `pass`다. 다만 아래 중 하나면 `fail`이다.

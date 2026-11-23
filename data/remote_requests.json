@@ -26,6 +26,11 @@
       "action": "diag",
       "profile": "edu_series",
       "day": "2026-11-23"
+    },
+    {
+      "id": "2026-11-23-edu-series-rerun",
+      "action": "rerun",
+      "profile": "edu_series"
     }
   ]
 }
