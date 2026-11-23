@@ -2,6 +2,8 @@
  * 인생 대시보드 웹앱 (구글 Apps Script, '나만' 접근으로 배포)
  *
  * 탭 1. 퀘스트 보드: 집 PC가 매시간 드라이브에 올리는 quest_board.html(보기 전용)
+ * 탭 4. 스케줄 보드: 포스트잇 캔버스. 내 드라이브 '스케줄보드_데이터/board.json' 하나에 저장(예전 단독 '내 스케줄 보드' 앱과 같은 파일).
+ *        저장할 때마다 판(rev)을 올려 두 기기가 동시에 고치면 충돌로 알리고, 빈 판으로 덮어쓰기를 막고, 한 시간에 한 번 백업한다.
  * 탭 3. 베이스캠프: 내가 만든 사이트·웹앱 모음(화면이 'tool' 분류로 저장). checkLinks가 주소가 열리는지 하루 한 번 점검한다.
  * 탭 2. 내 자산: 금융·파이프라인(부가수입)·부동산·사람·저작물·직위·수상을 기록하는 곳. 화면에서 추가·수정·삭제한다.
  *        분류 목록은 화면(app.html)이 정한다. 이 코드는 분류 이름 형식만 검사하므로 분류를 더해도 다시 붙여 넣을 필요가 없다.
@@ -14,7 +16,7 @@
  *   이 코드를 다시 붙여 넣을 필요가 없다. 이 코드가 바뀌면 API_VERSION이 올라가고 화면이 '새로 붙여 넣기'를 알린다.
  * 설치·갱신 방법: docs/QUEST_BOARD_WEBAPP.md
  */
-const API_VERSION = 3;
+const API_VERSION = 4;
 const QUEST_FILE = 'quest_board.html';
 const APP_FILE = 'life_dashboard_app.html';
 const BOOK_NAME = '인생 자산 대시보드 (웹앱 데이터)';
@@ -419,6 +421,90 @@ function checkLinks(urls) {
       return { url: url, code: 0, state: 'down' };
     }
   });
+}
+
+// ---------------------------------------------------------------- 스케줄 보드(포스트잇 캔버스)
+// 예전 단독 앱 '내 스케줄 보드'와 같은 폴더·파일을 쓴다(그대로 이어서 쓰기). 첨부도 같은 폴더에 비공개로 둔다.
+const BOARD_FOLDER = '스케줄보드_데이터';
+const BOARD_FILE = 'board.json';
+const BOARD_BACKUP = 'board.backup.json';
+const BOARD_BACKUP_MS = 3600e3;            // 백업은 한 시간에 한 번까지
+
+function boardFolder_() {
+  const it = DriveApp.getFoldersByName(BOARD_FOLDER);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(BOARD_FOLDER);
+}
+function boardFile_(folder, name) {
+  const it = folder.getFilesByName(name);
+  return it.hasNext() ? it.next() : null;
+}
+// 카드 수(작업 + 완료): 빈 판으로 덮어쓰기를 막는 데 쓴다
+function boardCards_(json) {
+  try {
+    const d = JSON.parse(json || '{}');
+    const cvs = d.canvases || [{ cards: d.cards, done: d.done }];
+    return cvs.reduce(function (a, c) { return a + ((c && c.cards) || []).length + ((c && c.done) || []).length; }, 0);
+  } catch (e) { return -1; }
+}
+
+/**
+ * 보드 불러오기 → {json, rev}. json은 저장된 그대로(없으면 빈 글자).
+ * 처음 한 번은 예전 앱이 '링크가 있는 사람은 보기'로 열어 둔 첨부를 비공개로 되돌린다.
+ */
+function loadBoard() {
+  const folder = boardFolder_(), props = PropertiesService.getScriptProperties();
+  if (!props.getProperty('BOARD_PRIVATE')) {
+    const files = folder.getFiles();
+    while (files.hasNext()) { try { files.next().setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE); } catch (e) { /* 정책상 못 바꿔도 계속 */ } }
+    props.setProperty('BOARD_PRIVATE', '1');
+  }
+  const f = boardFile_(folder, BOARD_FILE);
+  return { json: f ? f.getBlob().getDataAsString('UTF-8') : '', rev: Number(props.getProperty('BOARD_REV') || 0) };
+}
+
+/**
+ * 보드 저장. baseRev = 화면이 마지막으로 받은 판.
+ * - 그 사이 다른 기기가 저장했거나(판이 다름) 예전 단독 앱이 파일을 고쳤으면 저장하지 않고 {conflict, json, rev}를 돌려준다
+ *   → 화면이 카드 단위로 합친 뒤 다시 저장한다.
+ * - 카드가 있던 보드를 카드 0장으로 덮어쓰려 하면 force 없이는 거절한다(불러오기 실패로 빈 화면이 저장되는 사고 방지).
+ */
+function saveBoard(json, baseRev, force) {
+  if (typeof json !== 'string' || boardCards_(json) < 0) throw new Error('보드 내용이 올바르지 않습니다');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const folder = boardFolder_(), props = PropertiesService.getScriptProperties();
+    const rev = Number(props.getProperty('BOARD_REV') || 0), stamp = Number(props.getProperty('BOARD_STAMP') || 0);
+    const f = boardFile_(folder, BOARD_FILE);
+    const cur = f ? f.getBlob().getDataAsString('UTF-8') : '';
+    const outside = f && stamp && f.getLastUpdated().getTime() > stamp + 3000;     // 이 앱 밖에서 고침(예전 단독 앱)
+    if (outside) {                       // 바깥에서 고친 것도 새 판으로 쳐 두고(다음 비교의 기준) 충돌로 알린다
+      props.setProperty('BOARD_REV', String(rev + 1)); props.setProperty('BOARD_STAMP', String(f.getLastUpdated().getTime()));
+      return { conflict: true, json: cur, rev: rev + 1 };
+    }
+    if (f && Number(baseRev || 0) !== rev) return { conflict: true, json: cur, rev: rev };
+    if (!force && boardCards_(json) === 0 && boardCards_(cur) > 0) return { refused: true, rev: rev };
+    if (f && cur) {
+      const b = boardFile_(folder, BOARD_BACKUP);
+      if (!b) folder.createFile(BOARD_BACKUP, cur, MimeType.PLAIN_TEXT);
+      else if (Date.now() - b.getLastUpdated().getTime() > BOARD_BACKUP_MS) b.setContent(cur);
+    }
+    const file = f || folder.createFile(BOARD_FILE, json, MimeType.PLAIN_TEXT);
+    if (f) f.setContent(json);
+    const next = rev + 1;
+    props.setProperty('BOARD_REV', String(next));
+    props.setProperty('BOARD_STAMP', String(file.getLastUpdated().getTime()));
+    return { ok: true, rev: next };
+  } finally { lock.releaseLock(); }
+}
+
+/** 첨부 올리기 → {name, url, id}. 비공개(나만 보기)로 저장한다 — 링크가 새어도 남은 열 수 없다. 10MB까지. */
+function uploadBoardFile(base64, name, mimeType) {
+  const bytes = Utilities.base64Decode(String(base64 || ''));
+  if (bytes.length > 10 * 1024 * 1024) throw new Error('10MB 이하 파일만 올릴 수 있어요');
+  const blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', String(name || 'file').slice(0, 120));
+  const file = boardFolder_().createFile(blob);
+  return { name: file.getName(), url: file.getUrl(), id: file.getId() };
 }
 
 /** 화면을 그릴 데이터 전부. 처음 부르면 데이터 시트와 매일 기록 트리거를 만든다. */

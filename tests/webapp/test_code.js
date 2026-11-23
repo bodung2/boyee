@@ -160,6 +160,63 @@ test('베이스캠프 주소 점검: 열림·로그인 필요·닫힘·접속 �
   assert.equal(gas.checkLinks(Array(50).fill('https://a.example/')).length, 40, '한 번에 최대 40개');
 });
 
+test('스케줄 보드: 처음엔 빈 판, 저장하면 판이 오르고 같은 폴더에 남는다', () => {
+  const { gas, fake } = load();
+  const r0 = gas.loadBoard();
+  assert.deepEqual([r0.json, r0.rev], ['', 0]);
+  const j = JSON.stringify({ canvases: [{ id: 'c1', cards: [{ id: 'a' }], done: [] }] });
+  const s1 = gas.saveBoard(j, 0);
+  assert.deepEqual([s1.ok, s1.rev], [true, 1]);
+  const r1 = gas.loadBoard();
+  assert.equal(r1.json, j); assert.equal(r1.rev, 1);
+  assert.equal(fake.folders['스케줄보드_데이터'].files.filter(f => f.name === 'board.json').length, 1);
+});
+
+test('스케줄 보드: 다른 기기가 먼저 저장했으면(판이 다름) 덮어쓰지 않고 충돌로 알린다', () => {
+  const { gas } = load();
+  const a = JSON.stringify({ canvases: [{ id: 'c1', cards: [{ id: 'a' }], done: [] }] });
+  gas.saveBoard(a, 0);                                    // 기기 A → 판 1
+  const b = JSON.stringify({ canvases: [{ id: 'c1', cards: [{ id: 'b' }], done: [] }] });
+  const r = gas.saveBoard(b, 0);                          // 기기 B는 판 0을 보고 있었다
+  assert.equal(r.conflict, true); assert.equal(r.json, a); assert.equal(r.rev, 1);
+  assert.equal(gas.loadBoard().json, a, '덮어쓰지 않음');
+});
+
+test('스케줄 보드: 예전 단독 앱이 파일을 고치면 충돌로 알린다', () => {
+  const { gas, fake } = load();
+  gas.saveBoard(JSON.stringify({ canvases: [{ id: 'c1', cards: [{ id: 'a' }] }] }), 0);
+  const f = fake.folders['스케줄보드_데이터'].files.find(x => x.name === 'board.json');
+  f.content = JSON.stringify({ canvases: [{ id: 'c1', cards: [{ id: 'old' }] }] }); fake.touch(f);
+  const r = gas.saveBoard(JSON.stringify({ canvases: [{ id: 'c1', cards: [{ id: 'a' }, { id: 'n' }] }] }), 1);
+  assert.equal(r.conflict, true); assert.ok(r.rev > 1);
+  assert.equal(gas.saveBoard(JSON.stringify({ canvases: [{ id: 'c1', cards: [{ id: 'merged' }] }] }), r.rev).ok, true, '합친 뒤 새 판으로는 저장됨');
+});
+
+test('스케줄 보드: 카드가 있던 판을 빈 판으로 덮어쓰지 않고, 깨진 내용은 거절, 백업을 남긴다', () => {
+  const { gas, fake } = load();
+  const full = JSON.stringify({ canvases: [{ id: 'c1', cards: [{ id: 'a' }, { id: 'b' }], done: [{ id: 'c' }] }] });
+  gas.saveBoard(full, 0);
+  const empty = JSON.stringify({ canvases: [{ id: 'c1', cards: [], done: [] }] });
+  const r = gas.saveBoard(empty, 1);
+  assert.equal(r.refused, true); assert.equal(gas.loadBoard().json, full);
+  assert.equal(gas.saveBoard(empty, 1, true).ok, true, '직접 모두 지운 경우(force)는 저장');
+  assert.throws(() => gas.saveBoard('{깨짐', 2));
+  const bak = fake.folders['스케줄보드_데이터'].files.find(x => x.name === 'board.backup.json');
+  assert.ok(bak, '백업 파일'); assert.equal(bak.content, full);
+});
+
+test('스케줄 보드: 첨부는 비공개로 올리고, 예전 앱이 공개해 둔 첨부도 비공개로 되돌린다', () => {
+  const { gas, fake } = load();
+  const folder = fake.globals.DriveApp.createFolder('스케줄보드_데이터');
+  const old = folder.createFile('예전첨부.pdf', 'x', 'application/pdf'); old.sharing = 'ANYONE_WITH_LINK';
+  gas.loadBoard();
+  assert.equal(old.sharing, 'PRIVATE');
+  const up = gas.uploadBoardFile(Buffer.from('hello').toString('base64'), '메모.txt', 'text/plain');
+  assert.equal(up.name, '메모.txt'); assert.match(up.url, /drive\.google\.com/);
+  const f = folder.files.find(x => x.name === '메모.txt');
+  assert.equal(f.sharing, 'PRIVATE'); assert.equal(f.content, 'hello');
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ' + name); } catch (e) { failed++; console.log('FAIL ' + name + '\n     ' + (e.stack || e).split('\n').slice(0, 3).join('\n     ')); }
