@@ -652,6 +652,32 @@ def restyle(cfg: Config, day: str, number: int | None = None) -> list[str]:
     return lines
 
 
+def rethumb(cfg: Config, day: str, upload=None) -> Path:
+    """발행한 글의 썸네일을 지금 규칙(칩 번호를 원문자로)으로 다시 그려 드라이브 thumb_<프로필>_<날짜>.png로 올린다.
+    블로그 주인이 휴대폰에서 받아 글의 대표 이미지를 직접 바꾼다."""
+    out_dir = cfg.output_dir / day
+    post = _load_post(out_dir / "post.json")
+    thumb = dict(post["thumbnail"])
+    thumb["chip"] = re.sub(r"(\d+)\s*$", lambda m: generate.circled(int(m.group(1))), str(thumb.get("chip", "")))
+    title = re.sub(r"(시리즈 )(\d+)(\])", lambda m: m.group(1) + generate.circled(int(m.group(2))) + m.group(3),
+                   post.get("title", ""))
+    scene = next((out_dir / f"{i.get('name')}.png" for i in post.get("illustrations") or []
+                  if (out_dir / f"{i.get('name')}.png").exists()), None)
+    tone = images.edu_tone(post.get("lane")) if cfg.profile.thumbnail_style != "bold" else images.invest_tone(post.get("lane"))
+    path = out_dir / "thumbnail_redo.png"
+    if scene:
+        images.make_thumbnail_scene(thumb, scene, path, tone)
+    else:
+        images.make_thumbnail_childhood(thumb, None, path, tone=tone)
+    if upload is None:
+        from quest_board.drive import put as upload
+    upload(path.read_bytes(), f"thumb_{cfg.profile.name}_{day}.png", "image/png",
+           cfg.data_dir / f"drive_thumb_{cfg.profile.name}.json")
+    log.info("썸네일 다시 그림: 칩 '%s' / 바꿀 제목 '%s' → 드라이브 thumb_%s_%s.png", thumb["chip"], title,
+             cfg.profile.name, day)
+    return path
+
+
 def run(cfg: Config, dry_run: bool = False, force: bool = False, day: str | None = None) -> int:
     # 브라우저 자동화는 무거우므로 필요할 때만 불러온다.
     from . import publisher

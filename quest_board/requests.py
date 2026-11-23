@@ -36,6 +36,9 @@ def command(req: dict) -> list[str] | None:
     if req.get("action") == "restyle" and req.get("profile") in PROFILES and _is_day(req.get("day")):
         return [sys.executable, "-m", "naver_autopost", "restyle", "--profile", req["profile"], "--day", req["day"],
                 "--publish"]
+    # 발행한 글 썸네일을 지금 규칙으로 다시 그려 드라이브에(블로그 주인이 직접 바꿈)
+    if req.get("action") == "rethumb" and req.get("profile") in PROFILES and _is_day(req.get("day")):
+        return [sys.executable, "-m", "naver_autopost", "rethumb", "--profile", req["profile"], "--day", req["day"]]
     if req.get("action") == "rerun" and req.get("profile") in PROFILES:
         return [sys.executable, "-m", "naver_autopost", "run", "--profile", req["profile"]]
     return None
