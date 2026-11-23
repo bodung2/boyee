@@ -5,6 +5,7 @@
   python -m booth qr             QR 안내판 그림(output/booth/qr_안내판.png)과 큰 화면 주소
   python -m booth print-test     예시 사진 한 장 인쇄
   python -m booth padlet-test    패들렛에 시험 글 하나 올리기
+  python -m booth padlet-retry   패들렛에 못 올린 그림을 다시 올리기(run을 켤 때도 저절로 한 번)
   python -m booth reprint ID     그 작업의 사진을 다시 인쇄
 """
 from __future__ import annotations
@@ -153,6 +154,16 @@ def cmd_padlet_test(cfg: BoothConfig) -> int:
     return 0
 
 
+def cmd_padlet_retry(cfg: BoothConfig) -> int:
+    if not cfg.padlet_on:
+        print(".env에 PADLET_API_KEY와 PADLET_BOARD(보드 주소)를 적어 주세요")
+        return 1
+    _setup_logging(cfg)
+    done, left = worker.Booth(cfg, Server(cfg), convert).retry_padlet()
+    print(f"패들렛에 {done}장 올렸습니다. 남은 것 {left}장")
+    return 0 if not left else 1
+
+
 def cmd_reprint(cfg: BoothConfig, job_id: str) -> int:
     hits = sorted(cfg.out_dir.glob(f"*/{job_id}_인쇄.jpg"))
     if not hits:
@@ -172,6 +183,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("qr")
     sub.add_parser("print-test")
     sub.add_parser("padlet-test")
+    sub.add_parser("padlet-retry")
     rp = sub.add_parser("reprint")
     rp.add_argument("job_id")
     args = ap.parse_args(argv)
@@ -190,6 +202,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_print_test(cfg)
     if args.cmd == "padlet-test":
         return cmd_padlet_test(cfg)
+    if args.cmd == "padlet-retry":
+        return cmd_padlet_retry(cfg)
     if args.cmd == "reprint":
         return cmd_reprint(cfg, args.job_id)
     _setup_logging(cfg)
