@@ -430,15 +430,3 @@ def test_busy_pattern_is_simplified_to_outline_and_one_inner_line(cfg, monkeypat
     monkeypatch.setattr(render, "BUSY_RATIO", 3.5)
     simple = sum(1 for v in render.Assets(lib)._edges("weave", 800).getdata() if v)
     assert simple < full * 0.6
-
-
-def test_open_line_ends_are_joined_or_removed():
-    import numpy as np
-    sk = np.zeros((200, 200), bool)
-    sk[20, 20:180] = True; sk[180, 20:180] = True; sk[20:181, 20] = True; sk[20:181, 180] = True   # 바깥 사각형
-    sk[100, 20:150] = True                     # 왼쪽 벽에서 시작해 중간에서 끊긴 선 → 오른쪽 벽까지 이어져야
-    sk[60, 80:90] = True                       # 어디에도 안 닿는 짧은 조각 → 지워져야
-    out = render.close_open_ends(sk, reach=60)
-    assert out[98:103, 175].any() and not out[60, 85]          # 오른쪽 벽까지 이어짐, 떠 있던 조각은 없어짐
-    ends = [(y, x) for y, x in zip(*np.nonzero(out)) if len(render._neighbors(out, y, x)) == 1]
-    assert ends == []

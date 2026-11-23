@@ -121,8 +121,7 @@ class Assets:
             mask = self._edges(key, size)
             alpha_src = library.cutout(self._src(key, size)).getchannel("A")
         if dashed:                                     # 선 가운데 한 줄만 남겨, 선을 따라가며 짧게 끊는다
-            mask = dash_line_mask(mask, dash=max(10, size // 55), gap=max(7, size // 80), width=max(3, size // 260),
-                                  reach=max(20, size // 8))
+            mask = dash_line_mask(mask, dash=max(10, size // 55), gap=max(7, size // 80), width=max(3, size // 260))
         out = Image.new("RGBA", mask.size, color + (0,))
         out.putalpha(mask)
         box = (alpha_src.getbbox() or (0, 0, size, size))
@@ -157,86 +156,11 @@ def _thin(b):
             return img[1:-1, 1:-1].astype(bool)
 
 
-_NB = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
-
-
-def _neighbors(sk, y, x):
-    h, w = sk.shape
-    return [(y + dy, x + dx) for dy, dx in _NB if 0 <= y + dy < h and 0 <= x + dx < w and sk[y + dy, x + dx]]
-
-
-def _walk(sk, y, x, limit):
-    """끝점에서 갈림길(이웃 3개 이상)이나 limit까지 선을 따라간 점들."""
-    path, prev = [(y, x)], None
-    cur = (y, x)
-    while len(path) < limit:
-        nxt = [p for p in _neighbors(sk, *cur) if p != prev and p not in path[-3:]]
-        if len(nxt) != 1:
-            break
-        prev, cur = cur, nxt[0]
-        if len(_neighbors(sk, *cur)) >= 3:
-            break
-        path.append(cur)
-    return path
-
-
-def close_open_ends(sk, reach: int, rounds: int = 3):
-    """'시작한 선은 끝나야 한다': 중간에서 끊긴 선 끝은 그 방향으로 늘여 다른 선에 닿게 하고(reach 안에서),
-    닿지 못하는 끊긴 조각은 지운다. 고리·갈림길로 이어진 선만 남는다."""
-    import numpy as np
-    sk = sk.copy()
-    h, w = sk.shape
-    for _ in range(rounds):
-        ends = [(y, x) for y, x in zip(*np.nonzero(sk)) if len(_neighbors(sk, y, x)) == 1]
-        if not ends:
-            break
-        changed = False
-        for y, x in ends:
-            if not sk[y, x] or len(_neighbors(sk, y, x)) != 1:
-                continue
-            own = _walk(sk, y, x, reach * 2)
-            own_set = set(own)
-            k = min(len(own) - 1, max(6, reach // 6))
-            if k < 3:
-                hit = None
-            else:
-                dy, dx = y - own[k][0], x - own[k][1]
-                norm = (dy * dy + dx * dx) ** 0.5 or 1
-                dy, dx = dy / norm, dx / norm
-                hit = None
-                for t in range(3, reach):           # 선 방향으로 곧게 늘여 다른 선에 닿는지
-                    py, px = int(round(y + dy * t)), int(round(x + dx * t))
-                    if not (0 <= py < h and 0 <= px < w):
-                        break
-                    for qy, qx in [(py, px)] + _neighbors(sk, py, px):
-                        if sk[qy, qx] and (qy, qx) not in own_set:
-                            hit = (qy, qx)
-                            break
-                    if hit:
-                        break
-            if hit:
-                import cv2
-                tmp = sk.astype(np.uint8)
-                cv2.line(tmp, (int(x), int(y)), (int(hit[1]), int(hit[0])), 1, 1)
-                sk = tmp.astype(bool)
-                changed = True
-            else:                                   # 이을 곳이 없는 끊긴 가지는 갈림길까지 지운다
-                for py, px in own:
-                    sk[py, px] = False
-                changed = True
-        if not changed:
-            break
-    return _thin(sk)
-
-
-def dash_line_mask(mask: Image.Image, dash: int, gap: int, width: int, min_len: int = 12, reach: int = 0) -> Image.Image:
-    """선 그림(두께 무관) → 한 겹의 가는 점선. 가운데 선을 따라 걸으며 dash만큼 긋고 gap만큼 쉰다.
-    reach를 주면 끊긴 선 끝을 잇거나 지워 모든 선이 다른 선에 닿거나 고리가 되게 한다."""
+def dash_line_mask(mask: Image.Image, dash: int, gap: int, width: int, min_len: int = 12) -> Image.Image:
+    """선 그림(두께 무관) → 한 겹의 가는 점선. 가운데 선을 따라 걸으며 dash만큼 긋고 gap만큼 쉰다."""
     import numpy as np
     from collections import deque
     sk = _thin(np.asarray(mask) > 127)
-    if reach:
-        sk = close_open_ends(sk, reach)
     h, w = sk.shape
     seen = np.zeros_like(sk, dtype=bool)
     out = np.zeros((h, w), np.uint8)
