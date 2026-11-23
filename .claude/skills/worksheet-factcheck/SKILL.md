@@ -1,6 +1,6 @@
 ---
 name: worksheet-factcheck
-description: "worksheet-post가 쓴 유아 무료 활동지 나눔글(post.json)을 발행 직전에 독립적으로 검수한다. 글이 실제 활동지(worksheet.json·장 이미지)와 맞는지, 다운로드 주소가 pdf_url과 같은지, 누리과정·발달 근거를 원문과 대조하고, 발달 안전 가드레일과 판매·구매 표현을 걸러 factcheck.json에 pass/fail을 남긴다. ChatGPT 교차검증 지적 반영(MODE=apply_gpt_review)에도 쓴다."
+description: "worksheet-post가 쓴 유아 무료 활동지 나눔글(post.json)을 발행 직전에 독립적으로 검수한다. 글이 실제 활동지(worksheet.json·장 이미지)와 맞는지, PDF 첨부 자리가 있는지, 누리과정·발달 근거를 원문과 대조하고, 발달 안전 가드레일과 판매·구매 표현을 걸러 factcheck.json에 pass/fail을 남긴다. ChatGPT 교차검증 지적 반영(MODE=apply_gpt_review)에도 쓴다."
 ---
 
 # 무료 활동지 나눔글 검수
@@ -16,7 +16,7 @@ description: "worksheet-post가 쓴 유아 무료 활동지 나눔글(post.json)
 
 `OUTPUT_DIR/worksheet.json`을 열어 대조한다.
 - 장 수·활동 종류·연령·주제가 글과 같다. 없는 활동·없는 장을 쓴 문장은 지운다.
-- 다운로드 주소가 **`pdf_url`과 글자 하나까지 같다.** 다르면 `pdf_url`로 고친다. 다른 다운로드 주소(블로그 첨부 약속, 다른 드라이브 주소)는 지운다.
+- 다운로드는 **PDF 첨부파일**이다. 본문에 `[[IMAGE:worksheet_pdf]]` 자리가 정확히 한 번, '📥 무료 다운로드' 절 안에 있어야 한다. 없으면 그 절에 넣는다. 다른 다운로드 주소(드라이브·외부 링크)는 지운다.
 - 정답 칸이 `answers`와 같다. 다르면 고친다.
 
 ## 내용
@@ -29,6 +29,7 @@ description: "worksheet-post가 쓴 유아 무료 활동지 나눔글(post.json)
 ## 판정
 
 - 고쳐서 살릴 수 있으면 고치고 `pass`.
-- `fail`: 다운로드 주소를 확인할 수 없을 때, 글이 실제 활동지와 다른 활동을 중심으로 소개해 고치면 글이 무너질 때, 판매 표현을 지울 수 없을 때.
+- `fail`: 글이 실제 활동지와 다른 활동을 중심으로 소개해 고치면 글이 무너질 때, 판매 표현을 지울 수 없을 때.
+- 형식: 제목이 `[유아 무료 활동지 나눔]`으로 시작하고, 본문 순서가 worksheet-post 2절(담긴 것 → 쓰는 법 → 다운로드 → 워크북 소개 → 다른 활동지 → 이용 안내)과 같은지 본다. 어긋나면 고친다.
 
 마지막 응답은 "verdict / checked / fixed / removed" 한 줄로 끝낸다.

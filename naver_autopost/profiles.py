@@ -37,6 +37,7 @@ class Profile:
     same_blog_as: str = ""      # 다른 프로필과 같은 블로그에 올린다(블로그 주소·로그인 브라우저를 그 프로필 것으로)
     photos: bool = False        # 블로그 주인이 직접 찍은 사진(places_inbox 폴더)으로 쓰는 글. 새 폴더가 있는 날만 발행
     worksheet: bool = False     # 글 쓰기 전에 무료 활동지 한 세트(worksheets 패키지)를 먼저 만들어 그 나눔글을 쓴다
+    summary_card: bool = True   # 본문에 요약 카드([[IMAGE:card]])를 넣는다(직관형 나눔글은 넣지 않음)
 
 
 PROFILES: dict[str, Profile] = {
@@ -104,12 +105,14 @@ PROFILES: dict[str, Profile] = {
     "worksheet": Profile(
         name="worksheet", label="무료 활동지",
         write_skill="worksheet-post", factcheck_skill="worksheet-factcheck",
-        thumbnail_style="childhood", illustrations=False, worksheet=True,
+        thumbnail_style="childhood", illustrations=False, worksheet=True, summary_card=False,
         extra_forbidden=(
             "정상/지연", "통과해야", "못하면 발달", "smartstore.naver.com", "coupang.com", "kmong.com",
             "크몽", "구매 링크", "구매하기", "판매 중", "결제",
         ),
-        min_sources=3, min_primary=1, min_claims=3, min_body_chars=1000, max_title=40,
+        # 블로그 주인이 직접 올리던 나눔글과 같은 형식: [유아 무료 활동지 나눔] 제목, 직관형 본문, PDF 첨부파일
+        title_pattern=r"^\[유아 무료 활동지 나눔\]",
+        min_sources=1, min_primary=0, min_claims=1, min_body_chars=500, max_title=45,
         social=False, same_blog_as="childhood",
     ),
     # 투자 블로그: 티스토리 '숫자로 보는 한국'(stats-auto-post)의 '통념 × 공식 숫자' 방식을 돈·부동산·일상 주제로 옮긴 글.

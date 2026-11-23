@@ -211,24 +211,25 @@ def _mark(out_dir: Path, **flags) -> None:
     _save_json(out_dir / "stage.json", {**_stage(out_dir), **flags})
 
 
-def _load_fixed(post_path: Path) -> dict:
+def _load_fixed(post_path: Path, card: bool = True) -> dict:
     post = _load_post(post_path)
-    post["body_html"], moved = content.fix_card_marker(post["body_html"])
-    if moved:
-        log.info("요약 카드 자리([[IMAGE:card]])를 맞췄습니다")
+    if card:
+        post["body_html"], moved = content.fix_card_marker(post["body_html"])
+        if moved:
+            log.info("요약 카드 자리([[IMAGE:card]])를 맞췄습니다")
     _save_json(post_path, post)
     return post
 
 
 def _fix_structure(cfg: Config, out_dir: Path, post_path: Path) -> dict:
     """구조 검사. 떨어지면 글을 버리기 전에 같은 글을 한 번 고치게 한다(출처 부족 같은 형식 문제로 주제를 날리지 않게)."""
-    post = _load_fixed(post_path)
+    post = _load_fixed(post_path, cfg.profile.summary_card)
     errors = content.validate(post, cfg.profile)
     if not errors:
         return post
     log.warning("구조 검증 실패 → 같은 글을 고칩니다:\n- %s", "\n- ".join(errors))
     generate.repair_post(cfg, out_dir, errors)
-    post = _load_fixed(post_path)
+    post = _load_fixed(post_path, cfg.profile.summary_card)
     errors = content.validate(post, cfg.profile)
     if errors:
         raise Rejected("구조 검증 실패:\n- " + "\n- ".join(errors))
@@ -423,7 +424,7 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
         imgs = {
             "thumbnail": (images.make_thumbnail_scene(post["thumbnail"], scene, thumb_out, tone) if scene
                           else images.make_thumbnail_childhood(post["thumbnail"], None, thumb_out, tone=tone)),
-            "card": images.make_card(post["card"], fname("card", "card"), tone=tone),
+            **({"card": images.make_card(post["card"], fname("card", "card"), tone=tone)} if post.get("card") else {}),
         }
     elif cfg.profile.thumbnail_style == "photo":
         # 직접 찍은 대표 사진 위에 질문 글씨를 얹는다(검수를 통과한 사진만). 사진이 없으면 단색.
@@ -434,7 +435,7 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
         imgs = {
             "thumbnail": (images.make_thumbnail_scene(post["thumbnail"], out_dir / f"{cover}.jpg", thumb_out, tone)
                           if cover else images.make_thumbnail_childhood(post["thumbnail"], None, thumb_out, tone=tone)),
-            "card": images.make_card(post["card"], fname("card", "card"), tone=tone),
+            **({"card": images.make_card(post["card"], fname("card", "card"), tone=tone)} if post.get("card") else {}),
         }
     elif cfg.profile.thumbnail_style == "childhood":
         tone = images.childhood_tone(post.get("domain"))
@@ -446,13 +447,13 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
         imgs = {
             "thumbnail": (images.make_thumbnail_scene(post["thumbnail"], scene, thumb_out, tone) if scene
                           else images.make_thumbnail_childhood(post["thumbnail"], post.get("domain"), thumb_out)),
-            "card": images.make_card(post["card"], fname("card", "card"), tone=tone),
+            **({"card": images.make_card(post["card"], fname("card", "card"), tone=tone)} if post.get("card") else {}),
         }
     else:
         tone = images.edu_tone(post.get("lane"))          # 주제 레인마다 다른 색
         imgs = {
             "thumbnail": images.make_thumbnail(post["thumbnail"], fname("thumbnail", "thumbnail"), tone=tone),
-            "card": images.make_card(post["card"], fname("card", "card"), tone=tone),
+            **({"card": images.make_card(post["card"], fname("card", "card"), tone=tone)} if post.get("card") else {}),
         }
     for ill in post.get("illustrations") or []:
         path = out_dir / f"{ill.get('name')}.png"
@@ -472,6 +473,17 @@ def render_images(cfg: Config, post: dict, out_dir: Path) -> dict[str, Path]:
             named = out_dir / f"{infographic.NAME}_{images.INFOGRAPHIC_WIDTH}.png"
         # 원본(고해상도)은 두고, 올릴 파일만 가로 600px로 줄인다(세로는 비율대로).
         imgs[infographic.NAME] = images.fit_width(info, named, images.INFOGRAPHIC_WIDTH)
+    if not cfg.profile.summary_card:
+        imgs.pop("card", None)
+    if cfg.profile.worksheet:                       # 무료 활동지 PDF는 이미지처럼 자리를 잡아 첨부파일로 올린다
+        try:
+            ws = json.loads((out_dir / "worksheet.json").read_text(encoding="utf-8"))
+            pdf = out_dir / ws.get("pdf_file", "")
+            if ws.get("pdf_file") and pdf.exists():
+                imgs[content.ATTACH_NAME] = pdf
+            post["worksheet_pdf_url"] = ws.get("pdf_url", "")
+        except (OSError, ValueError) as e:
+            log.warning("활동지 정보를 읽지 못했습니다: %s", e)
     # 본문에 표시가 남아 있는데 파일이 없는 이미지는 지운다(발행 중 오류 방지).
     missing = {m.group(1) for m in content.IMAGE_MARKER.finditer(post["body_html"])} - set(imgs)
     post["body_html"] = content.remove_markers(post["body_html"], missing)
@@ -686,6 +698,9 @@ def run(cfg: Config, dry_run: bool = False, force: bool = False) -> int:
                 cat_note += " ⚠️ 이 카테고리를 찾지 못해 기본 카테고리로 들어갔습니다"
             if not info_ok:
                 cat_note += "\n⚠️ 인포그래픽을 만들지 못해 빼고 올렸습니다(로그 확인)"
+            if post.get("_attached") is False:
+                cat_note += ("\n⚠️ PDF 첨부가 안 돼 드라이브 주소로 대신 넣었습니다" if post.get("worksheet_pdf_url")
+                             else "\n⚠️ PDF 첨부가 안 됐습니다. 글에 직접 첨부해 주세요(로그·attach-failed 화면 확인)")
             if dry_run:
                 notify.send(cfg, f"[{label} 자동발행 테스트] 최종 발행 직전까지 확인했습니다: {post['title']}\n{cat_note}")
                 return 0

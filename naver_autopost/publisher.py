@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 
 from playwright.sync_api import BrowserContext, Frame, Locator, Page, sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
 from .config import Config
 from . import se_markup
@@ -32,6 +33,11 @@ SELECTORS = {
     "body": [".se-component.se-text .se-text-paragraph", ".se-content .se-text-paragraph"],
     "image_button": ["button.se-image-toolbar-button", "button[data-name='image']", "button[data-log='dot.img']"],
     "image_component": [".se-component.se-image"],
+    # 파일 첨부(무료 활동지 PDF): 도구 모음의 '파일' → (뜨면) '내 PC'
+    "file_button": ["button.se-file-toolbar-button", "button[data-name='file']", "button[data-log='dot.file']",
+                    "button[data-log*='file']"],
+    "file_from_pc": ["button:has-text('내 PC')", ".se-popup-button-pc", "li:has-text('내 PC') button"],
+    "file_component": [".se-component.se-file"],
     "publish_open": ["button[class*='publish_btn']", "button:has-text('발행')"],
     "tag_input": ["input#tag-input", "input[placeholder*='태그']"],
     "category_open": ["button[class*='selectbox_button']", "button[aria-label*='카테고리']"],
@@ -220,6 +226,29 @@ class _Editor:
         self.page.wait_for_timeout(1500)
         self.move_to_end()
 
+    def attach_file(self, path: Path) -> None:
+        """본문 지금 자리에 파일을 첨부한다(무료 활동지 PDF). 네이버 편집기의 '파일' 단추가 바로 파일 창을 열거나,
+        '내 PC'/'MYBOX' 고르는 작은 창을 먼저 띄우는 두 경우를 모두 처리한다."""
+        comp = SELECTORS["file_component"][0]
+        before = self.scopes[0].locator(comp).count()
+        chooser = None
+        try:
+            with self.page.expect_file_chooser(timeout=4_000) as fc:
+                self.find("file_button").first.click()
+            chooser = fc.value
+        except PlaywrightTimeout:
+            with self.page.expect_file_chooser(timeout=10_000) as fc:
+                self.find("file_from_pc", timeout=5_000).first.click()
+            chooser = fc.value
+        chooser.set_files(str(path))
+        deadline = time.time() + 90
+        while self.scopes[0].locator(comp).count() <= before:
+            if time.time() > deadline:
+                raise PublishError(f"파일 첨부가 끝나지 않았습니다: {path.name}")
+            time.sleep(1)
+        self.page.wait_for_timeout(1500)
+        self.move_to_end()
+
     def center_small_image(self, width: int, label: str = "썸네일") -> bool:
         """방금 올린 이미지를 '작게'(원본 크기) + 가운데 정렬로 바꾼다. 기본값은 '문서 너비'·왼쪽 정렬이라
         600px 그림도 본문 폭(약 886px)으로 늘어난다. 실패해도 발행은 계속하고 False를 돌려준다.
@@ -379,6 +408,20 @@ def _publish(page: Page, cfg: Config, post: dict, images: dict[str, Path], dry_r
 
     ed.find("body").last.click()
     def upload(name: str) -> None:
+        if images[name].suffix.lower() == ".pdf":       # 무료 활동지 PDF: 첨부파일로. 안 되면 드라이브 주소를 대신 쓴다
+            try:
+                ed.attach_file(images[name])
+                log.info("PDF 첨부: %s", images[name].name)
+                post["_attached"] = True
+            except Exception as e:  # noqa: BLE001
+                log.warning("PDF 첨부 실패(드라이브 주소로 대신): %s", e)
+                post["_attached"] = False
+                _shot(page, cfg, "attach-failed")
+                if post.get("worksheet_pdf_url"):
+                    ed.move_to_end()
+                    page.keyboard.insert_text(post["worksheet_pdf_url"])
+                    page.keyboard.press("Enter")
+            return
         ed.upload_image(images[name])
         if name not in SMALL_CENTERED:
             return

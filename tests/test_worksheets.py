@@ -84,8 +84,32 @@ def test_worksheet_profile_posts_to_childhood_blog_without_infographic(monkeypat
     assert w.retry_time == "off"
 
 
+def share_post(**over):
+    post = make_post(title="[유아 무료 활동지 나눔] 겨울 옷으로 배우는 선 긋기", lane="E",
+                     thumbnail={"chip": "무료 나눔 · 활동지", "main_lines": ["겨울 옷", "선 긋기 세트"], "sub": "3~5세"})
+    post.pop("card", None)
+    post["body_html"] = (post["body_html"].replace("<p>[[IMAGE:card]]</p>", "")
+                         + "<h2>📥 무료 다운로드</h2><p>[[IMAGE:worksheet_pdf]]</p>")
+    post.update(over)
+    return post
+
+
+def test_share_post_format_rules():
+    prof = profiles.get("worksheet")
+    assert content.validate(share_post(), prof) == []
+    errs = content.validate(share_post(title="겨울 선긋기 활동지 무료 나눔"), prof)
+    assert any("제목 형식" in e for e in errs)
+    no_pdf = share_post()
+    no_pdf["body_html"] = no_pdf["body_html"].replace("<p>[[IMAGE:worksheet_pdf]]</p>", "")
+    assert any("PDF 첨부" in e for e in content.validate(no_pdf, prof))
+    with_card = share_post(card={"bullets": ["a", "b", "c"]})
+    with_card["body_html"] += "<p>[[IMAGE:card]]</p>"
+    assert any("요약 카드" in e for e in content.validate(with_card, prof))
+
+
 def test_sales_words_blocked_in_worksheet_post():
-    post = make_post(title="겨울 선긋기 활동지 무료 나눔", body_html=make_post()["body_html"] + "<p>크몽에서 구매하기</p>")
+    post = share_post()
+    post["body_html"] += "<p>크몽에서 구매하기</p>"
     errs = content.validate(post, profiles.get("worksheet"))
     assert any("구매하기" in e for e in errs) and any("크몽" in e for e in errs)
 
@@ -291,7 +315,7 @@ def test_attempt_writes_post_after_worksheet(cfg, monkeypatch):
     monkeypatch.setattr(wb, "build", lambda c, o, t, f="": o.mkdir(parents=True, exist_ok=True))
 
     def fake_write(c, out_dir, today, feedback=""):
-        post = make_post(title="겨울 선긋기 활동지 무료 나눔 | 3~5세", lane="E")
+        post = share_post()
         (out_dir / "post.json").write_text(json.dumps(post, ensure_ascii=False), encoding="utf-8")
     monkeypatch.setattr(generate, "write_post", fake_write)
 
@@ -302,7 +326,7 @@ def test_attempt_writes_post_after_worksheet(cfg, monkeypatch):
     monkeypatch.setattr(generate, "factcheck", fake_fc)
     monkeypatch.setattr(openai_client, "factcheck", lambda c, p: {"verdict": "pass", "issues": []})
     post = pipeline._attempt(cfg, "2026-11-24", out, "")
-    assert post["title"].startswith("겨울 선긋기")
+    assert post["title"].startswith("[유아 무료 활동지 나눔]")
     assert json.loads((out / "stage.json").read_text())["worksheet"] is True
 
 
@@ -313,7 +337,7 @@ def test_write_prompt_points_to_worksheet_file(cfg, monkeypatch):
     out.mkdir(parents=True)
     with pytest.raises(generate.NoPostError):
         generate.write_post(cfg, out, "2026-11-24")
-    assert "/worksheet-post" in seen["p"] and "WORKSHEET_FILE=" in seen["p"] and "pdf_url" in seen["p"]
+    assert "/worksheet-post" in seen["p"] and "WORKSHEET_FILE=" in seen["p"] and "worksheet_pdf" in seen["p"]
 
 
 # ---------------------------------------------------------------- 워크북 원화(master) 넣기
