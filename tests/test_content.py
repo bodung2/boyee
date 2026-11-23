@@ -76,8 +76,8 @@ def test_edu_daily_skips_lane_b_and_series_requires_strict_sources():
     b_daily = {**post, "lane": "B"}
     assert any("시리즈" in e for e in content.validate(b_daily, edu))
     assert not [e for e in content.validate({**post, "lane": "D"}, edu) if "갈래" in e]
-    s = {**post, "lane": "B", "title": "[저경력 교사 필수 시리즈 9] 비정기 전보 내신, 언제 쓰나?",
-         "thumbnail": {"chip": "저경력 교사 필수 9", "main_lines": ["전보 내신,", "언제 쓸까?"], "sub": "기한이 있어요"}}
+    s = {**post, "lane": "B", "title": "[저경력 교사 필수 시리즈 ⑨] 비정기 전보 내신, 언제 쓰나?",
+         "thumbnail": {"chip": "저경력 교사 필수 ⑨", "main_lines": ["전보 내신,", "언제 쓸까?"], "sub": "기한이 있어요"}}
     errors = content.validate(s, series)
     assert not [e for e in errors if "제목 형식" in e or "갈래" in e]
     primary = sum(1 for x in s["sources"] if x.get("primary"))
@@ -100,10 +100,10 @@ def test_edu_series_title_and_scene_thumbnail():
     from tests.sample_post import make_post
     prof = profiles.get("edu_series")
     assert prof.thumbnail_style == "edu_scene"
-    post = make_post(title="[저경력 교사 필수 시리즈 2] 신규 교사 첫 월급, 실수령 얼마일까?", lane="B",
-                     thumbnail={"chip": "저경력 교사 필수 2", "main_lines": ["신규 교사", "첫 월급,", "얼마일까?"],
+    post = make_post(title="[저경력 교사 필수 시리즈 ②] 신규 교사 첫 월급, 실수령 얼마일까?", lane="B",
+                     thumbnail={"chip": "저경력 교사 필수 ②", "main_lines": ["신규 교사", "첫 월급,", "얼마일까?"],
                                 "sub": "공제만 7가지예요"})
     errs = content.validate(post, prof)
     assert not any("제목 형식" in e or "썸네일" in e for e in errs), errs
-    old = make_post(title="[저경력 교사 필수 ②] 첫 월급 명세서 읽는 법", lane="B")
+    old = make_post(title="[저경력 교사 필수 시리즈 2] 첫 월급 명세서 읽는 법", lane="B")     # 아라비아 숫자는 안 됨
     assert any("제목 형식" in e for e in content.validate(old, prof))

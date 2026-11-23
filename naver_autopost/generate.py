@@ -278,11 +278,23 @@ def _place_prompt(cfg: Config, out_dir: Path, today: str, related: list[Path]) -
     )
 
 
+def circled(n: int) -> str:
+    """1→①, 21→㉑, 36→㊱ (50까지). 그 밖은 숫자 그대로."""
+    if 1 <= n <= 20:
+        return chr(0x2460 + n - 1)
+    if 21 <= n <= 35:
+        return chr(0x3251 + n - 21)
+    if 36 <= n <= 50:
+        return chr(0x32B1 + n - 36)
+    return str(n)
+
+
 def restyle_post(cfg: Config, out_dir: Path, number: int) -> None:
     """발행했던 글을 새 형식으로만 고친다(사실·출처는 그대로). 웹 검색·원문 다시 받기를 하지 않아 가볍다."""
     prompt = (
         f"/{cfg.profile.write_skill}\n\n"
-        f"OUTPUT_DIR={_rel(out_dir)}\nMODE=restyle\nSERIES_NO={number}\nHISTORY_FILE={_rel(cfg.history_file)}\n"
+        f"OUTPUT_DIR={_rel(out_dir)}\nMODE=restyle\nSERIES_NO={number} (제목·썸네일에는 원문자 {circled(number)})\n"
+        f"HISTORY_FILE={_rel(cfg.history_file)}\n"
         f"{_persona_lines(cfg, recent=False)}\n"
         "OUTPUT_DIR/post.json은 이미 원문 확인과 팩트체크를 통과해 발행했던 글이다. 블로그 주인이 형식을 바꿔 다시 발행한다. "
         "사실·수치·출처(sources)·claims·본문 챕터 내용은 바꾸지 말고, 스킬의 지금 형식(제목·도입·썸네일 규칙)에 맞춰 "

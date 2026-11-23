@@ -66,8 +66,8 @@ PROFILES: dict[str, Profile] = {
         lane_categories=(("*", "교직 꿀팁"),),
         off_topic=r"유아|유치원|어린이집|영유아|누리과정",
         off_topic_note="유아 주제는 유아 블로그가 씁니다. 초·중·고 교사 실무 주제로 바꾸세요",
-        # 2026-11-23: '[저경력 교사 필수 시리즈 N] 홈피드형 제목'(N = 발행 순서)
-        title_pattern=r"^\[저경력 교사 필수 시리즈 \d+\] ", max_title=45,
+        # 2026-11-23: '[저경력 교사 필수 시리즈 ①] 홈피드형 제목'(번호 = 발행 순서, 원문자 ①~㊿)
+        title_pattern=r"^\[저경력 교사 필수 시리즈 [\u2460-\u2473\u3251-\u325f\u32b1-\u32bf]\] ", max_title=45,
         min_sources=10, min_primary=4, min_claims=8,
         social=False, same_blog_as="edu",
     ),

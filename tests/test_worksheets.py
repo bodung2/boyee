@@ -478,7 +478,7 @@ def test_restyle_reopens_published_post_for_new_format(tmp_path, monkeypatch):
     def fake_restyle(cfg, out_dir, number):
         seen["no"] = number
         post = json.loads((out_dir / "post.json").read_text(encoding="utf-8"))
-        post["title"] = f"[저경력 교사 필수 시리즈 {number}] 방학엔 학교 안 가도 될까?"
+        post["title"] = f"[저경력 교사 필수 시리즈 {chr(0x2460 + number - 1)}] 방학엔 학교 안 가도 될까?"
         (out_dir / "post.json").write_text(json.dumps(post, ensure_ascii=False), encoding="utf-8")
     monkeypatch.setattr(generate, "restyle_post", fake_restyle)
     lines = pipeline.restyle(c, "2026-11-23")
@@ -486,4 +486,4 @@ def test_restyle_reopens_published_post_for_new_format(tmp_path, monkeypatch):
     assert history.load(other) == [] and not (out / "ready.json").exists()
     stage = json.loads((out / "stage.json").read_text())
     assert stage["claude_pass"] is False and stage["gpt_pass"] is True and stage["written"] is True
-    assert "시리즈 1" in lines[-1]
+    assert "시리즈 ①" in lines[-1]
