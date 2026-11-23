@@ -162,11 +162,11 @@ def test_render_makes_pages_pdf_cover_and_answers(cfg, tmp_path):
     lib = library.root(cfg.data_dir)
     s = SPEC()
     s["pages"] = [s["pages"][1], {"type": "count_write", "title": "몇 개일까요?", "instruction": "세어 보고 써요",
-                                  "items": [{"asset": "hat", "count": 3}, {"asset": "boot", "count": 7},
-                                            {"asset": "mitten", "count": 10}]}]
+                                  "items": [{"asset": k, "count": c} for k, c in
+                                            (("hat", 3), ("boot", 7), ("mitten", 10), ("scarf", 2), ("hat", 5), ("boot", 1))]}]
     library.ensure(cfg, lib, s["assets"], gen=fake_gen)
     r = render.render(s, lib, tmp_path / "o", "https://blog.naver.com/example")
-    assert r["answers"]["p2"] == [3, 7, 10] and sorted(r["answers"]["p1"]) == [1, 2, 3]
+    assert r["answers"]["p2"] == [3, 7, 10, 2, 5, 1] and sorted(r["answers"]["p1"]) == [1, 2, 3]
     assert Image.open(tmp_path / "o" / "page1_full.png").size == (2480, 3508)          # A4 300dpi
     assert Image.open(tmp_path / "o" / "worksheet_p1.png").width == render.BLOG_WIDTH
     assert Image.open(tmp_path / "o" / "worksheet_cover.png").size == (1600, 900)
@@ -185,7 +185,7 @@ def test_every_activity_type_renders(cfg, tmp_path):
         "word_cards": it(8), "vocab_poster": it(6), "check_game": it(6), "trace_letters": it(4),
         "trace_lines": it(4, path="wave"), "cut_lines": it(3, path="zigzag"), "trace_outline": it(4),
         "half_draw": it(4), "coloring": [{"asset": "big_line", "word": "공"}] * 2, "match_same": it(4),
-        "match_shadow": it(3), "emotion_match": it(3), "cut_paste": it(3), "count_write": it(3, count=4),
+        "match_shadow": it(3), "emotion_match": it(3), "cut_paste": it(3), "count_write": it(8, count=9),
     }
     assert set(pages) == set(sp.PAGE_TYPES)
     for t, items in pages.items():
@@ -367,3 +367,47 @@ def test_master_art_is_never_deleted_by_qa(cfg, monkeypatch):
     with pytest.raises(build.WorksheetRejected):
         build.build(cfg, cfg.output_dir / "d", "2026-11-24", run=design_run, gen=fake_gen, upload=lambda *a: {})
     assert library.path(lib, "rabbit").exists()
+
+
+def test_count_write_needs_six_to_eight_problems():
+    page = {"type": "count_write", "title": "몇 개일까요?", "instruction": "세어 보고 써요",
+            "items": [{"asset": "hat", "count": 3}] * 3}
+    assert any("6~8개" in e for e in sp.problems(SPEC(pages=[page])))
+
+
+def test_cut_paste_container_must_be_open():
+    s = SPEC(assets=SPEC()["assets"] + [{"key": "basket_line", "kind": "line", "prompt": "a basket with a lid"}])
+    s["pages"] = [{"type": "cut_paste", "title": "바구니 꾸미기", "instruction": "오려서 붙여요",
+                   "container": "basket_line", "items": [{"asset": "hat"}, {"asset": "boot"}]}]
+    assert any("열린" in e for e in sp.problems(s))
+    s["assets"][-1]["open"] = True
+    assert sp.problems(s) == []
+
+
+def test_clipped_art_is_redrawn_with_margin_then_flagged(cfg):
+    lib = library.root(cfg.data_dir)
+    prompts = []
+
+    def cut_gen(cfg, prompt, out, refs):                     # 늘 오른쪽 가장자리에 닿는 그림
+        prompts.append(prompt)
+        img = Image.new("RGB", (1024, 1024), "white")
+        ImageDraw.Draw(img).rectangle([400, 300, 1023, 700], fill=(200, 120, 40))
+        img.save(out)
+    library.draw(cfg, lib, {"key": "box", "prompt": "a box"}, gen=cut_gen)
+    assert len(prompts) == 2 and "wide white margin" in prompts[1]
+    assert library.load(lib)["box"]["clipped"] is True
+    assert library.touches_edge(Image.new("RGB", (100, 100), "white")) is False
+
+
+@needs_font
+def test_half_draw_ghost_lines_up_with_art(cfg):
+    lib = library.root(cfg.data_dir)
+    library.ensure(cfg, lib, [{"key": "ball", "prompt": "x"}], gen=fake_gen)
+    A = render.Assets(lib)
+    art, ghost = A.art("ball", 800), A.outline("ball", 800, same_art=True)
+    assert art.size == ghost.size                            # 같은 그림에서 뽑아 자리가 정확히 같다
+
+
+def test_seed_skips_clipped_example_art():
+    seeds = json.loads(library.SEED_FILE.read_text(encoding="utf-8"))["assets"]
+    assert seeds["picnic_basket_line"].get("skip")

@@ -71,8 +71,10 @@ def catalog(lib: Path) -> list[dict]:
     index = load(lib)
     return [{"key": k, "name": v.get("name", ""), "kind": v.get("kind", "color"), "used": len(v.get("used") or []),
              **({"character": True} if v.get("character") else {}), **({"master": True} if v.get("master") else {}),
+             **({"open": True} if v.get("open") else {}),
              **({"has_line": True} if f"{k}_line" in index else {})}
-            for k, v in sorted(index.items()) if v.get("status") == "ok" and path(lib, k).exists()]
+            for k, v in sorted(index.items())
+            if v.get("status") == "ok" and not v.get("clipped") and path(lib, k).exists()]
 
 
 SEED_FILE = Path(__file__).with_name("seed_assets.json")
@@ -103,7 +105,7 @@ def seed(docx: Path, lib: Path) -> list[str]:
         media = {Path(n).name: n for n in z.namelist() if n.startswith("word/media/")}
         pages: dict[str, Image.Image] = {}
         for key, info in seeds.items():
-            if key in index and path(lib, key).exists():
+            if info.get("skip") or (key in index and path(lib, key).exists()):
                 continue
             name = info["image"]
             if name not in media:
@@ -134,9 +136,10 @@ def to_square(src: Path, out: Path) -> None:
     canvas.resize((SIZE, SIZE), Image.LANCZOS).save(out, "PNG", optimize=True)
 
 
-def prompt_for(asset: dict) -> str:
+def prompt_for(asset: dict, margin: bool = False) -> str:
     kind = asset.get("kind", "color")
-    return f"{STYLE.get(kind, STYLE['color'])}\nSubject: {asset['prompt'].strip()}\n{TAIL}"
+    return (f"{MARGIN_NOTE if margin else ''}{STYLE.get(kind, STYLE['color'])}\n"
+            f"Subject: {asset['prompt'].strip()}\n{TAIL}")
 
 
 def _references(lib: Path, index: dict, kind: str, limit: int = 2) -> list[Path]:
@@ -151,12 +154,22 @@ def _references(lib: Path, index: dict, kind: str, limit: int = 2) -> list[Path]
     return [path(lib, k) for k in ok[:limit]]
 
 
-def draw(cfg, lib: Path, asset: dict, gen=None) -> Path:
-    """그림 한 장을 새로 그려 보관함에 넣는다(status new). gen(cfg, prompt, out, refs)는 테스트용."""
-    index = load(lib)
-    out = path(lib, asset["key"])
-    refs = _references(lib, index, asset.get("kind", "color"))
-    prompt = (REF_NOTE if refs else "") + prompt_for(asset)
+MARGIN_NOTE = ("IMPORTANT: draw the subject smaller (about 70% of the square) with a wide white margin on every side. "
+               "No part of it may touch or be cut off by the edges of the image.\n")
+
+
+def touches_edge(img: Image.Image, border: int = 4, threshold: int = 235) -> bool:
+    """그림이 정사각형 가장자리에 닿았는지(잘린 그림). 흰 배경 위 한 가지 사물이어야 하므로 닿으면 잘린 것이다."""
+    g = img.convert("L")
+    w, h = g.size
+    for box in ((0, 0, w, border), (0, h - border, w, h), (0, 0, border, h), (w - border, 0, w, h)):
+        if g.crop(box).getextrema()[0] < threshold:
+            return True
+    return False
+
+
+def _draw_once(cfg, out: Path, prompt: str, refs: list[Path], gen=None) -> None:
+    out.parent.mkdir(parents=True, exist_ok=True)
     if gen is not None:
         gen(cfg, prompt, out, refs)
     elif cfg.image_backend == "codex":
@@ -172,9 +185,23 @@ def draw(cfg, lib: Path, asset: dict, gen=None) -> Path:
                   (img.width + side) // 2, (img.height + side) // 2)).save(tmp)
         to_square(tmp, out)
         tmp.unlink(missing_ok=True)
+
+
+def draw(cfg, lib: Path, asset: dict, gen=None) -> Path:
+    """그림 한 장을 새로 그려 보관함에 넣는다(status new). gen(cfg, prompt, out, refs)는 테스트용."""
+    index = load(lib)
+    out = path(lib, asset["key"])
+    refs = _references(lib, index, asset.get("kind", "color"))
+    prompt = (REF_NOTE if refs else "") + prompt_for(asset)
+    _draw_once(cfg, out, prompt, refs, gen)
+    if touches_edge(Image.open(out)):             # 잘린 그림: 여백을 크게 해서 한 번 더 그린다
+        log.warning("원화가 가장자리에서 잘렸습니다(다시 그림): %s", asset["key"])
+        _draw_once(cfg, out, (REF_NOTE if refs else "") + prompt_for(asset, margin=True), refs, gen)
     index = load(lib)
     index[asset["key"]] = {"name": asset.get("name", ""), "prompt": asset["prompt"], "kind": asset.get("kind", "color"),
-                           "status": "new", "created": date.today().isoformat(), "used": []}
+                           "status": "new", "created": date.today().isoformat(), "used": [],
+                           **({"open": True} if asset.get("open") else {}),
+                           **({"clipped": True} if touches_edge(Image.open(out)) else {})}
     save(lib, index)
     log.info("원화 새로 그림: %s (%s)", asset["key"], asset.get("name", ""))
     return out
