@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>캐릭터 공방 학습지 (A5)</title>
+<!-- 인쇄용 PDF: character_worksheet.pdf(A4 가로에 2장, 가운데 잘라 쓰기), character_worksheet_a5.pdf(A5 한 장).
+     이 파일을 크롬에서 열어 인쇄 → PDF로 저장해도 된다(용지 A5, 배경 그래픽 켜기). 주소 끝에 #2up을 붙이면 A4 2장 배치. -->
+<link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+<style>
+  @page { size: A5; margin: 0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: #2b2340; font-family: "NanumSquareRound", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+         -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .sheet { width: 148mm; height: 210mm; padding: 7mm 8mm 6mm; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+
+  .head { display: flex; align-items: flex-end; justify-content: space-between; border-bottom: .9mm dotted #f4b6c6; padding-bottom: 2mm; }
+  .title { font-family: "Jua", sans-serif; font-size: 22pt; line-height: 1; color: #ff5c80; }
+  .title small { display: block; font-size: 9pt; color: #6b5f86; margin-top: 1.4mm; }
+  .blank { display: inline-block; border-bottom: .3mm solid #2b2340; height: 5mm; vertical-align: bottom; }
+  .who { font-size: 9.5pt; white-space: nowrap; }
+
+  h2 { font-family: "Jua", sans-serif; font-weight: 400; font-size: 12.5pt; margin: 3mm 0 1.6mm; display: flex; align-items: center; gap: 1.8mm; }
+  .num { display: inline-grid; place-items: center; width: 6.2mm; height: 6.2mm; border-radius: 50%; background: #ff8fa8; color: #fff; font-size: 10pt; }
+  h2 em { font-style: normal; font-family: "NanumSquareRound", sans-serif; font-size: 8pt; color: #6b5f86; }
+
+  .fields { display: grid; grid-template-columns: 1fr; gap: 2mm; font-size: 9.5pt; }
+  .field { display: flex; align-items: flex-end; gap: 2mm; }
+  .field b { white-space: nowrap; }
+  .field .blank { flex: 1; }
+  .field small { font-size: 7.5pt; color: #6b5f86; white-space: nowrap; }
+
+  .drawwrap { position: relative; flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .draw { flex: 1; border: .45mm solid #2b2340; border-radius: 2.5mm; position: relative; }
+  .mark { position: absolute; width: 7mm; height: 7mm; border: 0 solid #ff5c80; }
+  .mark.tl { top: 2mm; left: 2mm; border-top-width: .9mm; border-left-width: .9mm; }
+  .mark.tr { top: 2mm; right: 2mm; border-top-width: .9mm; border-right-width: .9mm; }
+  .mark.bl { bottom: 2mm; left: 2mm; border-bottom-width: .9mm; border-left-width: .9mm; }
+  .mark.br { bottom: 2mm; right: 2mm; border-bottom-width: .9mm; border-right-width: .9mm; }
+  .tips { display: flex; justify-content: space-between; gap: 1.4mm; margin-top: 1.6mm; font-size: 7.8pt; }
+  .tips span { background: #fff6e8; border-radius: 2mm; padding: .9mm 1.6mm; white-space: nowrap; }
+  .tips i { font-style: normal; font-family: "Jua", sans-serif; color: #ff8a3d; margin-right: .8mm; }
+
+  .styles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.3mm 1.6mm; font-size: 8.4pt; }
+  .st { display: flex; align-items: center; gap: 1.2mm; border: .25mm solid #e6dcf7; border-radius: 2mm; padding: 1.1mm 1.4mm; white-space: nowrap; }
+  .box { width: 3.4mm; height: 3.4mm; border: .35mm solid #2b2340; border-radius: .8mm; flex: none; }
+
+  .foot { margin-top: 2.2mm; display: flex; align-items: center; justify-content: center; gap: 1.6mm; font-size: 8pt; color: #6b5f86;
+          background: #f4f0ff; border-radius: 2mm; padding: 1.3mm 2mm; }
+  .foot b { color: #7c5cff; font-family: "Jua", sans-serif; font-weight: 400; font-size: 9.5pt; }
+
+  /* A4 가로 한 장에 두 장(#2up) */
+  .two { width: 297mm; height: 210mm; display: flex; position: relative; }
+  .two::after { content: ""; position: absolute; left: 148.5mm; top: 4mm; bottom: 4mm; border-left: .3mm dashed #b9b0cc; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="head">
+    <div class="title">캐릭터 공방<small>내 캐릭터를 그리고 AI 마법으로 변신시켜요!</small></div>
+    <div class="who">별명 <span class="blank" style="width:24mm"></span></div>
+  </div>
+
+  <h2><span class="num">1</span>내 캐릭터 소개</h2>
+  <div class="fields">
+    <div class="field"><b>캐릭터 이름</b><span class="blank"></span></div>
+    <div class="field"><b>취미·특기</b><span class="blank"></span><small>← 웹앱 '소개'에 적어요</small></div>
+  </div>
+
+  <h2><span class="num">2</span>캐릭터 그리기 <em>빨간 모서리 안쪽만 사진으로 찍어요</em></h2>
+  <div class="drawwrap">
+    <div class="draw"><span class="mark tl"></span><span class="mark tr"></span><span class="mark bl"></span><span class="mark br"></span></div>
+    <div class="tips"><span><i>1</i>온몸을 크~게</span><span><i>2</i>테두리는 사인펜으로 진하게</span><span><i>3</i>꼼꼼히 색칠</span><span><i>4</i>배경·글씨 없이</span></div>
+  </div>
+
+  <h2><span class="num">3</span>어떤 모습으로 변신할까? <em>하나에 ✓</em></h2>
+  <div class="styles">
+    <div class="st"><span class="box"></span>양모펠트 인형</div>
+    <div class="st"><span class="box"></span>클레이 인형</div>
+    <div class="st"><span class="box"></span>2D 애니메이션</div>
+    <div class="st"><span class="box"></span>3D 애니메이션</div>
+    <div class="st"><span class="box"></span>봉제 인형</div>
+    <div class="st"><span class="box"></span>픽셀아트 게임</div>
+    <div class="st"><span class="box"></span>수채화 그림책</div>
+    <div class="st"><span class="box"></span>스티커</div>
+  </div>
+
+  <div class="foot">
+    <svg width="4.5mm" height="4.5mm" viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3z" fill="none" stroke="#7c5cff" stroke-width="2"/><path d="M14 14h3v3h-3zM18 18h3v3h-3z" fill="#7c5cff"/></svg>
+    <b>QR 찍기</b> → 별명 쓰기 → 그림 찍기 → 모습 고르기 → <b>변신!</b>
+  </div>
+</div>
+<script>
+  // 주소 끝이 #2up이면 A4 가로 한 장에 두 장을 나란히(가운데 점선을 따라 자른다)
+  if (location.hash === '#2up') {
+    const one = document.querySelector('.sheet');
+    const two = document.createElement('div');
+    two.className = 'two';
+    two.append(one.cloneNode(true), one);
+    document.body.prepend(two);
+    const st = document.createElement('style');
+    st.textContent = '@page { size: A4 landscape; margin: 0; }';
+    document.head.append(st);
+  }
+</script>
+</body>
+</html>
