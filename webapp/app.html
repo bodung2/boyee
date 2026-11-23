@@ -178,6 +178,112 @@ body.has-run #toast{bottom:auto;top:64px}body.has-run{padding-bottom:calc(76px +
 @media (prefers-reduced-motion:reduce){#ko .kc,#ko .cf,.gplus{animation:none}}
 @media (max-width:520px){.grid{grid-template-columns:repeat(2,1fr)}.hero .big{font-size:26px}.legend{grid-template-columns:1fr}}
 #syncdot{position:fixed;left:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:60;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--chip);color:var(--sub);box-shadow:var(--shadow)}
+/* ---------------------------------------------------------------- 📌 스케줄 보드(포스트잇 캔버스) */
+#board{display:flex;flex-direction:column;height:calc(100dvh - var(--tabsH,58px));overflow:hidden}
+#board[hidden]{display:none}
+.sb-top{display:flex;align-items:center;gap:8px;padding:8px 12px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--line);background:var(--bg)}
+.sb-seg{display:flex;gap:2px;padding:3px;border-radius:12px;background:var(--chip)}
+.sb-seg button{border:0;background:none;height:36px;padding:0 14px;border-radius:9px;font-size:15px;font-weight:800;color:var(--sub);cursor:pointer}
+.sb-seg button.on{background:var(--tabon);color:var(--ink);box-shadow:var(--tabsh)}
+.sb-seg b{display:inline-block;min-width:20px;margin-left:4px;padding:0 6px;border-radius:999px;background:var(--accent);color:#fff;font-size:12px;line-height:19px}
+.sb-btn{display:inline-flex;align-items:center;gap:5px;height:40px;padding:0 14px;border-radius:11px;border:1px solid var(--line);
+background:var(--cardbg);color:var(--ink);font-size:15px;font-weight:800;cursor:pointer;box-shadow:var(--shadow);white-space:nowrap}
+.sb-btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.sb-btn:active{transform:translateY(1px)}
+#board.done-view .sb-addonly{display:none}
+#sbStatus{position:absolute;right:12px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:5;font-size:12.5px;font-weight:700;color:var(--sub);white-space:nowrap;padding:6px 11px;border-radius:999px;background:var(--cardbg);border:1px solid var(--line);box-shadow:var(--shadow);pointer-events:none}
+#sbStatus.warn{color:var(--warn)}
+.sb-tabs{display:flex;gap:6px;padding:7px 12px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--line);background:var(--bg)}
+.sb-tabs::-webkit-scrollbar{display:none}
+.sb-ctab{flex:none;display:flex;align-items:center;gap:4px;height:34px;padding:0 6px 0 14px;border-radius:10px;background:var(--chip);
+color:var(--sub);font-size:14.5px;font-weight:700;cursor:pointer;max-width:220px;border:1px solid transparent}
+.sb-ctab.on{background:var(--tabon);color:var(--ink);box-shadow:var(--tabsh)}
+.sb-ctab .nm{outline:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px}
+.sb-ctab .nm[contenteditable=true]{background:var(--card);border-radius:5px;padding:0 5px;box-shadow:0 0 0 2px var(--accent)}
+.sb-ctab .x{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;opacity:.5;font-size:12px}
+.sb-ctab .x:hover{opacity:1;background:rgba(239,68,68,.2)}
+.sb-ctab.add{padding:0 12px;border:1px dashed var(--line);background:none;font-size:18px}
+.sb-vp{position:relative;flex:1;overflow:hidden;touch-action:none;cursor:grab;
+background-color:var(--bg);background-image:radial-gradient(var(--line) 1.6px,transparent 1.6px);background-size:28px 28px}
+:root[data-theme=dark] .sb-vp{background-image:radial-gradient(rgba(148,163,184,.22) 1.6px,transparent 1.6px)}
+.sb-vp.panning{cursor:grabbing}
+#board.done-view .sb-vp{background-color:color-mix(in srgb,var(--bg) 88%,#22c55e)}
+.sb-world{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
+#sbEdges{position:absolute;top:0;left:0;overflow:visible;pointer-events:none;z-index:1}
+#sbEdges path[data-e]{pointer-events:stroke;cursor:pointer}
+.sb-card{position:absolute;z-index:2;display:flex;flex-direction:column;min-width:160px;min-height:120px;border-radius:14px;color:#1b1f24;
+box-shadow:0 2px 4px rgba(0,0,0,.18),0 10px 26px rgba(0,0,0,.22);user-select:none;transition:opacity .25s,filter .25s}
+:root[data-theme=dark] .sb-card{box-shadow:0 2px 6px rgba(0,0,0,.5),0 14px 34px rgba(0,0,0,.55)}
+.sb-card.sel{outline:3px solid var(--accent);outline-offset:3px;z-index:4}
+.sb-card.target{outline:3px dashed var(--accent);outline-offset:3px}
+.sb-bar{height:38px;display:flex;align-items:center;gap:4px;padding:0 6px;border-radius:14px 14px 0 0;background:rgba(0,0,0,.07);cursor:grab;touch-action:none}
+.sb-grip{flex:1;align-self:stretch;min-width:18px}
+.sb-tools{display:none;gap:2px;position:absolute;left:0;bottom:100%;margin-bottom:10px;padding:4px;border-radius:12px;background:var(--cardbg);border:1px solid var(--line);box-shadow:var(--shadow);z-index:5}
+.sb-card.sel .sb-tools{display:flex}
+.sb-tools .sb-ib{width:38px;height:38px;font-size:18px;color:var(--ink)}
+.sb-ib{width:30px;height:30px;border:0;border-radius:8px;background:transparent;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#1b1f24}
+.sb-ib:hover{background:rgba(0,0,0,.12)}
+/* 끝냄 스위치(흐리게): 켜면 카드가 흐려져 '다 했다'가 한눈에 보인다 */
+.sb-sw{position:relative;width:44px;height:24px;border-radius:999px;border:0;background:rgba(0,0,0,.22);cursor:pointer;flex:none;padding:0}
+.sb-sw i{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.35);transition:left .18s}
+.sb-sw[aria-checked=true]{background:#16a34a}
+.sb-sw[aria-checked=true] i{left:23px}
+/* 완료 체크박스: 누르면 완료 보드로 */
+.sb-chk{width:28px;height:28px;flex:none;border-radius:8px;border:2.5px solid rgba(0,0,0,.45);background:rgba(255,255,255,.55);cursor:pointer;
+font-size:16px;font-weight:900;line-height:1;color:transparent;display:flex;align-items:center;justify-content:center;padding:0}
+.sb-chk:hover,.sb-card.dim .sb-chk{color:#16a34a;border-color:#16a34a}
+.sb-card.dim .sb-chk{background:#fff;animation:sbpulse 1.6s ease-in-out infinite}
+@keyframes sbpulse{50%{box-shadow:0 0 0 5px rgba(22,163,74,.25)}}
+.sb-card.dim{filter:saturate(.3)}
+.sb-card.dim .sb-body,.sb-card.dim .sb-foot,.sb-card.dim .sb-tbl,.sb-card.dim .sb-tt{opacity:.42}
+.sb-card.dim .sb-body{text-decoration:line-through;text-decoration-thickness:2px}
+.sb-body{flex:1;padding:10px 14px 12px;font-size:17px;line-height:1.55;font-weight:550;outline:none;overflow:auto;word-break:break-word;white-space:pre-wrap;user-select:text}
+.sb-body:empty::before{content:"할 일을 적으세요";color:rgba(0,0,0,.38)}
+.sb-card.text{background:transparent!important;box-shadow:none;color:var(--ink);min-height:48px}
+.sb-card.text,:root[data-theme] .sb-card.text{box-shadow:none}
+.sb-card.text .sb-bar{position:absolute;left:0;right:0;bottom:100%;background:transparent;visibility:hidden}
+.sb-card.text.sel .sb-bar,.sb-card.text:hover .sb-bar{visibility:visible}
+.sb-card.text.sel .sb-tools{bottom:auto;top:100%;margin:10px 0 0}
+.sb-card.text .sb-body{overflow:visible}
+.sb-card.text .sb-ib,.sb-card.text .sb-chk{color:var(--ink)}
+.sb-card.text .sb-body{font-size:21px;font-weight:800;line-height:1.4;padding:2px 10px}
+.sb-card.text .sb-body:empty::before{content:"텍스트 입력";color:var(--mute)}
+.sb-card.text [data-r=color]{display:none}
+.sb-foot{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 11px}
+.sb-chip{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.75);
+border:1px solid rgba(0,0,0,.12);font-size:13px;font-weight:600;color:#1f2937;cursor:pointer;text-decoration:none;overflow:hidden}
+.sb-chip .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-chip .x{opacity:.55;font-weight:900;padding-left:3px}
+.sb-chip.ok{background:rgba(22,163,74,.18);border-color:rgba(22,163,74,.4);color:#14532d;cursor:default}
+.sb-tbl{border-collapse:collapse;margin:8px 12px 0;font-size:15px}
+.sb-tbl td{border:1px solid rgba(0,0,0,.22);padding:6px 9px;min-width:52px;background:rgba(255,255,255,.6);outline:none;user-select:text}
+.sb-tt{display:flex;gap:5px;padding:6px 12px 10px}
+.sb-tt button{height:28px;padding:0 9px;font-size:13px;font-weight:700;border:1px solid rgba(0,0,0,.18);border-radius:7px;background:rgba(255,255,255,.65);cursor:pointer;color:#1f2937}
+.sb-dot{position:absolute;right:-11px;top:50%;transform:translateY(-50%);width:20px;height:20px;border-radius:50%;background:#fff;border:3px solid var(--accent);cursor:crosshair;display:none;z-index:3}
+.sb-card.sel .sb-dot{display:block}
+.sb-rs{position:absolute;right:0;bottom:0;width:24px;height:24px;cursor:nwse-resize;display:none;z-index:3}
+.sb-rs::after{content:"";position:absolute;right:5px;bottom:5px;width:10px;height:10px;border-right:3px solid rgba(0,0,0,.35);border-bottom:3px solid rgba(0,0,0,.35);border-radius:0 0 3px 0}
+.sb-card.sel .sb-rs{display:block}
+.sb-zoom{position:absolute;left:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:5;display:flex;align-items:center;gap:2px;padding:4px;border-radius:12px;background:var(--cardbg);border:1px solid var(--line);box-shadow:var(--shadow)}
+.sb-zoom button{width:36px;height:36px;border:0;border-radius:9px;background:none;font-size:20px;font-weight:800;cursor:pointer;color:var(--ink)}
+.sb-zoom span{min-width:52px;text-align:center;font-size:13px;font-weight:800;color:var(--sub)}
+.sb-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;pointer-events:none;text-align:center;padding:20px;color:var(--sub)}
+.sb-empty b{font-size:19px;color:var(--ink)}
+.sb-lock{position:absolute;inset:0;z-index:8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;
+background:color-mix(in srgb,var(--bg) 86%,transparent);font-size:15px;line-height:1.6}
+.sb-lock[hidden]{display:none}
+.sb-pop{position:fixed;z-index:70;display:none;gap:7px;padding:9px;border-radius:14px;background:var(--cardbg);border:1px solid var(--line);box-shadow:var(--shadow)}
+.sb-pop.open{display:grid}
+#sbPal{grid-template-columns:repeat(4,1fr)}
+#sbPal i{width:32px;height:32px;border-radius:9px;cursor:pointer;border:1px solid rgba(0,0,0,.15)}
+#sbPal i.on{outline:3px solid var(--accent);outline-offset:1px}
+#sbLink.open{display:flex;align-items:center}
+#sbLink input{width:min(260px,60vw);height:38px;border:1px solid var(--line);border-radius:10px;padding:0 10px;font-size:15px;background:var(--card);outline:none}
+.sb-undo{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(64px + env(safe-area-inset-bottom));z-index:75;display:flex;align-items:center;gap:12px;
+padding:10px 12px 10px 16px;border-radius:14px;background:#111827;color:#fff;font-size:14.5px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.sb-undo[hidden]{display:none}
+.sb-undo button{border:0;border-radius:9px;background:#facc15;color:#111;font-weight:900;padding:7px 12px;cursor:pointer}
+@media (max-width:560px){.sb-btn .tx{display:none}.sb-btn{padding:0 12px}.sb-top{gap:6px;padding:7px 8px}}
 </style>
 </head>
 <body>
@@ -186,10 +292,32 @@ body.has-run #toast{bottom:auto;top:64px}body.has-run{padding-bottom:calc(76px +
   <button role="tab" data-tab="growth" aria-selected="false">🏅 성장</button>
   <button role="tab" data-tab="quest" aria-selected="false">퀘스트</button>
   <button role="tab" data-tab="assets" aria-selected="false">내 자산</button>
+  <button role="tab" data-tab="board" aria-selected="false">📌 보드</button>
   <button role="tab" data-tab="camp" aria-selected="false">🏕 베이스캠프</button>
   <button type="button" id="themeBtn" aria-label="화면 모드 바꾸기" title="화면 모드">🌙</button>
 </div>
 <div id="ko" hidden></div>
+<section id="board" hidden>
+  <div class="sb-top">
+    <div class="sb-seg"><button type="button" data-sb="view" data-v="active" class="on">작업</button><button type="button" data-sb="view" data-v="done">완료<b id="sbDoneN">0</b></button></div>
+    <button type="button" class="sb-btn pri sb-addonly" data-sb="note">＋<span class="tx"> 포스트잇</span></button>
+    <button type="button" class="sb-btn sb-addonly" data-sb="text">T<span class="tx"> 텍스트</span></button>
+    <button type="button" class="sb-btn sb-addonly" data-sb="table">▦<span class="tx"> 표</span></button>
+    <button type="button" class="sb-btn" data-sb="fit">⊡<span class="tx"> 전체 보기</span></button>
+  </div>
+  <div class="sb-tabs" id="sbTabs"></div>
+  <div class="sb-vp" id="sbVp">
+    <div class="sb-world" id="sbWorld"><svg id="sbEdges" xmlns="http://www.w3.org/2000/svg"><defs><marker id="sbArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--sub)"></path></marker></defs></svg></div>
+    <div class="sb-empty" id="sbEmpty"></div>
+    <div class="sb-zoom"><button type="button" data-sb="zout" aria-label="축소">－</button><span id="sbZoom">100%</span><button type="button" data-sb="zin" aria-label="확대">＋</button></div>
+    <span id="sbStatus">불러오는 중…</span>
+    <div class="sb-lock" id="sbLock" hidden></div>
+  </div>
+  <div class="sb-pop" id="sbPal"></div>
+  <div class="sb-pop" id="sbLink"><input id="sbLinkIn" type="url" placeholder="https:// 링크 붙여넣기"><button type="button" class="sb-btn pri" data-sb="linksave">추가</button></div>
+  <div class="sb-undo" id="sbUndo" hidden><span></span><button type="button" data-sb="undo">되돌리기</button></div>
+  <input type="file" id="sbFile" hidden>
+</section>
 <section id="camp" hidden><main id="cmain"><p class="empty">불러오는 중…</p></main></section>
 <section id="timer" hidden><main id="tmain"><p class="empty">불러오는 중…</p></main></section>
 <section id="growth" hidden><main id="gmain"><p class="empty">불러오는 중…</p></main></section>
@@ -202,7 +330,7 @@ body.has-run #toast{bottom:auto;top:64px}body.has-run{padding-bottom:calc(76px +
 <div id="syncdot" hidden aria-live="polite">☁️ 저장 중…</div>
 <script>
 "use strict";
-const NEED_API = 3;
+const NEED_API = 4;
 const CATS = {
   finance: {icon: "💰", label: "금융", name: "이름", nameHint: "예: 삼성전자, 비상금 통장", date: "매수일(선택)"},
   pipeline: {icon: "💵", label: "파이프라인", name: "이름", nameHint: "예: 교육 블로그 애드포스트", date: "시작일"},
@@ -388,7 +516,12 @@ try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () =
 function showTab(name) {
   document.querySelectorAll(".tabs button[data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name));
   $("#quest").hidden = name !== "quest"; $("#assets").hidden = name !== "assets"; $("#growth").hidden = name !== "growth"; $("#timer").hidden = name !== "timer"; $("#camp").hidden = name !== "camp";
+  $("#board").hidden = name !== "board"; document.body.style.overflow = name === "board" ? "hidden" : "";
   store.set("tab", name);
+  if (name === "board") {             // 보드 코드는 맨 아래 <script>에 있다 — 처음 열 때 아직 안 읽혔으면 잠시 뒤에
+    const go = () => typeof BOARD !== "undefined" ? BOARD.show() : setTimeout(go, 30); go();
+    if (!DATA) loadAssets(); return;
+  }
   if (name === "quest") loadQuest(); else if (!DATA) loadAssets(); else if (name === "growth") renderGrowth(); else if (name === "timer") renderTimer(); else if (name === "camp") renderCamp();
 }
 let questAt = 0;
@@ -790,7 +923,7 @@ $("#form").addEventListener("change", e => {
 $("#sheet").addEventListener("click", e => { if (e.target.id === "sheet") $("#sheet").hidden = true; });
 VIEW = VIEWS.some(([k]) => k === store.get("view")) ? store.get("view") : "summary";
 applyTheme();
-showTab(["assets", "growth", "timer", "camp"].includes(store.get("tab")) ? store.get("tab") : "quest");
+showTab(["assets", "growth", "timer", "camp", "board"].includes(store.get("tab")) ? store.get("tab") : "quest");
 // 주소 끝에 ?tab=timer 를 붙여 홈 화면에 두면 바로 ⏱ 기록 화면으로 열린다
 try { google.script.url.getLocation(loc => { const t = loc && loc.parameter && loc.parameter.tab; if (["timer", "growth", "assets", "quest", "camp"].includes(t)) showTab(t); }); } catch (e) {}
 </script>
@@ -1804,7 +1937,7 @@ function renderGrowth() {
 }
 
 // 화면 버전: 폰이 새 화면을 받았는지 성장 탭 맨 아래에서 확인할 수 있게(바꿀 때마다 올린다)
-const APP_BUILD = "2026.11.18-b";
+const APP_BUILD = "2026.11.23-a";
 // 카드 하나를 그리다 오류가 나도 나머지 화면은 그대로 보이게, 오류 내용은 그 자리에 보여 준다
 function safeCard(name, fn) {
   try { return fn(); }
@@ -2554,6 +2687,455 @@ $("#form").addEventListener("submit", e => {
   e.preventDefault(); e.stopImmediatePropagation(); saveTool();
 }, true);
 renderCamp();
+</script>
+<script>
+// ---------------------------------------------------------------- 📌 스케줄 보드(포스트잇 캔버스)
+// 예전 단독 앱 '내 스케줄 보드'를 대시보드 탭으로 옮긴 것. 데이터는 그 앱과 같은 드라이브 파일(스케줄보드_데이터/board.json).
+// 지키는 것: ① 불러오기에 실패하거나 파일을 못 읽으면 저장을 잠가 빈 화면이 덮어쓰지 않게 ② 두 기기가 동시에 고치면 서버가 충돌을 알리고
+// 카드 단위로 합친다(카드마다 고친 시각 u, 지운 것은 gone에 시각) ③ 첨부는 비공개 ④ 지우기는 확인 대신 '되돌리기'
+// ⑤ 두 손가락으로 확대·축소. 카드 위 스위치(끝냄)는 카드를 흐리게, 체크박스는 완료 보드로 옮긴다.
+const BOARD = (() => {
+  const COLORS = ["#FFE27A", "#FFBE8F", "#FFA8C0", "#D7B8FF", "#9DE3B4", "#A7D0FF", "#FFF3C4", "#E5E7EB"];
+  const GONE_KEEP = 60 * 864e5;                 // 지운 기록(합칠 때 되살아나지 않게)은 60일 보관
+  let S = {canvases: [], currentCanvasId: null, gone: {}}, view = "active", sel = null;
+  let rev = 0, loaded = false, dirty = false, saving = false, saveT = 0, checkedAt = 0, started = false;
+  const q = s => document.querySelector(s), vp = () => q("#sbVp"), world = () => q("#sbWorld"), edges = () => q("#sbEdges");
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const now = () => Date.now();
+  const blankView = () => ({panX: 120, panY: 90, zoom: 1});
+  function normCanvas(c) {
+    return {id: c.id || uid(), name: c.name || "캔버스", u: c.u || 0, cards: c.cards || [], links: c.links || [], view: c.view || blankView(),
+      done: c.done || [], doneLinks: c.doneLinks || [], doneView: c.doneView || blankView()};
+  }
+  function fromData(d) {
+    const cvs = d.canvases && d.canvases.length ? d.canvases : (d.cards || d.done) ? [{name: "캔버스 1", ...d}] : [];
+    return {canvases: cvs.map(normCanvas), currentCanvasId: d.currentCanvasId || null, gone: d.gone || {}};
+  }
+  function ensureCanvas() {
+    if (!S.canvases.length) { const c = normCanvas({name: "캔버스 1", u: now()}); S.canvases = [c]; }
+    if (!S.canvases.some(c => c.id === S.currentCanvasId)) S.currentCanvasId = S.canvases[0].id;
+  }
+  const cv = () => S.canvases.find(c => c.id === S.currentCanvasId) || S.canvases[0];
+  const cards = () => view === "done" ? cv().done : cv().cards;
+  const links = () => view === "done" ? cv().doneLinks : cv().links;
+  const vw = () => view === "done" ? cv().doneView : cv().view;
+  const find = id => cards().find(c => c.id === id);
+  const touch = c => { c.u = now(); return c; };
+
+  // ---------------- 상태 표시 · 잠금
+  function status(t, warn) { const e = q("#sbStatus"); if (e) { e.textContent = t; e.classList.toggle("warn", !!warn); } }
+  function lock(msg, retry) {
+    loaded = false; const l = q("#sbLock"); l.hidden = false;
+    l.innerHTML = `<div>${msg}</div>${retry ? '<button type="button" class="sb-btn pri" data-sb="reload">다시 불러오기</button>' : ""}`;
+    status("저장 멈춤", true);
+  }
+  function guard() { if (!loaded) { status("보드를 불러온 뒤에 고칠 수 있어요", true); return false; } return true; }
+
+  // ---------------- 불러오기 · 저장(충돌은 합쳐서 다시 저장)
+  async function load() {
+    status("불러오는 중…");
+    let r;
+    try { r = await api("loadBoard"); }
+    catch (e) {
+      const old = /loadBoard|not found|찾을 수 없/i.test(e.message);
+      return lock(old ? "웹앱 코드(Code.gs)가 예전 버전이라 보드를 열 수 없어요.<br>저장소의 webapp/Code.gs를 붙여 넣고 배포 관리 → 새 버전으로 다시 배포해 주세요."
+        : `보드를 불러오지 못했어요 (${esc(e.message)}).<br>빈 화면이 저장되지 않도록 고치기를 잠가 두었어요.`, true);
+    }
+    let d = {};
+    if (r.json) { try { d = JSON.parse(r.json); } catch (e) {
+      return lock("저장된 보드 파일(board.json)을 읽지 못했어요. 덮어쓰지 않도록 저장을 멈췄어요.<br>드라이브 '스케줄보드_데이터' 폴더의 board.backup.json으로 되살릴 수 있어요.", true); } }
+    S = fromData(d); ensureCanvas(); rev = r.rev || 0; loaded = true; dirty = false; checkedAt = now();
+    q("#sbLock").hidden = true; status("저장됨 ✓"); redraw();
+  }
+  function pack() {
+    const cut = now() - GONE_KEEP; Object.keys(S.gone).forEach(k => { if (S.gone[k] < cut) delete S.gone[k]; });
+    return JSON.stringify({v: 2, canvases: S.canvases, currentCanvasId: S.currentCanvasId, gone: S.gone});
+  }
+  function save() {
+    if (!loaded) return;
+    dirty = true; status("저장 대기…"); clearTimeout(saveT); saveT = setTimeout(flush, 600);
+  }
+  async function flush(force) {
+    if (!loaded || !dirty) return;
+    if (saving) { clearTimeout(saveT); saveT = setTimeout(flush, 400); return; }
+    saving = true; dirty = false; status("저장 중…");
+    try {
+      const r = await api("saveBoard", pack(), rev, !!force);
+      if (r.conflict) {                       // 다른 기기(또는 예전 앱)가 먼저 저장 → 카드 단위로 합쳐 다시 저장
+        try { S = merge(S, fromData(JSON.parse(r.json || "{}"))); } catch (e) {}
+        ensureCanvas(); rev = r.rev; dirty = true; redraw(); status("다른 기기에서 고친 내용과 합쳤어요");
+      } else if (r.refused) {
+        if (confirm("카드를 모두 지운 상태예요. 이대로 저장할까요? (취소하면 드라이브에 저장된 보드를 다시 불러와요)")) { dirty = true; saving = false; return flush(true); }
+        saving = false; return load();
+      } else { rev = r.rev; status(dirty ? "저장 대기…" : "저장됨 ✓"); }
+    } catch (e) { dirty = true; status("저장 실패 — 잠시 뒤 다시 저장해요", true); clearTimeout(saveT); saveT = setTimeout(flush, 5000); saving = false; return; }
+    saving = false;
+    if (dirty) { clearTimeout(saveT); saveT = setTimeout(flush, 300); }
+  }
+  // 다른 기기에서 바뀌었는지: 탭을 열거나 앱으로 돌아올 때(20초에 한 번까지)
+  async function checkRemote() {
+    if (!loaded || saving || now() - checkedAt < 20000) return;
+    checkedAt = now();
+    try {
+      const r = await api("loadBoard"); if (r.rev === rev || !r.json) return;
+      const srv = fromData(JSON.parse(r.json));
+      S = dirty ? merge(S, srv) : {...srv, currentCanvasId: S.currentCanvasId};
+      ensureCanvas(); rev = r.rev; redraw();
+    } catch (e) {}
+  }
+  // 합치기: 캔버스·카드·연결선을 id로 모아 더 최근에 고친 쪽(u)을 고른다. 지운 기록(gone)이 더 최근이면 뺀다. 화면 위치(view)는 이 기기 것
+  function merge(L, R) {
+    const gone = {...R.gone}; Object.entries(L.gone || {}).forEach(([k, t]) => { gone[k] = Math.max(gone[k] || 0, t); });
+    const alive = x => !(gone[x.id] >= (x.u || 0));
+    const out = [], ids = [...new Set([...R.canvases.map(c => c.id), ...L.canvases.map(c => c.id)])];
+    ids.forEach(id => {
+      const a = L.canvases.find(c => c.id === id), b = R.canvases.find(c => c.id === id), base = a || b;
+      const meta = a && b ? ((b.u || 0) > (a.u || 0) ? b : a) : base;
+      if (!alive(meta)) return;
+      const pick = new Map();
+      [[b, "cards"], [b, "done"], [a, "cards"], [a, "done"]].forEach(([c, k]) => c && c[k].forEach(it => {
+        const o = pick.get(it.id); if (!o || (it.u || 0) >= (o.it.u || 0)) pick.set(it.id, {it, k});
+      }));
+      const m = normCanvas({...meta, view: (a || b).view, doneView: (a || b).doneView, cards: [], done: [], links: [], doneLinks: []});
+      pick.forEach(({it, k}) => { if (alive(it)) m[k].push(it); });
+      ["links", "doneLinks"].forEach(k => {
+        const list = k === "links" ? m.cards : m.done, has = new Set(list.map(x => x.id)), lm = new Map();
+        [b, a].forEach(c => c && c[k].forEach(l => lm.set(l.id, l)));
+        lm.forEach(l => { if (alive(l) && has.has(l.from) && has.has(l.to)) m[k].push(l); });
+      });
+      out.push(m);
+    });
+    return {canvases: out, currentCanvasId: L.currentCanvasId, gone};
+  }
+
+  // ---------------- 좌표 · 그리기
+  function toWorld(sx, sy) { const r = vp().getBoundingClientRect(), v = vw(); return {x: (sx - r.left - v.panX) / v.zoom, y: (sy - r.top - v.panY) / v.zoom}; }
+  function applyView() { const v = vw(); world().style.transform = `translate(${v.panX}px,${v.panY}px) scale(${v.zoom})`; q("#sbZoom").textContent = Math.round(v.zoom * 100) + "%"; }
+  function redraw() {
+    if (!S.canvases.length) return;
+    q("#board").classList.toggle("done-view", view === "done");
+    document.querySelectorAll("#board [data-sb=view]").forEach(b => b.classList.toggle("on", b.dataset.v === view));
+    renderTabs(); applyView(); renderCards();
+  }
+  function renderCards() {
+    world().querySelectorAll(".sb-card").forEach(n => n.remove());
+    cards().forEach(renderCard); drawEdges(); refreshUI();
+  }
+  const short = u => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return String(u).slice(0, 24); } };
+  const md = t => { const d = new Date(t); return (d.getMonth() + 1) + "/" + d.getDate(); };
+  function renderCard(c) {
+    let el = world().querySelector(`.sb-card[data-id="${c.id}"]`);
+    if (!el) { el = document.createElement("div"); el.className = "sb-card"; el.dataset.id = c.id; world().appendChild(el); }
+    el.classList.toggle("text", c.type === "text"); el.classList.toggle("dim", !!c.dim); el.classList.toggle("sel", c.id === sel);
+    Object.assign(el.style, {left: c.x + "px", top: c.y + "px", width: c.w + "px", height: c.h + "px", background: c.type === "text" ? "transparent" : c.color});
+    const foot = [c.completedAt ? `<span class="sb-chip ok">✓ ${md(c.completedAt)} 완료</span>` : "",
+      c.link ? `<a class="sb-chip" href="${esc(c.link)}" target="_blank" rel="noopener" data-r="openlink">🔗<span class="t">${esc(short(c.link))}</span><span class="x" data-r="rmlink">✕</span></a>` : "",
+      ...(c.attachments || []).map((a, i) => `<span class="sb-chip" data-r="openfile" data-i="${i}">📎<span class="t">${esc(a.name)}</span><span class="x" data-r="rmfile" data-i="${i}">✕</span></span>`)].join("");
+    const body = c.type === "table" ? tableHTML(c) + `<div class="sb-tt"><button type="button" data-r="addrow">＋행</button><button type="button" data-r="delrow">－행</button><button type="button" data-r="addcol">＋열</button><button type="button" data-r="delcol">－열</button></div>`
+      : `<div class="sb-body" contenteditable="true" spellcheck="false">${esc(c.text || "")}</div>`;
+    const done = view === "done";
+    el.innerHTML = `<div class="sb-bar" data-r="drag">
+        ${done ? "" : `<button type="button" class="sb-sw" role="switch" aria-checked="${!!c.dim}" data-r="dim" title="끝냄 표시(흐리게)" aria-label="끝냄 표시"><i></i></button>`}
+        <span class="sb-grip" data-r="drag"></span>
+        <span class="sb-tools"><button type="button" class="sb-ib" data-r="color" title="색">🎨</button><button type="button" class="sb-ib" data-r="link" title="링크">🔗</button><button type="button" class="sb-ib" data-r="file" title="첨부">📎</button><button type="button" class="sb-ib" data-r="del" title="지우기">🗑</button></span>
+        ${done ? `<button type="button" class="sb-ib" data-r="restore" title="작업 보드로 되돌리기">↩</button>` : `<button type="button" class="sb-chk" data-r="complete" title="완료 → 완료 보드로" aria-label="완료 보드로 옮기기">✓</button>`}
+      </div>${body}${foot ? `<div class="sb-foot">${foot}</div>` : ""}<div class="sb-dot" data-r="connect" title="끌어서 연결"></div><div class="sb-rs" data-r="resize"></div>`;
+  }
+  function tableHTML(c) {
+    const t = c.table; let h = '<table class="sb-tbl"><tbody>';
+    for (let r = 0; r < t.rows; r++) { h += "<tr>"; for (let k = 0; k < t.cols; k++) h += `<td contenteditable="true" data-row="${r}" data-col="${k}">${esc((t.cells[r] && t.cells[r][k]) || "")}</td>`; h += "</tr>"; }
+    return h + "</tbody></table>";
+  }
+  function refreshUI() {
+    q("#sbDoneN").textContent = cv().done.length;
+    const e = q("#sbEmpty"), has = cards().length > 0; e.style.display = has ? "none" : "flex";
+    e.innerHTML = view === "done" ? "<b>완료 보관함</b><span>체크박스(✓)를 누른 포스트잇이 여기로 모여요</span>"
+      : "<b>비어 있는 캔버스</b><span>위의 ‘＋ 포스트잇’으로 첫 할 일을 추가해 보세요</span>";
+  }
+  function select(id) { sel = id; world().querySelectorAll(".sb-card").forEach(n => n.classList.toggle("sel", n.dataset.id === id)); closePops(); }
+  function anchor(a, b) {
+    const cx = a.x + a.w / 2, cy = a.y + a.h / 2, dx = b.x + b.w / 2 - cx, dy = b.y + b.h / 2 - cy;
+    if (!dx && !dy) return {x: cx, y: cy};
+    const s = Math.min(dx ? (a.w / 2) / Math.abs(dx) : Infinity, dy ? (a.h / 2) / Math.abs(dy) : Infinity);
+    return {x: cx + dx * s, y: cy + dy * s};
+  }
+  function drawEdges() {
+    const svg = edges(); svg.querySelectorAll("path[data-e]").forEach(n => n.remove());
+    links().forEach(l => {
+      const a = find(l.from), b = find(l.to); if (!a || !b) return;
+      const p1 = anchor(a, b), p2 = anchor(b, a), mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2, dx = (p2.x - p1.x) * .18;
+      const d = `M ${p1.x} ${p1.y} Q ${mx - dx} ${my} ${p2.x} ${p2.y}`;
+      [["transparent", 16, ""], ["var(--sub)", 2.6, "url(#sbArrow)"]].forEach(([st, w, mk]) => {
+        const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        p.setAttribute("data-e", l.id); p.setAttribute("d", d); p.setAttribute("fill", "none"); p.setAttribute("stroke", st); p.setAttribute("stroke-width", w);
+        if (mk) p.setAttribute("marker-end", mk);
+        p.addEventListener("click", ev => { ev.stopPropagation(); if (guard() && confirm("이 연결선을 지울까요?")) { removeLink(l.id); } });
+        svg.appendChild(p);
+      });
+    });
+  }
+  function removeLink(id) {
+    const c = cv(), k = view === "done" ? "doneLinks" : "links"; c[k] = c[k].filter(l => l.id !== id); S.gone[id] = now(); drawEdges(); save();
+  }
+
+  // ---------------- 만들기 · 지우기(되돌리기)
+  function center() { const r = vp().getBoundingClientRect(); return toWorld(r.left + r.width / 2, r.top + r.height / 2); }
+  function make(type) {
+    if (!guard()) return;
+    if (view === "done") setView("active");
+    const p = center(), size = {note: [210, 160], text: [240, 64], table: [280, 150]}[type];
+    let x = p.x - size[0] / 2, y = p.y - size[1] / 2;                 // 같은 자리에 이미 카드가 있으면 비스듬히 비켜 놓는다
+    for (let k = 0; k < 12 && cards().some(o => Math.abs(o.x - x) < 24 && Math.abs(o.y - y) < 24); k++) { x += 34; y += 34; }
+    const c = touch({id: uid(), type, x, y, w: size[0], h: size[1], link: "", attachments: [],
+      color: type === "text" ? "transparent" : type === "table" ? COLORS[7] : COLORS[Math.floor(Math.random() * 6)], text: ""});
+    if (type === "table") c.table = {rows: 2, cols: 2, cells: [["", ""], ["", ""]]};
+    cv().cards.push(c); renderCard(c); select(c.id); refreshUI(); save();
+    const b = world().querySelector(`.sb-card[data-id="${c.id}"] .sb-body`); if (b) b.focus({preventScroll: true});
+  }
+  let undoT = 0, undoFn = null;
+  function offerUndo(msg, fn) {
+    undoFn = fn; const u = q("#sbUndo"); u.querySelector("span").textContent = msg; u.hidden = false;
+    clearTimeout(undoT); undoT = setTimeout(() => { u.hidden = true; undoFn = null; }, 7000);
+  }
+  function delCard(id) {
+    if (!guard()) return;
+    const c = cv(), k = view === "done" ? "done" : "cards", lk = view === "done" ? "doneLinks" : "links", it = c[k].find(x => x.id === id); if (!it) return;
+    const ls = c[lk].filter(l => l.from === id || l.to === id);
+    c[k] = c[k].filter(x => x.id !== id); c[lk] = c[lk].filter(l => !ls.includes(l)); S.gone[id] = now(); ls.forEach(l => { S.gone[l.id] = now(); });
+    sel = null; renderCards(); save();
+    offerUndo("카드를 지웠어요", () => {
+      delete S.gone[id]; ls.forEach(l => { delete S.gone[l.id]; touch(l); });
+      c[k].push(touch(it)); c[lk].push(...ls); renderCards(); save();
+    });
+  }
+  function move(id, toDone) {
+    const c = cv(), from = toDone ? "cards" : "done", to = toDone ? "done" : "cards", fl = toDone ? "links" : "doneLinks";
+    const i = c[from].findIndex(x => x.id === id); if (i < 0) return;
+    const it = touch(c[from].splice(i, 1)[0]);
+    c[fl].filter(l => l.from === id || l.to === id).forEach(l => { S.gone[l.id] = now(); });
+    c[fl] = c[fl].filter(l => l.from !== id && l.to !== id);
+    if (toDone) it.completedAt = now(); else { delete it.completedAt; it.dim = false; }
+    c[to].push(it); sel = null; renderCards(); save();
+    toast(toDone ? "✓ 완료 보드로 옮겼어요" : "↩ 작업 보드로 되돌렸어요");
+  }
+
+  // ---------------- 손가락·마우스: 끌기 · 크기 · 연결 · 화면 이동 · 두 손가락 확대
+  let mode = null, ctx = null, temp = null;
+  const pts = new Map();
+  function onDown(e) {
+    if (!loaded) return;
+    pts.set(e.pointerId, {x: e.clientX, y: e.clientY});
+    if (pts.size === 2) {                     // 두 손가락: 하던 끌기를 멈추고 확대·축소
+      if (ctx && ctx.el) ctx.el.classList.remove("dragging");
+      const [a, b] = [...pts.values()], v = vw();
+      mode = "pinch"; ctx = {d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, z: v.zoom, px: v.panX, py: v.panY};
+      return;
+    }
+    const r = e.target.closest("[data-r]"), role = r && r.dataset.r, el = e.target.closest(".sb-card");
+    if (el && role && !["drag", "resize", "connect"].includes(role)) return;      // 버튼들은 클릭으로
+    if (el && role === "drag") {
+      const c = find(el.dataset.id); select(c.id); mode = "drag";
+      ctx = {c, el, sx: e.clientX, sy: e.clientY, ox: c.x, oy: c.y}; e.preventDefault(); return;
+    }
+    if (el && role === "resize") { const c = find(el.dataset.id); select(c.id); mode = "resize"; ctx = {c, el, sx: e.clientX, sy: e.clientY, ow: c.w, oh: c.h}; e.preventDefault(); return; }
+    if (el && role === "connect") {
+      const c = find(el.dataset.id); mode = "connect"; ctx = {c};
+      temp = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      temp.setAttribute("stroke", "var(--accent)"); temp.setAttribute("stroke-width", "3"); temp.setAttribute("fill", "none"); temp.setAttribute("stroke-dasharray", "7 6");
+      edges().appendChild(temp); e.preventDefault(); return;
+    }
+    if (el) { select(el.dataset.id); return; }
+    select(null); if (document.activeElement && document.activeElement.isContentEditable) document.activeElement.blur();
+    const v = vw(); mode = "pan"; ctx = {sx: e.clientX, sy: e.clientY, px: v.panX, py: v.panY}; vp().classList.add("panning");
+  }
+  function onMove(e) {
+    if (pts.has(e.pointerId)) pts.set(e.pointerId, {x: e.clientX, y: e.clientY});
+    if (!mode) return;
+    const v = vw();
+    if (mode === "pinch") {
+      if (pts.size < 2) return;
+      const [a, b] = [...pts.values()], d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, rc = vp().getBoundingClientRect();
+      const z = Math.min(2.5, Math.max(.3, ctx.z * d / ctx.d));
+      const wx = (ctx.mx - rc.left - ctx.px) / ctx.z, wy = (ctx.my - rc.top - ctx.py) / ctx.z;      // 처음 두 손가락 가운데가 가리키던 곳을 손가락 아래에 둔다
+      v.zoom = z; v.panX = mx - rc.left - wx * z; v.panY = my - rc.top - wy * z; applyView(); return;
+    }
+    if (mode === "pan") { v.panX = ctx.px + e.clientX - ctx.sx; v.panY = ctx.py + e.clientY - ctx.sy; applyView(); return; }
+    if (mode === "drag") { ctx.c.x = ctx.ox + (e.clientX - ctx.sx) / v.zoom; ctx.c.y = ctx.oy + (e.clientY - ctx.sy) / v.zoom; ctx.el.style.left = ctx.c.x + "px"; ctx.el.style.top = ctx.c.y + "px"; ctx.moved = true; drawEdges(); return; }
+    if (mode === "resize") { ctx.c.w = Math.max(160, ctx.ow + (e.clientX - ctx.sx) / v.zoom); ctx.c.h = Math.max(120, ctx.oh + (e.clientY - ctx.sy) / v.zoom); ctx.el.style.width = ctx.c.w + "px"; ctx.el.style.height = ctx.c.h + "px"; ctx.moved = true; drawEdges(); return; }
+    if (mode === "connect") {
+      const w = toWorld(e.clientX, e.clientY), c = ctx.c; temp.setAttribute("d", `M ${c.x + c.w / 2} ${c.y + c.h / 2} L ${w.x} ${w.y}`);
+      const over = document.elementFromPoint(e.clientX, e.clientY), oc = over && over.closest(".sb-card");
+      world().querySelectorAll(".target").forEach(n => n.classList.remove("target"));
+      if (oc && oc.dataset.id !== c.id) oc.classList.add("target");
+    }
+  }
+  function onUp(e) {
+    pts.delete(e.pointerId);
+    if (mode === "pinch") { if (pts.size < 2) { mode = null; ctx = null; save(); } return; }
+    if ((mode === "drag" || mode === "resize") && ctx.moved) { touch(ctx.c); save(); }
+    if (mode === "pan") { vp().classList.remove("panning"); if (ctx.px !== vw().panX || ctx.py !== vw().panY) save(); }
+    if (mode === "connect") {
+      const over = document.elementFromPoint(e.clientX, e.clientY), oc = over && over.closest(".sb-card");
+      if (oc && oc.dataset.id !== ctx.c.id) {
+        const from = ctx.c.id, to = oc.dataset.id;
+        if (!links().some(l => (l.from === from && l.to === to) || (l.from === to && l.to === from))) { links().push(touch({id: uid(), from, to})); save(); }
+      }
+      world().querySelectorAll(".target").forEach(n => n.classList.remove("target")); if (temp) { temp.remove(); temp = null; } drawEdges();
+    }
+    mode = null; ctx = null;
+  }
+
+  // ---------------- 카드 버튼
+  function onClick(e) {
+    const r = e.target.closest("[data-r]"), el = e.target.closest(".sb-card"); if (!r || !el) return;
+    const c = find(el.dataset.id), role = r.dataset.r; if (!c) return;
+    if (["openlink", "drag", "resize", "connect"].includes(role)) return;
+    e.stopPropagation(); if (!guard()) return;
+    const redo = () => { renderCard(c); select(c.id); save(); };
+    if (role === "dim") { touch(c).dim = !c.dim; renderCard(c); select(c.id); save(); if (c.dim) toast("끝냄 표시 · 관련 일까지 다 끝나면 체크박스(✓)로 완료 보드로"); return; }
+    if (role === "complete") return move(c.id, true);
+    if (role === "restore") return move(c.id, false);
+    if (role === "del") return delCard(c.id);
+    if (role === "color") return openPal(c, r);
+    if (role === "link") return openLink(c, r);
+    if (role === "file") return pickFile(c);
+    if (role === "rmlink") { e.preventDefault(); touch(c).link = ""; return redo(); }
+    if (role === "openfile") { const a = c.attachments[+r.dataset.i]; if (a && a.url) window.open(a.url, "_blank", "noopener"); return; }
+    if (role === "rmfile") { touch(c).attachments.splice(+r.dataset.i, 1); return redo(); }
+    const t = c.table;
+    if (role === "addrow") { t.rows++; t.cells.push(new Array(t.cols).fill("")); }
+    if (role === "delrow" && t.rows > 1) { t.rows--; t.cells.pop(); }
+    if (role === "addcol") { t.cols++; t.cells.forEach(x => x.push("")); }
+    if (role === "delcol" && t.cols > 1) { t.cols--; t.cells.forEach(x => x.pop()); }
+    if (["addrow", "delrow", "addcol", "delcol"].includes(role)) { touch(c); redo(); }
+  }
+  function onInput(e) {
+    const el = e.target.closest(".sb-card"); if (!el || !loaded) return;
+    const c = find(el.dataset.id); if (!c) return;
+    if (e.target.classList.contains("sb-body")) { touch(c).text = e.target.innerText; save(); }
+    else if (e.target.matches("td[contenteditable]")) { const r = +e.target.dataset.row, k = +e.target.dataset.col; (c.table.cells[r] = c.table.cells[r] || [])[k] = e.target.innerText; touch(c); save(); }
+  }
+
+  // ---------------- 색 · 링크 · 첨부
+  function place(pop, a) { const r = a.getBoundingClientRect(); pop.style.left = Math.max(8, Math.min(r.left, innerWidth - 300)) + "px"; pop.style.top = (r.bottom + 8) + "px"; }
+  function closePops() { ["#sbPal", "#sbLink"].forEach(s => { const p = q(s); if (p) p.classList.remove("open"); }); }
+  function openPal(c, a) {
+    closePops(); const p = q("#sbPal"); p.dataset.id = c.id;
+    p.innerHTML = COLORS.map(col => `<i data-col="${col}" class="${col === c.color ? "on" : ""}" style="background:${col}"></i>`).join("");
+    place(p, a); p.classList.add("open");
+  }
+  function openLink(c, a) { closePops(); const p = q("#sbLink"); p.dataset.id = c.id; q("#sbLinkIn").value = c.link || ""; place(p, a); p.classList.add("open"); setTimeout(() => q("#sbLinkIn").focus(), 0); }
+  function saveLink() {
+    const c = find(q("#sbLink").dataset.id); if (!c) return;
+    let u = q("#sbLinkIn").value.trim(); if (u && !/^(https?:\/\/|mailto:)/i.test(u)) u = "https://" + u;
+    touch(c).link = u; renderCard(c); select(c.id); save(); closePops();
+  }
+  let fileFor = null;
+  function pickFile(c) { fileFor = c.id; const f = q("#sbFile"); f.value = ""; f.click(); }
+  function onFile() {
+    const f = q("#sbFile").files[0], c = find(fileFor); if (!f || !c) return;
+    if (f.size > 10 * 1024 * 1024) return toast("10MB 이하 파일만 첨부할 수 있어요");
+    toast("올리는 중…");
+    const rd = new FileReader();
+    rd.onload = async () => {
+      try { const a = await api("uploadBoardFile", String(rd.result).split(",")[1], f.name, f.type || "application/octet-stream");
+        (touch(c).attachments = c.attachments || []).push(a); renderCard(c); select(c.id); save(); toast("첨부했어요 ✓ (나만 볼 수 있어요)"); }
+      catch (e) { toast("올리지 못했어요: " + e.message, true); }
+    };
+    rd.readAsDataURL(f);
+  }
+
+  // ---------------- 보드 · 캔버스 탭 · 확대
+  function setView(v) { if (v === view) return; view = v; sel = null; closePops(); redraw(); }
+  function renderTabs() {
+    const box = q("#sbTabs");
+    box.innerHTML = S.canvases.map(c => `<div class="sb-ctab${c.id === S.currentCanvasId ? " on" : ""}" data-cid="${esc(c.id)}"><span class="nm">${esc(c.name)}</span><span class="x" data-cx="1" title="캔버스 지우기">✕</span></div>`).join("")
+      + `<button type="button" class="sb-ctab add" data-sb="newcv" title="새 캔버스">＋</button>`;
+  }
+  function onTabs(e) {
+    const t = e.target.closest(".sb-ctab[data-cid]"); if (!t) return;
+    const id = t.dataset.cid;
+    if (e.target.closest("[data-cx]")) {
+      if (!guard()) return;
+      if (S.canvases.length <= 1) return toast("마지막 캔버스는 지울 수 없어요");
+      if (!confirm("이 캔버스를 통째로 지울까요? 안의 포스트잇도 모두 사라집니다.")) return;
+      const i = S.canvases.findIndex(c => c.id === id); S.canvases.splice(i, 1); S.gone[id] = now();
+      if (S.currentCanvasId === id) { S.currentCanvasId = S.canvases[Math.max(0, i - 1)].id; view = "active"; }
+      redraw(); save(); return;
+    }
+    if (id !== S.currentCanvasId) { S.currentCanvasId = id; view = "active"; sel = null; redraw(); save(); }
+  }
+  function onTabDbl(e) {
+    const nm = e.target.closest(".sb-ctab .nm"); if (!nm || !guard()) return;
+    nm.contentEditable = "true"; nm.focus(); const s = getSelection(); if (s) s.selectAllChildren(nm);
+    nm.onkeydown = ev => { if (ev.key === "Enter") { ev.preventDefault(); nm.blur(); } };
+    nm.onblur = () => { nm.contentEditable = "false"; const c = S.canvases.find(x => x.id === nm.parentNode.dataset.cid), v = nm.textContent.trim();
+      if (c && v && v !== c.name) { c.name = v; touch(c); save(); } renderTabs(); };
+  }
+  function zoom(z, cx, cy) {
+    z = Math.min(2.5, Math.max(.3, z)); const v = vw(), r = vp().getBoundingClientRect();
+    cx = cx == null ? r.left + r.width / 2 : cx; cy = cy == null ? r.top + r.height / 2 : cy;
+    const wx = (cx - r.left - v.panX) / v.zoom, wy = (cy - r.top - v.panY) / v.zoom;
+    v.zoom = z; v.panX = cx - r.left - wx * z; v.panY = cy - r.top - wy * z; applyView(); save();
+  }
+  function fit() {
+    const list = cards(), v = vw(), r = vp().getBoundingClientRect();
+    if (!list.length) { Object.assign(v, blankView()); applyView(); return save(); }
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    list.forEach(c => { x0 = Math.min(x0, c.x); y0 = Math.min(y0, c.y); x1 = Math.max(x1, c.x + c.w); y1 = Math.max(y1, c.y + c.h); });
+    const pad = 60, z = Math.min(1.6, Math.max(.3, Math.min(r.width / (x1 - x0 + pad * 2), r.height / (y1 - y0 + pad * 2))));
+    v.zoom = z; v.panX = r.width / 2 - (x0 + x1) / 2 * z; v.panY = r.height / 2 - (y0 + y1) / 2 * z; applyView(); save();
+  }
+
+  // ---------------- 시작(처음 탭을 열 때 한 번)
+  function init() {
+    if (started) return; started = true;
+    const v = vp();
+    v.addEventListener("pointerdown", onDown);
+    // 글자 칸에 커서가 가면 브라우저가 캔버스 상자 자체를 스크롤해 버린다 → 늘 0으로(이동은 pan으로만)
+    [v, q("#board")].forEach(n => n.addEventListener("scroll", () => { if (n.scrollTop || n.scrollLeft) { n.scrollTop = 0; n.scrollLeft = 0; } }));
+    addEventListener("pointermove", onMove); addEventListener("pointerup", onUp); addEventListener("pointercancel", onUp);
+    v.addEventListener("click", onClick); v.addEventListener("input", onInput);
+    v.addEventListener("wheel", e => { e.preventDefault(); zoom(vw().zoom * (e.deltaY < 0 ? 1.1 : .9), e.clientX, e.clientY); }, {passive: false});
+    q("#sbTabs").addEventListener("click", onTabs); q("#sbTabs").addEventListener("dblclick", onTabDbl);
+    q("#sbFile").addEventListener("change", onFile);
+    q("#sbLinkIn").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); saveLink(); } });
+    q("#sbPal").addEventListener("click", e => {
+      const i = e.target.closest("[data-col]"), c = find(q("#sbPal").dataset.id); if (!i || !c) return;
+      touch(c).color = i.dataset.col; renderCard(c); select(c.id); save(); openPal(c, world().querySelector(`.sb-card[data-id="${c.id}"] [data-r=color]`) || i);
+    });
+    q("#board").addEventListener("click", e => {
+      const b = e.target.closest("[data-sb]"); if (!b) return;
+      const a = b.dataset.sb;
+      if (a === "view") setView(b.dataset.v);
+      else if (["note", "text", "table"].includes(a)) make(a);
+      else if (a === "fit") fit();
+      else if (a === "zin") zoom(vw().zoom * 1.2);
+      else if (a === "zout") zoom(vw().zoom / 1.2);
+      else if (a === "linksave") saveLink();
+      else if (a === "reload") load();
+      else if (a === "undo") { const f = undoFn; undoFn = null; q("#sbUndo").hidden = true; if (f) f(); }
+      else if (a === "newcv" && guard()) {
+        const c = normCanvas({name: "캔버스 " + (S.canvases.length + 1), u: now()});
+        S.canvases.push(c); S.currentCanvasId = c.id; view = "active"; sel = null; redraw(); save(); toast("새 캔버스를 만들었어요");
+      }
+    });
+    document.addEventListener("pointerdown", e => { if (!e.target.closest("#sbPal,#sbLink,[data-r=color],[data-r=link]")) closePops(); }, true);
+    document.addEventListener("keydown", e => {
+      if (q("#board").hidden) return;
+      const ed = document.activeElement && (document.activeElement.isContentEditable || /INPUT|TEXTAREA/.test(document.activeElement.tagName));
+      if ((e.key === "Delete" || e.key === "Backspace") && sel && !ed) { e.preventDefault(); delCard(sel); }
+      if (e.key === "Escape") select(null);
+    });
+    document.addEventListener("visibilitychange", () => { if (!document.hidden && !q("#board").hidden) checkRemote(); });
+    addEventListener("beforeunload", e => { if (dirty || saving) { flush(); e.preventDefault(); e.returnValue = ""; } });
+    addEventListener("resize", sizeIt);
+    load();
+  }
+  function sizeIt() { const t = document.querySelector(".tabs"); if (t) document.documentElement.style.setProperty("--tabsH", t.offsetHeight + "px"); }
+  function show() { sizeIt(); if (!started) init(); else { checkRemote(); if (loaded) applyView(); } }
+  return {show, flush: () => flush(), state: () => S, merge, _rev: () => rev};
+})();
 </script>
 </body>
 </html>
