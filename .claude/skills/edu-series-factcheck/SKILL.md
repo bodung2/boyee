@@ -33,7 +33,7 @@ description: "edu-series-post가 만든 '저경력 교사가 꼭 알아야 할 �
 - 조문: `.venv/Scripts/python.exe -m naver_autopost.pagetext --law 교육공무원법 --article 41 --out OUTPUT_DIR/src_law41.txt`
 - 아무 공식 페이지·PDF: `.venv/Scripts/python.exe -m naver_autopost.pagetext "<주소>" --out OUTPUT_DIR/src_이름.txt`
 - `.venv/Scripts/python.exe`가 없으면 `python -m naver_autopost.pagetext …`로 실행한다.
-- 저장한 파일을 Read로 읽고, 거기서 `quote`를 그대로 복사한다. 별표·시행령은 법령 이름에 그대로 쓴다(예: `--law "공무원 수당 등에 관한 규정"`, `--law "교육공무원법 시행령"`).
+- **토큰 아끼기:** 저장한 파일을 통째로 Read하지 말고, Grep으로 필요한 조·항·단어(예: `제41조`, `방학`, `연수`) 주변만 찾아 읽는다. 거기서 `quote`를 그대로 복사한다. 글쓰기 단계가 OUTPUT_DIR에 남긴 `src_*.txt`가 있으면 다시 받지 말고 그것부터 확인한다. 별표·시행령은 법령 이름에 그대로 쓴다(예: `--law "공무원 수당 등에 관한 규정"`, `--law "교육공무원법 시행령"`).
 - 이 도구로도 열리지 않을 때만 그 출처를 포기한다.
 
 ## 판정 기준 (edu-auto-factcheck보다 엄격)
