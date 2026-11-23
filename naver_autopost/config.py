@@ -123,7 +123,7 @@ class Config:
             profile=profile,
             blog_id=(per_blog("NAVER_BLOG_ID") or env("NAVER_BLOG_ID", "")).strip(),
             category=(env(f"NAVER_CATEGORY_{own}") or {"market": "매일 시황", "place": "아이와 가볼 곳",
-                                                       "worksheet": "무료 활동지"}.get(profile.name)
+                                                       "worksheet": "유아 교육자료"}.get(profile.name)
                       or env("NAVER_CATEGORY", "")).strip(),
             browser_channel=env("BROWSER_CHANNEL", "chrome").strip(),
             headless=_bool("HEADLESS", False),
