@@ -8,7 +8,7 @@
  * 처음 한 번: 편집기 위쪽 함수 목록에서 setupBooth를 골라 ▶실행 → 실행 로그의 토큰을 노트북 .env의 BOOTH_TOKEN에 적는다.
  * 원본 그림은 비공개, 결과 그림만 '링크가 있는 사람 보기'로 공유한다(패들렛·큰 화면이 그림을 불러와야 해서).
  */
-const BOOTH_API = 1;
+const BOOTH_API = 2;
 const BOOK_NAME = '캐릭터 공방 대기열 (부스)';
 const FOLDER_NAME = '캐릭터 공방 (부스)';
 const STALE_MIN = 12;                 // 노트북이 가져간 뒤 이만큼 소식이 없으면 다시 대기열로
@@ -155,7 +155,8 @@ function getStatus(id) {
     status: row[C['상태']], ahead: ahead_(r.rows, i), nickname: row[C['닉네임']],
     style: row[C['스타일']], styleLabel: STYLES[row[C['스타일']]] || '',
     note: row[C['안내']], printed: row[C['인쇄']] === 'ok', padlet: row[C['패들렛']] === 'ok',
-    hasResult: !!row[C['결과 파일']],
+    hasResult: !!row[C['결과 파일']], resultUrl: row[C['결과 주소']] || '',
+    padletUrl: PropertiesService.getScriptProperties().getProperty('PADLET_URL') || '',
     workerOnline: Date.now() - lastSeen < 3 * 60 * 1000
   };
 }
@@ -207,7 +208,12 @@ function workerApi_(req) {
   return Object.assign({ ok: true }, fn(req));
 }
 
-function apiPing_() {
+/** 집 PC가 시작할 때: 아이가 직접 올릴 패들렛 보드 주소를 알려 준다(빈칸이면 버튼을 숨김). */
+function apiPing_(req) {
+  if (req && typeof req.padletUrl === 'string') {
+    const u = req.padletUrl.trim();
+    PropertiesService.getScriptProperties().setProperty('PADLET_URL', /^https:\/\/[^\s"'<>]+$/.test(u) ? u : '');
+  }
   const r = rows_();
   return { api: BOOTH_API, styles: STYLES, waiting: r.rows.filter(x => x[C['상태']] === S.WAIT).length };
 }

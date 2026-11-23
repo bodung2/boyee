@@ -14,9 +14,10 @@ class BoothConfig:
     webapp_url: str            # Apps Script 웹앱 주소(…/exec)
     token: str                 # setupBooth가 알려 준 토큰
     title: str                 # 인쇄 사진 아래쪽에 들어갈 부스 이름
-    printer: str               # 빈칸=윈도우 기본 프린터, off=인쇄 안 함
+    printer: str               # 빈칸=인쇄 안 함(집 PC 방식), 프린터 이름 일부(SELPHY) 또는 default=윈도우 기본 프린터
     padlet_key: str
     padlet_board: str          # 보드 id(주소를 적어도 됨)
+    padlet_url: str            # 보드 주소(아이 폰의 '패들렛에 올리기' 버튼)
     parallel: int              # 동시에 변환할 그림 수(Codex 구독 한도 때문에 1~2 권장)
     poll_sec: float
     codex_bin: str
@@ -35,6 +36,7 @@ class BoothConfig:
             printer=(env("BOOTH_PRINTER") or "").strip(),
             padlet_key=(env("PADLET_API_KEY") or "").strip(),
             padlet_board=board_id(env("PADLET_BOARD") or ""),
+            padlet_url=board_url(env("PADLET_BOARD") or ""),
             parallel=max(1, min(3, int(env("BOOTH_PARALLEL") or 1))),
             poll_sec=float(env("BOOTH_POLL_SEC") or 3),
             codex_bin=(env("CODEX_BIN") or "codex").strip(),
@@ -45,11 +47,16 @@ class BoothConfig:
 
     @property
     def print_on(self) -> bool:
-        return self.printer.lower() not in {"off", "0", "no", "false"}
+        return self.printer.lower() not in {"", "off", "0", "no", "false"}
 
     @property
     def padlet_on(self) -> bool:
         return bool(self.padlet_key and self.padlet_board)
+
+
+def board_url(value: str) -> str:
+    value = value.strip()
+    return value if value.startswith("https://") else ""
 
 
 def board_id(value: str) -> str:

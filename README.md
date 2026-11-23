@@ -486,6 +486,6 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_all_schedules.ps1 -Only Q
 
 ## 캐릭터 공방 (부스 활동)
 
-아이가 학습지에 그린 캐릭터를 폰으로 찍어 보내면, 부스 노트북이 **ChatGPT 구독(Codex)**으로 양모펠트·클레이·2D/3D 애니메이션 등
-8가지 모습으로 바꿔 **셀피 CP1500으로 바로 인쇄**하고 **패들렛에 올립니다**(API 결제 없음). 폰 화면·대기열은 구글 Apps Script,
-변환·인쇄는 `scripts\run_booth.bat`. 준비와 당일 운영: [docs/BOOTH_CHARACTER.md](docs/BOOTH_CHARACTER.md).
+아이가 종이 학습지에 그린 캐릭터를 폰으로 찍어 보내면, **집 PC**가 **ChatGPT 구독(Codex)**으로 양모펠트·클레이·2D/3D 애니메이션 등
+8가지 모습으로 바꿔 아이 폰에 보여 줍니다(API 결제 없음). 아이는 완성 그림을 패들렛에 직접 올리고, 부스에서는 셀피 앱으로 인쇄합니다.
+폰 화면·대기열은 구글 Apps Script, 변환은 집 PC의 `scripts\run_booth.bat`. 준비와 당일 운영: [docs/BOOTH_CHARACTER.md](docs/BOOTH_CHARACTER.md).

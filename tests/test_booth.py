@@ -59,7 +59,7 @@ def test_board_id_from_url(value, expected):
 
 def _cfg(tmp_path, **kw):
     base = dict(webapp_url="https://script.google.com/macros/s/x/exec", token="T", title="우리 부스", printer="",
-                padlet_key="", padlet_board="", parallel=1, poll_sec=0, codex_bin="codex", codex_model="",
+                padlet_key="", padlet_board="", padlet_url="", parallel=1, poll_sec=0, codex_bin="codex", codex_model="",
                 image_timeout=10, out_dir=tmp_path / "booth")
     base.update(kw)
     return config.BoothConfig(**base)
@@ -128,6 +128,7 @@ JOB = {"id": "1128-100000-ab12", "nickname": "별빛토끼", "style": "felt", "s
 def test_worker_full_flow_prints_and_posts(tmp_path):
     printed, posted = [], []
     cfg = _cfg(tmp_path, padlet_key="K", padlet_board="B", printer="SELPHY")
+    assert not _cfg(tmp_path).print_on                    # 비워 두면 인쇄 안 함(집 PC 방식)
     srv = FakeServer()
     b = worker.Booth(cfg, srv, convert.fake_convert,
                      print_fn=lambda img, name, job: printed.append((img.size, name)) or "Canon SELPHY CP1500",
@@ -157,7 +158,7 @@ def test_worker_print_or_padlet_failure_is_recorded_not_fatal(tmp_path):
     def boom(*a):
         raise RuntimeError("용지 없음")
 
-    b = worker.Booth(_cfg(tmp_path, padlet_key="K", padlet_board="B"), srv, convert.fake_convert,
+    b = worker.Booth(_cfg(tmp_path, padlet_key="K", padlet_board="B", printer="default"), srv, convert.fake_convert,
                      print_fn=boom, post_fn=boom)
     assert b.process(dict(JOB)) == "done"
     marks = [c[2] for c in srv.calls if c[0] == "mark"]
@@ -223,7 +224,7 @@ def test_print_card_layout(tmp_path):
 def test_pick_printer_by_part_of_name():
     names = ["Microsoft Print to PDF", "Canon SELPHY CP1500"]
     assert printer.pick_printer("selphy", names) == "Canon SELPHY CP1500"
-    assert printer.pick_printer("", names, "Default") == "Default"
+    assert printer.pick_printer("default", names, "Default") == "Default"
     with pytest.raises(RuntimeError, match="찾지 못했습니다"):
         printer.pick_printer("Epson", names)
 
@@ -278,3 +279,13 @@ def test_qr_poster(tmp_path, monkeypatch):
     from booth.__main__ import cmd_qr
     assert cmd_qr(_cfg(tmp_path)) == 0
     assert Image.open(tmp_path / "booth" / "qr_안내판.png").size == (1240, 1754)
+
+
+@pytest.mark.parametrize("key,expected", [("", "https://padlet.com/t/booth-abc123xyz9"), ("K", "")])
+def test_announce_sends_padlet_button_url_only_without_api_key(tmp_path, key, expected):
+    sent = []
+    url = "https://padlet.com/t/booth-abc123xyz9"
+    cfg = _cfg(tmp_path, padlet_key=key, padlet_board=config.board_id(url), padlet_url=config.board_url(url))
+    client.Server(cfg, send=lambda u, b, t: sent.append(json.loads(b)) or b'{"ok": true}').announce()
+    assert sent[0]["action"] == "ping" and sent[0]["padletUrl"] == expected
+    assert config.board_url("abc123xyz9") == ""
