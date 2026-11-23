@@ -88,6 +88,30 @@ def _asset_list(spec: dict, lib: Path) -> list[dict]:
     return out
 
 
+def make_picker(cfg, out_dir: Path, run=None):
+    """후보 원화 중 가장 나은 것을 Claude가 워크북 원화와 비교해 고른다(worksheet-qa MODE=pick)."""
+    def pick(cands: dict, refs: list) -> dict:
+        lines = "\n".join(f"{k}: " + ", ".join(str(_rel(p)) for p in ps) for k, ps in cands.items())
+        (out_dir / "pick.json").unlink(missing_ok=True)
+        prompt = (
+            "/worksheet-qa\n\n"
+            f"OUTPUT_DIR={_rel(out_dir)}\nMODE=pick\nSPEC_FILE={_rel(out_dir / 'spec.json')}\n"
+            f"MASTERS={', '.join(str(_rel(r)) for r in refs) or '(없음)'}\nCANDIDATES:\n{lines}\n"
+            "스킬의 MODE=pick 지침대로 그림마다 후보를 모두 Read로 보고 가장 나은 하나를 골라 OUTPUT_DIR/pick.json에 "
+            "저장하라. 질문하지 말고 끝까지 진행하라."
+        )
+        try:
+            _claude(cfg, prompt, out_dir / "claude_pick.log", run)
+            data = json.loads((out_dir / "pick.json").read_text(encoding="utf-8"))
+        except Exception as e:  # noqa: BLE001 - 고르지 못하면 첫 후보로(검수가 다시 본다)
+            log.warning("원화 후보 고르기 실패(첫 후보 사용): %s", e)
+            return {}
+        out = {k: int((v or {}).get("choice", 1)) for k, v in data.items() if isinstance(v, dict)}
+        out["_fix"] = {k: v.get("fix_prompt") for k, v in data.items() if isinstance(v, dict) and v.get("fix_prompt")}
+        return out
+    return pick
+
+
 def qa(cfg, out_dir: Path, spec: dict, result: dict, lib: Path, run=None) -> dict:
     index = library.load(lib)
     keys = used_assets(spec)
@@ -109,7 +133,7 @@ def qa(cfg, out_dir: Path, spec: dict, result: dict, lib: Path, run=None) -> dic
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def build(cfg, out_dir: Path, today: str, feedback: str = "", run=None, gen=None, upload=None) -> dict:
+def build(cfg, out_dir: Path, today: str, feedback: str = "", run=None, gen=None, upload=None, backup=None) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
     lib = library.root(cfg.data_dir)
     seed_masters(lib, cfg.data_dir)
@@ -119,7 +143,7 @@ def build(cfg, out_dir: Path, today: str, feedback: str = "", run=None, gen=None
     blog_url = f"https://blog.naver.com/{cfg.blog_id}" if cfg.blog_id else ""
     verdict: dict = {}
     for round_no in range(1, QA_ROUNDS + 1):
-        library.ensure(cfg, lib, _asset_list(spec, lib), gen)
+        library.ensure(cfg, lib, _asset_list(spec, lib), gen, pick=make_picker(cfg, out_dir, run))
         index = library.load(lib)
         clipped = [k for k in used_assets(spec) if index.get(k, {}).get("clipped") and not index[k].get("master")]
         if clipped:                               # 다시 그려도 잘린 그림은 검수 전에 지우고 또 그린다
@@ -149,6 +173,12 @@ def build(cfg, out_dir: Path, today: str, feedback: str = "", run=None, gen=None
     else:
         raise WorksheetRejected(f"원화를 {QA_ROUNDS}번 그려도 검수를 통과하지 못했습니다: {verdict.get('summary', '')}")
     library.accept(lib, used_assets(spec), spec["set_id"])
+    try:                                          # 검수를 통과한 원화를 드라이브 '꾸쓰쌤 활동지 원화' 폴더에 백업
+        backed = (backup or share.backup_assets)(lib)
+        if backed:
+            log.info("원화 %d장을 드라이브에 백업했습니다", backed)
+    except Exception as e:  # noqa: BLE001
+        log.warning("원화 드라이브 백업 실패(다음에 다시): %s", e)
     spec_path.write_text(json.dumps(spec, ensure_ascii=False, indent=1), encoding="utf-8")
 
     pdf = Path(result["pdf"])
