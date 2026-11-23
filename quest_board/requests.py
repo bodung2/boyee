@@ -32,6 +32,10 @@ def command(req: dict) -> list[str] | None:
     if req.get("action") == "diag" and req.get("profile") in PROFILES and _is_day(req.get("day")):
         return [sys.executable, "-m", "quest_board.diag", "--profile", req["profile"], "--day", req["day"]]
     # 원인을 고친 뒤 오늘 글을 바로 다시 쓰기(이미 발행했으면 아무것도 안 함)
+    # 발행했던 글을 새 형식으로만 고쳐 다시 발행(블로그 주인이 옛 글을 지운 뒤)
+    if req.get("action") == "restyle" and req.get("profile") in PROFILES and _is_day(req.get("day")):
+        return [sys.executable, "-m", "naver_autopost", "restyle", "--profile", req["profile"], "--day", req["day"],
+                "--publish"]
     if req.get("action") == "rerun" and req.get("profile") in PROFILES:
         return [sys.executable, "-m", "naver_autopost", "run", "--profile", req["profile"]]
     return None

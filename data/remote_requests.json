@@ -37,6 +37,12 @@
       "action": "diag",
       "profile": "edu_series",
       "day": "2026-11-23"
+    },
+    {
+      "id": "2026-11-23-edu-series-restyle",
+      "action": "restyle",
+      "profile": "edu_series",
+      "day": "2026-11-23"
     }
   ]
 }

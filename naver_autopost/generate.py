@@ -278,6 +278,21 @@ def _place_prompt(cfg: Config, out_dir: Path, today: str, related: list[Path]) -
     )
 
 
+def restyle_post(cfg: Config, out_dir: Path, number: int) -> None:
+    """발행했던 글을 새 형식으로만 고친다(사실·출처는 그대로). 웹 검색·원문 다시 받기를 하지 않아 가볍다."""
+    prompt = (
+        f"/{cfg.profile.write_skill}\n\n"
+        f"OUTPUT_DIR={_rel(out_dir)}\nMODE=restyle\nSERIES_NO={number}\nHISTORY_FILE={_rel(cfg.history_file)}\n"
+        f"{_persona_lines(cfg, recent=False)}\n"
+        "OUTPUT_DIR/post.json은 이미 원문 확인과 팩트체크를 통과해 발행했던 글이다. 블로그 주인이 형식을 바꿔 다시 발행한다. "
+        "사실·수치·출처(sources)·claims·본문 챕터 내용은 바꾸지 말고, 스킬의 지금 형식(제목·도입·썸네일 규칙)에 맞춰 "
+        "다음만 고쳐 같은 파일에 저장하라: (1) title과 title_candidates (2) 3줄 요약 다음 도입 첫 문단 "
+        "(3) thumbnail과 series 번호 (4) 본문에 남은 옛 시리즈 번호 표기. "
+        "웹 검색이나 원문 다시 받기는 하지 마라(필요한 원문은 OUTPUT_DIR의 src_*.txt에 있다). 질문하지 말고 끝까지 진행하라."
+    )
+    _run_claude(cfg, prompt + FILE_RULES, out_dir / "claude_restyle.log")
+
+
 def repair_post(cfg: Config, out_dir: Path, errors: list[str]) -> None:
     """구조 검사에서 떨어진 글을 버리지 않고, 같은 주제·내용으로 그 문제만 고치게 한다."""
     prompt = (
