@@ -20,6 +20,8 @@ BLOG_WIDTH = 1000
 M = 130                                   # 좌우 여백(약 11mm)
 CONTENT_BOTTOM = H - S.BAND_H - 150       # 풀 장식 위
 PATHS = ("straight", "wave", "zigzag", "curve", "loop", "steps")
+# 안쪽 선(무늬)이 바깥 테두리보다 이만큼 이상 많으면 '애매한 그림'으로 보고 단순하게(바깥선 + 안쪽 테두리 한 줄)
+BUSY_RATIO = 3.5
 
 
 # ---------------------------------------------------------------- 원화
@@ -92,9 +94,12 @@ class Assets:
         n, lab, st, _ = cv2.connectedComponentsWithStats(th)
         keep = np.zeros_like(th)
         min_area = 250 * (size / 1000) ** 2         # 수채 질감에서 나온 작은 점은 버린다
-        for i in range(1, n):
-            if st[i][4] > min_area:
-                keep[lab == i] = 255
+        comps = sorted((i for i in range(1, n) if st[i][4] > min_area), key=lambda i: -st[i][4])
+        busy = sum(st[i][4] for i in comps) / max(1, int((rim > 0).sum()))
+        if busy > BUSY_RATIO and comps:             # 짜임·털 같은 무늬가 많은 그림: 바깥선 + 가장 큰 안쪽 테두리 한 줄만
+            comps = comps[:1]
+        for i in comps:
+            keep[lab == i] = 255
         lines = cv2.bitwise_or(rim, keep)
         fuse = max(3, size // 120) | 1                 # 가까이 붙은 두 줄은 하나로 합친다(세선화하면 한 줄)
         lines = cv2.morphologyEx(cv2.dilate(lines, np.ones((fuse, fuse), np.uint8)), cv2.MORPH_CLOSE,
