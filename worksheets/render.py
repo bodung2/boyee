@@ -87,14 +87,19 @@ class Assets:
         blk = max(15, int(size * 0.041)) | 1
         th = cv2.adaptiveThreshold(gb, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, blk, 16)
         th = cv2.morphologyEx(th, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
-        th &= cv2.erode(body, np.ones((w * 2 + 1, w * 2 + 1), np.uint8))       # 바깥 테두리는 rim이 맡는다
+        edge_gap = max(w * 2 + 1, size // 32) | 1    # 바깥 테두리 바로 안쪽에 그려진 윤곽은 rim과 겹치므로 뺀다
+        th &= cv2.erode(body, np.ones((edge_gap, edge_gap), np.uint8))
         n, lab, st, _ = cv2.connectedComponentsWithStats(th)
         keep = np.zeros_like(th)
         min_area = 250 * (size / 1000) ** 2         # 수채 질감에서 나온 작은 점은 버린다
         for i in range(1, n):
             if st[i][4] > min_area:
                 keep[lab == i] = 255
-        return Image.fromarray(cv2.bitwise_or(rim, keep))
+        lines = cv2.bitwise_or(rim, keep)
+        fuse = max(3, size // 120) | 1                 # 가까이 붙은 두 줄은 하나로 합친다(세선화하면 한 줄)
+        lines = cv2.morphologyEx(cv2.dilate(lines, np.ones((fuse, fuse), np.uint8)), cv2.MORPH_CLOSE,
+                                 np.ones((fuse, fuse), np.uint8))
+        return Image.fromarray(lines)
 
     def outline(self, key: str, size: int, dashed: bool = True, color=S.TRACE, same_art: bool = False) -> Image.Image:
         """따라 그리기용 흐린 점선 밑그림. 돌려주는 그림은 art(key, size)와 같은 크기·같은 자리다.
@@ -105,25 +110,84 @@ class Assets:
         line_key = key if key.endswith("_line") else f"{key}_line"
         if not same_art and self.has(line_key) and not self.index.get(line_key, {}).get("clipped"):
             g = self._src(line_key, size).convert("L")
-            mask = g.point(lambda v: 255 if v < 150 else 0)
+            mask = g.point(lambda v: 255 if v < 150 else 0).filter(ImageFilter.MaxFilter(max(3, size // 160) | 1))
             alpha_src = library.cutout(self._src(line_key, size)).getchannel("A")
         else:
             mask = self._edges(key, size)
             alpha_src = library.cutout(self._src(key, size)).getchannel("A")
-        if dashed:                                     # 칸무늬를 곱해 선을 짧은 점선으로 끊는다
-            step = max(8, size // 45)
-            pat = Image.new("L", mask.size, 0)
-            pd = ImageDraw.Draw(pat)
-            for y in range(0, size, step):
-                for x in range(0, size, step):
-                    if ((x // step) + (y // step)) % 2 == 0:
-                        pd.rectangle([x, y, x + step - 1, y + step - 1], fill=255)
-            mask = ImageChops.multiply(mask, pat)
+        if dashed:                                     # 선 가운데 한 줄만 남겨, 선을 따라가며 짧게 끊는다
+            mask = dash_line_mask(mask, dash=max(10, size // 55), gap=max(7, size // 80), width=max(3, size // 260))
         out = Image.new("RGBA", mask.size, color + (0,))
         out.putalpha(mask)
         box = (alpha_src.getbbox() or (0, 0, size, size))
         self._cache[ck] = out.crop(box)
         return self._cache[ck]
+
+
+def _thin(b):
+    """Zhang-Suen 세선화: 두꺼운 선을 가운데 1px 선으로(numpy만 씀)."""
+    import numpy as np
+    img = np.pad(b.astype(np.uint8), 1)
+    while True:
+        changed = False
+        for step in (0, 1):
+            p2, p3, p4 = img[:-2, 1:-1], img[:-2, 2:], img[1:-1, 2:]
+            p5, p6, p7 = img[2:, 2:], img[2:, 1:-1], img[2:, :-2]
+            p8, p9 = img[1:-1, :-2], img[:-2, :-2]
+            nb = [p2, p3, p4, p5, p6, p7, p8, p9]
+            cnt = sum(n.astype(np.int8) for n in nb)
+            seq = nb + [p2]
+            trans = sum(((seq[i] == 0) & (seq[i + 1] == 1)).astype(np.int8) for i in range(8))
+            c = img[1:-1, 1:-1] == 1
+            m = c & (cnt >= 2) & (cnt <= 6) & (trans == 1)
+            if step == 0:
+                m &= ((p2 * p4 * p6) == 0) & ((p4 * p6 * p8) == 0)
+            else:
+                m &= ((p2 * p4 * p8) == 0) & ((p2 * p6 * p8) == 0)
+            if m.any():
+                img[1:-1, 1:-1][m] = 0
+                changed = True
+        if not changed:
+            return img[1:-1, 1:-1].astype(bool)
+
+
+def dash_line_mask(mask: Image.Image, dash: int, gap: int, width: int, min_len: int = 12) -> Image.Image:
+    """선 그림(두께 무관) → 한 겹의 가는 점선. 가운데 선을 따라 걸으며 dash만큼 긋고 gap만큼 쉰다."""
+    import numpy as np
+    from collections import deque
+    sk = _thin(np.asarray(mask) > 127)
+    h, w = sk.shape
+    seen = np.zeros_like(sk, dtype=bool)
+    out = np.zeros((h, w), np.uint8)
+    ys, xs = np.nonzero(sk)
+    nbrs = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
+
+    def degree(y, x):
+        return sum(1 for dy, dx in nbrs if 0 <= y + dy < h and 0 <= x + dx < w and sk[y + dy, x + dx])
+    # 끝점부터 걸어야 선이 한 방향으로 고르게 끊긴다(고리 모양은 아무 점에서 시작)
+    starts = sorted(zip(ys, xs), key=lambda p: degree(*p) != 1)
+    for y0, x0 in starts:
+        if seen[y0, x0]:
+            continue
+        comp, q = [], deque([((y0, x0), 0)])
+        seen[y0, x0] = True
+        while q:
+            (y, x), dist = q.popleft()
+            comp.append((y, x, dist))
+            for dy, dx in nbrs:
+                ny, nx = y + dy, x + dx
+                if 0 <= ny < h and 0 <= nx < w and sk[ny, nx] and not seen[ny, nx]:
+                    seen[ny, nx] = True
+                    q.append(((ny, nx), dist + 1))
+        if len(comp) < min_len:                     # 아주 짧은 조각(질감 점)은 버린다
+            continue
+        for y, x, dist in comp:
+            if dist % (dash + gap) < dash:
+                out[y, x] = 255
+    img = Image.fromarray(out)
+    if width > 1:
+        img = img.filter(ImageFilter.MaxFilter(width if width % 2 else width + 1))
+    return img
 
 
 def paste_fit(img: Image.Image, rgba: Image.Image, box, align="center") -> tuple[int, int, int, int]:
