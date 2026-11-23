@@ -471,6 +471,8 @@ function bgSave(task, what) {
   return BG.q;
 }
 const realId = id => BG.ids[id] || id;            // 아직 저장 전에 화면에 붙인 임시 id → 저장 뒤 진짜 id
+// 화면의 버튼에는 저장 전 임시 id가 남아 있을 수 있다 → 임시 id로도 찾는다(못 찾으면 버튼이 말없이 안 눌림)
+const sameId = (x, id) => x.id === id || x.id === realId(id);
 window.addEventListener("beforeunload", e => { if (BG.n) { e.preventDefault(); e.returnValue = ""; } });   // 저장이 남았는데 닫으려 하면 한 번 묻는다
 function syncBadge() { const b = document.getElementById("syncdot"); if (b) b.hidden = !BG.n; }
 // 화면에 바로 기록 한 건을 더하고(임시 id), 뒤에서 저장한다
@@ -1001,7 +1003,7 @@ const BENCH = {
     survival: {1: .678, 2: .522, 3: .357, 4: .25, 5: .15, 6: .08, 7: .04},
     src: "국민생활체육조사 2025(문화체육관광부, 2026.1.19 발표): 주 1회 이상 30대 67.8%, 주 2회 이상 전체 52.2% · 주 3회 이상 남성 35.7%(이전 조사) · 4회 이상은 추세로 추정",
     level: "공식(1·2회) + 추정(3회 이상)"},
-  craft: {title: "하루 평균 가사·돌봄 시간(요리·놀이·정리·설거지·청소·분리수거)", group: "30대 남성",
+  craft: {title: "하루 평균 가사·돌봄 시간(요리·놀이·육아·정리·설거지·청소·분리수거)", group: "30대 남성",
     mean: 76, pd: .70, cv: .8,
     src: "생활시간조사 2024(국가데이터처) 통계표 2-1: 30~39세 남자 가정관리 49분 + 가족 및 가구원 돌보기 27분 = 하루 76분(요일 평균). 참고: 25~39세 기혼·유자녀 남성은 134분. 하루 참여율 70%·분포(로그정규, 변동계수 0.8)는 추정",
     level: "평균 공식, 참여율·분포 추정"},
@@ -1084,7 +1086,9 @@ const MIND_EX = {
   impulse: ["충동구매·야식을 참음", "한 달간 계획대로 씀", "오래된 나쁜 습관을 끊음"],
   avoid: ["미루던 일을 처리함", "두려운 일에 도전함", "인생의 큰 결정을 내리고 실행함"],
   heart: ["나를 돌아본 기록을 남김", "힘든 시기에 다시 일어섬", "큰 실패·상실을 딛고 회복함"]};
-const CRAFT_FIELDS = [["cook", "🍳 요리"], ["play", "🧸 놀이"], ["tidy", "🗂 정리"], ["dish", "🍽 설거지·주방"], ["clean", "🧹 청소"], ["recycle", "♻️ 분리수거"]];
+// 가사 + 육아(돌봄). 육아도 '가족 및 가구원 돌보기'라 같은 생활시간조사 기준(가정관리 + 돌보기 = 하루 76분)에 들어간다
+const CRAFT_FIELDS = [["cook", "🍳 요리"], ["play", "🧸 놀이"], ["kidcare", "🍼 육아"],
+  ["tidy", "🗂 정리"], ["dish", "🍽 설거지·주방"], ["clean", "🧹 청소"], ["recycle", "♻️ 분리수거"]];
 const RECYCLE_MIN = 15;
 const PSS_Q = ["예상치 못한 일 때문에 속상했던 적이", "인생에서 중요한 일들을 조절할 수 없다고 느낀 적이", "신경이 예민해지고 스트레스를 받았다고 느낀 적이",
   "개인적인 문제를 다루는 능력에 자신감을 느낀 적이", "일이 내 뜻대로 진행되고 있다고 느낀 적이", "해야 할 일들을 감당할 수 없다고 느낀 적이",
@@ -1979,7 +1983,7 @@ function renderGrowth() {
 }
 
 // 화면 버전: 폰이 새 화면을 받았는지 성장 탭 맨 아래에서 확인할 수 있게(바꿀 때마다 올린다)
-const APP_BUILD = "2026.11.23-e";
+const APP_BUILD = "2026.11.23-f";
 // 카드 하나를 그리다 오류가 나도 나머지 화면은 그대로 보이게, 오류 내용은 그 자리에 보여 준다
 function safeCard(name, fn) {
   try { return fn(); }
@@ -2443,7 +2447,7 @@ document.addEventListener("click", async e => {
   if (a === "rivalsmore") { RIVAL_SHOW += 20; showRivals(true); }
   if (a === "cmpreset") saveCmp(true);
   if (a === "dellog") {
-    const l = DATA.items.find(i => i.id === b.dataset.id); if (!l || !confirm(`'${l.name}' 기록을 지울까요?`)) return;
+    const l = DATA.items.find(i => sameId(i, b.dataset.id)); if (!l || !confirm(`'${l.name}' 기록을 지울까요?`)) return;
     DATA.items = DATA.items.filter(i => i.id !== l.id); redrawLive(); toast("지웠습니다");
     if (!$("#sheet").hidden && $("#form").dataset.mode === "detail") showGoalDetail(DETAIL);
     bgSave(() => api("deleteItem", realId(l.id)), "지우기");
@@ -2475,7 +2479,7 @@ const TIMER_ACTS = {
   craft: [...CRAFT_FIELDS.map(([k, l]) => [k, l, {type: "time", field: k}]), ["etc", "✏️ 기타(직접 적기)", {type: "etc"}]]
 };
 const TIMER_HINT = {body: "운동은 30분 이상이면 1회로 셉니다", mind: "끝내면 그 영역의 '작은 승리'로 기록돼요(같은 주 같은 영역은 반씩 줄어요)",
-  craft: "가사·돌봄 시간은 하루 평균 분으로 30대 남성과 비교해요"};
+  craft: "가사·육아(돌봄) 시간은 하루 평균 분으로 30대 남성과 비교해요"};
 let TSEL = {goal: "", act: ""}, tickId = 0;
 // 진행 중인 타이머: 시트의 'timer' 항목. 새로고침·재실행 직후(데이터를 받기 전)에도 바로 보이게 이 기기에 사본을 둔다
 function runningTimers() {
@@ -2582,7 +2586,7 @@ function timerLog(goal, act, minutes, memo) {
 // 기록 고치기(시간·횟수·날짜)
 let TEDIT = null;
 function openTimeEdit(id) {
-  const l = gLogs().find(x => x.id === id); if (!l) return;
+  const l = gLogs().find(x => sameId(x, id)); if (!l) return;
   TEDIT = l; const rec = l.f.count != null;
   $("#form").innerHTML = `<h3>${goalIcon(l.f.goal)} ${esc(l.name)}</h3>
     <div class="f"><label for="te_val">${rec ? "횟수" : "시간(분)"}</label><input id="te_val" name="val" inputmode="numeric" required value="${esc(String(rec ? (num(l.f.count) || 1) : (num(l.f.minutes) || 0)))}"></div>
@@ -2605,7 +2609,7 @@ async function saveTimeEdit() {
 async function timerAct(kind, id) {
   try {
     if (!DATA) { toast("불러오는 중…"); await loadAssets(true); if (!DATA) return; }
-    const run = runningTimers().find(t => t.id === id);
+    const run = runningTimers().find(t => sameId(t, id));
     if (kind === "start" || kind === "once") {
       if (!TSEL.act) return;
       const memo = (($("#tmemo") || {}).value || "").trim();
@@ -2638,7 +2642,7 @@ async function timerAct(kind, id) {
       bgSave(() => api("deleteItem", realId(tid)).catch(() => {}), "");
       redrawLive(); toast(`${goalIcon(run.f.goal)} ${minutes}분 기록했어요 · 성장에 반영됨`);
     } else if (kind === "del") {
-      const l = gLogs().find(x => x.id === id); if (!l) return;
+      const l = gLogs().find(x => sameId(x, id)); if (!l) return; id = l.id;
       if (!confirm(`'${l.name}' 기록을 지울까요?`)) return;
       DATA.items = DATA.items.filter(i => i.id !== id); $("#sheet").hidden = true; redrawLive(); toast("지웠어요");
       bgSave(() => api("deleteItem", realId(id)), "지우기");
