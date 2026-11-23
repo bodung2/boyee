@@ -56,7 +56,8 @@ class Assets:
         return sh
 
     def _edges(self, key: str, size: int) -> Image.Image:
-        """색 그림에서 바로 뽑은 윤곽선(같은 그림이라 원화와 정확히 겹친다). opencv가 없으면 바깥 외곽선만."""
+        """색 그림에서 바로 뽑은 선 그림: 매끈한 바깥 윤곽 + 원화에 그려진 안쪽 선(같은 그림이라 원화와 정확히 겹친다).
+        opencv가 없으면 바깥 외곽선만."""
         src = self._src(key, size)
         alpha = library.cutout(src).getchannel("A")
         try:
@@ -81,14 +82,18 @@ class Assets:
         body = (cv2.GaussianBlur(body, (k * 2 + 1, k * 2 + 1), 0) > 127).astype(np.uint8) * 255   # 계단 줄이기
         w = max(4, size // 110)
         rim = cv2.subtract(cv2.dilate(body, np.ones((w, w), np.uint8)), body)
-        gb = cv2.GaussianBlur(cv2.bilateralFilter(g.astype(np.uint8), 9, 60, 9), (5, 5), 0)
-        inner = cv2.Canny(gb, 60, 140) & cv2.erode(body, np.ones((k * 2, k * 2), np.uint8))
-        n, lab, st, _ = cv2.connectedComponentsWithStats(inner)
-        keep = np.zeros_like(inner)
-        for i in range(1, n):                       # 안쪽 선은 긴 것만(수채 질감 점은 버림)
-            if st[i][4] > size // 4:
+        # 안쪽 선: 원화에 그려진 갈색 윤곽·무늬(주변보다 진한 선)를 살린다(바구니 짜임·사과 꼭지·돗자리 말림)
+        gb = cv2.bilateralFilter(g.astype(np.uint8), 9, 50, 7)
+        blk = max(15, int(size * 0.041)) | 1
+        th = cv2.adaptiveThreshold(gb, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, blk, 16)
+        th = cv2.morphologyEx(th, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
+        th &= cv2.erode(body, np.ones((w * 2 + 1, w * 2 + 1), np.uint8))       # 바깥 테두리는 rim이 맡는다
+        n, lab, st, _ = cv2.connectedComponentsWithStats(th)
+        keep = np.zeros_like(th)
+        min_area = 250 * (size / 1000) ** 2         # 수채 질감에서 나온 작은 점은 버린다
+        for i in range(1, n):
+            if st[i][4] > min_area:
                 keep[lab == i] = 255
-        keep = cv2.dilate(keep, np.ones((max(3, w - 2),) * 2, np.uint8))
         return Image.fromarray(cv2.bitwise_or(rim, keep))
 
     def outline(self, key: str, size: int, dashed: bool = True, color=S.TRACE, same_art: bool = False) -> Image.Image:
