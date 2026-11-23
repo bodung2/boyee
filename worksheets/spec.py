@@ -1,30 +1,45 @@
-"""활동지 설계서(spec.json) 형식과 검사.
+"""활동지 설계서(spec.json) 형식과 검사. 활동 종류는 「경량 활동 12종 상세 프롬프트 명세서」를 따른다.
 
 {
-  "set_id": "2026-11-24-winter-clothes",     # 날짜-영문 주제(파일 이름에 씀)
-  "theme": "겨울 옷", "title": "겨울 옷 입기 활동지", "age": "3~5세",
-  "domain": "소근육", "nuri": "신체운동·건강 - 신체 활동 즐기기", "skills": ["눈과 손 협응"],
-  "assets": [{"key": "mitten", "name": "장갑", "prompt": "a pair of red knitted mittens", "kind": "color"}],
-  "pages": [{"type": "trace_lines", "title": "장갑을 찾아가요", "instruction": "점선을 따라 선을 그어요",
-             "rows": [{"from": "bear", "to": "mitten", "path": "wave"}]}],
-  "parent_tip": "…", "answers": "…"
+  "set_id": "2026-11-24-winter", "theme": "겨울", "title": "겨울 준비물 활동지", "age": "3~5세",
+  "domain": "소근육", "competency": "M5 그래포모터·그리기", "nuri": "신체운동·건강 – 신체 활동 즐기기",
+  "characters": ["rabbit", "bear", "fox", "squirrel"],          # 머리에 세울 고정 캐릭터(보관함 key)
+  "assets": [{"key": "mitten", "name": "장갑", "kind": "color", "prompt": "..."}],
+  "pages": [{"type": "trace_outline", "title": "겨울 준비물 따라 그려요", "instruction": "옅은 선을 따라 그려 보세요.",
+             "header": "characters", "items": [{"asset": "mitten", "word": "장갑"}]}],
+  "parent_tip": "…"
 }
 """
 from __future__ import annotations
 
 import re
 
+# 종류: (이름, 항목 수 범위, 필요한 값)
 PAGE_TYPES = {
-    "trace_lines": "선 따라 긋기",
-    "trace_letters": "낱말 따라 쓰기",
-    "count_write": "세어 보고 숫자 쓰기",
-    "match_shadow": "그림자 짝 잇기",
-    "match_word": "그림과 낱말 잇기",
+    "word_cards": "그림 한글 카드",
+    "cut_lines": "오리기 연습",
+    "trace_outline": "흐린 밑그림 따라 그리기",
     "coloring": "색칠하기",
-    "find_same": "같은 그림 찾기",
+    "match_same": "같은 그림 선 잇기",
+    "match_shadow": "그림자 찾기",
+    "half_draw": "반쪽 그림 완성",
+    "cut_paste": "오려 붙이기 미니판",
+    "trace_letters": "낱말 따라 쓰기",
+    "vocab_poster": "그림 낱말판",
+    "emotion_match": "기분 찾기",
+    "check_game": "찾으면 콕! 체크 놀이",
+    "trace_lines": "선 따라 그리기",
+    "count_write": "세어 보고 숫자 쓰기",
 }
-PATHS = ("straight", "wave", "zigzag", "loop", "steps", "arc")
-HANGUL_WORD = re.compile(r"^[가-힣]{1,4}$")
+COUNTS = {
+    "word_cards": (4, 8), "cut_lines": (3, 4), "trace_outline": (4, 4), "coloring": (2, 4), "match_same": (3, 4),
+    "match_shadow": (3, 4), "half_draw": (4, 4), "cut_paste": (2, 3), "trace_letters": (3, 4), "vocab_poster": (6, 8),
+    "emotion_match": (3, 4), "check_game": (4, 6), "trace_lines": (3, 4), "count_write": (3, 4),
+}
+NEEDS_WORD = {"word_cards", "trace_letters", "vocab_poster", "emotion_match", "check_game"}
+LINE_ONLY = {"coloring"}
+PATHS = ("straight", "wave", "zigzag", "curve", "loop", "steps")
+HANGUL_WORD = re.compile(r"^[가-힣]{1,5}$")
 
 
 def _keys(spec: dict) -> dict[str, dict]:
@@ -32,23 +47,20 @@ def _keys(spec: dict) -> dict[str, dict]:
 
 
 def used_assets(spec: dict) -> list[str]:
-    """페이지에서 실제로 쓰는 그림 key(순서 유지, 중복 없음)."""
+    """실제로 쓰는 그림 key(머리 캐릭터 포함, 순서 유지, 중복 없음)."""
     seen: list[str] = []
 
     def add(k):
         if k and k not in seen:
             seen.append(k)
+    for k in spec.get("characters") or []:
+        add(k)
     for p in spec.get("pages") or []:
-        for r in p.get("rows") or []:
-            for k in (r.get("from"), r.get("to"), r.get("asset"), r.get("target"), *(r.get("options") or [])):
-                add(k)
-        for k in p.get("assets") or []:
+        for k in p.get("characters") or []:
             add(k)
-        for pr in p.get("pairs") or []:
-            add(pr.get("asset"))
-        for w in p.get("words") or []:
-            add(w.get("asset"))
-        add(p.get("asset"))
+        add(p.get("container"))
+        for it in p.get("items") or []:
+            add(it.get("asset"))
     return seen
 
 
@@ -56,7 +68,7 @@ def problems(spec: dict, library_index: dict | None = None) -> list[str]:
     """설계서가 그릴 수 없는 모양이면 문제 목록(비면 통과)."""
     from .library import KEY_RE
     errs: list[str] = []
-    for f in ("set_id", "theme", "title", "age", "assets", "pages"):
+    for f in ("set_id", "theme", "title", "age", "pages"):
         if not spec.get(f):
             errs.append(f"필수 항목 없음: {f}")
     if errs:
@@ -65,6 +77,9 @@ def problems(spec: dict, library_index: dict | None = None) -> list[str]:
         errs.append(f"set_id 형식: YYYY-MM-DD-영문소문자 ({spec['set_id']})")
     lib = library_index or {}
     assets = _keys(spec)
+
+    def kind(k):
+        return (assets.get(k) or {}).get("kind") or (lib.get(k) or {}).get("kind") or "color"
     for k, a in assets.items():
         if not KEY_RE.match(str(k or "")):
             errs.append(f"그림 key는 영문 소문자·숫자·_만: {k}")
@@ -72,8 +87,6 @@ def problems(spec: dict, library_index: dict | None = None) -> list[str]:
             errs.append(f"그림 kind는 color/line: {k}")
         if not a.get("prompt") and k not in lib:
             errs.append(f"새 그림에는 영어 prompt가 필요합니다: {k}")
-    def kind(k):
-        return (assets.get(k) or {}).get("kind") or (lib.get(k) or {}).get("kind") or "color"
     pages = spec["pages"]
     if not 1 <= len(pages) <= 2:
         errs.append(f"활동지는 1~2장입니다(현재 {len(pages)}장)")
@@ -82,48 +95,41 @@ def problems(spec: dict, library_index: dict | None = None) -> list[str]:
         if t not in PAGE_TYPES:
             errs.append(f"{i}장: 모르는 활동 종류 {t} (가능: {', '.join(PAGE_TYPES)})")
             continue
-        if not p.get("title") or len(p["title"]) > 18:
-            errs.append(f"{i}장: 제목은 1~18자({p.get('title')})")
-        if not p.get("instruction") or len(p["instruction"]) > 30:
-            errs.append(f"{i}장: 안내 문장은 1~30자({p.get('instruction')})")
-        rows = p.get("rows") or []
-        if t == "trace_lines":
-            if not 3 <= len(rows) <= 5:
-                errs.append(f"{i}장: 선 긋기 줄은 3~5개")
-            errs += [f"{i}장: path는 {'/'.join(PATHS)}" for r in rows if r.get("path") not in PATHS]
-        elif t == "trace_letters":
-            words = p.get("words") or []
-            if not 3 <= len(words) <= 4:
-                errs.append(f"{i}장: 따라 쓸 낱말은 3~4개")
-            errs += [f"{i}장: 낱말은 한글 1~4자({w.get('word')})" for w in words
-                     if not HANGUL_WORD.match(str(w.get("word", "")))]
-        elif t == "count_write":
-            if not 3 <= len(rows) <= 4:
-                errs.append(f"{i}장: 세기 줄은 3~4개")
-            errs += [f"{i}장: count는 1~10({r.get('count')})" for r in rows
-                     if not isinstance(r.get("count"), int) or not 1 <= r["count"] <= 10]
-        elif t == "match_shadow":
-            if not 3 <= len(p.get("assets") or []) <= 5:
-                errs.append(f"{i}장: 그림자 잇기 그림은 3~5개")
-            errs += [f"{i}장: 그림자 잇기는 색 그림(color)만({k})" for k in p.get("assets") or []
-                     if kind(k) != "color"]
-        elif t == "match_word":
-            pairs = p.get("pairs") or []
-            if not 3 <= len(pairs) <= 5:
-                errs.append(f"{i}장: 낱말 잇기 짝은 3~5개")
-            errs += [f"{i}장: 낱말은 한글 1~4자({x.get('word')})" for x in pairs
-                     if not HANGUL_WORD.match(str(x.get("word", "")))]
-        elif t == "coloring":
-            k = p.get("asset")
-            if kind(k) != "line":
-                errs.append(f"{i}장: 색칠하기 그림은 선 그림(kind line)이어야 합니다({k})")
-        elif t == "find_same":
-            if not 3 <= len(rows) <= 4:
-                errs.append(f"{i}장: 같은 그림 찾기 줄은 3~4개")
-            for r in rows:
-                opts = r.get("options") or []
-                if len(opts) != 4 or r.get("target") not in opts or len(set(opts)) != 4:
-                    errs.append(f"{i}장: 보기 4개(서로 다름) 안에 target이 하나 있어야 합니다")
+        title = str(p.get("title") or "")
+        if not title or len(title.replace("\n", "")) > 14:
+            errs.append(f"{i}장: 제목은 1~14자({title})")
+        if not p.get("instruction") or len(p["instruction"]) > 32:
+            errs.append(f"{i}장: 안내 문장은 한 문장 1~32자({p.get('instruction')})")
+        items = p.get("items") or []
+        lo, hi = COUNTS[t]
+        if not lo <= len(items) <= hi:
+            errs.append(f"{i}장 {PAGE_TYPES[t]}: 항목은 {lo}~{hi}개(현재 {len(items)}개)")
+        if t in ("word_cards",) and len(items) % 2:
+            errs.append(f"{i}장: 한글 카드는 짝수 개(2열)")
+        for it in items:
+            if not it.get("asset"):
+                if t not in ("trace_lines", "cut_lines"):
+                    errs.append(f"{i}장: 항목에 asset이 없습니다")
+            if t in NEEDS_WORD and not HANGUL_WORD.match(str(it.get("word", ""))):
+                errs.append(f"{i}장: 낱말은 한글 1~5자({it.get('word')})")
+            if t in ("trace_letters",) and len(str(it.get("word", ""))) > 4:
+                errs.append(f"{i}장: 따라 쓸 낱말은 4자 이하({it.get('word')})")
+            if t in ("trace_lines", "cut_lines") and it.get("path") not in PATHS:
+                errs.append(f"{i}장: path는 {'/'.join(PATHS)}")
+            if t == "count_write" and not (isinstance(it.get("count"), int) and 1 <= it["count"] <= 10):
+                errs.append(f"{i}장: count는 1~10({it.get('count')})")
+            if t in LINE_ONLY and it.get("asset") and kind(it["asset"]) != "line":
+                errs.append(f"{i}장: 색칠하기 그림은 선 그림(kind line)이어야 합니다({it.get('asset')})")
+            if t in ("match_shadow", "half_draw", "trace_outline", "emotion_match") and it.get("asset") \
+                    and kind(it["asset"]) != "color":
+                errs.append(f"{i}장: {PAGE_TYPES[t]}는 색 그림(color)만({it.get('asset')})")
+        if t in ("match_same", "match_shadow") and len({it.get("asset") for it in items}) != len(items):
+            errs.append(f"{i}장: 짝 잇기 그림은 서로 달라야 합니다")
+        if t == "cut_paste":
+            if kind(p.get("container")) != "line":
+                errs.append(f"{i}장: 오려 붙이기 큰 그림(container)은 선 그림이어야 합니다({p.get('container')})")
+        if p.get("header") == "characters" and len(p.get("characters") or spec.get("characters") or []) < 2:
+            errs.append(f"{i}장: 캐릭터 머리는 characters 2~4개가 필요합니다")
     for k in used_assets(spec):
         if k not in assets and k not in lib:
             errs.append(f"assets에 없는 그림: {k}")

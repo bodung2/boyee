@@ -1,0 +1,153 @@
+{
+ "source": "유아 워크북 홍보용 경량 활동 12종 명세서(docx)의 예시 페이지 그림. 2480×3508 페이지 좌표(x, y, w, h)",
+ "assets": {
+  "rabbit": {
+   "image": "image12.png",
+   "box": [
+    293,
+    931,
+    459,
+    651
+   ],
+   "name": "토끼",
+   "kind": "color",
+   "prompt": "a cream-white bunny with pink inner ears and a green bandana around the neck, smiling and opening both arms",
+   "character": true
+  },
+  "bear": {
+   "image": "image12.png",
+   "box": [
+    256,
+    1992,
+    532,
+    611
+   ],
+   "name": "곰",
+   "kind": "color",
+   "prompt": "a brown teddy bear wearing a cream long-sleeve shirt and green overalls, smiling with arms open",
+   "character": true
+  },
+  "fox": {
+   "image": "image10.png",
+   "box": [
+    1346,
+    951,
+    414,
+    472
+   ],
+   "name": "여우",
+   "kind": "color",
+   "prompt": "an orange fox wearing a blue cap and a blue neckerchief, waving one paw happily",
+   "character": true
+  },
+  "squirrel": {
+   "image": "image10.png",
+   "box": [
+    1932,
+    984,
+    392,
+    410
+   ],
+   "name": "다람쥐",
+   "kind": "color",
+   "prompt": "a brown squirrel with a big fluffy tail and a small red cross-body bag, waving both paws",
+   "character": true
+  },
+  "apple": {
+   "image": "image12.png",
+   "box": [
+    1089,
+    1047,
+    376,
+    449
+   ],
+   "name": "사과",
+   "kind": "color",
+   "prompt": "a shiny red apple with a short brown stem and one green leaf"
+  },
+  "water_bottle": {
+   "image": "image12.png",
+   "box": [
+    1842,
+    1025,
+    274,
+    519
+   ],
+   "name": "물병",
+   "kind": "color",
+   "prompt": "a light-blue stainless water bottle with a screw cap and a small loop handle"
+  },
+  "picnic_basket": {
+   "image": "image12.png",
+   "box": [
+    1082,
+    2060,
+    390,
+    347
+   ],
+   "name": "바구니",
+   "kind": "color",
+   "prompt": "a woven wicker picnic basket with a lid and an arched handle"
+  },
+  "picnic_mat": {
+   "image": "image12.png",
+   "box": [
+    1843,
+    2109,
+    401,
+    298
+   ],
+   "name": "돗자리",
+   "kind": "color",
+   "prompt": "a rolled-up green straw picnic mat seen from the side, spiral end visible"
+  },
+  "apple_line": {
+   "image": "image4.png",
+   "box": [
+    205,
+    1998,
+    930,
+    1032
+   ],
+   "name": "사과(선)",
+   "kind": "line",
+   "prompt": "a red apple with a stem and one leaf"
+  },
+  "water_bottle_line": {
+   "image": "image4.png",
+   "box": [
+    1441,
+    1995,
+    737,
+    1040
+   ],
+   "name": "물병(선)",
+   "kind": "line",
+   "prompt": "a water bottle with a screw cap and a strap"
+  },
+  "picnic_basket_line": {
+   "image": "image8.png",
+   "box": [
+    716,
+    915,
+    1079,
+    1266
+   ],
+   "name": "바구니(선)",
+   "kind": "line",
+   "prompt": "a woven picnic basket with a lid and an arched handle"
+  },
+  "picnic_mat_line": {
+   "image": "image4.png",
+   "box": [
+    168,
+    974,
+    1006,
+    562
+   ],
+   "name": "돗자리(선)",
+   "kind": "line",
+   "prompt": "a rolled-up picnic mat with a grid pattern and spiral end"
+  }
+ }
+}

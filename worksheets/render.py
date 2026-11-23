@@ -1,7 +1,8 @@
-"""활동지 그리기: AI 원화는 그림만 맡고, 글씨·점선·칸·브랜드 띠는 코드로 정확하게 그린다.
+"""활동지 그리기(A4 300dpi): 블로그 주인의 무료 나눔 활동지 양식(worksheets/style.py)과
+「경량 활동 12종 상세 프롬프트 명세서」의 활동 엔진을 코드로 옮겼다.
 
-A4(200dpi, 1654×2339) PNG를 장마다 만들고, 묶어서 PDF 한 파일로 저장한다.
-블로그에는 폭 1000px로 줄인 장 이미지와 16:9 미리보기(cover)를 올린다.
+원화(AI 그림)는 그림만 맡고, 글자·점·선·점선·칸·절취선은 모두 코드가 정확한 자리에 그린다(명세서의 '후편집' 규칙).
+장마다 원본 PNG(2480×3508), 블로그용 PNG(폭 1000), 묶음 PDF, 16:9 미리보기를 만든다.
 """
 from __future__ import annotations
 
@@ -9,129 +10,283 @@ import math
 import random
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
-from . import library
-from .spec import PAGE_TYPES
+from . import library, style as S
+from .style import H, W
 
-W, H = 1654, 2339
-DPI = 200
-M = 96                                   # 바깥 여백
-GREEN, YELLOW = (47, 107, 61), (255, 210, 63)
-INK, SOFT, TRACE = (51, 51, 51), (150, 150, 150), (196, 196, 196)
-PAPER_TINT = (255, 248, 228)
-BAND_H = 118
-CONTENT_TOP = 590
-CONTENT_BOTTOM = H - BAND_H - 70
+DPI = 300
 BLOG_WIDTH = 1000
-FONT_FALLBACK = ("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
-                 "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
-                 "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc")
+M = 130                                   # 좌우 여백(약 11mm)
+CONTENT_BOTTOM = H - S.BAND_H - 150       # 풀 장식 위
+PATHS = ("straight", "wave", "zigzag", "curve", "loop", "steps")
 
 
-def font(weight: str, size: int) -> ImageFont.FreeTypeFont:
-    try:
-        from naver_autopost.images import _font
-        return _font(weight, size)
-    except RuntimeError:
-        for p in FONT_FALLBACK:
-            if Path(p).exists():
-                return ImageFont.truetype(p, size, index=1 if "NotoSansCJK" in p else 0)
-        raise
-
-
-def _tw(d: ImageDraw.ImageDraw, text: str, f) -> int:
-    l, _, r, _ = d.textbbox((0, 0), text, font=f)
-    return r - l
-
-
-def _fit(d, text: str, weight: str, size: int, max_w: int, min_size: int = 28):
-    f = font(weight, size)
-    while size > min_size and _tw(d, text, f) > max_w:
-        size -= 2
-        f = font(weight, size)
-    return f
-
-
-def _center_text(d, box, text, f, fill):
-    x0, y0, x1, y1 = box
-    l, t, r, b = d.textbbox((0, 0), text, font=f)
-    d.text(((x0 + x1 - (r - l)) / 2 - l, (y0 + y1 - (b - t)) / 2 - t), text, font=f, fill=fill)
-
+# ---------------------------------------------------------------- 원화
 
 class Assets:
-    """원화 불러오기(같은 그림은 한 번만 읽는다)."""
-
     def __init__(self, lib: Path):
         self.lib = lib
-        self._cache: dict[tuple, Image.Image] = {}
+        self._cache: dict = {}
 
-    def get(self, key: str, size: int, cut: bool = False, shadow: bool = False) -> Image.Image:
-        ck = (key, size, cut, shadow)
+    def has(self, key: str | None) -> bool:
+        return bool(key) and library.path(self.lib, key).exists()
+
+    def _src(self, key: str, size: int) -> Image.Image:
+        ck = ("src", key, size)
         if ck not in self._cache:
             img = Image.open(library.path(self.lib, key)).convert("RGB")
-            img = img.resize((size, size), Image.LANCZOS)
-            if shadow:
-                img = library.silhouette(img)
-            elif cut:
-                img = library.cutout(img)
-            self._cache[ck] = img
+            self._cache[ck] = img.resize((size, size), Image.LANCZOS)
         return self._cache[ck]
 
-    def paste(self, page: Image.Image, key: str, box, cut=True, shadow=False) -> None:
-        x0, y0, x1, y1 = (int(v) for v in box)
-        side = min(x1 - x0, y1 - y0)
-        img = self.get(key, side, cut=cut or shadow, shadow=shadow)
-        pos = (x0 + (x1 - x0 - side) // 2, y0 + (y1 - y0 - side) // 2)
-        if img.mode == "RGBA":
-            page.paste(img, pos, img)
+    def art(self, key: str, size: int) -> Image.Image:
+        """흰 배경을 지운 그림(바깥 흰색만), 그림 부분만 잘라 낸 RGBA."""
+        ck = ("art", key, size)
+        if ck not in self._cache:
+            cut = library.cutout(self._src(key, size))
+            box = cut.getchannel("A").getbbox() or (0, 0, size, size)
+            self._cache[ck] = cut.crop(box)
+        return self._cache[ck]
+
+    def shadow(self, key: str, size: int) -> Image.Image:
+        art = self.art(key, size)
+        sh = Image.new("RGBA", art.size, (96, 84, 76, 255))
+        sh.putalpha(art.getchannel("A"))
+        return sh
+
+    def outline(self, key: str, size: int, dashed: bool = True, color=S.TRACE) -> Image.Image:
+        """따라 그리기용 흐린 점선 밑그림. 선 그림(<key>_line)이 있으면 그 선을, 없으면 그림 외곽선을 쓴다."""
+        ck = ("outline", key, size, dashed)
+        if ck in self._cache:
+            return self._cache[ck]
+        line_key = key if key.endswith("_line") else f"{key}_line"
+        if self.has(line_key):
+            g = self._src(line_key, size).convert("L")
+            mask = g.point(lambda v: 255 if v < 150 else 0)
+            alpha_src = library.cutout(self._src(line_key, size)).getchannel("A")
         else:
-            page.paste(img, pos)
+            alpha_src = library.cutout(self._src(key, size)).getchannel("A")
+            k = max(3, size // 90) | 1
+            mask = ImageChops.subtract(alpha_src, alpha_src.filter(ImageFilter.MinFilter(k)))
+            mask = mask.filter(ImageFilter.MaxFilter(3))
+        if dashed:                                     # 칸무늬를 곱해 선을 짧은 점선으로 끊는다
+            step = max(8, size // 45)
+            pat = Image.new("L", mask.size, 0)
+            pd = ImageDraw.Draw(pat)
+            for y in range(0, size, step):
+                for x in range(0, size, step):
+                    if ((x // step) + (y // step)) % 2 == 0:
+                        pd.rectangle([x, y, x + step - 1, y + step - 1], fill=255)
+            mask = ImageChops.multiply(mask, pat)
+        out = Image.new("RGBA", mask.size, color + (0,))
+        out.putalpha(mask)
+        box = (alpha_src.getbbox() or (0, 0, size, size))
+        self._cache[ck] = out.crop(box)
+        return self._cache[ck]
 
 
-# ---------------------------------------------------------------- 점선
-
-def _dashed(d, pts, fill=SOFT, width=10, dash=24, gap=18):
-    on, left = True, dash
-    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
-        seg = math.hypot(x1 - x0, y1 - y0)
-        pos = 0.0
-        while pos < seg:
-            step = min(left, seg - pos)
-            if on:
-                a, b = pos / seg, (pos + step) / seg
-                d.line([(x0 + (x1 - x0) * a, y0 + (y1 - y0) * a), (x0 + (x1 - x0) * b, y0 + (y1 - y0) * b)],
-                       fill=fill, width=width)
-            pos += step
-            left -= step
-            if left <= 0:
-                on = not on
-                left = dash if on else gap
+def paste_fit(img: Image.Image, rgba: Image.Image, box, align="center") -> tuple[int, int, int, int]:
+    """비율을 지켜 칸 안에 꽉 차게 붙인다. 실제로 붙은 자리를 돌려준다."""
+    x0, y0, x1, y1 = (int(v) for v in box)
+    s = min((x1 - x0) / rgba.width, (y1 - y0) / rgba.height)
+    w, h = max(1, int(rgba.width * s)), max(1, int(rgba.height * s))
+    im = rgba.resize((w, h), Image.LANCZOS)
+    x = x0 + (x1 - x0 - w) // 2 if align == "center" else (x0 if align == "left" else x1 - w)
+    y = y0 + (y1 - y0 - h) // 2
+    img.paste(im, (x, y), im)
+    return x, y, x + w, y + h
 
 
-def path_points(kind: str, x0: float, x1: float, y: float, amp: float, n: int = 240) -> list[tuple[float, float]]:
+def grid(cols: int, rows: int, top: float, bottom: float, gap: float = 56, left: float = M, right: float = W - M):
+    cw = (right - left - gap * (cols - 1)) / cols
+    ch = (bottom - top - gap * (rows - 1)) / rows
+    return [(left + c * (cw + gap), top + r * (ch + gap), left + c * (cw + gap) + cw, top + r * (ch + gap) + ch)
+            for r in range(rows) for c in range(cols)]
+
+
+def _shuffled(n: int, seed: str) -> list[int]:
+    """오른쪽 순서: 같은 줄에 정답이 오지 않게 섞는다(설계서마다 같은 결과)."""
+    idx = list(range(n))
+    rnd = random.Random(seed)
+    for _ in range(300):
+        rnd.shuffle(idx)
+        if all(i != j for j, i in enumerate(idx)):
+            return idx
+    return idx[1:] + idx[:1]
+
+
+# ---------------------------------------------------------------- 머리(제목·안내)
+
+def _title_lines(title: str, two: bool) -> list[str]:
+    if "\n" in title:
+        return title.split("\n")[:2]
+    if not two or len(title) <= 7:
+        return [title]
+    words = title.split(" ")
+    best = min(range(1, len(words)), key=lambda i: abs(len(" ".join(words[:i])) - len(" ".join(words[i:]))),
+               default=None)
+    return [" ".join(words[:best]), " ".join(words[best:])] if best else [title]
+
+
+def header(img, d, spec: dict, page: dict, A: Assets) -> float:
+    """제목·안내를 그리고 본문이 시작할 y를 돌려준다."""
+    chars = [k for k in (page.get("characters") or spec.get("characters") or []) if A.has(k)][:4]
+    if page.get("header", "characters" if len(chars) >= 2 else "leaves") == "characters" and len(chars) >= 2:
+        lines = _title_lines(page["title"], True)
+        size = 150 if max(len(x) for x in lines) <= 6 else 128
+        pw = max(S.tw(d, x, S.font("title", size)) for x in lines) + 220
+        box = (W / 2 - pw / 2, 250, W / 2 + pw / 2, 250 + size * 1.18 * len(lines) + 150)
+        S.pill(img, d, box, lines, size)
+        left = chars[: (len(chars) + 1) // 2]
+        right = chars[(len(chars) + 1) // 2:]
+        side_w = (box[0] - 60) / max(1, len(left))
+        for i, k in enumerate(left):
+            paste_fit(img, A.art(k, 900), (40 + i * side_w * 0.92, 170, 40 + (i + 1) * side_w * 0.92 + 40, box[3] + 40))
+        side_w = (W - box[2] - 60) / max(1, len(right))
+        for i, k in enumerate(right):
+            x = box[2] + 20 + i * side_w * 0.92
+            paste_fit(img, A.art(k, 900), (x, 170, x + side_w * 0.92 + 40, box[3] + 40))
+        S.leaf(img, box[2] - 40, box[1] + 10, 70, 35)
+        y = box[3] + 70
+    else:
+        lines = [page["title"]]
+        f = S.fit(d, page["title"], "title", 150, W - 2 * M - 560)
+        size = f.size
+        pw = S.tw(d, page["title"], f) + 240
+        box = (W / 2 - pw / 2, 230, W / 2 + pw / 2, 230 + size * 1.18 + 130)
+        S.pill(img, d, box, lines, size)
+        S.sprig(img, box[0] - 110, box[3] - 10, 230)
+        S.sprig(img, box[2] + 110, box[3] - 10, 230, mirror=True)
+        y = box[3] + 60
+    f = S.fit(d, page["instruction"], "body", 62, W - 2 * M - 220)
+    text_w = S.tw(d, page["instruction"], f)
+    x = W / 2 - (text_w + 130) / 2
+    S.leaf_icon(img, x, y + 45, 110)
+    d.text((x + 130, y + 45), page["instruction"], font=f, fill=S.INK_SOFT, anchor="lm")
+    return y + 150
+
+
+# ---------------------------------------------------------------- 활동(명세서 12종 + 세기)
+
+def _word_grid(img, d, page, A, top, cols, rows, check=False, scissors=False):
+    items = page["items"]
+    boxes = grid(cols, rows, top, CONTENT_BOTTOM, gap=44)
+    if scissors:
+        _scissors(d, M - 10, top - 100, 60)
+    for b, it in zip(boxes, items):
+        S.card(d, b, radius=50)
+        x0, y0, x1, y1 = b
+        lh = min((y1 - y0) * 0.24, 190)
+        paste_fit(img, A.art(it["asset"], 900), (x0 + 60, y0 + 40, x1 - 60, y1 - lh - 50))
+        if it.get("word"):
+            S.label(d, (x0 + 60, y1 - lh - 34, x1 - 60, y1 - 44), it["word"], size=int(lh * 0.62))
+        if check:
+            r = 46
+            d.ellipse([x1 - 60 - 2 * r, y0 + 50, x1 - 60, y0 + 50 + 2 * r], outline=S.DOT, width=7, fill=(255, 255, 255))
+    return {}
+
+
+def word_cards(img, d, page, A, top, seed):
+    n = len(page["items"])
+    return _word_grid(img, d, page, A, top, 2, (n + 1) // 2, scissors=True)
+
+
+def vocab_poster(img, d, page, A, top, seed):
+    n = len(page["items"])
+    return _word_grid(img, d, page, A, top, 4 if n == 8 else 3, 2)
+
+
+def check_game(img, d, page, A, top, seed):
+    n = len(page["items"])
+    return _word_grid(img, d, page, A, top, 3 if n > 4 else 2, 2, check=True)
+
+
+def coloring(img, d, page, A, top, seed):
+    items = page["items"]
+    n = len(items)
+    boxes = grid(2, 1, top, CONTENT_BOTTOM) if n == 2 else grid(2, 2, top, CONTENT_BOTTOM)
+    for b, it in zip(boxes, items):
+        S.card(d, b)
+        x0, y0, x1, y1 = b
+        lh = 150 if it.get("word") else 0
+        paste_fit(img, A.art(it["asset"], 1200), (x0 + 80, y0 + 80, x1 - 80, y1 - 70 - lh))
+        if it.get("word"):
+            S.center_text(d, (x0, y1 - 70 - lh, x1, y1 - 50), it["word"], S.font("title", 96))
+    return {}
+
+
+def trace_outline(img, d, page, A, top, seed):
+    """흐린 밑그림 따라 그리기: 왼쪽에 작은 기준 그림, 오른쪽에 크게 점선 밑그림."""
+    for b, it in zip(grid(2, 2, top, CONTENT_BOTTOM), page["items"]):
+        S.card(d, b)
+        x0, y0, x1, y1 = b
+        w = x1 - x0
+        ref = paste_fit(img, A.art(it["asset"], 700), (x0 + 60, y0 + (y1 - y0) * 0.28, x0 + w * 0.34, y1 - (y1 - y0) * 0.3))
+        if it.get("word"):
+            S.center_text(d, (x0 + 40, ref[3] + 20, x0 + w * 0.36, ref[3] + 120), it["word"], S.font("title", 74))
+        paste_fit(img, A.outline(it["asset"], 1100), (x0 + w * 0.38, y0 + 90, x1 - 70, y1 - 90))
+    return {}
+
+
+def half_draw(img, d, page, A, top, seed):
+    """반쪽 그림 완성: 왼쪽 반은 원화, 오른쪽 반은 점선 밑그림, 가운데 기준선."""
+    for b, it in zip(grid(2, 2, top, CONTENT_BOTTOM), page["items"]):
+        S.card(d, b)
+        x0, y0, x1, y1 = b
+        lh = 170
+        area = (x0 + 90, y0 + 80, x1 - 90, y1 - lh - 60)
+        art = A.art(it["asset"], 1100)
+        ghost = A.outline(it["asset"], 1100)
+        ghost = ghost.resize(art.size, Image.LANCZOS)
+        pos = paste_fit(img, ghost, area)
+        left = art.crop((0, 0, art.width // 2, art.height))
+        lw = (pos[2] - pos[0]) // 2
+        img.paste(left.resize((lw, pos[3] - pos[1]), Image.LANCZOS), (pos[0], pos[1]),
+                  left.resize((lw, pos[3] - pos[1]), Image.LANCZOS))
+        cx = pos[0] + lw
+        S.dashed_line(d, [(cx, pos[1] - 30), (cx, pos[3] + 30)], fill=(190, 180, 170), width=5, dash=20, gap=14)
+        if it.get("word"):
+            S.label(d, (x0 + 110, y1 - lh - 30, x1 - 110, y1 - 50), it["word"])
+    return {}
+
+
+def _pencil(d, x, y, s, color):
+    d.polygon([(x, y), (x - s * 0.5, y - s * 0.2), (x - s * 0.5, y + s * 0.2)], fill=(246, 214, 160))
+    d.polygon([(x - s * 0.5, y - s * 0.2), (x - s * 2.4, y - s * 0.2), (x - s * 2.4, y + s * 0.2), (x - s * 0.5, y + s * 0.2)],
+              fill=color)
+    d.ellipse([x - s * 0.14, y - s * 0.07, x + s * 0.02, y + s * 0.07], fill=(60, 60, 60))
+
+
+def _scissors(d, x, y, s):
+    d.ellipse([x, y, x + s * 0.6, y + s * 0.6], outline=S.DOT, width=6)
+    d.ellipse([x, y + s * 0.8, x + s * 0.6, y + s * 1.4], outline=S.DOT, width=6)
+    d.line([(x + s * 0.55, y + s * 0.45), (x + s * 1.6, y + s * 1.1)], fill=S.DOT, width=8)
+    d.line([(x + s * 0.55, y + s * 0.95), (x + s * 1.6, y + s * 0.3)], fill=S.DOT, width=8)
+
+
+def path_points(kind: str, x0: float, x1: float, y: float, amp: float, n: int = 300):
     pts = []
     for i in range(n + 1):
         t = i / n
         x = x0 + (x1 - x0) * t
         if kind == "wave":
-            dy = -amp * math.sin(t * math.pi * 5)
+            dy = -amp * math.sin(t * math.pi * 6)
         elif kind == "zigzag":
-            ph = (t * 5) % 1
-            dy = amp * (1 - 4 * abs(ph - 0.5)) * -1
+            ph = (t * 7) % 1
+            dy = -amp * (1 - 4 * abs(ph - 0.5))
+        elif kind == "curve":
+            dy = -amp * 1.2 * math.sin(t * math.pi)
         elif kind == "steps":
             dy = -amp * 0.8 if int(t * 6) % 2 else amp * 0.8
-        elif kind == "arc":
-            dy = -amp * 1.3 * math.sin(t * math.pi)
-        elif kind == "loop":                      # 고리 4개(트로코이드)
-            r = (x1 - x0) / 4 / (2 * math.pi) * 1.9
-            th = t * 4 * 2 * math.pi
+        elif kind == "loop":
+            r = (x1 - x0) / 5 / (2 * math.pi) * 1.9
+            th = t * 5 * 2 * math.pi
             x = x0 + (x1 - x0) * t - r * math.sin(th)
-            dy = -r * (1 - math.cos(th)) * 1.15
+            dy = -r * (1 - math.cos(th)) * 1.1
         else:
             dy = 0
         pts.append((x, y + dy))
-    if kind == "steps":                           # 계단은 세로로 곧게 꺾는다
+    if kind == "steps":
         out = [pts[0]]
         for p in pts[1:]:
             if abs(p[1] - out[-1][1]) > 1:
@@ -141,208 +296,188 @@ def path_points(kind: str, x0: float, x1: float, y: float, amp: float, n: int = 
     return pts
 
 
-# ---------------------------------------------------------------- 공통 틀
-
-def _frame(spec: dict, page: dict, no: int, total: int, assets: Assets, blog_url: str, guide: str | None):
-    img = Image.new("RGB", (W, H), "white")
-    d = ImageDraw.Draw(img)
-    # 맨 위 색 띠 + 제목
-    d.rounded_rectangle([M - 20, 60, W - M + 20, 290], radius=40, fill=PAPER_TINT)
-    title = page["title"]
-    tf = _fit(d, title, "bold", 92, W - 2 * M - 520)
-    d.text((M + 30, 86), title, font=tf, fill=INK)
-    meta = f"{spec.get('age', '')} · {spec.get('domain', '') or PAGE_TYPES.get(page['type'], '')}"
-    d.text((M + 32, 222), meta, font=font("regular", 34), fill=SOFT)
-    nf = font("bold", 36)
-    for i, label in enumerate(("이름", "날짜")):
-        y = 110 + i * 76
-        d.text((W - M - 470, y), label, font=nf, fill=INK)
-        d.line([(W - M - 370, y + 46), (W - M - 20, y + 46)], fill=SOFT, width=3)
-    # 안내 문장(안내 캐릭터가 있으면 옆에)
-    box = [M, 330, W - M, 500]
-    d.rounded_rectangle(box, radius=36, outline=YELLOW, width=6, fill=(255, 253, 244))
-    tx = M + 40
-    if guide:
-        assets.paste(img, guide, (M + 18, 336, M + 178, 496))
-        tx = M + 200
-    inf = _fit(d, page["instruction"], "bold", 56, W - M - 40 - tx)
-    l, t, r, b = d.textbbox((0, 0), page["instruction"], font=inf)
-    d.text((tx, (box[1] + box[3] - (b - t)) / 2 - t), page["instruction"], font=inf, fill=INK)
-    # 브랜드 띠(무료 나눔: 출처 표시)
-    y0 = H - BAND_H
-    d.rectangle([0, y0, W, H], fill=GREEN)
-    d.rectangle([0, y0, W, y0 + 7], fill=YELLOW)
-    _center_text(d, (0, y0 + 14, W, y0 + 66), "ⓒ 꾸쓰쌤 · 더 많은 교육자료는 블로그에", font("bold", 36), "white")
-    if blog_url:
-        _center_text(d, (0, y0 + 64, W, y0 + 108), blog_url, font("regular", 30), (255, 238, 180))
-    if total > 1:
-        d.text((W - M - 60, y0 - 56), f"{no}/{total}", font=font("regular", 30), fill=SOFT)
-    return img, d
+PENCILS = [(110, 170, 80), (70, 130, 210), (240, 140, 60), (220, 90, 110)]
 
 
-def _rows(n: int, top=CONTENT_TOP, bottom=CONTENT_BOTTOM):
-    h = (bottom - top) / n
-    return [(top + i * h, top + (i + 1) * h) for i in range(n)]
-
-
-def _shuffled(items: list, seed: str) -> list[int]:
-    """짝 잇기 오른쪽 순서: 같은 자리에 오는 짝이 없게 섞는다(설계서마다 같은 결과)."""
-    idx = list(range(len(items)))
-    rnd = random.Random(seed)
-    for _ in range(200):
-        rnd.shuffle(idx)
-        if all(i != j for j, i in enumerate(idx)):
-            return idx
-    return idx[1:] + idx[:1]
-
-
-# ---------------------------------------------------------------- 활동 종류별
-
-def _trace_lines(img, d, page, assets, seed):
-    rows = page["rows"]
-    for (y0, y1), r in zip(_rows(len(rows)), rows):
-        h = y1 - y0
-        s = min(h * 0.74, 300)
+def _lines(img, d, page, A, top, cut: bool):
+    items = page["items"]
+    rows = grid(1, len(items), top, CONTENT_BOTTOM, gap=50)
+    for i, (b, it) in enumerate(zip(rows, items)):
+        S.card(d, b, radius=50)
+        x0, y0, x1, y1 = b
         cy = (y0 + y1) / 2
-        assets.paste(img, r["from"], (M, cy - s / 2, M + s, cy + s / 2))
-        assets.paste(img, r["to"], (W - M - s, cy - s / 2, W - M, cy + s / 2))
-        xa, xb = M + s + 40, W - M - s - 40
-        pts = path_points(r.get("path", "straight"), xa, xb, cy + (h * 0.12 if r.get("path") == "arc" else 0),
-                          amp=h * 0.2)
-        _dashed(d, pts)
-        d.ellipse([xa - 18, pts[0][1] - 18, xa + 18, pts[0][1] + 18], fill=GREEN)
+        if cut:
+            _scissors(d, x0 + 60, cy - 50, 70)
+            xa = x0 + 210
+        else:
+            r = 92
+            d.ellipse([x0 + 50, cy - r, x0 + 50 + 2 * r, cy + r], fill=(255, 255, 255), outline=S.LEAF_DARK, width=8)
+            S.center_text(d, (x0 + 50, cy - r, x0 + 50 + 2 * r, cy + r), "시작", S.font("title", 70), S.LEAF_DARK)
+            d.polygon([(x0 + 260, cy - 28), (x0 + 310, cy), (x0 + 260, cy + 28)], fill=S.LEAF_DARK)
+            xa = x0 + 350
+        end = x1 - 90
+        if it.get("asset"):
+            s = min(y1 - y0 - 80, 300)
+            paste_fit(img, A.art(it["asset"], 600), (x1 - 60 - s, cy - s / 2, x1 - 60, cy + s / 2))
+            end = x1 - 100 - s
+        else:
+            _pencil(d, x1 - 70, cy, 70, PENCILS[i % 4])
+            end = x1 - 260
+        pts = path_points(it.get("path", "straight"), xa, end, cy + (40 if it.get("path") == "curve" else 0),
+                          amp=(y1 - y0) * 0.2)
+        S.dashed_line(d, pts, fill=S.DOT if cut else (120, 100, 85), width=12 if cut else 10, dash=34, gap=22)
     return {}
 
 
-def _trace_letters(img, d, page, assets, seed):
-    words = page["words"]
-    for (y0, y1), w in zip(_rows(len(words)), words):
-        h = y1 - y0
-        s = min(h * 0.72, 280)
+def trace_lines(img, d, page, A, top, seed):
+    return _lines(img, d, page, A, top, cut=False)
+
+
+def cut_lines(img, d, page, A, top, seed):
+    return _lines(img, d, page, A, top, cut=True)
+
+
+def _match(img, d, page, A, top, seed, right):
+    items = page["items"]
+    n = len(items)
+    order = _shuffled(n, seed + page["type"])
+    rows = grid(1, n, top, CONTENT_BOTTOM, gap=30)
+    for (x0, y0, x1, y1), it in zip(rows, items):
+        s = min(y1 - y0 - 40, 470)
+        lab = 90 if it.get("name") else 0
+        pos = paste_fit(img, A.art(it["asset"], 900), (M + 40, y0 + 10, M + 40 + s, y1 - lab - 10))
+        if lab:
+            S.center_text(d, (pos[0] - 40, y1 - lab - 10, pos[2] + 40, y1), it["name"], S.font("body", 54))
+        r = 24
+        d.ellipse([M + s + 150 - r, (y0 + y1) / 2 - r, M + s + 150 + r, (y0 + y1) / 2 + r], fill=S.DOT)
+    for slot, i in enumerate(order):
+        x0, y0, x1, y1 = rows[slot]
+        s = min(y1 - y0 - 40, 470)
         cy = (y0 + y1) / 2
-        assets.paste(img, w["asset"], (M, cy - s / 2, M + s, cy + s / 2))
-        x = M + s + 40
-        slot_w = (W - M - x - 2 * 24) / 3
-        slot_h = min(h * 0.66, 250)
-        word = w["word"]
-        f = _fit(d, word, "bold", int(slot_h * 0.7), int(slot_w * 0.86))
-        for i in range(3):
-            box = (x + i * (slot_w + 24), cy - slot_h / 2, x + i * (slot_w + 24) + slot_w, cy + slot_h / 2)
-            d.rounded_rectangle(box, radius=26, outline=(225, 225, 225), width=4)
-            d.line([(box[0] + 16, cy), (box[2] - 16, cy)], fill=(238, 238, 238), width=3)   # 가운데 보조선
-            _center_text(d, box, word, f, INK if i == 0 else TRACE)
+        lab = 90 if items[i].get("name") else 0
+        rx = right(i, (W - M - 40 - s, y0 + 10, W - M - 40, y1 - lab - 10))
+        r = 24
+        d.ellipse([rx - 110 - r, cy - r, rx - 110 + r, cy + r], fill=S.DOT)
+    return {"answers": [order.index(i) + 1 for i in range(n)]}
+
+
+def match_same(img, d, page, A, top, seed):
+    items = page["items"]
+    return _match(img, d, page, A, top, seed,
+                  lambda i, box: paste_fit(img, A.art(items[i]["asset"], 900), box)[0])
+
+
+def match_shadow(img, d, page, A, top, seed):
+    items = page["items"]
+    return _match(img, d, page, A, top, seed,
+                  lambda i, box: paste_fit(img, A.shadow(items[i]["asset"], 900), box)[0])
+
+
+def emotion_match(img, d, page, A, top, seed):
+    items = page["items"]
+
+    def word(i, box):
+        x0, y0, x1, y1 = box
+        cy = (y0 + y1) / 2
+        b = (x1 - 560, cy - 120, x1, cy + 120)
+        S.label(d, b, items[i]["word"], size=120)
+        return b[0]
+    return _match(img, d, page, A, top, seed, word)
+
+
+def trace_letters(img, d, page, A, top, seed):
+    """낱말 따라 쓰기: 그림 + 점선 글자 + 빈 쓰기 칸."""
+    rows = grid(1, len(page["items"]), top, CONTENT_BOTTOM, gap=40)
+    for (x0, y0, x1, y1), it in zip(rows, page["items"]):
+        S.card(d, (x0, y0, x1, y1), radius=50)
+        h = y1 - y0
+        paste_fit(img, A.art(it["asset"], 700), (x0 + 60, y0 + 50, x0 + 60 + h - 100, y1 - 50))
+        word = it["word"]
+        gx0, gx1 = x0 + h + 20, x1 - h * 0.95
+        f = S.fit(d, word, "title", int(h * 0.62), gx1 - gx0 - 40)
+        layer = Image.new("L", (int(gx1 - gx0), int(h)), 0)
+        S.center_text(ImageDraw.Draw(layer), (0, 0, layer.width, layer.height), word, f, 255)
+        edge = ImageChops.subtract(layer.filter(ImageFilter.MaxFilter(9)), layer.filter(ImageFilter.MinFilter(5)))
+        step = 12
+        pat = Image.new("L", layer.size, 0)
+        pd = ImageDraw.Draw(pat)
+        for yy in range(0, layer.height, step):
+            for xx in range(0, layer.width, step):
+                if ((xx // step) + (yy // step)) % 2 == 0:
+                    pd.rectangle([xx, yy, xx + step - 1, yy + step - 1], fill=255)
+        mask = ImageChops.multiply(edge, pat)
+        col = Image.new("RGBA", layer.size, (170, 150, 135, 0))
+        col.putalpha(mask)
+        img.paste(col, (int(gx0), int(y0)), col)
+        bx = (x1 - h * 0.95 + 20, y0 + 50, x1 - 50, y1 - 50)
+        d.rounded_rectangle(bx, radius=40, fill=(255, 255, 255), outline=S.LABEL_EDGE, width=6)
     return {}
 
 
-def _count_write(img, d, page, assets, seed):
-    rows = page["rows"]
-    for (y0, y1), r in zip(_rows(len(rows)), rows):
-        h = y1 - y0
-        cy = (y0 + y1) / 2
-        bh = min(h * 0.8, 330)
-        box = (M, cy - bh / 2, W - M - 300, cy + bh / 2)
-        d.rounded_rectangle(box, radius=30, outline=(225, 225, 225), width=4)
-        n = r["count"]
+def cut_paste(img, d, page, A, top, seed):
+    """오려붙이기 미니판: 위에 큰 붙임 공간(바구니 등 선 그림), 아래 절취선과 조각."""
+    split = top + (CONTENT_BOTTOM - top) * 0.64
+    big = (M, top, W - M, split)
+    S.card(d, big)
+    paste_fit(img, A.art(page["container"], 1400), (M + 160, top + 80, W - M - 160, split - 140))
+    S.center_text(d, (M, split - 130, W - M, split - 50), "여기에 자유롭게 붙여요", S.font("body", 50), S.INK_SOFT)
+    y = split + 90
+    S.dashed_line(d, [(M, y), (W - M, y)], fill=S.DOT, width=6, dash=26, gap=18)
+    _scissors(d, W - M - 120, y - 52, 60)
+    S.center_text(d, (M, y - 46, M + 260, y + 46), "오려요", S.font("title", 52), S.INK_SOFT)
+    items = page["items"]
+    boxes = grid(len(items), 1, y + 80, CONTENT_BOTTOM, gap=90, left=M + 60, right=W - M - 60)
+    for b, it in zip(boxes, items):
+        S.cut_box(d, b)
+        x0, y0, x1, y1 = b
+        paste_fit(img, A.art(it["asset"], 700), (x0 + 50, y0 + 50, x1 - 50, y1 - 50))
+    return {}
+
+
+def count_write(img, d, page, A, top, seed):
+    rows = grid(1, len(page["items"]), top, CONTENT_BOTTOM, gap=44)
+    for (x0, y0, x1, y1), it in zip(rows, page["items"]):
+        S.card(d, (x0, y0, x1 - 420, y1), radius=50)
+        n = it["count"]
         per = 5 if n > 5 else n
         lines = 2 if n > 5 else 1
-        cell = min((box[2] - box[0] - 40) / 5, (bh - 30) / lines)
+        cell = min((x1 - 420 - x0 - 120) / 5, (y1 - y0 - 80) / lines)
         for k in range(n):
             row, col = divmod(k, per)
-            cols_here = per if row < lines - 1 or n % per == 0 else n % per
-            x0 = box[0] + (box[2] - box[0] - cols_here * cell) / 2 + col * cell
-            yy = cy - lines * cell / 2 + row * cell
-            assets.paste(img, r["asset"], (x0 + 6, yy + 6, x0 + cell - 6, yy + cell - 6))
-        ans = (W - M - 230, cy - 115, W - M, cy + 115)
-        d.rounded_rectangle(ans, radius=30, outline=GREEN, width=6)
-    return {"answers": [r["count"] for r in rows]}
+            here = per if row < lines - 1 or n % per == 0 else n % per
+            cx0 = x0 + (x1 - 420 - x0 - here * cell) / 2 + col * cell
+            cy0 = (y0 + y1) / 2 - lines * cell / 2 + row * cell
+            paste_fit(img, A.art(it["asset"], 400), (cx0 + 10, cy0 + 10, cx0 + cell - 10, cy0 + cell - 10))
+        b = (x1 - 360, (y0 + y1) / 2 - 170, x1 - 20, (y0 + y1) / 2 + 170)
+        d.rounded_rectangle(b, radius=50, fill=(255, 255, 255), outline=S.LABEL_EDGE, width=8)
+    return {"answers": [it["count"] for it in page["items"]]}
 
 
-def _match(img, d, page, assets, seed, right_draw):
-    left = page.get("assets") or [p["asset"] for p in page["pairs"]]
-    order = _shuffled(left, seed + page["type"])
-    rows = _rows(len(left))
-    for i, ((y0, y1), k) in enumerate(zip(rows, left)):
-        s = min((y1 - y0) * 0.78, 300)
-        cy = (y0 + y1) / 2
-        assets.paste(img, k, (M + 20, cy - s / 2, M + 20 + s, cy + s / 2))
-        d.ellipse([M + s + 70, cy - 16, M + s + 102, cy + 16], fill=INK)
-    for slot, i in enumerate(order):
-        y0, y1 = rows[slot]
-        s = min((y1 - y0) * 0.78, 300)
-        cy = (y0 + y1) / 2
-        right_draw(i, (W - M - 20 - s, cy - s / 2, W - M - 20, cy + s / 2))
-        d.ellipse([W - M - s - 102, cy - 16, W - M - s - 70, cy + 16], fill=INK)
-    return {"answers": [order.index(i) + 1 for i in range(len(left))]}     # 왼쪽 i번 → 오른쪽 몇 번째
+DRAW = {
+    "word_cards": word_cards, "cut_lines": cut_lines, "trace_outline": trace_outline, "coloring": coloring,
+    "match_same": match_same, "match_shadow": match_shadow, "half_draw": half_draw, "cut_paste": cut_paste,
+    "trace_letters": trace_letters, "vocab_poster": vocab_poster, "emotion_match": emotion_match,
+    "check_game": check_game, "trace_lines": trace_lines, "count_write": count_write,
+}
 
 
-def _match_shadow(img, d, page, assets, seed):
-    keys = page["assets"]
-    return _match(img, d, page, assets, seed,
-                  lambda i, box: assets.paste(img, keys[i], box, shadow=True))
-
-
-def _match_word(img, d, page, assets, seed):
-    pairs = page["pairs"]
-
-    def word_box(i, box):
-        x0, y0, x1, y1 = box
-        wbox = (x0 - 60, (y0 + y1) / 2 - 85, x1, (y0 + y1) / 2 + 85)
-        d.rounded_rectangle(wbox, radius=36, outline=YELLOW, width=6, fill=(255, 253, 244))
-        _center_text(d, wbox, pairs[i]["word"], _fit(d, pairs[i]["word"], "bold", 96, int(wbox[2] - wbox[0] - 40)), INK)
-    return _match(img, d, page, assets, seed, word_box)
-
-
-def _coloring(img, d, page, assets, seed):
-    box = (M + 30, CONTENT_TOP, W - M - 30, CONTENT_BOTTOM - 170)
-    d.rounded_rectangle(box, radius=40, outline=(225, 225, 225), width=4)
-    pad = 60
-    assets.paste(img, page["asset"], (box[0] + pad, box[1] + pad, box[2] - pad, box[3] - pad), cut=False)
-    colors = [(239, 83, 80), (255, 167, 38), (255, 213, 79), (102, 187, 106), (66, 165, 245), (171, 71, 188)]
-    y = CONTENT_BOTTOM - 100
-    gap = (W - 2 * M - 300) / len(colors)
-    d.text((M + 30, y - 28), "이런 색은 어때요?", font=font("bold", 40), fill=SOFT)
-    for i, c in enumerate(colors):
-        x = M + 400 + i * gap * 0.82
-        d.ellipse([x, y - 34, x + 68, y + 34], fill=c)
-    return {}
-
-
-def _find_same(img, d, page, assets, seed):
-    rows = page["rows"]
-    answers = []
-    for (y0, y1), r in zip(_rows(len(rows)), rows):
-        h = y1 - y0
-        cy = (y0 + y1) / 2
-        s = min(h * 0.7, 250)
-        tbox = (M, cy - s / 2 - 16, M + s + 32, cy + s / 2 + 16)
-        d.rounded_rectangle(tbox, radius=30, fill=PAPER_TINT, outline=YELLOW, width=6)
-        assets.paste(img, r["target"], (tbox[0] + 16, tbox[1] + 16, tbox[2] - 16, tbox[3] - 16))
-        ax = tbox[2] + 30
-        d.polygon([(ax, cy - 30), (ax + 50, cy), (ax, cy + 30)], fill=YELLOW)
-        x = ax + 90
-        cw = (W - M - x) / 4
-        for j, k in enumerate(r["options"]):
-            box = (x + j * cw + 10, cy - s / 2, x + (j + 1) * cw - 10, cy + s / 2)
-            d.rounded_rectangle(box, radius=26, outline=(225, 225, 225), width=4)
-            assets.paste(img, k, (box[0] + 14, box[1] + 14, box[2] - 14, box[3] - 14))
-        answers.append(r["options"].index(r["target"]) + 1)
-    return {"answers": answers}
-
-
-DRAW = {"trace_lines": _trace_lines, "trace_letters": _trace_letters, "count_write": _count_write,
-        "match_shadow": _match_shadow, "match_word": _match_word, "coloring": _coloring, "find_same": _find_same}
+def render_page(spec: dict, page: dict, A: Assets, blog_url: str) -> tuple[Image.Image, dict]:
+    img = Image.new("RGB", (W, H), S.PAPER)
+    d = ImageDraw.Draw(img)
+    top = header(img, d, spec, page, A)
+    info = DRAW[page["type"]](img, d, page, A, top + 20, spec["set_id"])
+    S.grass(img, H - S.BAND_H - 30)
+    S.band(img, blog_url)
+    return img, info
 
 
 def render(spec: dict, lib: Path, out_dir: Path, blog_url: str = "") -> dict:
-    """장 PNG(원본 크기)·블로그용 PNG·PDF·미리보기를 만든다. 만든 파일과 정답을 돌려준다."""
-    assets = Assets(lib)
-    guide = spec.get("guide") if spec.get("guide") and library.path(lib, spec["guide"]).exists() else None
+    S.ensure_fonts()
+    A = Assets(lib)
     pages, blog, answers = [], [], {}
-    total = len(spec["pages"])
     out_dir.mkdir(parents=True, exist_ok=True)
     for no, page in enumerate(spec["pages"], 1):
-        img, d = _frame(spec, page, no, total, assets, blog_url, guide)
-        info = DRAW[page["type"]](img, d, page, assets, spec["set_id"])
+        img, info = render_page(spec, page, A, blog_url)
         if info.get("answers"):
             answers[f"p{no}"] = info["answers"]
         full = out_dir / f"page{no}_full.png"
@@ -360,9 +495,9 @@ def render(spec: dict, lib: Path, out_dir: Path, blog_url: str = "") -> dict:
 
 
 def make_cover(pages: list[Path], out: Path) -> Path:
-    """16:9 미리보기: 연한 바탕에 장들을 살짝 기울여 겹쳐 놓는다(썸네일이 가운데 정사각형을 잘라 써도 보이게)."""
+    """16:9 미리보기: 크림 바탕에 장들을 살짝 기울여 겹쳐 놓는다."""
     cw, ch = 1600, 900
-    bg = Image.new("RGB", (cw, ch), (253, 243, 220))
+    bg = Image.new("RGB", (cw, ch), (250, 236, 210))
     ph = 800
     pw = round(W * ph / H)
     angles = [-5, 4] if len(pages) > 1 else [0]
