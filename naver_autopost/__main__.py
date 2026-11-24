@@ -53,6 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     run_p = with_profile(sub.add_parser("run"))
     run_p.add_argument("--dry-run", action="store_true", help="발행 버튼은 누르지 않는다")
     run_p.add_argument("--force", action="store_true", help="오늘 이미 발행했어도 한 편 더 발행")
+    run_p.add_argument("--day", help="자정을 넘겨 다시 쓸 때 그날 폴더(YYYY-MM-DD)를 이어서 쓴다")
     rst = with_profile(sub.add_parser("restyle"))
     rst.add_argument("--day", required=True, help="다시 다듬을 글 날짜 YYYY-MM-DD(옛 글은 블로그에서 지운 뒤)")
     rst.add_argument("--no", type=int, help="시리즈 번호(기본: 지난 시리즈 글 수 + 1)")
@@ -128,7 +129,7 @@ def main(argv: list[str] | None = None) -> int:
         return _capture_style(cfg, args.url, push=not args.no_push)
     if args.cmd == "run":
         from .pipeline import run
-        return run(cfg, dry_run=args.dry_run, force=args.force)
+        return run(cfg, dry_run=args.dry_run, force=args.force, day=args.day)
     if args.cmd == "rethumb":
         from .pipeline import rethumb, setup_logging
         setup_logging(cfg, f"{cfg.profile.name}-{args.day}")

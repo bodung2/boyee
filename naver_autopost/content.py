@@ -139,7 +139,7 @@ def fix_card_marker(body_html: str) -> tuple[str, bool]:
 
 def validate(post: dict, profile: Profile | None = None, after_factcheck: bool = False) -> list[str]:
     """발행을 막아야 하는 문제 목록. 비어 있으면 통과.
-    after_factcheck: 팩트체크가 틀린 문장을 지운 뒤라 분량 기준은 기본값(MIN_BODY_CHARS)만 본다
+    after_factcheck: 팩트체크가 틀린 문장을 지운 뒤라 분량 기준은 기본값(MIN_BODY_CHARS)까지만 본다(더 짧은 글 프로필은 그 기준)
     (분량 때문에 검수까지 끝난 글을 버리지 않게)."""
     errors: list[str] = []
     card_on = profile.summary_card if profile else True
@@ -187,7 +187,8 @@ def validate(post: dict, profile: Profile | None = None, after_factcheck: bool =
     for phrase in profile.extra_forbidden if profile else ():
         if _affirmative_use(everything, phrase):
             errors.append(f"금지 표현이 있습니다: '{phrase}'")
-    min_body = profile.min_body_chars if profile and not after_factcheck else MIN_BODY_CHARS
+    min_body = (min(profile.min_body_chars, MIN_BODY_CHARS) if after_factcheck else profile.min_body_chars) \
+        if profile else MIN_BODY_CHARS
     if len(text) < min_body:
         errors.append(f"본문이 너무 짧습니다({len(text)}자 < {min_body}자)")
 

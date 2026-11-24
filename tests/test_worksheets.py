@@ -593,3 +593,16 @@ def test_produce_keeps_worksheet_folder_after_writer_failure(cfg, monkeypatch):
     with pytest.raises(RuntimeError):
         pipeline.produce(cfg, "2026-11-24", out)
     assert seen["resume"] is True
+
+
+def test_short_share_post_passes_after_factcheck_too():
+    """나눔글은 500자 기준. 팩트체크 뒤 검사가 1500자 기본값으로 떨어뜨리던 문제(2026-11-24)."""
+    prof = profiles.get("worksheet")
+    post = share_post()
+    imgs = "".join(f"<p>[[IMAGE:{i['name']}]]</p>" for i in post.get("illustrations") or [])
+    post["body_html"] = ("<p>" + "집에서 바로 뽑아 쓰는 무료 활동지를 나눕니다. " * 25 + "</p>" + imgs
+                         + "<h2>📥 무료 다운로드</h2><p>[[IMAGE:worksheet_pdf]]</p>")
+    n = len(content.html_to_text(content.IMAGE_MARKER.sub("", post["body_html"])))
+    assert content.validate(post, prof) == []
+    assert n < content.MIN_BODY_CHARS
+    assert content.validate(post, prof, after_factcheck=True) == []

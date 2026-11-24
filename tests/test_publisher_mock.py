@@ -312,3 +312,57 @@ def test_launch_gives_up_on_other_errors_and_after_limit(tmp_path):
         publisher._launch(SimpleNamespace(chromium=Chromium("browser has been closed")), cfg, True,
                           wait_sec=180, sleep=slept.append)
     assert len(slept) == 3
+
+
+FILE_POPUP_MOCK = r"""<!doctype html><meta charset="utf-8"><body>
+<div class="se-content" id="content">
+  <div class="se-component se-text"><p class="se-text-paragraph" contenteditable="true">x</p></div>
+</div>
+<button class="se-file-toolbar-button" onclick="document.getElementById('pop').style.display='block';
+  document.getElementById('dim').style.display='block'">파일</button>
+<div id="dim" class="se-popup-dim se-popup-dim-transparent"
+     style="display:none;position:fixed;inset:0;z-index:5"></div>
+<div id="pop" class="se-popup se-popup-file" style="display:none;position:fixed;top:10px;left:10px;z-index:6">
+  <button class="se-popup-close-button" onclick="pop.style.display='none';dim.style.display='none'">x</button>
+  %s
+</div>
+<script>
+function attached() {
+  pop.style.display = 'none'; dim.style.display = 'none';
+  const c = document.createElement('div'); c.className = 'se-component se-file';
+  c.innerHTML = '<p class="se-text-paragraph">file</p>'; content.appendChild(c);
+}
+</script>"""
+
+
+@pytest.mark.parametrize("inner, ok", [
+    # 창 안 단추 이름이 우리가 아는 것과 다를 때: 단추를 눌러 파일 창을 연다
+    ('<button class="se-local-btn" onclick="f.click()">컴퓨터</button>'
+     '<input type="file" id="f" style="display:none" onchange="attached()">', True),
+    # 창 안에 파일 입력칸만 있을 때
+    ('<input type="file" id="f" onchange="attached()">', True),
+    # 아무것도 못 찾으면 창을 닫고 실패(남은 창이 본문 클릭을 막지 않게)
+    ('<span>MYBOX만</span>', False),
+])
+def test_attach_file_handles_file_popup(tmp_path, inner, ok):
+    cfg = Config.load()
+    pdf = tmp_path / "a.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    with sync_playwright() as p:
+        try:
+            browser = p.chromium.launch()
+        except Exception as e:
+            pytest.skip(f"Chromium 없음: {e}")
+        page = browser.new_page()
+        page.set_content(FILE_POPUP_MOCK % inner)
+        ed = publisher._Editor(page, cfg)
+        if ok:
+            ed.attach_file(pdf)
+            assert page.locator(".se-component.se-file").count() == 1
+        else:
+            with pytest.raises(publisher.PublishError):
+                ed.attach_file(pdf)
+            assert "se-popup-file" in (ed.file_popup_html or "")
+            assert not page.locator(".se-popup-file").is_visible()
+            page.locator(".se-text-paragraph").last.click(timeout=3_000)   # 창이 닫혀 본문을 누를 수 있다
+        browser.close()
