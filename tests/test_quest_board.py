@@ -347,3 +347,9 @@ def test_diag_collects_log_tail_and_claude_last_answer(tmp_path):
                                         + "\n--- stderr ---\n", encoding="utf-8")
     text = diag.build("edu_series", "2026-11-23", root=tmp_path)
     assert "실패: post.json 없음" in text and "원문을 열 수 없어" in text and "turns=40" in text
+
+
+def test_remote_tistory_rerun_slot_only():
+    from quest_board import requests as rq
+    assert rq.command({"action": "tistory_rerun", "slot": 2})[-3:] == ["run", "--slot", "2"]
+    assert rq.command({"action": "tistory_rerun", "slot": "1; rm"}) is None

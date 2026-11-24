@@ -79,6 +79,23 @@
       "id": "2026-11-24-market-rerun",
       "action": "rerun",
       "profile": "market"
+    },
+    {
+      "id": "2026-11-24-invest-diag",
+      "action": "diag",
+      "profile": "invest",
+      "day": "2026-11-24"
+    },
+    {
+      "id": "2026-11-24-worksheet-diag",
+      "action": "diag",
+      "profile": "worksheet",
+      "day": "2026-11-24"
+    },
+    {
+      "id": "2026-11-24-tistory-rerun-1",
+      "action": "tistory_rerun",
+      "slot": 1
     }
   ]
 }
