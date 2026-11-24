@@ -42,6 +42,9 @@ def command(req: dict) -> list[str] | None:
     # 무료 활동지를 전날 밤 미리 만들기(설계·원화·검수). 그날 나눔글이 그대로 쓴다
     if req.get("action") == "worksheet_prepare" and _is_day(req.get("day")):
         return [sys.executable, "-m", "worksheets", "prepare", "--day", req["day"]]
+    # 티스토리 그날 글 다시 쓰기(1편째·2편째)
+    if req.get("action") == "tistory_rerun" and req.get("slot") in (1, 2):
+        return [sys.executable, "-m", "tistory_autopost", "run", "--slot", str(req["slot"])]
     if req.get("action") == "rerun" and req.get("profile") in PROFILES:
         return [sys.executable, "-m", "naver_autopost", "run", "--profile", req["profile"]]
     return None
