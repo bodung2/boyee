@@ -111,6 +111,12 @@
       "id": "2026-11-24-tistory-rerun-2",
       "action": "tistory_rerun",
       "slot": 2
+    },
+    {
+      "id": "2026-11-24-worksheet-diag-2",
+      "action": "diag",
+      "profile": "worksheet",
+      "day": "2026-11-24"
     }
   ]
 }
