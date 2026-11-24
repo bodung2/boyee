@@ -48,6 +48,12 @@
       "id": "2026-11-24-worksheet-prepare",
       "action": "worksheet_prepare",
       "day": "2026-11-24"
+    },
+    {
+      "id": "2026-11-24-edu-diag",
+      "action": "diag",
+      "profile": "edu",
+      "day": "2026-11-24"
     }
   ]
 }
