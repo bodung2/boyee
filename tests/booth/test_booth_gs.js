@@ -8,7 +8,7 @@ const CODE = fs.readFileSync(path.join(__dirname, '..', '..', 'booth', 'apps_scr
 
 function load(opts) {
   opts = opts || {};
-  const fake = { props: {}, files: {}, sheets: [], locks: 0, lockBusy: false, now: Date.parse('2026-11-28T01:00:00Z'), shareFails: !!opts.shareFails };
+  const fake = { props: {}, cache: {}, propOps: 0, files: {}, sheets: [], locks: 0, lockBusy: false, now: Date.parse('2026-11-28T01:00:00Z'), shareFails: !!opts.shareFails };
   let seq = 0;
   function Sheet() { this.data = []; }
   Sheet.prototype = {
@@ -43,7 +43,10 @@ function load(opts) {
   const folders = {};
   const globals = {
     PropertiesService: { getScriptProperties: () => ({
-      getProperty: k => (k in fake.props ? fake.props[k] : null), setProperty: (k, v) => { fake.props[k] = String(v); } }) },
+      getProperty: k => { fake.propOps++; return k in fake.props ? fake.props[k] : null; },
+      setProperty: (k, v) => { fake.propOps++; fake.props[k] = String(v); } }) },
+    CacheService: { getScriptCache: () => ({
+      get: k => (k in fake.cache ? fake.cache[k] : null), put: (k, v) => { fake.cache[k] = String(v); } }) },
     SpreadsheetApp: {
       create() { const b = new Book(); books[b.id] = b; return b; },
       openById(id) { if (!books[id]) throw new Error('no book'); return books[id]; }
@@ -202,7 +205,31 @@ test('기다리는 그림이 없으면 잠그지 않고, 잠금이 바쁘면 기
   assert.equal(gas.getStatus(a.id).status, '대기');
   fake.lockBusy = false;
   assert.equal(post(gas, { token: T, action: 'claim' }).job.id, a.id);
-  assert.equal(post(gas, { token: T, action: 'ping' }).api, 3);
+  assert.equal(post(gas, { token: T, action: 'ping' }).api, 4);
+});
+
+test('집 PC와 아이 폰이 계속 물어도 저장값(하루 5만 번 한도)은 거의 쓰지 않는다', () => {
+  const { gas, fake } = load();
+  gas.setupBooth();
+  const T = fake.props.BOOTH_TOKEN;
+  post(gas, { token: T, action: 'ping', padletUrl: 'https://padlet.com/t/b-abc123' });
+  const a = gas.submitDrawing({ nickname: '곰', style: 'clay', image: IMG });
+  fake.propOps = 0;
+  for (let i = 0; i < 200; i++) { post(gas, { token: T, action: 'claim' }); gas.getStatus(a.id); }
+  assert.ok(fake.propOps <= 2, 'propOps=' + fake.propOps);
+  assert.equal(gas.getStatus(a.id).workerOnline, true);
+  assert.equal(gas.getStatus(a.id).padletUrl, 'https://padlet.com/t/b-abc123');
+});
+
+test('캐시가 비어도(6시간 지남) 저장값에서 다시 읽어 그대로 동작한다', () => {
+  const { gas, fake } = load();
+  gas.setupBooth();
+  const T = fake.props.BOOTH_TOKEN;
+  fake.cache = {};
+  assert.equal(post(gas, { token: T, action: 'ping' }).ok, true);
+  const a = gas.submitDrawing({ nickname: '곰', style: 'clay', image: IMG });
+  assert.equal(gas.getStatus(a.id).status, '대기');
+  assert.equal(fake.sheets.length, 1);
 });
 
 let failed = 0;
