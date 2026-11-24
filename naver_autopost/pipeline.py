@@ -369,7 +369,9 @@ def produce(cfg: Config, today: str, out_dir: Path, place: "places.Folder | None
             return post
 
     feedback = ""
-    resume = _stage(out_dir).get("written") and (out_dir / "post.json").exists()
+    stage0 = _stage(out_dir)
+    # 글을 이미 썼거나, 활동지(무료 활동지 나눔)를 이미 만들어 둔 폴더는 버리지 않고 이어서 한다
+    resume = (stage0.get("written") and (out_dir / "post.json").exists()) or bool(stage0.get("worksheet"))
     deadline = datetime.now(KST) + timedelta(minutes=cfg.limit_wait_max_min)
     for attempt in range(1, cfg.max_attempts + 1):
         if not resume and out_dir.exists() and any(out_dir.iterdir()):

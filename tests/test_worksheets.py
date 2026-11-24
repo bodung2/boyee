@@ -576,3 +576,20 @@ def test_attempt_uses_set_prepared_the_night_before(cfg, monkeypatch):
         pipeline._attempt(cfg, "2026-11-24", out, "")
     assert (out / "worksheet_p1.png").exists() and not ready.exists()
     assert json.loads((out / "stage.json").read_text())["worksheet"] is True
+
+
+def test_produce_keeps_worksheet_folder_after_writer_failure(cfg, monkeypatch):
+    out = cfg.output_dir / "2026-11-24"
+    out.mkdir(parents=True)
+    (out / "worksheet.json").write_text("{}", encoding="utf-8")
+    (out / "stage.json").write_text(json.dumps({"worksheet": True}), encoding="utf-8")
+    seen = {}
+
+    def fake_attempt(c, today, out_dir, feedback, resume=False, place=None):
+        seen["resume"] = resume
+        raise pipeline.Rejected("그만")
+    monkeypatch.setattr(pipeline, "_attempt", fake_attempt)
+    monkeypatch.setattr(c := cfg, "max_attempts", 1)
+    with pytest.raises(RuntimeError):
+        pipeline.produce(cfg, "2026-11-24", out)
+    assert seen["resume"] is True

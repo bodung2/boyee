@@ -54,6 +54,31 @@
       "action": "diag",
       "profile": "edu",
       "day": "2026-11-24"
+    },
+    {
+      "id": "2026-11-24-edu-rerun",
+      "action": "rerun",
+      "profile": "edu"
+    },
+    {
+      "id": "2026-11-24-invest-rerun",
+      "action": "rerun",
+      "profile": "invest"
+    },
+    {
+      "id": "2026-11-24-childhood-rerun",
+      "action": "rerun",
+      "profile": "childhood"
+    },
+    {
+      "id": "2026-11-24-worksheet-rerun",
+      "action": "rerun",
+      "profile": "worksheet"
+    },
+    {
+      "id": "2026-11-24-market-rerun",
+      "action": "rerun",
+      "profile": "market"
     }
   ]
 }
