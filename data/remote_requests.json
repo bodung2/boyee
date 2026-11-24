@@ -117,6 +117,12 @@
       "action": "diag",
       "profile": "worksheet",
       "day": "2026-11-24"
+    },
+    {
+      "id": "2026-11-24-worksheet-rerun-3",
+      "action": "rerun",
+      "profile": "worksheet",
+      "day": "2026-11-24"
     }
   ]
 }
