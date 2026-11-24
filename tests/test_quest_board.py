@@ -333,6 +333,8 @@ def test_remote_diag_and_rerun_requests_are_whitelisted():
     assert rq.command({"action": "diag", "profile": "edu_series", "day": "today; rm -rf"}) is None
     assert rq.command({"action": "rerun", "profile": "edu_series"})[-3:] == ["run", "--profile", "edu_series"]
     assert rq.command({"action": "rerun", "profile": "../x"}) is None
+    assert rq.command({"action": "rerun", "profile": "worksheet", "day": "2026-11-24"})[-2:] == ["--day", "2026-11-24"]
+    assert "--day" not in rq.command({"action": "rerun", "profile": "worksheet", "day": "x; rm"})
 
 
 def test_diag_collects_log_tail_and_claude_last_answer(tmp_path):

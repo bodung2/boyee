@@ -38,6 +38,7 @@ SELECTORS = {
                     "button[data-log*='file']"],
     "file_from_pc": ["button:has-text('내 PC')", ".se-popup-button-pc", "li:has-text('내 PC') button"],
     "file_component": [".se-component.se-file"],
+    "file_popup": [".se-popup-file"],
     "publish_open": ["button[class*='publish_btn']", "button:has-text('발행')"],
     "tag_input": ["input#tag-input", "input[placeholder*='태그']"],
     "category_open": ["button[class*='selectbox_button']", "button[aria-label*='카테고리']"],
@@ -156,6 +157,7 @@ class _Editor:
         self.page = page
         self.cfg = cfg
         self.image_debug: dict | None = None
+        self.file_popup_html: str | None = None
 
     @property
     def scopes(self) -> list[Page | Frame]:
@@ -263,10 +265,72 @@ class _Editor:
                 self.find("file_button").first.click()
             chooser = fc.value
         except PlaywrightTimeout:
-            with self.page.expect_file_chooser(timeout=10_000) as fc:
-                self.find("file_from_pc", timeout=5_000).first.click()
-            chooser = fc.value
+            chooser = self._choose_from_file_popup(path)
+            if chooser is None:     # 작은 창 안의 파일 입력칸에 바로 넣었다
+                self._wait_attached(comp, before, path)
+                return
         chooser.set_files(str(path))
+        self._wait_attached(comp, before, path)
+
+    def _file_popup(self) -> Locator | None:
+        for scope in self.scopes:
+            pop = scope.locator(SELECTORS["file_popup"][0])
+            if pop.count() and pop.first.is_visible():
+                return pop.first
+        return None
+
+    def _choose_from_file_popup(self, path: Path):
+        """'파일' 단추가 띄운 작은 창(se-popup-file)에서 내 PC 파일을 고른다. 창 구조를 몰라도 되게
+        ① 알려진 '내 PC' 단추 ② 창 안 파일 입력칸 ③ 창 안 단추를 차례로 눌러 본다. 다 안 되면 창 구조를 남기고 창을 닫는다."""
+        self.page.wait_for_timeout(800)
+        pop = self._file_popup()
+        try:
+            with self.page.expect_file_chooser(timeout=6_000) as fc:
+                self.find("file_from_pc", timeout=3_000).first.click()
+            return fc.value
+        except Exception:  # noqa: BLE001
+            pass
+        if pop is not None:
+            inputs = pop.locator("input[type='file']")
+            if inputs.count():
+                inputs.first.set_input_files(str(path))
+                return None
+            buttons = pop.locator("button:visible")
+            for i in range(min(buttons.count(), 4)):
+                b = buttons.nth(i)
+                label = (b.inner_text(timeout=1_000) or "") + " " + (b.get_attribute("class") or "")
+                if re.search(r"close|cancel|닫기|취소|MYBOX|마이박스", label, re.I):
+                    continue
+                try:
+                    with self.page.expect_file_chooser(timeout=6_000) as fc:
+                        b.click(timeout=3_000)
+                    return fc.value
+                except Exception:  # noqa: BLE001
+                    continue
+            try:
+                self.file_popup_html = pop.evaluate("e => e.outerHTML")[:20000]
+            except Exception:  # noqa: BLE001
+                pass
+        self.close_popups()
+        raise PublishError("파일 첨부 창에서 '내 PC'를 찾지 못했습니다")
+
+    def close_popups(self) -> None:
+        """열린 편집기 작은 창(파일 첨부 등)을 닫는다. 남아 있으면 본문 클릭을 모두 가로막는다."""
+        for _ in range(3):
+            if self._file_popup() is None and not any(
+                    sc.locator(".se-popup-dim:visible").count() for sc in self.scopes):
+                return
+            for scope in self.scopes:
+                btn = scope.locator(".se-popup:visible .se-popup-close-button, .se-popup:visible button[class*='close']")
+                if btn.count():
+                    try:
+                        btn.first.click(timeout=2_000)
+                    except Exception:  # noqa: BLE001
+                        pass
+            self.page.keyboard.press("Escape")
+            self.page.wait_for_timeout(500)
+
+    def _wait_attached(self, comp: str, before: int, path: Path) -> None:
         deadline = time.time() + 90
         while self.scopes[0].locator(comp).count() <= before:
             if time.time() > deadline:
@@ -443,6 +507,11 @@ def _publish(page: Page, cfg: Config, post: dict, images: dict[str, Path], dry_r
                 log.warning("PDF 첨부 실패(드라이브 주소로 대신): %s", e)
                 post["_attached"] = False
                 _shot(page, cfg, "attach-failed")
+                if getattr(ed, "file_popup_html", None):
+                    dbg_dir = diag_dir or cfg.log_dir
+                    dbg_dir.mkdir(parents=True, exist_ok=True)
+                    (dbg_dir / "file_popup.html").write_text(ed.file_popup_html, encoding="utf-8")
+                ed.close_popups()
                 if post.get("worksheet_pdf_url"):
                     ed.move_to_end()
                     page.keyboard.insert_text(post["worksheet_pdf_url"])

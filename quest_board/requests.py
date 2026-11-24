@@ -46,7 +46,8 @@ def command(req: dict) -> list[str] | None:
     if req.get("action") == "tistory_rerun" and req.get("slot") in (1, 2):
         return [sys.executable, "-m", "tistory_autopost", "run", "--slot", str(req["slot"])]
     if req.get("action") == "rerun" and req.get("profile") in PROFILES:
-        return [sys.executable, "-m", "naver_autopost", "run", "--profile", req["profile"]]
+        day = ["--day", req["day"]] if _is_day(req.get("day")) else []   # 자정 넘어 전날 글을 이어 쓸 때
+        return [sys.executable, "-m", "naver_autopost", "run", "--profile", req["profile"], *day]
     return None
 
 
