@@ -24,7 +24,7 @@ from .config import BoothConfig
 from .convert import convert, fake_convert
 
 log = logging.getLogger("booth")
-NEED_API = 3                      # Code.gs의 BOOTH_API가 이보다 작으면 다시 붙여 넣으라고 알린다
+NEED_API = 4                      # Code.gs의 BOOTH_API가 이보다 작으면 다시 붙여 넣으라고 알린다
 
 
 def _setup_logging(cfg: BoothConfig) -> None:

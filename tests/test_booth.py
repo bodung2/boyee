@@ -1,5 +1,6 @@
 """캐릭터 공방(부스): 스타일 목록 일치, 프롬프트, 노트북 일꾼 흐름, 인쇄 사진, 패들렛 요청, Codex 참고 그림."""
 import base64
+import sys
 import io
 import json
 import re
@@ -392,3 +393,12 @@ def test_failed_padlet_posts_are_kept_and_retried(tmp_path):
     assert [s for s, _ in posted] == ["별빛토끼의 캐릭터 · 양모펠트 인형", "곰의 캐릭터 · 양모펠트 인형"]
     assert json.loads((cfg.out_dir / "padlet_pending.json").read_text(encoding="utf-8")) == []
     assert ("mark", "j2", {"padlet": "ok"}) in srv.calls
+
+
+def test_winkeep_is_safe_off_windows_and_clears_quick_edit_bit():
+    from booth import winkeep
+    if sys.platform != "win32":
+        assert winkeep.keep_awake() is False and winkeep.disable_quick_edit() is False
+        winkeep.allow_sleep()
+    mode = winkeep.no_quick_edit_mode(0x01F7)                 # 흔한 콘솔 기본값(빠른 편집 켜짐)
+    assert not mode & winkeep.ENABLE_QUICK_EDIT_MODE and mode & winkeep.ENABLE_EXTENDED_FLAGS

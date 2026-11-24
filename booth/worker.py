@@ -15,7 +15,7 @@ from PIL import Image
 
 from naver_autopost.openai_client import CodexAccountError
 
-from . import padlet, printer
+from . import padlet, printer, winkeep
 from .client import Server
 from .config import BoothConfig
 from .convert import NotADrawing
@@ -196,6 +196,10 @@ class Booth:
 
 def run(cfg: BoothConfig, server: Server, convert_fn, once: bool = False) -> None:
     booth = Booth(cfg, server, convert_fn)
+    if winkeep.keep_awake():
+        log.info("이 창이 켜져 있는 동안 PC가 절전 모드로 들어가지 않습니다(화면은 꺼져도 됩니다)")
+    if winkeep.disable_quick_edit():
+        log.info("창 안을 눌러도 멈추지 않게 했습니다")
     try:
         done, left = booth.retry_padlet()
         if done or left:
@@ -214,3 +218,5 @@ def run(cfg: BoothConfig, server: Server, convert_fn, once: bool = False) -> Non
     except KeyboardInterrupt:
         log.info("멈춥니다(지금 그리던 그림은 12분 뒤 자동으로 대기열에 돌아갑니다)")
         stop.set()
+    finally:
+        winkeep.allow_sleep()
