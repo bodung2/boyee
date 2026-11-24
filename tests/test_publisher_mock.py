@@ -271,3 +271,44 @@ def test_publish_handles_naver_dialogs(tmp_path, monkeypatch, script, ok):
                 publisher._publish(page, cfg, post, _plain_images(tmp_path), dry_run=False)
             assert "발행할 수 없는 내용" in str(e.value) and not isinstance(e.value, publisher.PublishUncertain)
         browser.close()
+
+
+def test_launch_waits_while_profile_busy(tmp_path):
+    """같은 프로필을 다른 작업이 쓰는 중이면 닫혀 버린다 → 기다렸다 다시 연다(2026-11-24 다시 쓰기 동시 실행)."""
+    from types import SimpleNamespace
+    from naver_autopost import publisher
+
+    calls, slept = [], []
+
+    class Chromium:
+        def launch_persistent_context(self, **kw):
+            calls.append(kw.get("channel"))
+            if len(calls) <= 4:
+                raise RuntimeError("BrowserType.launch_persistent_context: Target page, context or browser has been closed")
+            return "ctx"
+    p = SimpleNamespace(chromium=Chromium())
+    cfg = SimpleNamespace(profile_dir=tmp_path / "prof", browser_channel="chrome")
+    assert publisher._launch(p, cfg, headless=True, sleep=slept.append) == "ctx"
+    assert calls == ["chrome", None, "chrome", None, "chrome"] and len(slept) == 2
+
+
+def test_launch_gives_up_on_other_errors_and_after_limit(tmp_path):
+    from types import SimpleNamespace
+    import pytest
+    from naver_autopost import publisher
+
+    class Chromium:
+        def __init__(self, msg):
+            self.msg = msg
+
+        def launch_persistent_context(self, **kw):
+            raise RuntimeError(self.msg)
+    cfg = SimpleNamespace(profile_dir=tmp_path / "prof", browser_channel="")
+    slept = []
+    with pytest.raises(RuntimeError, match="Executable"):
+        publisher._launch(SimpleNamespace(chromium=Chromium("Executable doesn't exist")), cfg, True, sleep=slept.append)
+    assert slept == []
+    with pytest.raises(RuntimeError, match="closed"):
+        publisher._launch(SimpleNamespace(chromium=Chromium("browser has been closed")), cfg, True,
+                          wait_sec=180, sleep=slept.append)
+    assert len(slept) == 3

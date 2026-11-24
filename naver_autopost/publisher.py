@@ -65,7 +65,28 @@ class PublishUncertain(PublishError):
     """발행 버튼을 누른 뒤의 실패. 중복 발행 위험이 있어 재시도하지 않는다."""
 
 
-def _launch(p, cfg: Config, headless: bool) -> BrowserContext:
+# 같은 브라우저 프로필(로그인 세션)을 다른 작업이 쓰고 있으면 크롬이 '기존 브라우저 세션에서 여는 중'이라며
+# 바로 닫힌다(예: 같은 블로그를 쓰는 유아 글·활동지 나눔글 다시 쓰기를 한꺼번에 돌릴 때). 그때는 앞 작업이 끝나길 기다린다.
+PROFILE_WAIT_SEC = 45 * 60
+PROFILE_RETRY_SEC = 60
+
+
+def _profile_busy(err: Exception) -> bool:
+    text = str(err)
+    return "has been closed" in text or "ProcessSingleton" in text or "SingletonLock" in text
+
+
+def _launch_once(p, cfg: Config, kwargs: dict) -> BrowserContext:
+    if cfg.browser_channel:
+        try:
+            return p.chromium.launch_persistent_context(channel=cfg.browser_channel, **kwargs)
+        except Exception as e:  # 크롬 미설치 등 → Playwright 내장 Chromium으로
+            log.warning("브라우저 채널 '%s' 실행 실패(%s). 내장 Chromium을 씁니다.", cfg.browser_channel,
+                        str(e).splitlines()[0] if str(e) else e)
+    return p.chromium.launch_persistent_context(**kwargs)
+
+
+def _launch(p, cfg: Config, headless: bool, wait_sec: float | None = None, sleep=time.sleep) -> BrowserContext:
     cfg.profile_dir.mkdir(parents=True, exist_ok=True)
     kwargs = dict(
         user_data_dir=str(cfg.profile_dir),
@@ -75,12 +96,17 @@ def _launch(p, cfg: Config, headless: bool) -> BrowserContext:
         viewport={"width": 1400, "height": 1000},
         permissions=["clipboard-read", "clipboard-write"],
     )
-    if cfg.browser_channel:
+    waited, limit = 0.0, PROFILE_WAIT_SEC if wait_sec is None else wait_sec
+    while True:
         try:
-            return p.chromium.launch_persistent_context(channel=cfg.browser_channel, **kwargs)
-        except Exception as e:  # 크롬 미설치 등 → Playwright 내장 Chromium으로
-            log.warning("브라우저 채널 '%s' 실행 실패(%s). 내장 Chromium을 씁니다.", cfg.browser_channel, e)
-    return p.chromium.launch_persistent_context(**kwargs)
+            return _launch_once(p, cfg, kwargs)
+        except Exception as e:
+            if waited >= limit or not _profile_busy(e):
+                raise
+            log.info("브라우저 프로필(%s)을 다른 작업이 쓰는 중입니다. %d초 뒤 다시 엽니다(%d분째 기다림).",
+                     cfg.profile_dir.name, PROFILE_RETRY_SEC, waited // 60)
+            sleep(PROFILE_RETRY_SEC)
+            waited += PROFILE_RETRY_SEC
 
 
 def _logged_in(ctx: BrowserContext) -> bool:
