@@ -19,6 +19,7 @@
   --accent:#e8483b;--card:light-dark(#fffaf0,#2f2013);--line:light-dark(#e6cfa8,#4d3826)}
 :root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
 *{box-sizing:border-box;min-width:0}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Gowun Dodum",system-ui,sans-serif;overflow-x:clip;min-height:100vh}
 button{font:inherit;color:inherit;cursor:pointer}
 button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
@@ -72,6 +73,10 @@ tr.me td{background:light-dark(#fff1c2,#4a3410)}
 .r1{background:#f7c531;color:#2b1a0e}.r2{background:#cfd6dd;color:#2b1a0e}.r3{background:#e39a5b;color:#2b1a0e}
 .del{border:0;background:transparent;color:var(--soft);min-height:36px;font-size:14px;text-decoration:underline}
 .note{font-size:14px;color:var(--soft)}
+.codebox{margin:16px 0 4px;padding:12px;border-radius:14px;background:var(--wood)}
+.codebox .note{margin:0 0 8px;color:var(--ink)}
+.codebox input{flex:1 1 220px;font-size:17px;min-height:44px;font-family:ui-monospace,monospace;background:var(--card)}
+textarea{font:16px/1.4 ui-monospace,monospace;width:100%;padding:12px;border-radius:14px;border:2px solid var(--line);background:var(--bg);color:var(--ink);resize:vertical}
 .confetti{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:6}
 .confetti i{position:absolute;top:-20px;width:12px;height:12px;animation:fall 1.8s ease-in forwards}
 @keyframes fall{to{transform:translateY(110vh) rotate(540deg)}}
@@ -116,6 +121,8 @@ tr.me td{background:light-dark(#fff1c2,#4a3410)}
   <div class="big" id="winTime">0:00</div>
   <p id="winMsg"></p>
   <div class="row"><button class="btn go" id="bNext" type="button">다음 단계</button><button class="btn" id="bAgain" type="button">한 번 더</button><button class="btn" id="bWinBoard" type="button">순위표</button><button class="btn go" id="bWinName" type="button" hidden>이름 넣고 기록하기</button></div>
+  <div class="codebox" id="codeBox1" hidden><p class="note">이 기록 코드를 선생님께 보내 주세요. 놀이를 마칠 때 마지막 코드 하나만 보내면 돼요.</p>
+    <div class="row"><input type="text" class="code" id="codeTxt1" readonly aria-label="기록 코드"><button class="btn" type="button" data-copy="codeTxt1">복사</button></div></div>
 </div></div>
 
 <div class="dlg" id="dlgStages" role="dialog" aria-modal="true" aria-labelledby="hStages"><div class="card">
@@ -130,7 +137,17 @@ tr.me td{background:light-dark(#fff1c2,#4a3410)}
   <p class="note" id="boardNote"></p>
   <table><thead><tr><th>순위</th><th>이름</th><th class="num">단계</th><th class="num">걸린 시간</th><th></th></tr></thead><tbody id="boardRows"></tbody></table>
   <p class="note">많은 단계를 깬 사람이 앞, 같으면 성공한 단계의 최고 기록을 더한 시간이 짧은 사람이 앞이에요.</p>
-  <button class="btn" type="button" data-close>닫기</button>
+  <div class="codebox" id="codeBox2" hidden><p class="note">이 기록 코드를 선생님께 보내 주세요. 놀이를 마칠 때 마지막 코드 하나만 보내면 돼요.</p>
+    <div class="row"><input type="text" class="code" id="codeTxt2" readonly aria-label="기록 코드"><button class="btn" type="button" data-copy="codeTxt2">복사</button></div></div>
+  <div class="row"><button class="btn go" id="bCodes" type="button" hidden>기록 코드 받기</button><button class="btn" type="button" data-close>닫기</button></div>
+</div></div>
+
+<div class="dlg" id="dlgCodes" role="dialog" aria-modal="true" aria-labelledby="hCodes"><div class="card">
+  <h2 id="hCodes">기록 코드 받기</h2>
+  <p>아이들이 보낸 기록 코드를 붙여 넣으세요. 단톡방 대화를 통째로 복사해 넣어도 코드만 골라내요. 같은 이름은 더 좋은 기록만 남아요.</p>
+  <textarea id="codeIn" rows="7" placeholder="[칠교:하늘:12:340:K7QM]"></textarea>
+  <p class="note" id="codeRes" aria-live="polite"></p>
+  <div class="row"><button class="btn go" id="bApply" type="button">순위표에 올리기</button><button class="btn" id="bCodesBack" type="button">순위표 보기</button></div>
 </div></div>
 
 <script>
@@ -175,7 +192,8 @@ const store = {
 };
 let players = store.get('players', {});       // 이름 → {name,best:{n:초},hints:{n:개}}
 let me = store.get('current', null);
-let db = null, remoteRows = null, writing = Promise.resolve(), canWrite = true;
+let db = null, remoteRows = null, writing = Promise.resolve(), canWrite = true, writer = null;
+const isWriter = () => !!db && canWrite && writer !== false;   // 이 화면이 공유 순위표에 직접 쓸 수 있는가
 const docId = name => 'p' + Array.from(new TextEncoder().encode(name), b => b.toString(16).padStart(2,'0')).join('');
 function summary(pl){
   const best = pl.best || {}; let cleared = 0; while (best[cleared+1] != null) cleared++;
@@ -206,6 +224,11 @@ async function pullRemote(name){
 }
 function connectDb(){
   if (!window.claude || typeof window.claude.use !== 'function') return setBoardNote();
+  window.claude.use('user').then(async u => {
+    if (!u || typeof u.can !== 'function') return;
+    try { const w = await u.can('data.write'); if (w === true || w === false) writer = w; } catch {}
+    setBoardNote();
+  }).catch(() => {});
   window.claude.use('db').then(d => {
     db = d; setBoardNote();
     if (!db) return;
@@ -222,8 +245,68 @@ function setBoardNote(){
   $('boardNote').textContent = !db ? '이 기기에서 놀이한 친구들의 기록이에요. (claude.ai에 로그인하면 모두의 순위표가 보여요)'
     : canWrite ? '이 놀이판을 여는 모든 친구의 기록이 함께 보여요.'
     : '모두의 순위표를 보고 있어요. 이 계정의 기록은 이 기기에만 저장돼 다른 사람에게는 보이지 않아요.';
-  $('nameNote').textContent = db ? '순위표는 이 놀이판을 함께 쓰는 사람에게 보여요. 별명을 써도 좋아요.' : '';
+  $('nameNote').textContent = '순위표는 이 놀이판을 함께 쓰는 사람에게 보여요. 별명을 써도 좋아요.';
+  if (!isWriter()) $('boardNote').textContent = (db ? '모두의 순위표와 이 기기 기록을 함께 보여요.' : '이 기기에서 놀이한 친구들의 기록이에요.') + ' 내 기록을 모두의 순위표에 올리려면 아래 기록 코드를 선생님께 보내 주세요.';
+  refreshCodes();
 }
+
+// ---------- 기록 코드: 공유 순위표에 직접 못 쓰는 아이 → 선생님이 받아 올린다 ----------
+function check4(str){ // 숫자를 고친 코드를 걸러 내는 확인 글자 4개
+  let h = 0x811c9dc5;
+  for (const ch of str) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let o = '';
+  for (let i = 0; i < 4; i++) { o += A[h & 31]; h >>>= 5; }
+  return o;
+}
+const salt = 'tangram-board-2026';
+function codeFor(name){
+  const sm = summary(players[name] || {best:{}});
+  if (!sm.cleared) return '';
+  return `[칠교:${name}:${sm.cleared}:${sm.total}:${check4(name + '|' + sm.cleared + '|' + sm.total + '|' + salt)}]`;
+}
+function parseCodes(text){
+  const out = {}; let ok = 0, bad = 0;
+  for (const m of String(text).matchAll(/\[칠교:([^:\[\]]{1,12}):(\d{1,3}):(\d{1,7}):([A-Z0-9]{4})\]/g)) {
+    const name = m[1].trim(), cleared = +m[2], total = +m[3];
+    if (!name || cleared < 1 || cleared > LEVELS.length || check4(name + '|' + cleared + '|' + total + '|' + salt) !== m[4]) { bad++; continue; }
+    ok++; out[name] = better(out[name], {name, cleared, total});
+  }
+  return {recs: Object.values(out), ok, bad};
+}
+function refreshCodes(){
+  const code = me ? codeFor(me) : '', show = !!code && !isWriter();
+  for (const i of [1, 2]) { $('codeBox' + i).hidden = !show; $('codeTxt' + i).value = code; }
+  $('bCodes').hidden = !isWriter();
+}
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-copy]'); if (!b) return;
+  const inp = $(b.dataset.copy);
+  try { await navigator.clipboard.writeText(inp.value); b.textContent = '복사됨'; }
+  catch { inp.select(); b.textContent = '길게 눌러 복사'; }
+  setTimeout(() => { b.textContent = '복사'; }, 2000);
+});
+$('bCodes').onclick = () => { $('codeRes').textContent = ''; openDlg('dlgCodes'); };
+$('bCodesBack').onclick = () => openBoard();
+$('bApply').onclick = async () => {
+  const {recs, ok, bad} = parseCodes($('codeIn').value);
+  if (!ok) { $('codeRes').textContent = bad ? '맞는 코드가 없어요(잘못된 코드 ' + bad + '개).' : '기록 코드를 찾지 못했어요. [칠교:…] 모양의 코드를 붙여 넣어 주세요.'; return; }
+  if (!isWriter()) { $('codeRes').textContent = '이 화면에서는 공유 순위표에 쓸 수 없어요. 선생님 계정으로 열어 주세요.'; return; }
+  $('bApply').disabled = true;
+  let up = 0, same = 0, fail = 0;
+  const byName = {}; for (const r of remoteRows || []) byName[r.name] = r;
+  for (const rec of recs) {
+    const old = byName[rec.name], oldS = old ? rowOf(old) : null;
+    if (oldS && better(oldS, rec) === oldS) { same++; continue; }
+    try {
+      await db.doc('scores/' + docId(rec.name)).set({...(old || {}), name: rec.name, cleared: rec.cleared, total: rec.total, updated: new Date().toISOString(), via: 'code'});
+      up++;
+    } catch (err) { fail++; if (err && err.code === 'invalid_argument') { canWrite = false; break; } }
+  }
+  $('bApply').disabled = false;
+  $('codeRes').textContent = `코드 ${ok}개 확인: ${up}명 올림` + (same ? `, ${same}명은 이미 같거나 더 좋은 기록` : '') + (bad ? `, 잘못된 코드 ${bad}개` : '') + (fail ? `, ${fail}명 저장 실패` : '') + '.';
+  if (up && !fail) $('codeIn').value = '';
+  setBoardNote();
+};
 
 // ---------- 단계 준비 ----------
 let LV, slots, pieces, layout, sel = null, startT = 0, hintsUsed = 0, solved = false, samples, outlineAnchors;
@@ -438,6 +521,7 @@ function win(){
   else { msg = '이름을 넣으면 이 기록이 순위표에 올라가요.'; pendingWin = {n, sec, hints: hintsUsed}; }
   if (hintsUsed) msg += ' 힌트 ' + hintsUsed + '번.';
   $('bWinName').hidden = !!me;
+  refreshCodes();
   $('hWin').textContent = n === LEVELS.length ? '100단계 모두 성공!' : n + '단계 성공!';
   $('winTime').textContent = fmt(sec);
   $('winMsg').textContent = msg;
@@ -488,12 +572,12 @@ function openName(){
 $('names').addEventListener('click', e => { const b = e.target.closest('[data-n]'); if (b) { $('iName').value = b.dataset.n; $('fName').requestSubmit(); } });
 $('fName').addEventListener('submit', e => {
   e.preventDefault();
-  const name = $('iName').value.replace(/\s+/g, ' ').trim().slice(0, 12);
+  const name = $('iName').value.replace(/[:\[\]]/g, '').replace(/\s+/g, ' ').trim().slice(0, 12);
   if (!name) { $('iName').focus(); return; }
   me = name; store.set('current', me);
   if (!players[me]) { players[me] = {name: me, best:{}, hints:{}}; store.set('players', players); }
   if (pendingWin) { record(me, pendingWin.n, pendingWin.sec, pendingWin.hints); pendingWin = null; }
-  closeDlg(); pullRemote(me);
+  closeDlg(); pullRemote(me); refreshCodes();
   const s = summary(players[me]);
   loadLevel(Math.min(LEVELS.length, s.cleared + 1));
 });
@@ -508,11 +592,17 @@ function openStages(){
 }
 $('stageGrid').addEventListener('click', e => { const b = e.target.closest('[data-s]'); if (b && !b.disabled) { closeDlg(); loadLevel(+b.dataset.s); } });
 
+function better(a, b){ if (!a) return b; if (!b) return a; return (b.cleared > a.cleared || (b.cleared === a.cleared && b.total < a.total)) ? b : a; }
+const num = v => Number.isFinite(+v) && +v >= 0 ? Math.floor(+v) : 0;
+function rowOf(r){ // 공유 기록 하나: 단계별 기록(best)과 코드로 받은 숫자 중 더 좋은 쪽
+  const a = r.best && typeof r.best === 'object' ? {name: r.name, ...summary({best: r.best})} : null;
+  return better(a, {name: r.name, cleared: Math.min(LEVELS.length, num(r.cleared)), total: num(r.total)});
+}
 function boardRows(){ // 공유 순위표 + 이 기기 기록(공유 순위표에 못 쓰는 방문자도 자기 기록은 보이게)
-  const best = {};
-  for (const r of remoteRows || []) best[r.name] = mergeBest(best[r.name], r.best);
-  for (const p of Object.values(players)) best[p.name] = mergeBest(best[p.name], p.best);
-  return Object.keys(best).map(name => ({name, ...summary({best: best[name]})}));
+  const m = {};
+  for (const r of remoteRows || []) if (r.name.length <= 24) m[r.name] = better(m[r.name], rowOf(r));
+  for (const p of Object.values(players)) m[p.name] = better(m[p.name], {name: p.name, ...summary(p)});
+  return Object.values(m);
 }
 let delArm = null;
 function renderBoard(){
@@ -533,7 +623,7 @@ $('boardRows').addEventListener('click', async e => {
   if (db) { try { await db.doc('scores/' + docId(name)).delete(); } catch (err) { $('boardNote').textContent = '공유 순위표에서 지우지 못했어요(' + (err && err.code || '오류') + ').'; } }
   renderBoard();
 });
-function openBoard(){ delArm = null; renderBoard(); openDlg('dlgBoard'); }
+function openBoard(){ delArm = null; renderBoard(); refreshCodes(); openDlg('dlgBoard'); }
 
 $('bName').onclick = openName; $('bWinName').onclick = openName; $('bStages').onclick = openStages; $('bBoard').onclick = openBoard; $('bWinBoard').onclick = openBoard;
 $('bNext').onclick = () => { closeDlg(); loadLevel(LV.n + 1); };
