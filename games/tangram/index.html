@@ -175,7 +175,7 @@ const store = {
 };
 let players = store.get('players', {});       // 이름 → {name,best:{n:초},hints:{n:개}}
 let me = store.get('current', null);
-let db = null, remoteRows = null, writing = Promise.resolve();
+let db = null, remoteRows = null, writing = Promise.resolve(), canWrite = true;
 const docId = name => 'p' + Array.from(new TextEncoder().encode(name), b => b.toString(16).padStart(2,'0')).join('');
 function summary(pl){
   const best = pl.best || {}; let cleared = 0; while (best[cleared+1] != null) cleared++;
@@ -184,10 +184,11 @@ function summary(pl){
 }
 function mergeBest(a = {}, b = {}){ const o = {...a}; for (const k in b) if (typeof b[k] === 'number' && b[k] >= 0 && (o[k] == null || b[k] < o[k])) o[k] = b[k]; return o; }
 function saveRemote(pl){
-  if (!db) return;
+  if (!db || !canWrite) return;
   const s = summary(pl);
   const body = {name: pl.name, best: pl.best, cleared: s.cleared, total: s.total, solved: s.solved, updated: new Date().toISOString()};
   writing = writing.then(() => db.doc('scores/' + docId(pl.name)).set(body)).catch(e => {
+    if (e && e.code === 'invalid_argument') { canWrite = false; return setBoardNote(); } // 공유 순위표에 쓸 권한이 없는 방문자
     $('boardNote').textContent = '공유 순위표에 저장하지 못했어요(' + (e && e.code || '오류') + '). 이 기기에는 저장돼 있어요.';
   });
 }
@@ -218,7 +219,9 @@ function connectDb(){
   }).catch(() => setBoardNote());
 }
 function setBoardNote(){
-  $('boardNote').textContent = db ? '이 놀이판을 여는 모든 친구의 기록이 함께 보여요.' : '이 기기에서 놀이한 친구들의 기록이에요.';
+  $('boardNote').textContent = !db ? '이 기기에서 놀이한 친구들의 기록이에요. (claude.ai에 로그인하면 모두의 순위표가 보여요)'
+    : canWrite ? '이 놀이판을 여는 모든 친구의 기록이 함께 보여요.'
+    : '모두의 순위표를 보고 있어요. 이 계정의 기록은 이 기기에만 저장돼 다른 사람에게는 보이지 않아요.';
   $('nameNote').textContent = db ? '순위표는 이 놀이판을 함께 쓰는 사람에게 보여요. 별명을 써도 좋아요.' : '';
 }
 
@@ -498,9 +501,11 @@ function openStages(){
 }
 $('stageGrid').addEventListener('click', e => { const b = e.target.closest('[data-s]'); if (b && !b.disabled) { closeDlg(); loadLevel(+b.dataset.s); } });
 
-function boardRows(){
-  if (remoteRows) return remoteRows.map(r => ({name: r.name, ...summary({best: r.best || {}})}));
-  return Object.values(players).map(p => ({name: p.name, ...summary(p)}));
+function boardRows(){ // 공유 순위표 + 이 기기 기록(공유 순위표에 못 쓰는 방문자도 자기 기록은 보이게)
+  const best = {};
+  for (const r of remoteRows || []) best[r.name] = mergeBest(best[r.name], r.best);
+  for (const p of Object.values(players)) best[p.name] = mergeBest(best[p.name], p.best);
+  return Object.keys(best).map(name => ({name, ...summary({best: best[name]})}));
 }
 let delArm = null;
 function renderBoard(){
