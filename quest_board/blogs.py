@@ -68,6 +68,8 @@ class Card:
     explore: list[str] = field(default_factory=list)
     pending: list[str] = field(default_factory=list)
     top_posts: list[tuple[str, str, int]] = field(default_factory=list)   # (제목, 주소, 최근 조회)
+    sub_of: str = ""                   # 같은 블로그 통계에서 함께 모으는 묶음이면 본 블로그 키
+    read_posts: int = 0                # 최근 WINDOW일 한 번이라도 읽힌 글 수
     login: str = ""
     index: dict = field(default_factory=dict)       # 구글 블로거 색인 감시 마지막 요약
     index_first: dict = field(default_factory=dict)  # 색인 감시 첫날 요약(변화 비교용)
@@ -108,6 +110,14 @@ def _lab_modes() -> tuple[list[str], list[str], list[str]]:
         return [], [], []
 
 
+def _parent(key: str) -> str:
+    try:
+        from growth_lab.config import SUB_PARENT
+        return SUB_PARENT.get(key, "")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def _views(card: Card, lab: Path, entries: list[dict], now: datetime) -> None:
     daily = _json(lab / f"daily_{card.key}.json", {})
     fetched = set(daily.get("fetched") or [])
@@ -135,6 +145,7 @@ def _views(card: Card, lab: Path, entries: list[dict], now: datetime) -> None:
         n = sum(int(v or 0) for d, v in by_day.items() if d in recent)
         if n:
             top.append((titles[k][0], titles[k][1], n))
+    card.read_posts = len(top)
     card.top_posts = sorted(top, key=lambda t: -t[2])[:3]
 
 
@@ -144,7 +155,9 @@ FREEBIE = re.compile(r"활동지|워크북|학습지|프린트|색칠|오리기"
 def _freebie(card: Card, lab: Path, output: Path, entries: list[dict], now: datetime) -> None:
     """유아 블로그 목표 중 하나인 '활동지 알리기'가 얼마나 읽히는지: 활동지 글 조회수와 활동지 관련 유입 검색어.
     직접 쓴 글(발행 날짜가 기록에 없는 글)도 일별 조회수는 모이고 있어 그대로 센다."""
-    posts = (_json(lab / f"daily_{card.key}.json", {}) or {}).get("posts") or {}
+    posts = dict((_json(lab / f"daily_{card.key}.json", {}) or {}).get("posts") or {})
+    for k, v in ((_json(lab / "daily_worksheet.json", {}) or {}).get("posts") or {}).items():
+        posts.setdefault(k, v)        # 무료 활동지 나눔글 조회수는 유아 블로그 통계에서 따로 모은다
     recent = {(now - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(1, WINDOW + 1)}
     rows = []
     for e in entries:
@@ -317,6 +330,8 @@ def collect(paths: Paths | None = None, now: datetime | None = None) -> list[Car
         if not hist.exists():
             continue
         card = Card(key, name, desc, mode="lab" if key in lab_on else "watch" if key in watch else "off")
+        if card.mode == "off" and _parent(key) in lab_on + watch:   # 같은 블로그 통계에서 함께 모으는 묶음
+            card.mode, card.sub_of = "watch", _parent(key)
         if card.mode == "lab" and key in auto:
             card.mode = "lab-auto"
         try:
@@ -473,7 +488,16 @@ def _card(c: Card) -> str:
         if ix.get("errors"):
             out.append(f'<div class="ev">⚠️ 서치 콘솔 오류: {escape(str(ix["errors"][0])[:150])}</div>')
         return "".join(out) + "</div>"
-    if c.mode == "watch":
+    if c.mode == "watch" and c.sub_of:
+        parent = next((n for k, n, _, _ in BLOGS if k == c.sub_of), c.sub_of)
+        if c.days_collected:
+            msg = f"{parent} 통계에서 함께 모아요({c.days_collected}일치)."
+            if c.views is not None and c.read_posts:
+                msg += f" 최근 {WINDOW}일 읽힌 글 {c.read_posts}편 · 글당 평균 {round(c.views / c.read_posts)}회."
+        else:
+            msg = f"오늘 밤 22:30 {parent} 통계 수집 때부터 함께 쌓여요(첫날 60일치를 한꺼번에 받아요)."
+        out.append(f'<div class="sec"><h4>지금 단계</h4><div class="ev">{escape(msg)}</div></div>')
+    elif c.mode == "watch":
         msg = (f"조회수 {c.days_collected}일치를 모았어요. 2주쯤 쌓이면 주제 판정·개선 실험을 켤 수 있어요."
                if c.days_collected else "오늘 밤 22:30 수집부터 조회수가 쌓여요(첫날 60일치를 한꺼번에 받아요).")
         out.append(f'<div class="sec"><h4>지금 단계</h4><div class="ev">{escape(msg)}</div></div>')

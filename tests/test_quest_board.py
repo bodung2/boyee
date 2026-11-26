@@ -185,8 +185,11 @@ def test_blog_panel_shows_lab_status_and_survives_missing_files(tmp_path, monkey
     assert set(by) == {"invest", "edu", "market"}
     assert by["invest"].mode == "lab-auto" and by["invest"].views == 42 and by["invest"].today == 1
     assert by["invest"].rules == [("2026-11-10", "조건형 검색어를 제목 앞에")]
-    assert by["edu"].mode == "watch" and by["edu"].views is None and by["market"].mode == "off"
+    assert by["edu"].mode == "watch" and by["edu"].views is None
+    # 시황은 투자 블로그 통계에서 함께 모은다
+    assert by["market"].mode == "watch" and by["market"].sub_of == "invest" and by["market"].days_collected == 0
     page = blogs.render(cards, now)
+    assert "네이버 투자 통계 수집 때부터 함께 쌓여요" in page
     assert "실험실 · 자동 개선" in page and "조건형 검색어를 제목 앞에" in page and "투3 연도를 제목 끝에" in page
     assert "조회수 수집 중" in page and "등록금" in page and "<script" not in page
 

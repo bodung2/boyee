@@ -56,6 +56,15 @@ BLOGS: dict[str, BlogSpec] = {
         eval_days=(7, 14)),
 }
 
+# 같은 블로그에 올라가는 다른 글 묶음: 본 블로그 통계 화면(날짜별 조회수 순위)에서 함께 뽑아 daily_<묶음>.json에 따로 쌓는다.
+# 따로 로그인·통계 화면을 열지 않으므로 추가 비용이 없다. (묶음 → 발행 이력 파일)
+SUB_BLOGS: dict[str, dict[str, str]] = {
+    "edu": {"edu_series": "published_edu_series.json"},
+    "invest": {"market": "published_market.json"},
+    "childhood": {"place": "published_place.json", "worksheet": "published_worksheet.json"},
+}
+SUB_PARENT = {sub: parent for parent, subs in SUB_BLOGS.items() for sub in subs}
+
 
 @dataclass
 class LabConfig:
