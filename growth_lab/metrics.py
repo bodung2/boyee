@@ -8,7 +8,7 @@ from pathlib import Path
 from naver_autopost import history
 
 from . import rank, stats, store
-from .config import BLOGS, SUB_BLOGS, LabConfig
+from .config import BLOGS, SUB_BLOGS, LabConfig, own_entries
 
 log = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def _subs(cfg: LabConfig, blog: str) -> dict[str, list[dict]]:
     for sub, fname in SUB_BLOGS.get(blog, {}).items():
         path = cfg.history_dir / fname
         if path.exists():
-            out[sub] = [e for e in history.load(path) if e.get("url")]
+            out[sub] = own_entries(history.load(path))
     return out
 
 
@@ -80,7 +80,8 @@ def collect(blog: str, cfg: LabConfig, today: str, capture_fn=None, rank_fetch=N
         daily = store.merge_daily(cfg, blog, stats.daily_views(cap, entries), sorted(cap.daily))
         for sub, sub_entries in _subs(cfg, blog).items():
             try:
-                store.merge_daily(cfg, sub, stats.daily_views(cap, sub_entries), sorted(cap.daily))
+                store.merge_daily(cfg, sub, stats.daily_views(cap, sub_entries), sorted(cap.daily),
+                                  keep={stats.post_key(e["url"]) for e in sub_entries})
             except Exception as e:  # noqa: BLE001 - 묶음을 못 모아도 본 블로그 기록은 지킨다
                 log.warning("[%s] %s 조회수 정리 실패: %s", spec.label, sub, e)
         matched = {k: {"views": sum(v.values()), "candidates": [{"field": "daily", "value": sum(v.values())}]}
