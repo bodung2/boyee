@@ -122,6 +122,9 @@ def _views(card: Card, lab: Path, entries: list[dict], now: datetime) -> None:
     daily = _json(lab / f"daily_{card.key}.json", {})
     fetched = set(daily.get("fetched") or [])
     posts = daily.get("posts") or {}
+    if card.sub_of:     # 묶음: 그 묶음으로 쓴 글만 센다(예전에 블로그 전체 글이 섞여 쌓인 값이 있어도)
+        own = {_key(e["url"]) for e in entries}
+        posts = {k: v for k, v in posts.items() if k in own}
     card.days_collected = len(fetched)
     if not fetched:
         return
@@ -336,6 +339,9 @@ def collect(paths: Paths | None = None, now: datetime | None = None) -> list[Car
             card.mode = "lab-auto"
         try:
             entries = _entries(hist)
+            if card.sub_of:            # 묶음은 그 묶음으로 쓴 글만(동기화로 들어온 블로그 전체 글 제외)
+                from growth_lab.config import own_entries
+                entries = own_entries(entries)
             card.titles = {_key(e["url"]): e.get("title") or "" for e in entries}
             card.note_date, card.note_html = note(key)
             auto_posts = [e for e in entries if e.get("source") == "autopost"]
@@ -547,7 +553,8 @@ def render(cards: list[Card], now: datetime | None = None) -> str:
     """'자동화 블로그 분석' 칸(HTML 조각). 퀘스트 보드 화면 안에 들어간다."""
     if not cards:
         return '<p class="stamp">아직 읽을 발행 기록이 없습니다.</p>'
-    lab = [c for c in cards if c.mode not in ("off", "index")]      # 블로거 색인 카드는 조회가 아니라 검색 노출이라 뺀다
+    # 블로거 색인 카드는 조회가 아니라 검색 노출이라 뺀다. 묶음(시리즈·시황 등)은 본 블로그 조회에 이미 들어 있다
+    lab = [c for c in cards if c.mode not in ("off", "index") and not c.sub_of]
     done = sum(1 for c in cards if c.today)
     total = sum(c.views or 0 for c in lab)
     pending = sum(len(c.pending) for c in cards)

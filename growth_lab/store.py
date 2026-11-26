@@ -107,9 +107,12 @@ def load_daily(cfg: LabConfig, blog: str) -> dict:
     return {"fetched": data.get("fetched", []), "posts": data.get("posts", {})}
 
 
-def merge_daily(cfg: LabConfig, blog: str, views: dict[str, dict[str, int]], fetched: list[str]) -> dict:
-    """새로 받은 날짜는 그날 값으로 바꾼다(그날 순위에 없던 글은 0으로 본다)."""
+def merge_daily(cfg: LabConfig, blog: str, views: dict[str, dict[str, int]], fetched: list[str],
+                keep: set[str] | None = None) -> dict:
+    """새로 받은 날짜는 그날 값으로 바꾼다(그날 순위에 없던 글은 0으로 본다). keep이 있으면 그 글만 남긴다."""
     data = load_daily(cfg, blog)
+    if keep is not None:
+        data["posts"] = {k: v for k, v in data["posts"].items() if k in keep}
     days = set(fetched)
     for key, by_day in data["posts"].items():
         for d in days:

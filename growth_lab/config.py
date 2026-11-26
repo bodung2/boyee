@@ -64,6 +64,12 @@ SUB_BLOGS: dict[str, dict[str, str]] = {
     "childhood": {"place": "published_place.json", "worksheet": "published_worksheet.json"},
 }
 SUB_PARENT = {sub: parent for parent, subs in SUB_BLOGS.items() for sub in subs}
+# 발행 목록 동기화(rss·blog-list)는 그 블로그 글을 모두 이력에 넣는다 → 묶음은 우리가 그 묶음으로 쓴 글만 센다
+OWN_SOURCES_EXCLUDE = ("rss", "blog-list")
+
+
+def own_entries(entries: list[dict]) -> list[dict]:
+    return [e for e in entries if e.get("url") and e.get("source") not in OWN_SOURCES_EXCLUDE]
 
 
 @dataclass

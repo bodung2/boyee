@@ -190,6 +190,15 @@ def test_blog_panel_shows_lab_status_and_survives_missing_files(tmp_path, monkey
     assert by["market"].mode == "watch" and by["market"].sub_of == "invest" and by["market"].days_collected == 0
     page = blogs.render(cards, now)
     assert "네이버 투자 통계 수집 때부터 함께 쌓여요" in page
+    # 동기화로 들어온 블로그 전체 글(blog-list)은 묶음 조회에서 뺀다
+    (data / "published_market.json").write_text(_json.dumps(
+        [dict(posts[0], url="https://blog.naver.com/x/9")] + [dict(p, source="blog-list") for p in posts]), encoding="utf-8")
+    (data / "lab" / "daily_market.json").write_text(_json.dumps({
+        "fetched": [f"2026-11-{d:02d}" for d in range(1, 21)],
+        "posts": {"https://blog.naver.com/x/1": {"2026-11-20": 50}, "https://blog.naver.com/x/9": {"2026-11-20": 4}}}),
+        encoding="utf-8")
+    market = {c.key: c for c in blogs.collect(Paths(data=data, output=out, logs=tmp_path), now)}["market"]
+    assert market.views == 4 and market.read_posts == 1
     assert "실험실 · 자동 개선" in page and "조건형 검색어를 제목 앞에" in page and "투3 연도를 제목 끝에" in page
     assert "조회수 수집 중" in page and "등록금" in page and "<script" not in page
 
