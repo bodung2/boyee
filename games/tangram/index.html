@@ -144,7 +144,7 @@ textarea{font:16px/1.4 ui-monospace,monospace;width:100%;padding:12px;border-rad
 
 <div class="dlg" id="dlgCodes" role="dialog" aria-modal="true" aria-labelledby="hCodes"><div class="card">
   <h2 id="hCodes">기록 코드 받기</h2>
-  <p>아이들이 보낸 기록 코드를 붙여 넣으세요. 단톡방 대화를 통째로 복사해 넣어도 코드만 골라내요. 같은 이름은 더 좋은 기록만 남아요.</p>
+  <p id="codesHelp">아이들이 보낸 기록 코드를 붙여 넣으세요. 단톡방 대화를 통째로 복사해 넣어도 코드만 골라내요. 같은 이름은 더 좋은 기록만 남아요.</p>
   <textarea id="codeIn" rows="7" placeholder="[칠교:하늘:12:340:K7QM]"></textarea>
   <p class="note" id="codeRes" aria-live="polite"></p>
   <div class="row"><button class="btn go" id="bApply" type="button">순위표에 올리기</button><button class="btn" id="bCodesBack" type="button">순위표 보기</button></div>
@@ -185,44 +185,84 @@ const fmt = sec => { sec = Math.max(0, Math.round(sec)); const h = Math.floor(se
 const $ = id => document.getElementById(id);
 const svg = $('svg'), NS = 'http://www.w3.org/2000/svg';
 
-// ---------- 기록 저장 (이 기기 + 공유 순위표) ----------
+// ---------- 기록 저장 ----------
+// 세 곳 중 하나에 저장한다.
+//  GAS : 구글 Apps Script 웹앱으로 열었을 때 — 선생님 구글 시트(누구나 로그인 없이 기록, 자동)
+//  db  : claude.ai 아티팩트로 열었을 때 — 쓰기 권한 있는 계정만 직접, 나머지는 기록 코드
+//  기기: 그냥 파일로 열었을 때 — 이 기기(localStorage)에만
 const store = {
   get(k, d){ try { const v = localStorage.getItem('tangram.' + k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v){ try { localStorage.setItem('tangram.' + k, JSON.stringify(v)); } catch {} },
 };
-let players = store.get('players', {});       // 이름 → {name,best:{n:초},hints:{n:개}}
+let players = store.get('players', {});       // 이름 → {name, best:{단계:초}, hints:{단계:개}, base:{cleared,total}(코드로 받은 기록)}
 let me = store.get('current', null);
+const GAS = !!(window.google && google.script && google.script.run);
+const gas = (fn, ...a) => new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...a));
 let db = null, remoteRows = null, writing = Promise.resolve(), canWrite = true, writer = null;
-const isWriter = () => !!db && canWrite && writer !== false;   // 이 화면이 공유 순위표에 직접 쓸 수 있는가
+const isWriter = () => GAS || (!!db && canWrite && writer !== false);   // 이 화면이 모두의 순위표에 직접 쓸 수 있는가
 const docId = name => 'p' + Array.from(new TextEncoder().encode(name), b => b.toString(16).padStart(2,'0')).join('');
-function summary(pl){
-  const best = pl.best || {}; let cleared = 0; while (best[cleared+1] != null) cleared++;
-  const total = Object.keys(best).filter(n => +n <= cleared).reduce((s,n) => s + best[n], 0);
-  return {cleared, total, solved: Object.keys(best).length};
+const num = v => Number.isFinite(+v) && +v >= 0 ? Math.floor(+v) : 0;
+function better(a, b){ if (!a) return b; if (!b) return a; return (b.cleared > a.cleared || (b.cleared === a.cleared && b.total < a.total)) ? b : a; }
+function summary(pl){ // 단계별 기록 + 코드로 받은 기록(base)을 이어 붙여 '연속으로 깬 단계'와 그 시간 합
+  const best = pl.best || {}, base = pl.base || {cleared: 0, total: 0};
+  let c1 = 0, t1 = 0; while (best[c1+1] != null) { t1 += best[c1+1]; c1++; }
+  let c2 = Math.min(LEVELS.length, num(base.cleared)), t2 = num(base.total); while (c2 && best[c2+1] != null) { t2 += best[c2+1]; c2++; }
+  const r = better({cleared: c1, total: t1}, {cleared: c2, total: t2});
+  return {cleared: r.cleared, total: r.total, solved: Object.keys(best).length};
 }
+const isDone = (pl, n) => !!pl && ((pl.best || {})[n] != null || n <= num((pl.base || {}).cleared));
 function mergeBest(a = {}, b = {}){ const o = {...a}; for (const k in b) if (typeof b[k] === 'number' && b[k] >= 0 && (o[k] == null || b[k] < o[k])) o[k] = b[k]; return o; }
+function rowOf(r){ // 모두의 순위표 한 줄 → {name, cleared, total}
+  const hasBest = r.best && typeof r.best === 'object' && Object.keys(r.best).length;
+  const base = r.base || (r.via === 'code' || !hasBest ? {cleared: num(r.cleared), total: num(r.total)} : null);
+  return {name: r.name, ...summary({best: r.best && typeof r.best === 'object' ? r.best : {}, base})};
+}
+function note(t){ $('boardNote').textContent = t; }
+function applyServer(r){ // 시트에서 받은 한 사람 기록을 이 기기 기록과 합친다
+  if (!r || typeof r.name !== 'string') return;
+  const pl = players[r.name] || (players[r.name] = {name: r.name, best:{}, hints:{}});
+  pl.best = mergeBest(pl.best, r.best || {});
+  if (r.base) pl.base = better(pl.base, {cleared: num(r.base.cleared), total: num(r.base.total)});
+  store.set('players', players);
+  if (remoteRows) { const i = remoteRows.findIndex(x => x.name === r.name); if (i >= 0) remoteRows[i] = r; else remoteRows.push(r); }
+}
 function saveRemote(pl){
+  if (GAS) {
+    writing = writing.then(() => gas('save', pl.name, pl.best)).then(r => { applyServer(r); if ($('dlgBoard').classList.contains('open')) renderBoard(); })
+      .catch(() => note('순위표에 저장하지 못했어요. 인터넷 연결을 확인해 주세요. 이 기기에는 저장돼 있어요.'));
+    return;
+  }
   if (!db || !canWrite) return;
   const s = summary(pl);
   const body = {name: pl.name, best: pl.best, cleared: s.cleared, total: s.total, solved: s.solved, updated: new Date().toISOString()};
   writing = writing.then(() => db.doc('scores/' + docId(pl.name)).set(body)).catch(e => {
     if (e && e.code === 'invalid_argument') { canWrite = false; return setBoardNote(); } // 공유 순위표에 쓸 권한이 없는 방문자
-    $('boardNote').textContent = '공유 순위표에 저장하지 못했어요(' + (e && e.code || '오류') + '). 이 기기에는 저장돼 있어요.';
+    note('공유 순위표에 저장하지 못했어요(' + (e && e.code || '오류') + '). 이 기기에는 저장돼 있어요.');
   });
 }
-async function pullRemote(name){
-  if (!db || !name) return;
+async function pullRemote(name){ // 이름을 넣으면 그 이름의 기록을 불러와 이어서 하게 한다
+  if (!name) return;
+  const pl = players[name] || (players[name] = {name, best:{}, hints:{}});
+  const before = JSON.stringify(summary(pl));
   try {
-    const snap = await db.doc('scores/' + docId(name)).get();
-    const pl = players[name] || {name, best:{}, hints:{}};
-    const before = JSON.stringify(pl.best);
-    if (snap.exists){ const d = snap.data(); pl.best = mergeBest(pl.best, d.best); }
-    players[name] = pl; store.set('players', players);
-    if (!snap.exists || JSON.stringify(snap.data().best) !== JSON.stringify(pl.best)) saveRemote(pl);
-    if (before !== JSON.stringify(pl.best)) updateHeader();
+    if (GAS) {
+      const r = await gas('player', name);
+      const had = JSON.stringify(pl.best);
+      if (r) applyServer(r);
+      if (!r || had !== JSON.stringify(r.best || {})) saveRemote(pl);   // 이 기기에만 있던 기록도 올린다
+    } else if (db) {
+      const snap = await db.doc('scores/' + docId(name)).get();
+      if (snap.exists) { const d = snap.data(); pl.best = mergeBest(pl.best, d.best); if (d.via === 'code') pl.base = better(pl.base, {cleared: num(d.cleared), total: num(d.total)}); }
+      store.set('players', players);
+      if (!snap.exists || JSON.stringify(snap.data().best) !== JSON.stringify(pl.best)) saveRemote(pl);
+    }
   } catch {}
+  if (before !== JSON.stringify(summary(pl))) updateHeader();
 }
+let boardTimer = null;
+function loadBoard(){ if (GAS) gas('board').then(rows => { remoteRows = rows; if ($('dlgBoard').classList.contains('open')) renderBoard(); }).catch(() => note('순위표를 불러오지 못했어요. 잠시 뒤 다시 열어 보세요.')); }
 function connectDb(){
+  if (GAS) { setBoardNote(); loadBoard(); return; }
   if (!window.claude || typeof window.claude.use !== 'function') return setBoardNote();
   window.claude.use('user').then(async u => {
     if (!u || typeof u.can !== 'function') return;
@@ -232,26 +272,29 @@ function connectDb(){
   window.claude.use('db').then(d => {
     db = d; setBoardNote();
     if (!db) return;
-    let timer = setTimeout(() => { $('boardNote').textContent = '공유 순위표를 아직 불러오지 못했어요. 잠시 뒤 다시 열어 보세요.'; }, 10000);
+    let timer = setTimeout(() => note('공유 순위표를 아직 불러오지 못했어요. 잠시 뒤 다시 열어 보세요.'), 10000);
     db.collection('scores').orderBy('cleared','desc').limit(300).onSnapshot(snap => {
       if (!snap.metadata.fromCache) { clearTimeout(timer); setBoardNote(); }
       remoteRows = snap.docs.map(d => d.data()).filter(r => r && typeof r.name === 'string');
       if ($('dlgBoard').classList.contains('open')) renderBoard();
-    }, e => { clearTimeout(timer); $('boardNote').textContent = '공유 순위표를 열 수 없어요(' + (e && e.code || '오류') + '). 이 기기 기록을 보여 줘요.'; remoteRows = null; });
-    if (me) pullRemote(me);
+    }, e => { clearTimeout(timer); note('공유 순위표를 열 수 없어요(' + (e && e.code || '오류') + '). 이 기기 기록을 보여 줘요.'); remoteRows = null; });
+    if (me) pullRemote(me).then(afterPull);
   }).catch(() => setBoardNote());
 }
 function setBoardNote(){
-  $('boardNote').textContent = !db ? '이 기기에서 놀이한 친구들의 기록이에요. (claude.ai에 로그인하면 모두의 순위표가 보여요)'
-    : canWrite ? '이 놀이판을 여는 모든 친구의 기록이 함께 보여요.'
-    : '모두의 순위표를 보고 있어요. 이 계정의 기록은 이 기기에만 저장돼 다른 사람에게는 보이지 않아요.';
-  $('nameNote').textContent = '순위표는 이 놀이판을 함께 쓰는 사람에게 보여요. 별명을 써도 좋아요.';
-  if (!isWriter()) $('boardNote').textContent = (db ? '모두의 순위표와 이 기기 기록을 함께 보여요.' : '이 기기에서 놀이한 친구들의 기록이에요.') + ' 내 기록을 모두의 순위표에 올리려면 아래 기록 코드를 선생님께 보내 주세요.';
+  if (GAS) {
+    note('모든 친구의 기록이 자동으로 모여요.');
+    $('nameNote').textContent = '전에 쓰던 이름을 그대로 넣으면 이어서 할 수 있어요. 순위표에 이 이름이 보여요.';
+  } else {
+    note(!db ? '이 기기에서 놀이한 친구들의 기록이에요.' : canWrite ? '이 놀이판을 여는 모든 친구의 기록이 함께 보여요.' : '모두의 순위표와 이 기기 기록을 함께 보여요.');
+    $('nameNote').textContent = '순위표는 이 놀이판을 함께 쓰는 사람에게 보여요. 별명을 써도 좋아요.';
+    if (!isWriter()) $('boardNote').textContent += ' 내 기록을 모두의 순위표에 올리려면 아래 기록 코드를 선생님께 보내 주세요.';
+  }
   refreshCodes();
 }
 
-// ---------- 기록 코드: 공유 순위표에 직접 못 쓰는 아이 → 선생님이 받아 올린다 ----------
-function check4(str){ // 숫자를 고친 코드를 걸러 내는 확인 글자 4개
+// ---------- 기록 코드: claude.ai 링크에서 직접 못 쓴 기록을 옮긴다 ----------
+function check4(str){ // 숫자를 고친 코드를 걸러 내는 확인 글자 4개 (Code.gs와 같아야 한다)
   let h = 0x811c9dc5;
   for (const ch of str) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; }
   const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let o = '';
@@ -277,6 +320,7 @@ function refreshCodes(){
   const code = me ? codeFor(me) : '', show = !!code && !isWriter();
   for (const i of [1, 2]) { $('codeBox' + i).hidden = !show; $('codeTxt' + i).value = code; }
   $('bCodes').hidden = !isWriter();
+  $('bCodes').textContent = GAS ? '이전 기록 가져오기' : '기록 코드 받기';
 }
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-copy]'); if (!b) return;
@@ -285,28 +329,47 @@ document.addEventListener('click', async e => {
   catch { inp.select(); b.textContent = '길게 눌러 복사'; }
   setTimeout(() => { b.textContent = '복사'; }, 2000);
 });
-$('bCodes').onclick = () => { $('codeRes').textContent = ''; openDlg('dlgCodes'); };
+$('bCodes').onclick = () => {
+  $('hCodes').textContent = GAS ? '이전 기록 가져오기' : '기록 코드 받기';
+  $('codesHelp').textContent = GAS
+    ? '전에 놀던 놀이터의 순위표나 성공 창에 있던 기록 코드를 붙여 넣으면, 그 단계까지 깬 것으로 이어서 할 수 있어요. 여러 명 코드를 한꺼번에 넣어도 돼요.'
+    : '아이들이 보낸 기록 코드를 붙여 넣으세요. 단톡방 대화를 통째로 복사해 넣어도 코드만 골라내요. 같은 이름은 더 좋은 기록만 남아요.';
+  $('codeRes').textContent = ''; openDlg('dlgCodes');
+};
 $('bCodesBack').onclick = () => openBoard();
 $('bApply').onclick = async () => {
-  const {recs, ok, bad} = parseCodes($('codeIn').value);
+  const text = $('codeIn').value, {recs, ok, bad} = parseCodes(text);
   if (!ok) { $('codeRes').textContent = bad ? '맞는 코드가 없어요(잘못된 코드 ' + bad + '개).' : '기록 코드를 찾지 못했어요. [칠교:…] 모양의 코드를 붙여 넣어 주세요.'; return; }
   if (!isWriter()) { $('codeRes').textContent = '이 화면에서는 공유 순위표에 쓸 수 없어요. 선생님 계정으로 열어 주세요.'; return; }
   $('bApply').disabled = true;
   let up = 0, same = 0, fail = 0;
-  const byName = {}; for (const r of remoteRows || []) byName[r.name] = r;
-  for (const rec of recs) {
-    const old = byName[rec.name], oldS = old ? rowOf(old) : null;
-    if (oldS && better(oldS, rec) === oldS) { same++; continue; }
-    try {
-      await db.doc('scores/' + docId(rec.name)).set({...(old || {}), name: rec.name, cleared: rec.cleared, total: rec.total, updated: new Date().toISOString(), via: 'code'});
-      up++;
-    } catch (err) { fail++; if (err && err.code === 'invalid_argument') { canWrite = false; break; } }
+  if (GAS) {
+    try { const r = await gas('importCodes', text); up = r.up; same = r.same; remoteRows = r.rows; }
+    catch { fail = recs.length; }
+    if (me && recs.some(x => x.name === me)) { await pullRemote(me); afterPull(); }
+  } else {
+    const byName = {}; for (const r of remoteRows || []) byName[r.name] = r;
+    for (const rec of recs) {
+      const old = byName[rec.name], oldS = old ? rowOf(old) : null;
+      if (oldS && better(oldS, rec) === oldS) { same++; continue; }
+      try {
+        await db.doc('scores/' + docId(rec.name)).set({...(old || {}), name: rec.name, cleared: rec.cleared, total: rec.total, updated: new Date().toISOString(), via: 'code'});
+        up++;
+      } catch (err) { fail++; if (err && err.code === 'invalid_argument') { canWrite = false; break; } }
+    }
   }
   $('bApply').disabled = false;
-  $('codeRes').textContent = `코드 ${ok}개 확인: ${up}명 올림` + (same ? `, ${same}명은 이미 같거나 더 좋은 기록` : '') + (bad ? `, 잘못된 코드 ${bad}개` : '') + (fail ? `, ${fail}명 저장 실패` : '') + '.';
+  $('codeRes').textContent = `코드 ${ok}개 확인: ${up}명 올림` + (same ? `, ${same}명은 이미 같거나 더 좋은 기록` : '') + (bad ? `, 잘못된 코드 ${bad}개` : '') + (fail ? `, 저장 실패 — 인터넷 연결을 확인해 주세요` : '') + '.';
   if (up && !fail) $('codeIn').value = '';
   setBoardNote();
 };
+// 불러온 기록이 더 앞서 있으면, 아직 손대지 않은 단계에서 이어지는 단계로 옮긴다
+function afterPull(){
+  if (!me || !players[me] || !LV) return;
+  const next = Math.min(LEVELS.length, summary(players[me]).cleared + 1);
+  if (!solved && next > LV.n && pieces.every(p => p.tray)) loadLevel(next);
+  updateHeader();
+}
 
 // ---------- 단계 준비 ----------
 let LV, slots, pieces, layout, sel = null, startT = 0, hintsUsed = 0, solved = false, samples, outlineAnchors;
@@ -570,37 +633,34 @@ function openName(){
   openDlg('dlgName');
 }
 $('names').addEventListener('click', e => { const b = e.target.closest('[data-n]'); if (b) { $('iName').value = b.dataset.n; $('fName').requestSubmit(); } });
-$('fName').addEventListener('submit', e => {
+const cleanName = v => String(v).replace(/[:\[\]]/g, '').replace(/\s+/g, ' ').trim().replace(/^[=+\-@]+/, '').trim().slice(0, 12);
+$('fName').addEventListener('submit', async e => {
   e.preventDefault();
-  const name = $('iName').value.replace(/[:\[\]]/g, '').replace(/\s+/g, ' ').trim().slice(0, 12);
+  const name = cleanName($('iName').value);
   if (!name) { $('iName').focus(); return; }
   me = name; store.set('current', me);
   if (!players[me]) { players[me] = {name: me, best:{}, hints:{}}; store.set('players', players); }
   if (pendingWin) { record(me, pendingWin.n, pendingWin.sec, pendingWin.hints); pendingWin = null; }
-  closeDlg(); pullRemote(me); refreshCodes();
-  const s = summary(players[me]);
-  loadLevel(Math.min(LEVELS.length, s.cleared + 1));
+  const go = $('fName').querySelector('.go'); go.disabled = true; go.textContent = '기록 불러오는 중…';
+  await Promise.race([pullRemote(me), new Promise(r => setTimeout(r, 8000))]);   // 전에 쓰던 이름이면 이어서
+  go.disabled = false; go.textContent = '시작하기';
+  closeDlg(); refreshCodes();
+  loadLevel(Math.min(LEVELS.length, summary(players[me]).cleared + 1));
 });
 
 function openStages(){
-  const s = me && players[me] ? summary(players[me]) : {cleared: 0}, best = me && players[me] ? players[me].best : {};
+  const pl = me && players[me], s = pl ? summary(pl) : {cleared: 0};
   const tiers = [[1,20,'쉬움 — 조각 2~4개, 90°씩 돌리기'],[21,50,'보통 — 조각 4~7개, 45°씩 돌리기'],[51,80,'어려움 — 조각 7~11개'],[81,100,'도전 — 칠교판 2벌, 조각 11~14개']];
   $('stageGrid').innerHTML = tiers.map(([a, b, label]) => `<div class="tier">${label}</div><div class="grid">` +
-    Array.from({length: b - a + 1}, (_, i) => { const n = a + i, done = best[n] != null, lock = n > s.cleared + 1 && !done;
+    Array.from({length: b - a + 1}, (_, i) => { const n = a + i, done = isDone(pl, n), lock = n > s.cleared + 1 && !done;
       return `<button type="button" data-s="${n}" class="${done ? 'done' : ''} ${LV && LV.n === n ? 'now' : ''}" ${lock ? 'disabled' : ''} aria-label="${n}단계${done ? ' 성공' : ''}">${n}</button>`; }).join('') + '</div>').join('');
   openDlg('dlgStages');
 }
 $('stageGrid').addEventListener('click', e => { const b = e.target.closest('[data-s]'); if (b && !b.disabled) { closeDlg(); loadLevel(+b.dataset.s); } });
 
-function better(a, b){ if (!a) return b; if (!b) return a; return (b.cleared > a.cleared || (b.cleared === a.cleared && b.total < a.total)) ? b : a; }
-const num = v => Number.isFinite(+v) && +v >= 0 ? Math.floor(+v) : 0;
-function rowOf(r){ // 공유 기록 하나: 단계별 기록(best)과 코드로 받은 숫자 중 더 좋은 쪽
-  const a = r.best && typeof r.best === 'object' ? {name: r.name, ...summary({best: r.best})} : null;
-  return better(a, {name: r.name, cleared: Math.min(LEVELS.length, num(r.cleared)), total: num(r.total)});
-}
 function boardRows(){ // 공유 순위표 + 이 기기 기록(공유 순위표에 못 쓰는 방문자도 자기 기록은 보이게)
   const m = {};
-  for (const r of remoteRows || []) if (r.name.length <= 24) m[r.name] = better(m[r.name], rowOf(r));
+  for (const r of remoteRows || []) if (r && typeof r.name === 'string' && r.name.length <= 24) m[r.name] = better(m[r.name], rowOf(r));
   for (const p of Object.values(players)) m[p.name] = better(m[p.name], {name: p.name, ...summary(p)});
   return Object.values(m);
 }
@@ -611,7 +671,7 @@ function renderBoard(){
   $('boardRows').innerHTML = rows.length ? rows.map((r, i) => `<tr class="${r.name === me ? 'me' : ''}">
     <td>${r.cleared ? `<span class="rank ${i < 3 ? 'r' + (i+1) : ''}">${i + 1}</span>` : '<span class="rank">–</span>'}</td><td>${esc(r.name)}</td>
     <td class="num">${r.cleared}</td><td class="num">${r.cleared ? fmt(r.total) : '–'}</td>
-    <td class="num"><button class="del" type="button" data-del="${esc(r.name)}">${delArm === r.name ? '정말 지울까요?' : '지우기'}</button></td></tr>`).join('')
+    <td class="num">${GAS ? '' : `<button class="del" type="button" data-del="${esc(r.name)}">${delArm === r.name ? '정말 지울까요?' : '지우기'}</button>`}</td></tr>`).join('')
     : '<tr><td colspan="5">아직 아무도 없어요. 이름을 넣고 1단계부터 도전해 봐요!</td></tr>';
 }
 $('boardRows').addEventListener('click', async e => {
@@ -623,7 +683,10 @@ $('boardRows').addEventListener('click', async e => {
   if (db) { try { await db.doc('scores/' + docId(name)).delete(); } catch (err) { $('boardNote').textContent = '공유 순위표에서 지우지 못했어요(' + (err && err.code || '오류') + ').'; } }
   renderBoard();
 });
-function openBoard(){ delArm = null; renderBoard(); refreshCodes(); openDlg('dlgBoard'); }
+function openBoard(){
+  delArm = null; renderBoard(); refreshCodes(); openDlg('dlgBoard');
+  if (GAS) { loadBoard(); clearInterval(boardTimer); boardTimer = setInterval(() => $('dlgBoard').classList.contains('open') ? loadBoard() : clearInterval(boardTimer), 15000); }
+}
 
 $('bName').onclick = openName; $('bWinName').onclick = openName; $('bStages').onclick = openStages; $('bBoard').onclick = openBoard; $('bWinBoard').onclick = openBoard;
 $('bNext').onclick = () => { closeDlg(); loadLevel(LV.n + 1); };
@@ -653,6 +716,7 @@ if (me && !players[me]) me = null;
 loadLevel(me ? Math.min(LEVELS.length, summary(players[me]).cleared + 1) : 1);
 if (!me) openName();
 connectDb();
+if (me) pullRemote(me).then(afterPull);
 window.__tangram = {levels: LEVELS, load: loadLevel, check, draw, solved: () => solved, slots: () => slots, pieces: () => pieces, solve(){ // 시험용
   for (const p of pieces) { const s = slots[p.id]; Object.assign(p, {k: s.k, f: s.f, x: s.x, y: s.y, tray: false}); draw(p); } check(); }};
 }
