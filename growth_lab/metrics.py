@@ -8,7 +8,7 @@ from pathlib import Path
 from naver_autopost import history
 
 from . import rank, stats, store
-from .config import BLOGS, LabConfig
+from .config import BLOGS, SUB_BLOGS, LabConfig
 
 log = logging.getLogger(__name__)
 
@@ -29,12 +29,25 @@ def blog_ident(pcfg) -> str:
 DAILY_BACKFILL_DAYS = 60     # 처음엔 60일치, 그 뒤로는 빠진 날 + 어제·오늘만 받는다
 
 
+def _subs(cfg: LabConfig, blog: str) -> dict[str, list[dict]]:
+    """같은 블로그에 올라가는 다른 글 묶음(시황·시리즈·장소·활동지)과 그 발행 글."""
+    out = {}
+    for sub, fname in SUB_BLOGS.get(blog, {}).items():
+        path = cfg.history_dir / fname
+        if path.exists():
+            out[sub] = [e for e in history.load(path) if e.get("url")]
+    return out
+
+
 def days_to_fetch(cfg: LabConfig, blog: str, today: str) -> list[str]:
-    fetched = set(store.load_daily(cfg, blog)["fetched"])
     d0 = date.fromisoformat(today)
     window = [(d0 - timedelta(days=i)).isoformat() for i in range(DAILY_BACKFILL_DAYS)]
+    missing: set[str] = set()
+    for key in [blog, *_subs(cfg, blog)]:      # 묶음을 처음 모을 때도 지난 60일치를 한 번 채운다
+        fetched = set(store.load_daily(cfg, key)["fetched"])
+        missing |= {d for d in window if d not in fetched}
     # 오늘은 아직 덜 찼고 어제도 늦게 집계될 수 있어 늘 다시 받는다
-    return sorted({d for d in window if d not in fetched} | set(window[:2]))
+    return sorted(missing | set(window[:2]))
 
 
 def capture(blog: str, cfg: LabConfig, pcfg=None, shots: Path | None = None, today: str = "") -> stats.Capture:
@@ -65,6 +78,11 @@ def collect(blog: str, cfg: LabConfig, today: str, capture_fn=None, rank_fetch=N
     matched: dict = {}
     if cap.daily:
         daily = store.merge_daily(cfg, blog, stats.daily_views(cap, entries), sorted(cap.daily))
+        for sub, sub_entries in _subs(cfg, blog).items():
+            try:
+                store.merge_daily(cfg, sub, stats.daily_views(cap, sub_entries), sorted(cap.daily))
+            except Exception as e:  # noqa: BLE001 - 묶음을 못 모아도 본 블로그 기록은 지킨다
+                log.warning("[%s] %s 조회수 정리 실패: %s", spec.label, sub, e)
         matched = {k: {"views": sum(v.values()), "candidates": [{"field": "daily", "value": sum(v.values())}]}
                    for k, v in daily["posts"].items()}
     elif cap.logged_in:

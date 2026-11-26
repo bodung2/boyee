@@ -776,3 +776,19 @@ def test_demand_by_autocomplete_without_api_key():
     assert demand.suggest_score(["공무원 봉급표"], fetch) == 0.3
     assert demand.suggest_score(["아무도안치는말"], fetch) == 0.0
     assert demand.suggest_score(["공무원 봉급표"], lambda u, timeout=8: (_ for _ in ()).throw(OSError("x"))) is None
+
+
+def test_collect_also_fills_same_blog_series(cfg):
+    """시황 글은 투자 블로그 통계(날짜별 조회수 순위)에서 함께 뽑아 daily_market.json에 따로 쌓는다."""
+    history.save(cfg.history_file("invest"), [{"date": "2026-10-20", "title": "연봉 5천, 실수령액 얼마일까?",
+                                               "url": url(1), "source": "autopost"}])
+    history.save(cfg.history_dir / "published_market.json", [{"date": "2026-10-23", "title": "10월 23일 시황 | 코스피",
+                                                               "url": url(2), "source": "autopost"}])
+    assert len(metrics.days_to_fetch(cfg, "invest", "2026-10-25")) == metrics.DAILY_BACKFILL_DAYS
+    rows = [("연봉 5천, 실수령액 얼마일까?", "/myblog/224000000001", 8), ("10월 23일 시황 | 코스피", "/myblog/224000000002", 4)]
+    cap = stats.Capture(daily={"2026-10-23": _rank_json(rows), "2026-10-24": _rank_json(rows[1:])})
+    metrics.collect("invest", cfg, "2026-10-25", capture_fn=lambda: cap, rank_fetch=lambda u: "")
+    market = store.load_daily(cfg, "market")
+    assert market["posts"][stats.post_key(url(2))] == {"2026-10-23": 4, "2026-10-24": 4}
+    assert stats.post_key(url(2)) not in store.load_daily(cfg, "invest")["posts"]
+    assert sorted(market["fetched"]) == ["2026-10-23", "2026-10-24"]
