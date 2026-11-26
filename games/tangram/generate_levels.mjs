@@ -222,14 +222,15 @@ function classicSquare(ox = 0) {
 
 // ---- 단계별 난이도 ----
 function plan(n) {
-  // pieces: 조각 수, rot: 돌리기 단위, hint: 조각 선 보이기, same: 처음부터 정답 방향
-  if (n <= 8) return { pieces: n <= 4 ? 2 : 3, rot: 90, hint: 'all', same: true };
-  if (n <= 20) return { pieces: n <= 14 ? 3 : 4, rot: 90, hint: 'all', same: false };
-  if (n <= 35) return { pieces: n <= 27 ? 4 : 5, rot: 45, hint: 'all', same: false };
-  if (n <= 50) return { pieces: n <= 42 ? 5 : n <= 46 ? 6 : 7, rot: 45, hint: 'some', same: false, flip: true };
-  if (n <= 70) return { pieces: n <= 56 ? 7 : n <= 63 ? 8 : 9, rot: 45, hint: 'none', same: false, flip: true };
-  if (n <= 90) return { pieces: n <= 76 ? 10 : n <= 83 ? 11 : 12, rot: 45, hint: 'none', same: false, flip: true };
-  return { pieces: n <= 95 ? 13 : 14, rot: 45, hint: 'none', same: false, flip: true };
+  // pieces: 조각 수, rot: 돌리기 단위, same: 처음부터 정답 방향
+  // 조각 사이 선은 어느 단계에서도 보여 주지 않는다(그림자만 보고 맞추는 것이 칠교 놀이의 기본)
+  if (n <= 8) return { pieces: n <= 4 ? 2 : 3, rot: 90, same: true };
+  if (n <= 20) return { pieces: n <= 14 ? 3 : 4, rot: 90, same: false };
+  if (n <= 35) return { pieces: n <= 27 ? 4 : 5, rot: 45, same: false };
+  if (n <= 50) return { pieces: n <= 42 ? 5 : n <= 46 ? 6 : 7, rot: 45, same: false, flip: true };
+  if (n <= 70) return { pieces: n <= 56 ? 7 : n <= 63 ? 8 : 9, rot: 45, same: false, flip: true };
+  if (n <= 90) return { pieces: n <= 76 ? 10 : n <= 83 ? 11 : 12, rot: 45, same: false, flip: true };
+  return { pieces: n <= 95 ? 13 : 14, rot: 45, same: false, flip: true };
 }
 
 function chooseTypes(rnd, count) {
@@ -295,7 +296,7 @@ for (let n = 1; n <= 100; n++) {
   for (let i = 0; i < polys.length; i++) for (let j = i + 1; j < polys.length; j++) {
     if (overlaps(polys[i], polys[j])) throw new Error(n + '단계 조각 겹침');
   }
-  levels.push({ n, name: L.name, rot: L.rot, hint: L.hint, same: L.same ? 1 : 0, s: slots.map(s => [s.t, s.k, s.f, s.x, s.y]) });
+  levels.push({ n, name: L.name, rot: L.rot, same: L.same ? 1 : 0, s: slots.map(s => [s.t, s.k, s.f, s.x, s.y]) });
 }
 
 const json = JSON.stringify(levels);
