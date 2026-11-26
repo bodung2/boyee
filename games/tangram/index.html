@@ -115,7 +115,7 @@ tr.me td{background:light-dark(#fff1c2,#4a3410)}
   <h2 id="hWin">성공!</h2>
   <div class="big" id="winTime">0:00</div>
   <p id="winMsg"></p>
-  <div class="row"><button class="btn go" id="bNext" type="button">다음 단계</button><button class="btn" id="bAgain" type="button">한 번 더</button><button class="btn" id="bWinBoard" type="button">순위표</button></div>
+  <div class="row"><button class="btn go" id="bNext" type="button">다음 단계</button><button class="btn" id="bAgain" type="button">한 번 더</button><button class="btn" id="bWinBoard" type="button">순위표</button><button class="btn go" id="bWinName" type="button" hidden>이름 넣고 기록하기</button></div>
 </div></div>
 
 <div class="dlg" id="dlgStages" role="dialog" aria-modal="true" aria-labelledby="hStages"><div class="card">
@@ -417,21 +417,27 @@ function check(){
   const lim = tgt * 0.015;
   if (miss <= lim && extra <= lim && over <= lim) win();
 }
+let pendingWin = null; // 이름 없이 성공한 기록 — 이름을 넣으면 저장한다
+function record(name, n, sec, hints){
+  const pl = players[name] || (players[name] = {name, best:{}, hints:{}});
+  const prev = pl.best[n];
+  let msg;
+  if (prev == null || sec < prev) { pl.best[n] = sec; msg = prev == null ? '기록을 남겼어요.' : '새 최고 기록이에요! (전에는 ' + fmt(prev) + ')'; }
+  else msg = '최고 기록은 ' + fmt(prev) + '이에요.';
+  pl.hints = pl.hints || {}; pl.hints[n] = hints;
+  store.set('players', players); saveRemote(pl);
+  return msg;
+}
 function win(){
   solved = true; select(null);
   const sec = Math.round((performance.now() - startT) / 1000), n = LV.n;
   $('svg').parentElement.classList.add('won');
   setTimeout(() => $('svg').parentElement.classList.remove('won'), 700);
-  let msg = '';
-  if (me) {
-    const pl = players[me] || (players[me] = {name: me, best:{}, hints:{}});
-    const prev = pl.best[n];
-    if (prev == null || sec < prev) { pl.best[n] = sec; msg = prev == null ? '기록을 남겼어요.' : '새 최고 기록이에요! (전에는 ' + fmt(prev) + ')'; }
-    else msg = '최고 기록은 ' + fmt(prev) + '이에요.';
-    pl.hints = pl.hints || {}; pl.hints[n] = hintsUsed;
-    store.set('players', players); saveRemote(pl);
-  } else msg = '이름을 넣으면 순위표에 기록돼요.';
+  let msg;
+  if (me) { msg = record(me, n, sec, hintsUsed); pendingWin = null; }
+  else { msg = '이름을 넣으면 이 기록이 순위표에 올라가요.'; pendingWin = {n, sec, hints: hintsUsed}; }
   if (hintsUsed) msg += ' 힌트 ' + hintsUsed + '번.';
+  $('bWinName').hidden = !!me;
   $('hWin').textContent = n === LEVELS.length ? '100단계 모두 성공!' : n + '단계 성공!';
   $('winTime').textContent = fmt(sec);
   $('winMsg').textContent = msg;
@@ -486,6 +492,7 @@ $('fName').addEventListener('submit', e => {
   if (!name) { $('iName').focus(); return; }
   me = name; store.set('current', me);
   if (!players[me]) { players[me] = {name: me, best:{}, hints:{}}; store.set('players', players); }
+  if (pendingWin) { record(me, pendingWin.n, pendingWin.sec, pendingWin.hints); pendingWin = null; }
   closeDlg(); pullRemote(me);
   const s = summary(players[me]);
   loadLevel(Math.min(LEVELS.length, s.cleared + 1));
@@ -509,12 +516,13 @@ function boardRows(){ // 공유 순위표 + 이 기기 기록(공유 순위표�
 }
 let delArm = null;
 function renderBoard(){
-  const rows = boardRows().filter(r => r.cleared > 0).sort((a, b) => b.cleared - a.cleared || a.total - b.total).slice(0, 50);
+  // 이름만 넣고 아직 성공한 단계가 없는 친구도 0단계로 보여 준다(순위 번호는 1단계 이상부터)
+  const rows = boardRows().sort((a, b) => b.cleared - a.cleared || a.total - b.total || a.name.localeCompare(b.name, 'ko')).slice(0, 60);
   $('boardRows').innerHTML = rows.length ? rows.map((r, i) => `<tr class="${r.name === me ? 'me' : ''}">
-    <td><span class="rank ${i < 3 ? 'r' + (i+1) : ''}">${i + 1}</span></td><td>${esc(r.name)}</td>
-    <td class="num">${r.cleared}</td><td class="num">${fmt(r.total)}</td>
+    <td>${r.cleared ? `<span class="rank ${i < 3 ? 'r' + (i+1) : ''}">${i + 1}</span>` : '<span class="rank">–</span>'}</td><td>${esc(r.name)}</td>
+    <td class="num">${r.cleared}</td><td class="num">${r.cleared ? fmt(r.total) : '–'}</td>
     <td class="num"><button class="del" type="button" data-del="${esc(r.name)}">${delArm === r.name ? '정말 지울까요?' : '지우기'}</button></td></tr>`).join('')
-    : '<tr><td colspan="5">아직 기록이 없어요. 1단계부터 도전해 봐요!</td></tr>';
+    : '<tr><td colspan="5">아직 아무도 없어요. 이름을 넣고 1단계부터 도전해 봐요!</td></tr>';
 }
 $('boardRows').addEventListener('click', async e => {
   const b = e.target.closest('[data-del]'); if (!b) return;
@@ -527,7 +535,7 @@ $('boardRows').addEventListener('click', async e => {
 });
 function openBoard(){ delArm = null; renderBoard(); openDlg('dlgBoard'); }
 
-$('bName').onclick = openName; $('bStages').onclick = openStages; $('bBoard').onclick = openBoard; $('bWinBoard').onclick = openBoard;
+$('bName').onclick = openName; $('bWinName').onclick = openName; $('bStages').onclick = openStages; $('bBoard').onclick = openBoard; $('bWinBoard').onclick = openBoard;
 $('bNext').onclick = () => { closeDlg(); loadLevel(LV.n + 1); };
 $('bAgain').onclick = () => { closeDlg(); loadLevel(LV.n); };
 $('bReset').onclick = () => loadLevel(LV.n);
