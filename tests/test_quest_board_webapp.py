@@ -138,3 +138,13 @@ def test_growth_benchmarks_name_their_source_and_evidence_level():
         assert block and "src:" in block.group(0), goal
     assert miles.count("src:") == miles.count("level:") >= 10
     assert "const CAP = 56" in app and "Math.log2(0.5 / Math.max(p, 0.001))" in app
+
+
+def test_app_scripts_have_no_url_slashes_inside_code():
+    """구글 웹앱이 화면을 내보낼 때 스크립트 속 '//'을 주석으로 보고 그 줄 끝까지 지워 버리는 일이 있다
+    (예: e.link = "https://" + e.link → 문자열이 끊겨 보드 전체가 SyntaxError). 스크립트 안의 주소는 "https:\\/\\/"처럼 쓴다."""
+    import re
+    app = (schedule.ROOT / "webapp" / "app.html").read_text(encoding="utf-8")
+    for block in re.findall(r"<script>([\s\S]*?)</script>", app):
+        assert "://" not in block, [ln.strip()[:80] for ln in block.splitlines() if "://" in ln]
+        assert not re.search(r"\\/\\//", block), "정규식 끝의 \\/\\// 는 \\/{2}/ 로"
