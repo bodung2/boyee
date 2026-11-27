@@ -2001,7 +2001,7 @@ function renderGrowth() {
 }
 
 // 화면 버전: 폰이 새 화면을 받았는지 성장 탭 맨 아래에서 확인할 수 있게(바꿀 때마다 올린다)
-const APP_BUILD = "2026.11.27-c";
+const APP_BUILD = "2026.11.27-d";
 // 카드 하나를 그리다 오류가 나도 나머지 화면은 그대로 보이게, 오류 내용은 그 자리에 보여 준다
 function safeCard(name, fn) {
   try { return fn(); }
@@ -2706,7 +2706,7 @@ function renderCamp() {
     return `<a class="tile" href="${esc(t.f.url)}" target="_blank" rel="noopener noreferrer" data-tool="${esc(t.id)}" style="--tc:${esc(t.f.color || "#6366f1")}">
       ${t.f.pin ? '<span class="tpin">📌</span>' : ""}${st ? `<span class="tst ${esc(st.state)}" title="${esc(st.state === "ok" ? "열림" : st.state === "login" ? "로그인 필요(살아 있음)" : "응답 없음")} · ${esc(String(st.code))}"></span>` : ""}
       <button type="button" class="tm" data-c="menu" data-id="${esc(t.id)}" aria-label="${esc(t.name)} 메뉴">⋯</button>
-      <span class="ti">${esc(t.f.icon || "🔗")}</span><b>${esc(t.name)}</b><small>${esc(t.f.desc || t.f.url.replace(/^https?:\/\//, ""))}</small>
+      <span class="ti">${esc(t.f.icon || "🔗")}</span><b>${esc(t.name)}</b><small>${esc(t.f.desc || t.f.url.replace(/^https?:\/{2}/, ""))}</small>
       <small style="margin-top:auto;font-size:10.5px">${t.f.cat ? esc(t.f.cat) + " · " : ""}${num(t.f.opens) ? `${num(t.f.opens)}번 열었음` : "아직 안 열어 봄"}</small></a>`; };
   const down = Object.values(chk).filter(x => x.state === "down").length;
   $("#cmain").innerHTML = `<div class="card vs" style="margin-bottom:6px"><div class="row"><b style="font-size:18px">🏕 베이스캠프</b><button type="button" class="vbtn" data-c="add">＋ 도구 등록</button></div>
@@ -2740,7 +2740,7 @@ function toolForm(t) {
   const f = CEDIT.f, cats = [...new Set([...CAMP_CATS, ...tools().map(x => x.f.cat).filter(Boolean)])];
   $("#form").innerHTML = `<h3>${CEDIT.id ? "도구 수정" : "도구 등록"}</h3>
     <div class="f"><label for="t_name">이름</label><input id="t_name" required maxlength="60" value="${esc(CEDIT.name)}" placeholder="예: 투자 대시보드"></div>
-    <div class="f"><label for="t_url">주소</label><input id="t_url" required type="url" inputmode="url" value="${esc(f.url || "")}" placeholder="https://"></div>
+    <div class="f"><label for="t_url">주소</label><input id="t_url" required type="url" inputmode="url" value="${esc(f.url || "")}" placeholder="https:\/\/"></div>
     <div class="row" style="gap:8px;flex-wrap:nowrap"><div class="f" style="flex:0 0 90px"><label for="t_icon">아이콘</label><input id="t_icon" maxlength="4" value="${esc(f.icon || "🔗")}"></div>
       <div class="f" style="flex:1"><label for="t_cat">분류</label><input id="t_cat" list="t_cats" maxlength="20" value="${esc(f.cat || "")}" placeholder="골라도, 새로 적어도 돼요"><datalist id="t_cats">${cats.map(c => `<option value="${esc(c)}">`).join("")}</datalist></div></div>
     <div class="f"><label for="t_desc">한 줄 설명(선택)</label><input id="t_desc" maxlength="80" value="${esc(f.desc || "")}"></div>
@@ -2754,7 +2754,7 @@ function toolForm(t) {
 async function saveTool() {
   const name = $("#t_name").value.trim(), url = $("#t_url").value.trim();
   if (!name) return toast("이름을 적어 주세요");
-  if (!isUrl(url)) return toast("주소는 http:// 또는 https://로 시작해야 해요");
+  if (!isUrl(url)) return toast("주소는 http:\/\/ 또는 https:\/\/로 시작해야 해요");
   const c = document.querySelector("[name=t_color]:checked");
   const f = {...CEDIT.f, url, icon: $("#t_icon").value.trim() || "🔗", cat: $("#t_cat").value.trim(), desc: $("#t_desc").value.trim(),
     memo: $("#t_memo").value.trim(), color: c ? c.value : CAMP_COLORS[0], pin: $("#t_pin").checked ? "1" : "", embed: $("#t_embed").checked ? "1" : ""};
@@ -2781,7 +2781,7 @@ function toolMenu(id) {
 }
 function loadQrLib() {
   return new Promise((ok, fail) => { if (window.qrcode) return ok();
-    const sc = document.createElement("script"); sc.src = "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"; sc.onload = ok; sc.onerror = () => fail(new Error("QR 도구를 불러오지 못했어요")); document.head.appendChild(sc); });
+    const sc = document.createElement("script"); sc.src = "https:\/\/cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"; sc.onload = ok; sc.onerror = () => fail(new Error("QR 도구를 불러오지 못했어요")); document.head.appendChild(sc); });
 }
 async function showQr(id) {
   const t = tools().find(x => x.id === id); if (!t) return;
@@ -3048,7 +3048,7 @@ const BOARD = (() => {
       <div class="tk-f"><label>중요도 <i>*</i></label><div class="tk-pr">${[3, 2, 1].map(p => `<button type="button" data-tk="prio" data-p="${p}" aria-pressed="${e.prio === p}">${PRIO[p]}</button>`).join("")}</div></div>
       <div class="tk-f"><label>분류 <i>*</i> <span style="font-weight:600">대분류는 꼭, 중·소분류는 골라도 되고 비워도 돼요</span></label><div class="tk-row" id="tkCats">${catSel(0)}${catSel(1)}${catSel(2)}</div></div>
       <div class="tk-f"><label>메모</label><textarea id="tkMemo" placeholder="세부 내용·준비물 등">${esc(e.memo)}</textarea></div>
-      <div class="tk-f"><label>링크</label><input id="tkLink" type="url" value="${esc(e.link)}" placeholder="https:// 붙여넣기"></div>
+      <div class="tk-f"><label>링크</label><input id="tkLink" type="url" value="${esc(e.link)}" placeholder="https:\/\/ 붙여넣기"></div>
       <div class="tk-f"><label>첨부(구글 드라이브 · 나만 보기)</label>
         <div class="tk-att">${(e.attachments || []).map((a, i) => `<span>📎 <a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.name)}</a><button type="button" class="x" data-tk="rmfile" data-i="${i}" aria-label="첨부 빼기">✕</button></span>`).join("")}</div>
         <button type="button" class="tk-btn sm" data-tk="file" style="margin-top:6px">📎 파일 올리기</button></div>
@@ -3061,7 +3061,7 @@ const BOARD = (() => {
     if (!e.title.trim()) return toast("과제 이름을 적어 주세요");
     if (!e.due) return toast("종료 일시를 정해 주세요");
     if (!e.cat[0]) return toast("대분류를 골라 주세요(없으면 ‘＋ 새로 만들기’)");
-    if (e.link && !/^(https?:\/\/|mailto:)/i.test(e.link)) e.link = "https://" + e.link;
+    if (e.link && !/^(https?:\/\/|mailto:)/i.test(e.link)) e.link = "https:\/\/" + e.link;
     const {_new, _done} = e; delete e._new; delete e._done; e.title = e.title.trim(); touch(e);
     const list = _done ? S.done : S.active, i = list.findIndex(t => t.id === e.id);
     if (i >= 0) list[i] = e; else S.active.push(e);
