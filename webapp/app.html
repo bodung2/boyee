@@ -8,6 +8,8 @@
      webapp/Code.gs의 doGet이 그 파일을 보여 준다. 데이터는 google.script.run으로 Code.gs의 함수를 불러 주고받는다. -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <script>
+// 화면 코드가 이 브라우저에서 읽히지 않으면(오래된 앱 속 브라우저 등) 그 오류를 남겨 두었다가 화면에 보여 준다
+window.__errs = []; window.addEventListener("error", function (e) { window.__errs.push(String(e.message || e)); });
 // 화면 모드: dark(기본) · light · auto(기기 설정). 이 기기에만 기억한다
 (function () { let m = "dark"; try { m = localStorage.getItem("theme") || "dark"; } catch (e) {}
   const dark = m === "auto" ? matchMedia("(prefers-color-scheme: dark)").matches : m === "dark";
@@ -543,7 +545,14 @@ function showTab(name) {
   $("#board").hidden = name !== "board";
   store.set("tab", name);
   if (name === "board") {             // 보드 코드는 맨 아래 <script>에 있다 — 처음 열 때 아직 안 읽혔으면 잠시 뒤에
-    const go = () => typeof BOARD !== "undefined" ? BOARD.show() : setTimeout(go, 30); go();
+    let tries = 0;
+    const go = () => {
+      if (typeof BOARD !== "undefined") return BOARD.show();
+      if (++tries < 150) return setTimeout(go, 30);
+      const st = $("#tkStatus"); if (st) st.innerHTML = `보드 화면 코드를 실행하지 못했어요${window.__errs.length ? ` (${esc(window.__errs[window.__errs.length - 1])})` : ""}.<br>
+        앱을 완전히 닫았다가 다시 열거나, 크롬 등 다른 브라우저로 웹앱 주소를 열어 보세요. 이 문구를 Claude에게 알려 주시면 고칠게요.`;
+    };
+    go();
     if (!DATA) loadAssets(); return;
   }
   if (name === "quest") loadQuest(); else if (!DATA) loadAssets(); else if (name === "growth") renderGrowth(); else if (name === "timer") renderTimer(); else if (name === "camp") renderCamp();
@@ -1974,7 +1983,7 @@ function renderGrowth() {
 }
 
 // 화면 버전: 폰이 새 화면을 받았는지 성장 탭 맨 아래에서 확인할 수 있게(바꿀 때마다 올린다)
-const APP_BUILD = "2026.11.27-a";
+const APP_BUILD = "2026.11.27-b";
 // 카드 하나를 그리다 오류가 나도 나머지 화면은 그대로 보이게, 오류 내용은 그 자리에 보여 준다
 function safeCard(name, fn) {
   try { return fn(); }
@@ -2894,7 +2903,7 @@ const BOARD = (() => {
   async function load() {
     status("불러오는 중…");
     let r;
-    try { r = await api("loadBoard"); }
+    try { r = await Promise.race([api("loadBoard"), new Promise((_, no) => setTimeout(() => no(new Error("서버 응답이 25초 동안 없어요")), 25000))]); }
     catch (e) {
       const old = /loadBoard|not found|찾을 수 없/i.test(e.message);
       return lock(old ? "웹앱 코드(Code.gs)가 예전 버전이라 보드를 열 수 없어요.<br>저장소의 webapp/Code.gs를 붙여 넣고 배포 관리 → 새 버전으로 다시 배포해 주세요."
@@ -3152,7 +3161,7 @@ const BOARD = (() => {
     const root = q("#board");
     root.addEventListener("click", e => {
       const b = e.target.closest("[data-tk]"); if (!b) return;
-      const a = b.dataset.tk, id = b.dataset.id || (b.closest("[data-id]") || {}).dataset?.id;
+      const holder = b.closest("[data-id]"), a = b.dataset.tk, id = b.dataset.id || (holder ? holder.dataset.id : "");
       if (a === "view") { view = b.dataset.v; path = []; render(); return; }
       if (a === "reload") return load();
       if (a === "undo") { const f = undoFn; undoFn = null; q("#tkUndo").hidden = true; if (f) f(); return; }
