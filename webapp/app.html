@@ -202,7 +202,10 @@ body.has-run #toast{bottom:auto;top:64px}body.has-run{padding-bottom:calc(76px +
 .tot-list{padding:4px 6px 10px;font-size:13px;max-height:280px;overflow:auto}
 .tot-list>div{display:grid;grid-template-columns:86px 1fr;gap:6px;padding:4px 0;border-bottom:1px dashed var(--line)}
 /* ---------------------------------------------------------------- 📌 과제 보드(작업 갤러리 · 완료 폴더) */
-#bmain{padding-bottom:90px}
+#bmain{max-width:none;padding:12px 16px 90px}       /* 퀘스트 탭처럼 화면 가로 전체 */
+.tk-addrow{display:flex;gap:6px;margin:6px 0 10px}.tk-addrow input{flex:1;min-width:0;min-height:40px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:16px;background:var(--card);color:var(--ink)}
+.tk-node.del{border-color:#ef4444;background:color-mix(in srgb,#ef4444 10%,var(--card))}
+.tk-node .nm small{font-weight:600;color:var(--sub);margin-left:4px}
 .tk-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0 8px}
 .tk-seg{display:flex;gap:2px;padding:3px;border-radius:12px;background:var(--chip)}
 .tk-seg button{border:0;background:none;height:38px;padding:0 14px;border-radius:9px;font-size:15px;font-weight:800;color:var(--sub);cursor:pointer}
@@ -221,28 +224,28 @@ background:var(--cardbg);color:var(--ink);font-size:15px;font-weight:800;cursor:
 .tk-chip[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .tk-sec{margin:14px 0 6px;display:flex;align-items:baseline;gap:8px;font-size:15px;font-weight:900}
 .tk-sec small{font-size:12.5px;color:var(--sub);font-weight:600}
-.tk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
-.tk-card{position:relative;display:flex;flex-direction:column;gap:6px;padding:12px 12px 10px;border-radius:14px;background:var(--cardbg);
-border:1px solid var(--line);box-shadow:var(--shadow);cursor:pointer;min-height:132px;overflow:hidden;transition:opacity .2s,filter .2s}
-.tk-card::before{content:"";position:absolute;inset:0 0 auto 0;height:5px;background:var(--pc)}
+.tk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.tk-card{position:relative;display:flex;flex-direction:column;gap:9px;padding:20px 18px 15px;border-radius:18px;background:var(--cardbg);
+border:1px solid var(--line);box-shadow:var(--shadow);cursor:pointer;min-height:200px;overflow:hidden;transition:opacity .2s,filter .2s}
+.tk-card::before{content:"";position:absolute;inset:0 0 auto 0;height:7px;background:var(--pc)}
 .tk-card.p3{--pc:#ef4444}.tk-card.p2{--pc:#f59e0b}.tk-card.p1{--pc:#94a3b8}
 .tk-r1{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:2px;min-width:0}
 .tk-r1 .tk-due{overflow:hidden;text-overflow:ellipsis}
-.tk-prio{white-space:nowrap;flex:none;font-size:11.5px;font-weight:900;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--pc) 18%,transparent);color:var(--ink)}
-.tk-due{font-size:12.5px;font-weight:800;color:var(--sub);white-space:nowrap}
+.tk-prio{white-space:nowrap;flex:none;font-size:14px;font-weight:900;padding:3px 11px;border-radius:999px;background:color-mix(in srgb,var(--pc) 18%,transparent);color:var(--ink)}
+.tk-due{font-size:15.5px;font-weight:800;color:var(--sub);white-space:nowrap}
 .tk-due.over{color:#ef4444}.tk-due.today{color:#f59e0b}
-.tk-title{margin:0;font-size:16.5px;line-height:1.35;font-weight:800;color:var(--ink);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
-.tk-path{font-size:12.5px;color:var(--sub);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tk-title{margin:0;font-size:22px;line-height:1.35;font-weight:800;color:var(--ink);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+.tk-path{font-size:15px;color:var(--sub);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tk-path.none{color:var(--warn)}
-.tk-memo{margin:0;font-size:13px;color:var(--sub);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap}
-.tk-foot{display:flex;align-items:center;gap:8px;margin-top:auto;padding-top:4px;font-size:12.5px;color:var(--sub)}
+.tk-memo{margin:0;font-size:15.5px;color:var(--sub);line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap}
+.tk-foot{display:flex;align-items:center;gap:10px;margin-top:auto;padding-top:6px;font-size:15px;color:var(--sub)}
 .tk-foot .sp{flex:1}
 /* 끝냄 스위치(흐리게)와 완료 체크박스 */
-.tk-sw{position:relative;width:44px;height:24px;border-radius:999px;border:0;background:var(--line);cursor:pointer;flex:none;padding:0}
-.tk-sw i{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.35);transition:left .18s}
-.tk-sw[aria-checked=true]{background:#16a34a}.tk-sw[aria-checked=true] i{left:23px}
-.tk-chk{width:30px;height:30px;flex:none;border-radius:9px;border:2.5px solid var(--sub);background:transparent;cursor:pointer;
-font-size:17px;font-weight:900;line-height:1;color:transparent;display:flex;align-items:center;justify-content:center;padding:0}
+.tk-sw{position:relative;width:56px;height:30px;border-radius:999px;border:0;background:var(--line);cursor:pointer;flex:none;padding:0}
+.tk-sw i{position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.35);transition:left .18s}
+.tk-sw[aria-checked=true]{background:#16a34a}.tk-sw[aria-checked=true] i{left:29px}
+.tk-chk{width:40px;height:40px;flex:none;border-radius:11px;border:2.5px solid var(--sub);background:transparent;cursor:pointer;
+font-size:22px;font-weight:900;line-height:1;color:transparent;display:flex;align-items:center;justify-content:center;padding:0}
 .tk-chk:hover{color:#16a34a;border-color:#16a34a}
 .tk-card.dim .tk-chk{color:#16a34a;border-color:#16a34a;animation:tkpulse 1.6s ease-in-out infinite}
 @keyframes tkpulse{50%{box-shadow:0 0 0 5px rgba(22,163,74,.25)}}
@@ -2001,7 +2004,7 @@ function renderGrowth() {
 }
 
 // 화면 버전: 폰이 새 화면을 받았는지 성장 탭 맨 아래에서 확인할 수 있게(바꿀 때마다 올린다)
-const APP_BUILD = "2026.11.27-d";
+const APP_BUILD = "2026.11.27-e";
 // 카드 하나를 그리다 오류가 나도 나머지 화면은 그대로 보이게, 오류 내용은 그 자리에 보여 준다
 function safeCard(name, fn) {
   try { return fn(); }
@@ -2945,8 +2948,10 @@ const BOARD = (() => {
         try { S = merge(S, fromData(JSON.parse(r.json || "{}"))); } catch (e) {}
         rev = r.rev; dirty = true; render(); status("다른 기기에서 고친 내용과 합쳤어요");
       } else if (r.refused) {
-        if (confirm("과제를 모두 지운 상태예요. 이대로 저장할까요? (취소하면 드라이브에 저장된 보드를 다시 불러와요)")) { dirty = true; saving = false; return flush(true); }
-        saving = false; return load();
+        saving = false; dirty = true;
+        const st = q("#tkStatus"); st.classList.add("warn");
+        st.innerHTML = `과제를 모두 지운 상태라 저장을 멈췄어요. <button type="button" class="tk-btn sm" data-tk="forceSave">이대로 저장</button> <button type="button" class="tk-btn sm" data-tk="reload">드라이브 것 다시 불러오기</button>`;
+        return;
       } else { rev = r.rev; status(dirty ? "저장 대기…" : "저장됨 ✓"); }
     } catch (e) { dirty = true; status("저장 실패 — 잠시 뒤 다시 저장해요", true); clearTimeout(saveT); saveT = setTimeout(flush, 5000); saving = false; return; }
     saving = false;
@@ -3046,7 +3051,8 @@ const BOARD = (() => {
       <div class="tk-f"><label>종료 일시 <i>*</i></label><input id="tkDue" type="datetime-local" value="${esc(e.due)}">
         <div class="tk-quick">${quick.map(([k, l]) => `<button type="button" data-tk="q" data-k="${k}">${l}</button>`).join("")}</div></div>
       <div class="tk-f"><label>중요도 <i>*</i></label><div class="tk-pr">${[3, 2, 1].map(p => `<button type="button" data-tk="prio" data-p="${p}" aria-pressed="${e.prio === p}">${PRIO[p]}</button>`).join("")}</div></div>
-      <div class="tk-f"><label>분류 <i>*</i> <span style="font-weight:600">대분류는 꼭, 중·소분류는 골라도 되고 비워도 돼요</span></label><div class="tk-row" id="tkCats">${catSel(0)}${catSel(1)}${catSel(2)}</div></div>
+      <div class="tk-f"><label>분류 <i>*</i> <span style="font-weight:600">대분류는 꼭, 중·소분류는 골라도 되고 비워도 돼요</span></label><div class="tk-row" id="tkCats">${catSel(0)}${catSel(1)}${catSel(2)}</div>
+        ${e._addLv != null ? `<div class="tk-addrow"><input id="tkCatNew" maxlength="40" placeholder="새 ${["대분류", "중분류", "소분류"][e._addLv]} 이름"><button type="button" class="tk-btn sm pri" data-tk="catNewOk">추가</button><button type="button" class="tk-btn sm" data-tk="catNewNo">취소</button></div>` : ""}</div>
       <div class="tk-f"><label>메모</label><textarea id="tkMemo" placeholder="세부 내용·준비물 등">${esc(e.memo)}</textarea></div>
       <div class="tk-f"><label>링크</label><input id="tkLink" type="url" value="${esc(e.link)}" placeholder="https:\/\/ 붙여넣기"></div>
       <div class="tk-f"><label>첨부(구글 드라이브 · 나만 보기)</label>
@@ -3062,16 +3068,14 @@ const BOARD = (() => {
     if (!e.due) return toast("종료 일시를 정해 주세요");
     if (!e.cat[0]) return toast("대분류를 골라 주세요(없으면 ‘＋ 새로 만들기’)");
     if (e.link && !/^(https?:\/\/|mailto:)/i.test(e.link)) e.link = "https:\/\/" + e.link;
-    const {_new, _done} = e; delete e._new; delete e._done; e.title = e.title.trim(); touch(e);
+    const {_new, _done} = e; delete e._new; delete e._done; delete e._addLv; e.title = e.title.trim(); touch(e);
     const list = _done ? S.done : S.active, i = list.findIndex(t => t.id === e.id);
     if (i >= 0) list[i] = e; else S.active.push(e);
     closeSheet(); render(); save(); toast(_new ? "과제를 추가했어요" : "고쳤어요");
   }
-  function addCat(level) {
-    const pid = level ? ED.cat[level - 1] : "";
-    const name = (prompt(`새 ${["대분류", "중분류", "소분류"][level]} 이름`) || "").trim().slice(0, 40); if (!name) return;
-    const c = touch({id: uid(), name, parent: pid || "", o: kids(pid).length});
-    S.cats.push(c); ED.cat = [...ED.cat.slice(0, level), c.id]; save();
+  function newCat(name, pid) {
+    name = String(name || "").trim().slice(0, 40); if (!name) { toast("이름을 적어 주세요"); return null; }
+    const c = touch({id: uid(), name, parent: pid || "", o: kids(pid || "").length}); S.cats.push(c); save(); return c;
   }
 
   // ---------------- 완료 · 되돌리기 · 지우기(되돌리기 가능) · 옮기기
@@ -3100,23 +3104,34 @@ const BOARD = (() => {
   }
 
   // ---------------- 분류 관리
+  let CE = null, CD = "";          // 분류 관리: 지금 고치는 칸({mode: "add"|"ren", id}), 지우기 확인을 기다리는 분류
   function openCats() {
     if (!guard()) return;
     const cnt = id => { const ids = new Set(subtree(id)); return [...S.active, ...S.done].filter(t => catPath(t).some(c => ids.has(c.id))).length; };
-    const node = (c, depth) => `<div class="tk-node" style="margin-left:${depth * 18}px"><span class="nm">${["📁", "📂", "🏷"][depth]} ${esc(c.name)}</span><small>${cnt(c.id)}개</small>
-        ${depth < 2 ? `<button type="button" class="tk-btn sm" data-tk="catAdd" data-pid="${esc(c.id)}" title="하위 분류 추가">＋</button>` : ""}
-        <button type="button" class="tk-btn sm" data-tk="catRen" data-cid="${esc(c.id)}" title="이름 바꾸기">✏️</button>
-        <button type="button" class="tk-btn sm danger" data-tk="catDel" data-cid="${esc(c.id)}" title="지우기">🗑</button></div>`
-      + (depth < 2 ? kids(c.id).map(k => node(k, depth + 1)).join("") : "");
-    sheet(`<h3>🗂 분류 관리</h3><p class="muted" style="margin:0 0 10px;font-size:13px;line-height:1.6">대분류 › 중분류 › 소분류. 완료한 과제는 이 폴더에 자동으로 담겨요.
-      분류를 지워도 과제는 지워지지 않고 <b>미분류</b>로 옮겨져요(완료 보드에서 다시 정할 수 있어요).</p>
+    const input = (val, ph, ok) => `<div class="tk-addrow"><input id="tkCatIn" maxlength="40" value="${esc(val)}" placeholder="${esc(ph)}"><button type="button" class="tk-btn sm pri" data-tk="${ok}">저장</button><button type="button" class="tk-btn sm" data-tk="catCancel">취소</button></div>`;
+    const node = (c, depth) => {
+      const pad = `style="margin-left:${depth * 18}px"`, lv = ["대분류", "중분류", "소분류"][depth];
+      const row = CE && CE.mode === "ren" && CE.id === c.id ? `<div ${pad}>${input(c.name, lv + " 이름", "catRenOk")}</div>`
+        : CD === c.id ? `<div class="tk-node del" ${pad}><span class="nm">🗑 ‘${esc(c.name)}’${kids(c.id).length ? josa(c.name, "과", "와") + " 그 아래 분류를" : josa(c.name, "을", "를")} 지울까요?<br><small>안의 과제 ${cnt(c.id)}개는 지워지지 않고 미분류로 옮겨져요</small></span>
+            <button type="button" class="tk-btn sm danger" data-tk="catDelOk" data-cid="${esc(c.id)}">지우기</button><button type="button" class="tk-btn sm" data-tk="catCancel">취소</button></div>`
+        : `<div class="tk-node" ${pad}><span class="nm">${["📁", "📂", "🏷"][depth]} ${esc(c.name)} <small>${lv} · ${cnt(c.id)}개</small></span>
+            ${depth < 2 ? `<button type="button" class="tk-btn sm" data-tk="catAdd" data-pid="${esc(c.id)}">＋ 하위</button>` : ""}
+            <button type="button" class="tk-btn sm" data-tk="catRen" data-cid="${esc(c.id)}" aria-label="이름 바꾸기">✏️</button>
+            <button type="button" class="tk-btn sm danger" data-tk="catDel" data-cid="${esc(c.id)}">🗑 지우기</button></div>`;
+      const add = CE && CE.mode === "add" && CE.id === c.id ? `<div style="margin-left:${(depth + 1) * 18}px">${input("", "새 " + ["중분류", "소분류"][depth] + " 이름", "catAddOk")}</div>` : "";
+      return row + add + (depth < 2 ? kids(c.id).map(k => node(k, depth + 1)).join("") : "");
+    };
+    sheet(`<h3>🗂 분류 관리</h3><p class="muted" style="margin:0 0 10px;font-size:13.5px;line-height:1.6">대분류 › 중분류 › 소분류. 완료한 과제는 이 폴더에 자동으로 담겨요.
+      필요 없어진 분류는 <b>🗑 지우기</b> — 안의 과제는 지워지지 않고 완료 보드의 <b>📥 미분류</b>로 옮겨져요(작업 중인 과제는 ‘분류 없음’으로 남아요).</p>
+      <div class="tk-addrow"><input id="tkNewTop" maxlength="40" placeholder="새 대분류 이름 (예: 업무 · 가정 · 개인)"><button type="button" class="tk-btn sm pri" data-tk="catAddTop">＋ 대분류</button></div>
       <div class="tk-tree">${kids("").map(c => node(c, 0)).join("") || '<p class="muted">아직 분류가 없어요.</p>'}</div>
-      <div class="tk-acts"><button type="button" class="tk-btn pri" data-tk="catAdd" data-pid="">＋ 대분류</button><button type="button" class="tk-btn" data-tk="close">닫기</button></div>`);
+      <div class="tk-acts"><span></span><button type="button" class="tk-btn" data-tk="close">닫기</button></div>`);
+    const f = q("#tkCatIn"); if (f) f.focus();
   }
   function catDel(id) {
     const c = cat(id); if (!c) return;
     const ids = new Set(subtree(id)), hit = [...S.active, ...S.done].filter(t => catPath(t).some(x => ids.has(x.id)));
-    if (!confirm(`‘${c.name}’${ids.size > 1 ? "과 그 아래 분류" : ""}를 지울까요?\n안에 있던 과제 ${hit.length}개는 지워지지 않고 미분류로 옮겨져요.`)) return;
+    CD = ""; CE = null;
     const before = hit.map(t => [t, t.cat]), removed = S.cats.filter(x => ids.has(x.id));
     S.cats = S.cats.filter(x => !ids.has(x.id)); ids.forEach(i => { S.gone[i] = now(); });
     hit.forEach(t => { t.cat = []; touch(t); }); if (ids.has(path[0]) || path.some(p => ids.has(p))) path = [];
@@ -3182,11 +3197,12 @@ const BOARD = (() => {
       const holder = b.closest("[data-id]"), a = b.dataset.tk, id = b.dataset.id || (holder ? holder.dataset.id : "");
       if (a === "view") { view = b.dataset.v; path = []; render(); return; }
       if (a === "reload") return load();
+      if (a === "forceSave") { dirty = true; return flush(true); }
       if (a === "undo") { const f = undoFn; undoFn = null; q("#tkUndo").hidden = true; if (f) f(); return; }
       if (a === "close") return closeSheet();
       if (!guard()) return;
       if (a === "new") openEdit("");
-      else if (a === "cats") openCats();
+      else if (a === "cats") { CE = null; CD = ""; openCats(); }
       else if (a === "filt") { filt = b.dataset.f; render(); }
       else if (a === "sort") { sortBy = sortBy === "due" ? "prio" : "due"; render(); }
       else if (a === "dim") { e.stopPropagation(); const t = findT(id); if (t) { t.dim = !t.dim; touch(t); render(); save(); if (t.dim) toast("끝냄 표시 · 관련 일까지 다 끝나면 체크박스(✓)로 완료 보드로"); } }
@@ -3203,18 +3219,28 @@ const BOARD = (() => {
       else if (a === "saveEdit") saveEdit();
       else if (a === "del") { const i = ED.id; closeSheet(); delTask(i); }
       else if (a === "restore") { const i = ED.id; closeSheet(); restore(i); }
-      else if (a === "catAdd") { const name = (prompt(b.dataset.pid ? "하위 분류 이름" : "새 대분류 이름") || "").trim().slice(0, 40); if (!name) return;
-        S.cats.push(touch({id: uid(), name, parent: b.dataset.pid || "", o: kids(b.dataset.pid).length})); openCats(); render(); save(); }
-      else if (a === "catRen") { const c = cat(b.dataset.cid); const name = (prompt("새 이름", c.name) || "").trim().slice(0, 40); if (!name || name === c.name) return; c.name = name; touch(c); openCats(); render(); save(); }
-      else if (a === "catDel") catDel(b.dataset.cid);
+      else if (a === "catAddTop") { if (newCat(q("#tkNewTop").value, "")) { CE = null; openCats(); render(); toast("대분류를 추가했어요"); } }
+      else if (a === "catAdd") { CE = {mode: "add", id: b.dataset.pid}; CD = ""; openCats(); }
+      else if (a === "catAddOk") { if (newCat(q("#tkCatIn").value, CE.id)) { CE = null; openCats(); render(); } }
+      else if (a === "catRen") { CE = {mode: "ren", id: b.dataset.cid}; CD = ""; openCats(); }
+      else if (a === "catRenOk") { const c = cat(CE.id), v = q("#tkCatIn").value.trim().slice(0, 40); if (c && v && v !== c.name) { c.name = v; touch(c); save(); } CE = null; openCats(); render(); }
+      else if (a === "catCancel") { CE = null; CD = ""; openCats(); }
+      else if (a === "catDel") { CD = b.dataset.cid; CE = null; openCats(); }
+      else if (a === "catDelOk") catDel(b.dataset.cid);
+      else if (a === "catNewOk") { readEdit(); const lv = ED._addLv, c = newCat(q("#tkCatNew").value, lv ? ED.cat[lv - 1] : ""); if (c) { ED.cat = [...ED.cat.slice(0, lv), c.id]; ED._addLv = null; drawEdit(); } }
+      else if (a === "catNewNo") { readEdit(); ED._addLv = null; drawEdit(); }
     });
     root.addEventListener("change", e => {
       const s = e.target.closest("select[data-lv]"); if (!s || !ED) return;
       readEdit(); const lv = +s.dataset.lv;
-      if (s.value === "_add") addCat(lv); else ED.cat = s.value ? [...ED.cat.slice(0, lv), s.value] : ED.cat.slice(0, lv);
-      drawEdit();
+      if (s.value === "_add") ED._addLv = lv; else { ED._addLv = null; ED.cat = s.value ? [...ED.cat.slice(0, lv), s.value] : ED.cat.slice(0, lv); }
+      drawEdit(); if (ED._addLv != null) { const i = q("#tkCatNew"); if (i) i.focus(); }
     });
     q("#tkSheet").addEventListener("click", e => { if (e.target.id === "tkSheet") closeSheet(); });
+    q("#tkSheet").addEventListener("keydown", e => {        // 이름 칸에서 Enter = 저장·추가
+      if (e.key !== "Enter" || !e.target.matches("#tkNewTop,#tkCatIn,#tkCatNew")) return;
+      e.preventDefault(); const b = e.target.parentNode.querySelector("[data-tk]"); if (b) b.click();
+    });
     root.addEventListener("pointerdown", e => { const h = e.target.closest("[data-drag]"); if (h && loaded) dragStart(e, h.dataset.drag); });
     addEventListener("pointermove", dragMove); addEventListener("pointerup", dragEnd); addEventListener("pointercancel", () => { if (drag) { drag.g.remove(); drag = null; } });
     q("#tkFile").addEventListener("change", onFile);
