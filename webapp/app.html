@@ -549,8 +549,26 @@ function showTab(name) {
     const go = () => {
       if (typeof BOARD !== "undefined") return BOARD.show();
       if (++tries < 150) return setTimeout(go, 30);
-      const st = $("#tkStatus"); if (st) st.innerHTML = `보드 화면 코드를 실행하지 못했어요${window.__errs.length ? ` (${esc(window.__errs[window.__errs.length - 1])})` : ""}.<br>
-        앱을 완전히 닫았다가 다시 열거나, 크롬 등 다른 브라우저로 웹앱 주소를 열어 보세요. 이 문구를 Claude에게 알려 주시면 고칠게요.`;
+      const st = $("#tkStatus"); if (!st) return;
+      // 어느 줄·몇 번째 글자에서 막혔는지: 보드 스크립트를 한 번 더 넣어 브라우저가 알려 주는 위치(줄·칸)를 그대로 보여 준다
+      let where = "";
+      try {
+        const sc = [...document.scripts].find(x => x.text.indexOf("const BOARD" + " = (") >= 0);
+        if (!sc) where = "보드 코드가 페이지에 없어요";
+        else {
+          let got = null; const h = ev => { got = ev; };
+          window.addEventListener("error", h);
+          const s2 = document.createElement("script"); s2.text = sc.text; document.body.appendChild(s2); s2.remove();
+          window.removeEventListener("error", h);
+          if (got && got.lineno) {
+            const L = sc.text.split("\n"), ln = L[got.lineno - 1] || "", c = Math.max(0, (got.colno || 1) - 1);
+            const odd = [...ln].filter(ch => ch.charCodeAt(0) > 126 && !/[가-힣]/.test(ch)).map(ch => "U+" + ch.codePointAt(0).toString(16)).join(" ");
+            where = `${got.lineno}번째 줄 ${got.colno}칸: ${esc(got.message)}<br><code style="font-size:11px;word-break:break-all">${esc(ln.slice(Math.max(0, c - 60), c))}<b style="color:#ef4444">⟦${esc(ln.slice(c, c + 3))}⟧</b>${esc(ln.slice(c + 3, c + 60))}</code>${odd ? `<br>특수 글자: ${odd}` : ""}`;
+          } else where = "다시 실행하니 오류가 나지 않았어요 — 새로고침해 보세요";
+        }
+      } catch (er) { where = String(er && er.message); }
+      st.innerHTML = `보드 화면 코드를 실행하지 못했어요${window.__errs.length ? ` (${esc(window.__errs[window.__errs.length - 1])})` : ""}.<br>${where}<br>
+        이 화면을 캡처해 Claude에게 보여 주시면 고칠게요.`;
     };
     go();
     if (!DATA) loadAssets(); return;
@@ -1983,7 +2001,7 @@ function renderGrowth() {
 }
 
 // 화면 버전: 폰이 새 화면을 받았는지 성장 탭 맨 아래에서 확인할 수 있게(바꿀 때마다 올린다)
-const APP_BUILD = "2026.11.27-b";
+const APP_BUILD = "2026.11.27-c";
 // 카드 하나를 그리다 오류가 나도 나머지 화면은 그대로 보이게, 오류 내용은 그 자리에 보여 준다
 function safeCard(name, fn) {
   try { return fn(); }
@@ -2810,7 +2828,7 @@ renderCamp();
 // 작업 보드: 과제 카드를 마감 순서(지남·오늘·이번 주·나중·마감 없음)로 모아 보여 준다. 카드마다 종료 일시 · 중요도 · 분류(대·중·소).
 //   카드 위 스위치(끝냄)는 흐리게, 체크박스(✓)는 완료 보드로.
 // 완료 보드: 대분류 › 중분류 › 소분류 폴더에 자동으로 담긴다. 분류를 지우면 그 안 과제는 '미분류'로(데이터는 그대로),
-//   손잡이(⠿)를 끌어 폴더에 놓거나 '옮기기'로 다시 분류한다.
+//   손잡이((손잡이))를 끌어 폴더에 놓거나 '옮기기'로 다시 분류한다.
 // 저장: 예전 보드와 같은 드라이브 파일(스케줄보드_데이터/board.json). 서버(saveBoard)가 카드 수를 세는 자리(canvases[0].cards·done)에
 //   과제를 담아, 빈 판 덮어쓰기 방지 · 두 기기 충돌 합치기 · 백업을 그대로 쓴다(Code.gs 변경 없음). 예전 포스트잇은 과제로 옮긴다.
 const BOARD = (() => {
@@ -2967,7 +2985,7 @@ const BOARD = (() => {
     const list = S.active.filter(inF).sort((a, b) => sortBy === "prio"
       ? ((b.prio || 2) - (a.prio || 2)) || ((a.due || "9") < (b.due || "9") ? -1 : 1)
       : (a.due || "9") < (b.due || "9") ? -1 : (a.due || "9") > (b.due || "9") ? 1 : (b.prio || 2) - (a.prio || 2));
-    const chips = `<div class="tk-bar"><button type="button" class="tk-chip" data-tk="sort" aria-pressed="false">${sortBy === "prio" ? "⇅ 중요도순" : "⇅ 마감순"}</button><button type="button" class="tk-chip" data-tk="filt" data-f="" aria-pressed="${!filt}">전체 ${S.active.length}</button>
+    const chips = `<div class="tk-bar"><button type="button" class="tk-chip" data-tk="sort" aria-pressed="false">${sortBy === "prio" ? "\u21c5 중요도순" : "\u21c5 마감순"}</button><button type="button" class="tk-chip" data-tk="filt" data-f="" aria-pressed="${!filt}">전체 ${S.active.length}</button>
       ${tops.map(c => { const n = S.active.filter(t => (catPath(t)[0] || {}).id === c.id).length;
         return `<button type="button" class="tk-chip" data-tk="filt" data-f="${esc(c.id)}" aria-pressed="${filt === c.id}">${esc(c.name)} ${n}</button>`; }).join("")}
       ${S.active.some(t => !catPath(t).length) ? `<button type="button" class="tk-chip" data-tk="filt" data-f="_none" aria-pressed="${filt === "_none"}">⚠️ 미분류</button>` : ""}
@@ -2990,14 +3008,14 @@ const BOARD = (() => {
     const folders = sub.map(c => `<button type="button" class="tk-folder" data-tk="into" data-cid="${esc(c.id)}" data-drop="${esc([...path, c.id].join(","))}"><span class="ic">📁</span><span><b>${esc(c.name)}</b><small>${countIn(c.id)}개</small></span></button>`).join("");
     // 맨 위(완료)에서는 미분류 과제를 폴더 바로 아래에 펼쳐 둔다 → 손잡이로 끌어 위 폴더에 바로 넣을 수 있게
     const here = S.done.filter(t => path.length ? inFolder(t, path) : !catPath(t).length).sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
-    const items = here.map(t => `<div class="tk-item" data-id="${esc(t.id)}"><span class="hd" data-drag="${esc(t.id)}" title="끌어서 폴더로 옮기기">⠿</span>
+    const items = here.map(t => `<div class="tk-item" data-id="${esc(t.id)}"><span class="hd" data-drag="${esc(t.id)}" title="끌어서 폴더로 옮기기">\u283f</span>
       <div class="bd" data-tk="open" data-id="${esc(t.id)}"><b>${esc(t.title)}</b><small>✓ ${esc(fmtC(t.completedAt))} 완료 · ${PRIO[t.prio || 2]}${t.due ? " · 마감 " + esc((dueInfo(t.due).full || "").split(" · ")[1] || "") : ""}${(t.attachments || []).length ? " · 📎" + t.attachments.length : ""}</small></div>
       <button type="button" class="tk-btn sm" data-tk="move" data-id="${esc(t.id)}">📁 옮기기</button></div>`).join("");
     if (!S.done.length) return crumb + `<div class="tk-empty"><b>완료한 과제가 없어요</b>작업 보드에서 체크박스(✓)를 누르면 분류 폴더에 자동으로 담겨요.</div>`;
     return crumb + (folders ? `<div class="tk-folders">${folders}</div>` : (path.length ? "" : `<p class="muted">분류 폴더가 없어요 — ‘🗂 분류’에서 만들어 주세요.</p>`))
       + (!path.length && items ? `<div class="tk-sec">📥 미분류<small>${here.length}개 · 분류를 다시 정해 주세요</small></div>` : "")
       + (items ? `<div class="tk-list">${items}</div>` : path.length && !sub.length ? `<div class="tk-empty" style="padding:12px">이 폴더에 바로 담긴 과제가 없어요.</div>` : "")
-      + (items ? `<p class="muted" style="font-size:12px;margin-top:8px">⠿를 끌어 폴더나 위 경로에 놓으면 분류가 바뀌어요(📦 완료에 놓으면 미분류) · 📁 옮기기로도 돼요.</p>` : "");
+      + (items ? `<p class="muted" style="font-size:12px;margin-top:8px">\u283f를 끌어 폴더나 위 경로에 놓으면 분류가 바뀌어요(📦 완료에 놓으면 미분류) · 📁 옮기기로도 돼요.</p>` : "");
   }
   const fmtC = ms => { if (!ms) return ""; const d = new Date(ms); return `${d.getFullYear() % 100}.${d.getMonth() + 1}.${d.getDate()}`; };
 
@@ -3073,7 +3091,7 @@ const BOARD = (() => {
   function setCat(id, p) { const t = findT(id); if (!t) return; t.cat = p[0] === "_none" ? [] : p.slice(0, 3); touch(t); render(); save(); toast(`📁 ${pathText(t)}(으)로 옮겼어요`); }
   function openMove(id) {
     const t = findT(id); if (!t) return;
-    const rows = []; const walk = (pid, pre, depth) => kids(pid).forEach(c => { const p = [...pre, c.id]; rows.push([p, "　".repeat(depth) + "📁 " + c.name]); if (depth < 2) walk(c.id, p, depth + 1); });
+    const rows = []; const walk = (pid, pre, depth) => kids(pid).forEach(c => { const p = [...pre, c.id]; rows.push([p, "\u3000".repeat(depth) + "📁 " + c.name]); if (depth < 2) walk(c.id, p, depth + 1); });
     walk("", [], 0);
     sheet(`<h3>📁 옮기기 · ${esc(t.title)}</h3><p class="muted" style="margin:0 0 8px">지금: ${esc(pathText(t))}</p><div class="tk-pick">
       ${rows.map(([p, l]) => `<button type="button" data-tk="moveTo" data-id="${esc(id)}" data-p="${esc(p.join(","))}">${esc(l)}</button>`).join("")}
@@ -3110,7 +3128,7 @@ const BOARD = (() => {
     });
   }
 
-  // ---------------- 끌어서 폴더로(손잡이 ⠿ — 폰에서도 됨)
+  // ---------------- 끌어서 폴더로(손잡이 (손잡이) — 폰에서도 됨)
   let drag = null;
   function dragStart(e, id) {
     const t = findT(id); if (!t) return;
